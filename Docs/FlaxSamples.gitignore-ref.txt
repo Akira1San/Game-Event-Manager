@@ -1,0 +1,66 @@
+# Reference copy: the official FlaxSamples .gitignore (github.com/FlaxEngine/FlaxSamples, master)
+# Saved 2026-10-23 so Task 1 Part B can model the project .gitignore on the standard,
+# even offline. NOTE for Part B: paths are relative to the project root — our project
+# root is New/EventManager/EventManager/ (git repo root is one level higher, so paths
+# here must NOT carry a leading slash when adapted, or must live in a .gitignore file
+# placed inside EventManager/EventManager/ itself).
+#
+# --- begin FlaxSamples .gitignore ---
+# Ignore Flax project files
+/Binaries/
+/Cache/
+/Logs/
+/Output/
+/Screenshots/
+*.HotReload.*
+Source/*.Gen.*
+
+# Local files
+imgui.ini
+
+# Ignore Visual Studio project files (generated locally)
+*.csproj
+*.sln
+*.slnx
+launchSettings.json
+
+# Ignore Visual Studio Code project files (generated locally)
+*.code-workspace
+*.vscode/
+
+# Ignore Rider project files (generated locally)
+*.idea/
+
+# Ignore thumbnails created by Windows and MacOS
+Thumbs.db
+.DS_Store
+
+# Ignore files built by Visual Studio
+*.obj
+*.exe
+*.pdb
+*.user
+*.aps
+*.pch
+*.vspscc
+*_i.c
+*_p.c
+*.ncb
+*.suo
+*.tlb
+*.tlh
+*.bak
+*.cache
+*.ilk
+*.log
+[Bb]in
+*.lib
+*.sbr
+/Source/obj/
+_ReSharper*/
+[Tt]est[Rr]esult*
+.vs/
+
+# Ignore Nuget packages folder
+packages/
+# --- end FlaxSamples .gitignore ---
