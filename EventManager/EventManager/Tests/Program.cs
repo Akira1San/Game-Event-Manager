@@ -349,7 +349,125 @@ ExpectParseError("when door is open\n  show me\n", "trigger", "an unknown trigge
 ExpectParseError("when W is pressings\n  show me\n", "trigger", "a bent trigger shape is a friendly error");
 ExpectParseError("when me appears and\n  hide me\n", "needs something after it", "a dangling `and` is a friendly trigger error");
 
+// ------------------------------------------------------------------
+// Runtime Part A: variables (values, scopes, hot-reload survival)
+// ------------------------------------------------------------------
+
+var store = new EventVariables();
+int warned = 0;
+store.OnWarning = message => { warned++; };
+
+var unset = store.GetGlobal("Score");
+Check(unset.Kind == ValueKind.None && unset.AsNumber() == 0 && unset.AsText() == "" && unset.AsBoolean() == false,
+      "reading an unset variable gives 0 / \"\" / false without crashing");
+store.GetGlobal("Score");
+Check(warned == 1, "the unset warning is one-time per name");
+store.GetGlobal("Score");
+Check(warned == 1, "reading the same unset name again stays silent");
+
+store.SetGlobal("Score", ValueBox.OfNumber(5));
+Check(store.GetGlobal("Score").AsNumber() == 5, "global numbers keep their value");
+store.SetGlobal("PlayerName", ValueBox.OfText("Bob"));
+Check(store.GetGlobal("PlayerName").AsText() == "Bob", "global text keeps its value");
+store.SetGlobal("Gate", ValueBox.OfBoolean(true));
+Check(store.GetGlobal("Gate").AsBoolean() == true, "global booleans keep their value");
+store.SetGlobal("Score", ValueBox.OfText("ten"));
+Check(store.GetGlobal("Score").AsText() == "ten", "a new write re-types the variable");
+
+Check(ValueBox.OfBoolean(true).AsNumber() == 1 && ValueBox.OfBoolean(false).AsNumber() == 0, "booleans read as 1 / 0");
+Check(ValueBox.OfText("3.5").AsNumber() == 3.5 && ValueBox.OfText("hugo").AsNumber() == 0, "text reads as a number when parseable, 0 otherwise");
+Check(ValueBox.OfNumber(2.5).AsText() == "2.5" && ValueBox.OfNumber(5).AsText() == "5" && ValueBox.OfNumber(0.5).AsText() == "0.5", "numbers read as clean text for set-text-of displays");
+
+var player = new FakeActor("Player");
+var enemy = new FakeActor("Enemy");
+store.SetLocal(player, "health", ValueBox.OfNumber(3));
+store.SetLocal(enemy, "health", ValueBox.OfNumber(8));
+Check(store.GetLocal(player, "health").AsNumber() == 3 && store.GetLocal(enemy, "health").AsNumber() == 8,
+      "each copy of an actor keeps its own `my` variables");
+Check(store.GetGlobal("health").Kind == ValueKind.None, "global scope stays untouched by `my` writes");
+
+var previous = new EventVariables();
+previous.SetGlobal("Score", ValueBox.OfNumber(11));
+previous.SetGlobal("OldScore", ValueBox.OfNumber(9));
+previous.SetLocal(player, "ammo", ValueBox.OfText("12"));
+previous.SetLocal(player, "OldLocal", ValueBox.OfNumber(1));
+
+var next = new EventVariables();
+next.CarryValuesFrom(previous, name => name == "Score" || name == "ammo");
+Check(next.GetGlobal("Score").AsNumber() == 11, "globals survive hot reload when the name still exists");
+Check(next.GetGlobal("OldScore").Kind == ValueKind.None, "globals whose name vanished come back unset");
+Check(next.HasGlobal("Score") && !next.HasGlobal("OldScore"), "carried store contains exactly the surviving names");
+Check(next.GetLocal(player, "ammo").AsText() == "12", "per-object values survive hot reload");
+Check(next.GetLocal(player, "OldLocal").Kind == ValueKind.None, "per-object values whose name vanished come back unset");
+next.SetGlobal("Score", ValueBox.OfNumber(1));
+Check(previous.GetGlobal("Score").AsNumber() == 11, "carried values are copies, not aliases of the old store");
+
+// ------------------------------------------------------------------
+// Runtime Part A: value evaluation (all forms incl. seeded random)
+// ------------------------------------------------------------------
+
+Rng.Seed(7);
+bool diceInRange = true;
+for (int roll = 0; roll < 80; roll++)
+{
+    ValueBox diceRoll = ValueEvaluator.Evaluate(new RandomRangeValue { Min = new NumberValue { Value = 1 }, Max = new NumberValue { Value = 4 } }, null);
+    if (diceRoll.AsNumber() < 1 || diceRoll.AsNumber() > 4 || diceRoll.AsNumber() != Math.Floor(diceRoll.AsNumber()))
+        diceInRange = false;
+}
+Check(diceInRange, "`random 1 to 4` only yields whole numbers inside the range");
+
+var eventDice = parser.Parse("when me appears\n  set Dice to random 1 to 4\n");
+var diceStatement = (SetNode)eventDice.Events[0].Body[0].Statement!;
+ValueBox parsedDice = ValueEvaluator.Evaluate(diceStatement.Value, null);
+Check(parsedDice.AsNumber() >= 1 && parsedDice.AsNumber() <= 4, "the parser's Dice node rolls in range too");
+
+Rng.Seed(42);
+double first = ValueEvaluator.Evaluate(new RandomRangeValue { Min = new NumberValue { Value = 1 }, Max = new NumberValue { Value = 4 } }, null).AsNumber();
+double second = ValueEvaluator.Evaluate(new RandomRangeValue { Min = new NumberValue { Value = 1 }, Max = new NumberValue { Value = 4 } }, null).AsNumber();
+Rng.Seed(42);
+double firstAgain = ValueEvaluator.Evaluate(new RandomRangeValue { Min = new NumberValue { Value = 1 }, Max = new NumberValue { Value = 4 } }, null).AsNumber();
+double secondAgain = ValueEvaluator.Evaluate(new RandomRangeValue { Min = new NumberValue { Value = 1 }, Max = new NumberValue { Value = 4 } }, null).AsNumber();
+Check(first == firstAgain && second == secondAgain, "seeded rolls replay the exact sequence");
+
+var fractional = ValueEvaluator.Evaluate(new RandomRangeValue { Min = new NumberValue { Value = 0.5 }, Max = new NumberValue { Value = 2 } }, null).AsNumber();
+Check(fractional >= 0.5 && fractional <= 2, "`random 0.5 to 2` rolls a fractional value in range");
+
+Rng.Seed(3);
+var reversed = ValueEvaluator.Evaluate(new RandomRangeValue { Min = new NumberValue { Value = 4 }, Max = new NumberValue { Value = 1 } }, null).AsNumber();
+Check(reversed >= 1 && reversed <= 4, "`random 4 to 1` still rolls a value in range (bounds swap quietly)");
+
+var diceStore = new EventVariables();
+var evalDice = ValueEvaluator.Evaluate(new RandomRangeValue { Min = new VariableValue { Name = "Low" }, Max = new VariableValue { Name = "High" } },
+    variable => variable.Name == "Low" ? ValueBox.OfNumber(1) : ValueBox.OfNumber(6));
+Check(evalDice.AsNumber() >= 1 && evalDice.AsNumber() <= 6, "random bounds may be variables");
+
+var sum = ValueEvaluator.Evaluate(new MathValue { Left = new NumberValue { Value = 1 }, Op = '+', Right = new NumberValue { Value = 2 } }, null);
+Check(sum.AsNumber() == 3, "one-op math evaluates (1 + 2 = 3)");
+var times = ValueEvaluator.Evaluate(new MathValue { Left = new NumberValue { Value = 2 }, Op = '*', Right = new NumberValue { Value = 2.5 } }, null);
+Check(times.AsNumber() == 5, "one-op math evaluates (2 * 2.5 = 5)");
+var byZero = ValueEvaluator.Evaluate(new MathValue { Left = new NumberValue { Value = 1 }, Op = '/', Right = new NumberValue { Value = 0 } }, null);
+Check(byZero.AsNumber() == 0, "dividing by zero stays friendly (0, no crash)");
+
+var scoreValue = ValueEvaluator.Evaluate(new VariableValue { Name = "Score", Owner = "my" },
+    variable => variable.Owner == "my" ? diceStore.GetLocal(player, variable.Name) : diceStore.GetGlobal(variable.Name));
+Check(scoreValue.Kind == ValueKind.None, "a variable resolves through the runtime's variable context");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);
+
+class FakeActor
+{
+    public FakeActor(string name)
+    {
+        Name = name;
+    }
+
+    public string Name;
+
+    public override string ToString()
+    {
+        return Name;
+    }
+}

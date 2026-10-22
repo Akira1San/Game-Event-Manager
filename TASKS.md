@@ -13,7 +13,7 @@ That session should read `DESIGN.md`, do only that Part, and check the box when 
 
 ---
 
-## Task 1 — Flax Project Scaffold `[~]`
+## Task 1 — Flax Project Scaffold `[x]`
 
 Goal: a Flax project exists with the Event Manager skeleton, so every later task has a home.
 
@@ -21,8 +21,8 @@ Goal: a Flax project exists with the Event Manager skeleton, so every later task
 - [x] Engine environment: Flax + matching .NET SDK installed & verified (user confirmed).
 - [x] Flax project created (C# flavor) inside this repo at `New/EventManager/EventManager/`
   (.flaxproj present, default module **Game** under `Source/Game/`, opens in the editor).
-- [ ] 10-second check: open the project and watch a scene play (any template scene is fine —
-  Task 4 authors the real one).
+- [x] 10-second check: open the project and watch a scene play (user added a scene and
+  confirmed: plays fine, no output errors — 2026-10-23).
 
 ### Part B — Folder skeleton
 - [x] `.gitignore` added **before any commit**, modeled on the official FlaxSamples one
@@ -105,19 +105,29 @@ pure C#, runnable in isolation.** (DESIGN.md Sections 3 & 4 define behavior.)
 
 ---
 
-## Task 3 — Runtime (back end) `[ ]`
+## Task 3 — Runtime (back end) `[~]`
 
 Goal: the event tree actually *lives* in a running Flax game. Depends on Task 2.
 (DESIGN.md Section 6 defines execution: polled vs pushed triggers, once-per-tick,
 top-to-bottom order.)
 
 ### Part A — Variables
-- [ ] Variable store with the auto-typed rules: global (Capitalized), per-object (`my …`),
-  defaults 0 / "" / false, values survive hot reload when the name still exists.
-- [ ] Value evaluation for all value forms — including `random <min> to <max>` (with a
-  seedable RNG mode so unit tests assert exact rolled values, not luck).
-- [ ] Unit test: set/add/become-checks behave as written; `set Dice to random 1 to 4`
-  yields only in-range values (and exact sequences when seeded).
+- [x] Variable store (`Runtime/EventVariables.cs`): global (Capitalized `set` targets) +
+  per-object (`my …`, keyed by host object so each copy is separate), auto-typed by the
+  value written — `ValueBox` kinds None/Number/Text/Boolean, re-typed by each write,
+  defaults read as 0 / "" / false with a **one-time friendly warning** per name (warning
+  sink injectable: `OnWarning`). `Task 1` marked `[x]` (user's editor play check passed).
+- [x] Value evaluation for all value forms (`Runtime/ValueEvaluator.cs`): numbers, `"text"`,
+  `true`/`false`, variables via a resolver delegate (Part B plugs the real context), the
+  one-op math form, and `random <min> to <max>` — whole-number rolls for integer bounds
+  (asks `Rng.Seed(n)` for replayable sequences), fractional rolls otherwise, bounds swap
+  quietly if written high-to-low.
+- [x] Unit test: the store (defaults + one-time warning, typing, per-object isolation,
+  hot-reload survival w/ copies-not-aliases) and evaluation (integral dice luck-free,
+  seeded exact sequences, fractional + swapped bounds, variable bounds, math ops,
+  friendly divide-by-zero) — 75/75 green; module build 0/0.
+  (`Tests/EventManagerTests.csproj` now covers `Source/Game/{Events,Runtime}/*.cs`; the
+  `**` wildcard is avoided — it would swallow Flax's `Game.Build.cs`/`Game.Gen.cs`.)
 
 ### Part B — Execution engine
 - [ ] Tick the event trees exactly per DESIGN.md: pushed trigger queue first, then polled
@@ -352,3 +362,4 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 | 2026-10-23 | Task 2 Part A executed: lexer (tokens/line numbers/friendly errors, strict 2-space indents) + test harness (`Tests/`, 17 green incl. doc self-test over 10 DESIGN.md listings); DESIGN.md listings normalized 4→2 spaces; module rebuilt green. NOTE: Flax module needs explicit `using System…` (no implicit usings there) | Task 2 A done, next: Part B (parser) |
 | 2026-10-23 | Task 2 Part B executed: parser → event tree (`ParseException`, `Ast.cs` = ProgramFile/EventNode/BodyLineNode + SetNode/AddNode/RawActionNode, `EventParser.cs`); value forms incl. `random` ranges, `true`/`false` (new `BooleanValue`), `my` vars, one-op `set` math; friendly errors with near-miss suggestions; found + fixed real gap: `when` inside an event body. §7 shooter parses 16/16 events; 40/40 tests green; module build 0/0 | Task 2 B done, next: Part C (word registry) |
 | 2026-10-23 | Task 2 Part C executed: `WordRegistry.cs` (24 trigger shapes + conditions + action entries w/ examples, replaces hardcoded `KnownWords`); trigger-shape validation w/ placeholders, `and` splits, dangling-`and` error; `set text of` → `SetTextNode` so menu vocab parses; every registered example parses (66); 47/47 tests green; module build 0/0 (explicit usings quirk again) | Task 2 C done — Task 2 complete, next: Task 3 (runtime) |
+| 2026-10-23 | User confirmed Task 1's editor play check (scene added, plays clean) → Task 1 `[x]`. Task 3 Part A executed: `Runtime/ValueBox.cs` (typed values, conversions), `Runtime/EventVariables.cs` (globals + per-object hosts, one-time unset warnings, `CarryValuesFrom` hot-reload survival), `Runtime/ValueEvaluator.cs` (all value forms, seeded `Rng`, one-op math); 75/75 tests green; module build 0/0 | Task 3 A done, next: Part B (execution engine) |
