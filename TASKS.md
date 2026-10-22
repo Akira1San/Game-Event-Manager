@@ -41,15 +41,27 @@ Goal: a Flax project exists with the Event Manager skeleton, so every later task
 
 ---
 
-## Task 2 — Parser (front end) `[ ]`
+## Task 2 — Parser (front end) `[~]`
 
 Goal: text goes in, a validated event tree comes out, with friendly errors. **No Flax needed —
 pure C#, runnable in isolation.** (DESIGN.md Sections 3 & 4 define behavior.)
 
-### Part A — Lexer: text → tokens
-- [ ] Read a `.events` file: track line numbers; handle comments (`#`), quoted strings,
-  numbers, words, indents (2 spaces = one level).
-- [ ] Unit test: a tiny file lexes to the expected token list.
+### Part A — Lexer: text → tokens `[x]`
+- [x] `Source/Game/Events/EventLexer.cs`: reads `.events` text, tracks line numbers; skips
+  `#` comments (anywhere in lines), quoted strings, numbers (decimal + negative via
+  InvariantCulture), words (anything else runs together, incl. `-1`, `20%`, `other's`),
+  indents — **2 spaces = one level**, strict (tabs / odd widths / 2-level jumps are
+  friendly `LexException`s with line numbers).
+- [x] Token language now exists: `Token.cs` (`TokenType` + `Token` with `Line`),
+  `LexException.cs` (`Line N: <human sentence>`). Dedents are emitted before the next
+  event's tokens and before `EndOfFile`; EOF anchors to the last physical line.
+- [x] Test runner harness: `Tests/EventManagerTests.csproj` (console, references the
+  Events sources directly — no Flax at all; runs via `dotnet run --project Tests`).
+- [x] Unit tests: 17 green — expected token lists, comments/blanks, dedents before the
+  next event and before EOF, nested levels+stacked dedents, value forms (`-1`, `0.5`,
+  `20%`, strings), line numbers across blank lines, all 5 friendly-error cases, plus a
+  **doc self-test**: every `when`-starting code fence in DESIGN.md must lex clean
+  (10 listings; DESIGN.md was normalized 4→2 spaces to match the spec).
 
 ### Part B — Parser: tokens → event tree
 - [ ] Parse blocks: one `when` line + condition lines (`unless`) + indented actions.
@@ -314,3 +326,4 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 | 2026-10-23 | Environment + scaffold: Flax & .NET SDK verified; project created at `New/EventManager/EventManager/` (module Game, nested path — documented); `GameLogic/` doc naming updated to real `Source/Game/` paths; FlaxSamples gitignore reference saved to `Docs/`; `MyProject` at default location = user sandbox, not the project | Task 1 A (marked), Part B prep |
 | 2026-10-23 | BGE borrow sweep: `random <min> to <max>` value form (parses + evaluates anywhere values are legal, seedable in tests), `face <thing>` continuous tracking word, Enemy patrol jitter example, full brick-borrow map in DESIGN.md §2 | Task 2 B, Task 3 A/C |
 | 2026-10-23 | Task 1 Part B executed: `.gitignore` in project root (FlaxSamples-based, verified), `Source/Game/Events/` + `Source/Game/GameFiles/` (+ seed `Game.events`), 5 placeholder classes (namespace Game), `dotnet build` green 0/0 | Task 1 B done, Task 2 next (Part A: lexer) |
+| 2026-10-23 | Task 2 Part A executed: lexer (tokens/line numbers/friendly errors, strict 2-space indents) + test harness (`Tests/`, 17 green incl. doc self-test over 10 DESIGN.md listings); DESIGN.md listings normalized 4→2 spaces; module rebuilt green. NOTE: Flax module needs explicit `using System…` (no implicit usings there) | Task 2 A done, next: Part B (parser) |

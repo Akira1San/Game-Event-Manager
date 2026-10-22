@@ -56,3 +56,7 @@ _ReSharper*/
 
 # Ignore Nuget packages folder
 packages/
+
+# Ignore test runner build output (local only)
+/Tests/bin/
+/Tests/obj/
