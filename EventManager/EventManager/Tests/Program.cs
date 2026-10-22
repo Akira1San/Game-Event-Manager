@@ -305,6 +305,50 @@ ExpectParseError("when game starts\n  restar scane\n", "restart", "near-miss ver
 ExpectParseError("when game starts\n  banana 3\n", "means yet", "far-off word gets the plain unknown-word error");
 ExpectParseError("  hide me\n", "when", "an indented line with no `when` above is a friendly error");
 
+// ------------------------------------------------------------------
+// Word registry (Task 2 Part C): vocabulary as data
+// ------------------------------------------------------------------
+
+int examplesChecked = 0;
+int exampleFailures = 0;
+foreach (var entry in WordRegistry.All)
+{
+    if (entry.Example.Length == 0)
+        continue;
+    string source = entry.Kind == "trigger"
+        ? entry.Example + "\n  show me\n"
+        : "when me appears\n  " + entry.Example + "\n";
+    try
+    {
+        parser.Parse(source);
+        examplesChecked++;
+    }
+    catch (Exception e)
+    {
+        exampleFailures++;
+        Console.WriteLine($"FAIL  registry example [{entry.Kind}] \"{entry.Word}\" -> {e.Message}");
+    }
+}
+Check(examplesChecked > 0 && exampleFailures == 0,
+      $"every registered word's example parses ({examplesChecked} examples checked)");
+
+var sight = parser.Parse("when me appears\n  hide me\n\nwhen me stops seeing Player by 8\n  show me\n");
+Check(sight.Events.Count == 2 && sight.Events[1].Trigger.Count == 6,
+      "`when me stops seeing Player by 8` validates through the alt trigger shape");
+
+var hud = parser.Parse("when scene starts\n  set text of ScoreLabel to Score\n");
+var hudSet = (SetTextNode)hud.Events[0].Body[0].Statement!;
+Check(hudSet.Target == "ScoreLabel" && hudSet.Value is VariableValue hv && hv.Name == "Score",
+      "`set text of ScoreLabel to Score` builds a SetTextNode");
+
+bool registryVerbsLive = Array.IndexOf(WordRegistry.ActionWords, "quit") >= 0 &&
+                         Array.IndexOf(WordRegistry.ActionWords, "move") >= 0;
+Check(registryVerbsLive, "actions validate against the registry, not hardcoded strings");
+
+ExpectParseError("when door is open\n  show me\n", "trigger", "an unknown trigger shape is a friendly error");
+ExpectParseError("when W is pressings\n  show me\n", "trigger", "a bent trigger shape is a friendly error");
+ExpectParseError("when me appears and\n  hide me\n", "needs something after it", "a dangling `and` is a friendly trigger error");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

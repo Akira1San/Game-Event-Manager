@@ -70,31 +70,6 @@ namespace Game
         }
     }
 
-    public static class KnownWords
-    {
-        public static readonly string[] Seed =
-        {
-            "when", "unless", "and", "not", "my", "me", "other", "set", "add", "to",
-            "is", "has", "becomes", "changes", "exists", "does", "near", "chance",
-            "every", "seconds", "move", "turn", "look", "face", "goto", "teleport",
-            "push", "make", "destroy", "spawn", "play", "loop", "stop", "send",
-            "show", "hide", "camera", "wait", "equip", "drop", "restart", "load",
-            "quit", "remove",
-        };
-
-        public static readonly string[] Verbs =
-        {
-            "move", "turn", "look", "face", "goto", "teleport", "push", "make",
-            "destroy", "spawn", "play", "loop", "stop", "send", "show", "hide",
-            "camera", "wait", "equip", "drop", "restart", "load", "quit", "remove",
-        };
-
-        public static readonly string[] ConditionMarks =
-        {
-            "is", "has", "becomes", "changes", "exists", "does", "near", "chance",
-        };
-    }
-
     public static class Values
     {
         public static string Describe(ValueNode value)

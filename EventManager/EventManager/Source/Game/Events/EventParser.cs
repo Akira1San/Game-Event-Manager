@@ -44,6 +44,104 @@ namespace Game
             return file;
         }
 
+        private static readonly string[][] TriggerShapes = BuildTriggerShapes();
+
+        private static string[][] BuildTriggerShapes()
+        {
+            var shapes = new List<string[]>();
+            foreach (var entry in WordRegistry.All)
+            {
+                if (entry.Kind != "trigger")
+                    continue;
+                shapes.Add(SplitShape(entry.Word));
+                if (entry.AltShape.Length > 0)
+                    shapes.Add(SplitShape(entry.AltShape));
+            }
+            return shapes.ToArray();
+        }
+
+        private static string[] SplitShape(string template)
+        {
+            var parts = new List<string>();
+            int index = 0;
+            while (index < template.Length)
+            {
+                while (index < template.Length && template[index] == ' ')
+                    index++;
+                int start = index;
+                while (index < template.Length && template[index] != ' ')
+                    index++;
+                if (index > start)
+                    parts.Add(template.Substring(start, index - start));
+            }
+            return parts.ToArray();
+        }
+
+        private static bool TryMatchShape(string[] shape, int si, List<Token> trigger, int ti)
+        {
+            if (si >= shape.Length)
+                return ti == trigger.Count;
+            string part = shape[si];
+            if (part.Contains("<"))
+            {
+                string name = part.Replace("\"", "").Replace("<", "").Replace(">", "");
+                if (name == "value")
+                {
+                    return ti < trigger.Count && si == shape.Length - 1;
+                }
+                if (name == "n" || name == "dist")
+                {
+                    return ti < trigger.Count && trigger[ti].Type == TokenType.Number &&
+                           TryMatchShape(shape, si + 1, trigger, ti + 1);
+                }
+                if (name == "name")
+                {
+                    return ti < trigger.Count && trigger[ti].Type == TokenType.Str &&
+                           TryMatchShape(shape, si + 1, trigger, ti + 1);
+                }
+                for (int take = 1; ti + take - 1 < trigger.Count; take++)
+                {
+                    if (trigger[ti + take - 1].Type != TokenType.Word)
+                        break;
+                    if (TryMatchShape(shape, si + 1, trigger, ti + take))
+                        return true;
+                }
+                return false;
+            }
+            return ti < trigger.Count && trigger[ti].Type == TokenType.Word && trigger[ti].Text == part &&
+                   TryMatchShape(shape, si + 1, trigger, ti + 1);
+        }
+
+        private void ValidateTrigger(Token whenToken, List<Token> trigger)
+        {
+            var full = new List<Token> { whenToken };
+            full.AddRange(trigger);
+            var basePart = full;
+            for (int i = 1; i < full.Count; i++)
+            {
+                if (full[i].Type == TokenType.Word && full[i].Text == "and")
+                {
+                    if (i == full.Count - 1)
+                        throw new ParseException("`and` joins conditions — it needs something after it, like `when me overlaps Enemy and other is a Player`", full[i].Line);
+                    basePart = full.GetRange(0, i);
+                    break;
+                }
+            }
+            foreach (var shape in TriggerShapes)
+            {
+                if (TryMatchShape(shape, 0, basePart, 0))
+                    return;
+            }
+            var text = new System.Text.StringBuilder();
+            for (int i = 0; i < full.Count; i++)
+            {
+                if (i > 0)
+                    text.Append(' ');
+                text.Append(full[i].Type == TokenType.Str ? "\"" + full[i].Text + "\"" : full[i].Text);
+            }
+            throw new ParseException($"I don't know this trigger — \u201C{text}\u201D isn't a `when` line I recognize. Triggers look like \u201Cwhen game starts\u201D or \u201Cwhen W is pressed\u201D.", whenToken.Line);
+        }
+
         private EventNode ParseEvent()
         {
             var whenToken = tokens[pos];
@@ -54,6 +152,7 @@ namespace Game
                 ev.Trigger.Add(tokens[pos++]);
             if (ev.Trigger.Count == 0)
                 throw new ParseException("a `when` needs something after it — like `when game starts`", whenToken.Line);
+            ValidateTrigger(whenToken, ev.Trigger);
             if (pos < tokens.Count && tokens[pos].Type == TokenType.NewLine)
                 pos++;
             if (pos >= tokens.Count || tokens[pos].Type != TokenType.Indent)
@@ -125,7 +224,7 @@ namespace Game
             bool hasConditionMark = false;
             foreach (var w in line.Words)
             {
-                if (w.Type == TokenType.Word && Array.IndexOf(KnownWords.ConditionMarks, w.Text) >= 0)
+                if (w.Type == TokenType.Word && Array.IndexOf(WordRegistry.ConditionMarks, w.Text) >= 0)
                 {
                     hasConditionMark = true;
                     break;
@@ -146,7 +245,7 @@ namespace Game
                 line.Statement = ParseAdd(line);
                 return;
             }
-            if (Array.IndexOf(KnownWords.Verbs, first.Text) >= 0)
+            if (Array.IndexOf(WordRegistry.ActionWords, first.Text) >= 0)
             {
                 var action = new RawActionNode { Line = line.Line };
                 action.Words.AddRange(line.Words);
@@ -240,9 +339,12 @@ namespace Game
             return new VariableValue { Line = t.Line, Name = t.Text };
         }
 
-        private SetNode ParseSet(BodyLineNode line)
+        private StatementNode ParseSet(BodyLineNode line)
         {
             var words = line.Words;
+            if (words.Count > 2 && words[1].Type == TokenType.Word && words[1].Text == "text" &&
+                words[2].Type == TokenType.Word && words[2].Text == "of")
+                return ParseSetText(line);
             var node = new SetNode { Line = line.Line };
             int index = 1;
             node.Target = ReadVariable(words, ref index, line.Line, "`set`");
@@ -260,6 +362,23 @@ namespace Game
             CheckEndOfLine(words, index, line.Line, node.Target.Owner.Length == 0
                 ? $"set {node.Target.Name} to <value>"
                 : $"set my {node.Target.Name} to <value>");
+            return node;
+        }
+
+        private SetTextNode ParseSetText(BodyLineNode line)
+        {
+            var words = line.Words;
+            var node = new SetTextNode { Line = line.Line };
+            int index = 3;
+            if (index >= words.Count || words[index].Type != TokenType.Word)
+                throw new ParseException("after `set text of` comes the name of the thing — `set text of ScoreLabel to Score`", line.Line);
+            node.Target = words[index].Text;
+            index++;
+            if (index >= words.Count || words[index].Type != TokenType.Word || words[index].Text != "to")
+                throw new ParseException("a `set text of` line joins the thing and the value with `to` — `set text of ScoreLabel to Score`", line.Line);
+            index++;
+            node.Value = ReadValue(words, ref index, line.Line);
+            CheckEndOfLine(words, index, line.Line, $"set text of {node.Target} to <value>");
             return node;
         }
 
@@ -293,7 +412,7 @@ namespace Game
         {
             string best = "";
             int bestDistance = int.MaxValue;
-            foreach (var candidate in KnownWords.Seed)
+            foreach (var candidate in WordRegistry.Suggestables)
             {
                 int distance = WordDistance.Between(word, candidate);
                 if (distance < bestDistance)

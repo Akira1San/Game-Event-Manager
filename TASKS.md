@@ -41,7 +41,7 @@ Goal: a Flax project exists with the Event Manager skeleton, so every later task
 
 ---
 
-## Task 2 — Parser (front end) `[~]`
+## Task 2 — Parser (front end) `[x]`
 
 Goal: text goes in, a validated event tree comes out, with friendly errors. **No Flax needed —
 pure C#, runnable in isolation.** (DESIGN.md Sections 3 & 4 define behavior.)
@@ -86,11 +86,22 @@ pure C#, runnable in isolation.** (DESIGN.md Sections 3 & 4 define behavior.)
   incl. 10 friendly-error cases); module build 0 warnings / 0 errors.
 
 ### Part C — Word registry: the vocabulary as data
-- [ ] Define the v0.1 word list from DESIGN.md Section 5 (triggers / conditions / actions)
-  as a checked-in table, each with its one-line example (later feeds autocomplete/docs).
-- [ ] Parser validates line shape against this registry, not hardcoded strings.
-- [ ] Unit test: near-miss typo produces the suggestion sentence; every registered word's
-  example parses successfully.
+- [x] `WordRegistry.cs`: the v0.1 word list from DESIGN.md Section 5 checked in as data —
+  24 trigger templates (with machine-checkable shapes + alt shapes like
+  `stops seeing … by <dist>` / `becomes not`), 8 conditions, 36 action entries, each with
+  its concrete one-line example (later feeds autocomplete/docs). Hardcoded `KnownWords`
+  removed — conditions marks, action verbs and near-miss suggestion candidates (incl. the
+  structural words `when/unless/…`) now derive from the registry.
+- [x] Parser validates trigger **shape** against the registry templates (placeholder
+  matcher: `<key>/<thing>` = words, `<n>/<dist>` = number, `<name>` = quoted string,
+  `<value>` = rest-of-line); inline trailing conditions after `and` are matched on the
+  base part; a dangling `and` is a friendly error. Unknown triggers explain the shape
+  instead of "unknown word". Got the `set text of <thing> to <val>` statement working
+  (new `SetTextNode`) so the full menu vocabulary parses.
+- [x] Unit test: near-miss typo suggestions (registry-driven), every registered word's
+  example parses (66 examples checked), alt trigger shape, `when door is open` /
+  `when W is pressings` rejected with the shape-explaining error. 47/47 green;
+  module build 0 warnings / 0 errors (explicit usings again).
 
 ---
 
@@ -340,3 +351,4 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 | 2026-10-23 | Task 1 Part B executed: `.gitignore` in project root (FlaxSamples-based, verified), `Source/Game/Events/` + `Source/Game/GameFiles/` (+ seed `Game.events`), 5 placeholder classes (namespace Game), `dotnet build` green 0/0 | Task 1 B done, Task 2 next (Part A: lexer) |
 | 2026-10-23 | Task 2 Part A executed: lexer (tokens/line numbers/friendly errors, strict 2-space indents) + test harness (`Tests/`, 17 green incl. doc self-test over 10 DESIGN.md listings); DESIGN.md listings normalized 4→2 spaces; module rebuilt green. NOTE: Flax module needs explicit `using System…` (no implicit usings there) | Task 2 A done, next: Part B (parser) |
 | 2026-10-23 | Task 2 Part B executed: parser → event tree (`ParseException`, `Ast.cs` = ProgramFile/EventNode/BodyLineNode + SetNode/AddNode/RawActionNode, `EventParser.cs`); value forms incl. `random` ranges, `true`/`false` (new `BooleanValue`), `my` vars, one-op `set` math; friendly errors with near-miss suggestions; found + fixed real gap: `when` inside an event body. §7 shooter parses 16/16 events; 40/40 tests green; module build 0/0 | Task 2 B done, next: Part C (word registry) |
+| 2026-10-23 | Task 2 Part C executed: `WordRegistry.cs` (24 trigger shapes + conditions + action entries w/ examples, replaces hardcoded `KnownWords`); trigger-shape validation w/ placeholders, `and` splits, dangling-`and` error; `set text of` → `SetTextNode` so menu vocab parses; every registered example parses (66); 47/47 tests green; module build 0/0 (explicit usings quirk again) | Task 2 C done — Task 2 complete, next: Task 3 (runtime) |

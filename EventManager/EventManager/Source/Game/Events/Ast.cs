@@ -41,6 +41,12 @@ namespace Game
         public VariableValue Target = new VariableValue();
     }
 
+    public class SetTextNode : StatementNode
+    {
+        public string Target = "";
+        public ValueNode Value = new NumberValue();
+    }
+
     public class RawActionNode : StatementNode
     {
         public List<Token> Words = new List<Token>();
