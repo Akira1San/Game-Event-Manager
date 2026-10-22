@@ -64,14 +64,26 @@ pure C#, runnable in isolation.** (DESIGN.md Sections 3 & 4 define behavior.)
   (10 listings; DESIGN.md was normalized 4→2 spaces to match the spec).
 
 ### Part B — Parser: tokens → event tree
-- [ ] Parse blocks: one `when` line + condition lines (`unless`) + indented actions.
-- [ ] Accept the value forms everywhere a value is legal: numbers, variables, and the
-  `random <min> to <max>` range form (DESIGN.md §5 "Random values") — one value-node shape,
-  not per-word special cases.
-- [ ] Reject unknown vocab with the DESIGN.md friendly-error rules (file + line number +
-  human sentence + near-miss "did you mean…" suggestion from the word list).
-- [ ] Unit test: the whole Top-Down Shooter example from DESIGN.md Section 7 parses with
-  zero errors.
+- [x] Parse blocks: one `when` line + condition lines (`unless`) + indented actions
+  (`EventParser.cs` + `ParseException.cs` mirroring the lexer's `Line N: …` shape).
+  Blocks: trigger tokens collected until line end; empty body, indented-orphan lines,
+  too-deep body lines and nested `when`s (both at body depth and extra-indented) are
+  friendly errors.
+- [x] Accept the value forms everywhere a value is legal: numbers, `"text"`, `true`/`false`
+  (needed by the shooter's `set my Invulnerable to true`), Capitalized variables,
+  `my <name>` targets/reads, `random <low> to <high>` (one grammar rule — bounds are
+  numbers or variables), and the one-op math form only inside `set A to B op C`.
+  Statement nodes: `SetNode` / `AddNode` (+ `RawActionNode` for verb lines);
+  `add` with math is rejected pointing at `set`.
+- [x] Body-line classification: `unless` / bare condition lines (any condition mark:
+  `is has becomes changes exists does near chance`) → `IsCondition`; first-word verb →
+  raw action; `set`/`add` → statements with leftover checks. Friendly errors per
+  DESIGN §4: unknown words get near-miss "did you mean" (Levenshtein ≤ 2 over the seed
+  vocabulary) or the plain "I don't know what … means yet.
+- [x] Unit test: the whole Top-Down Shooter example from DESIGN.md Section 7 parses with
+  zero errors — 16 events, every event has trigger + body, `add 1 to Score`, `destroy me`
+  verified as nodes. 40/40 tests green (10 lexer, 1 doc-lex self-test, 24 parser
+  incl. 10 friendly-error cases); module build 0 warnings / 0 errors.
 
 ### Part C — Word registry: the vocabulary as data
 - [ ] Define the v0.1 word list from DESIGN.md Section 5 (triggers / conditions / actions)
@@ -327,3 +339,4 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 | 2026-10-23 | BGE borrow sweep: `random <min> to <max>` value form (parses + evaluates anywhere values are legal, seedable in tests), `face <thing>` continuous tracking word, Enemy patrol jitter example, full brick-borrow map in DESIGN.md §2 | Task 2 B, Task 3 A/C |
 | 2026-10-23 | Task 1 Part B executed: `.gitignore` in project root (FlaxSamples-based, verified), `Source/Game/Events/` + `Source/Game/GameFiles/` (+ seed `Game.events`), 5 placeholder classes (namespace Game), `dotnet build` green 0/0 | Task 1 B done, Task 2 next (Part A: lexer) |
 | 2026-10-23 | Task 2 Part A executed: lexer (tokens/line numbers/friendly errors, strict 2-space indents) + test harness (`Tests/`, 17 green incl. doc self-test over 10 DESIGN.md listings); DESIGN.md listings normalized 4→2 spaces; module rebuilt green. NOTE: Flax module needs explicit `using System…` (no implicit usings there) | Task 2 A done, next: Part B (parser) |
+| 2026-10-23 | Task 2 Part B executed: parser → event tree (`ParseException`, `Ast.cs` = ProgramFile/EventNode/BodyLineNode + SetNode/AddNode/RawActionNode, `EventParser.cs`); value forms incl. `random` ranges, `true`/`false` (new `BooleanValue`), `my` vars, one-op `set` math; friendly errors with near-miss suggestions; found + fixed real gap: `when` inside an event body. §7 shooter parses 16/16 events; 40/40 tests green; module build 0/0 | Task 2 B done, next: Part C (word registry) |
