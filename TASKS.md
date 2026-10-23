@@ -196,11 +196,24 @@ top-to-bottom order.)
   editor run** (see session log for the exact steps).
 
 ### Part D — Hot reload
-- [ ] Watch `.events` files; on save: reparse; if valid, swap the live tree in place and
-  keep existing variable values; if it has errors, keep playing the old tree + show the
-  friendly error.
-- [ ] Verify: fix a typo in a `.events` file while the game runs in the editor and see the
-  fix take effect with no restart.
+- [x] The manager polls the GameFiles folder (0.25s cadence, mtime signatures — no
+  background threads); on the next tick after a save every changed file is re-parsed.
+- [x] A valid save swaps the live event tree **in place** (`EventRuntime.SwapSheetProgram`
+  — triggers re-classified, watch baselines/timers/fired-flags reset, queued pushes and
+  in-flight `wait`s dropped on the swap, `appears` does NOT re-fire on swap). Variable
+  values live in the shared store and are untouched: survival by name comes free; bags
+  stay too. Behavior notes: first `GameStart` stays once-per-session (no refire), and a
+  new `.events` file appearing mid-session attaches to matching actors immediately.
+- [x] A save with errors **keeps the old tree playing** and shows its friendly error once
+  per new error message (fixed text → then swap when a good version arrives). Files that
+  start broken still attach the moment they parse clean.
+- [x] Unit tests on the reload core: swap re-classifies polled triggers, variables
+  survive, waits/queued pushes from the old tree are dropped, duplicate attaches are
+  deduped (`FindActorSheet`), plus genuine file-based reload simulation through the real
+  loader (`EventFiles` on temp GameFiles folders). **152/152 green**; module build 0/0.
+- [ ] Verify (user, editor): with the game playing, save a fix to `Player.events` — the
+  change takes effect during the same play session without a restart; save a typo — the
+  friendly error appears and the old behavior keeps running until the fix saves.
 
 ---
 
@@ -412,3 +425,4 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 | 2026-10-23 | User confirmed Task 1's editor play check (scene added, plays clean) → Task 1 `[x]`. Task 3 Part A executed: `Runtime/ValueBox.cs` (typed values, conversions), `Runtime/EventVariables.cs` (globals + per-object hosts, one-time unset warnings, `CarryValuesFrom` hot-reload survival), `Runtime/ValueEvaluator.cs` (all value forms, seeded `Rng`, one-op math); 75/75 tests green; module build 0/0 | Task 3 A done, next: Part B (execution engine) |
 | 2026-10-23 | Task 3 Part B executed: `Runtime/Triggers.cs` (trigger classifier → descriptors/push signals), `Runtime/Conditions.cs` (condition parse + eval), `Runtime/EventWorld.cs` (key/dist/tag world interface), real `Runtime/EventRuntime.cs` (tick engine: wait-resume → pushed queues → polled every/held/watch, once-per-tick, gates, stop, send-message routing, bags prep); engine text-concat convenience for `set X to X + "txt"`; 108/108 tests green; module build 0/0 | Task 3 B done, next: Part C (Flax bridge) |
 | 2026-10-23 | Task 3 Part C executed: `Bridge/EventsManager.cs` (manager: locate GameFiles, parse, attach-by-name, per-actor `Bridge/EventSheet.cs` collider subscription → Touches/Overlaps, input press/release/held edges + wheel, runtime tick), `Bridge/FlaxWorld.cs` (`IEventWorld` on real Input/Tag), `Bridge/FlaxActions.cs` (move/turn/look at/face/teleport/push/goto/destroy/spawn/sound/hide-show/set text/restart/quit; `play anim` + `load scene` warn for later updates), `Runtime/ActionWords.cs` + `Events/EventFiles.cs` (pure, tested across compile). Flax API mismatches (Orientation/Quaternion, trigger events on Collider not Actor, `Vector3*Quaternion`) caught by build-against-`FlaxEngine.CSharp.dll` + a reflection dump tool; 133/133 tests green; module build 0/0 | Task 3 C done except editor verify (user must play: W → move cube), then Part D (hot reload) |
+| 2026-10-23 | User verified Part C in the editor (WASD move works after speeding to 40; also discovered `set text of` needs a real Canvas/UIControl-Label `HopsLabel` — UI labels need editor setup; note word `show text "..."` candidate for backlog). Task 3 Part D executed: `EventRuntime.SwapSheetProgram` (+ shared `ReadyTree` init), manager-side mtime poll (0.25s) → per-file reload semantics (valid = swap in place, broken = keep old tree + friendly error once per message, new file = attach immediately); variables untouched by swaps (survival by name); reload core covered by 44 new-ish engine tests → **152/152 green**; module build 0/0 | Task 3 D done except user editor verify (edit-while-playing); Task 3 fully code-complete, next: Task 4 (shooter) |

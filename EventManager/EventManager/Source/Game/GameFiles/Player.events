@@ -3,16 +3,16 @@
 # Hot reload (Part D) will refresh saves; for now the sheet attaches on play start.
 
 when W is held
-  move forward speed 5
+  move forward speed 40
 
 when A is held
-  move left speed 5
+  move left speed 40
 
 when D is held
-  move right speed 5
+  move right speed 40
 
 when S is held
-  move backward speed 5
+  move backward speed 40
 
 when Space is pressed
   add 1 to Hops

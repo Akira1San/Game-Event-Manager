@@ -93,19 +93,35 @@ namespace Game
                 Program = program,
                 AnchorTime = Time,
             };
+            ReadyTree(sheet, program);
+            sheets.Add(sheet);
+            sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.Appears });
+            return sheet;
+        }
+
+        public void SwapSheetProgram(SheetInstance sheet, ProgramFile replacement)
+        {
+            if (sheet == null || replacement == null)
+                return;
+            ReadyTree(sheet, replacement);
+            sheet.PushQueue.Clear();
+            sheet.Waiting.Clear();
+        }
+
+        private void ReadyTree(SheetInstance sheet, ProgramFile program)
+        {
+            sheet.Program = program;
             int count = program.Events.Count;
             sheet.FiredThisTick = new bool[count];
             sheet.LastFire = new double[count];
             sheet.Watches = new WatchState[count];
+            sheet.Triggers.Clear();
             for (int i = 0; i < count; i++)
             {
                 sheet.LastFire[i] = Time;
                 sheet.Watches[i] = new WatchState();
                 sheet.Triggers.Add(TriggerClassifier.Classify(program.Events[i]));
             }
-            sheets.Add(sheet);
-            sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.Appears });
-            return sheet;
         }
 
         public void RemoveAllSheets()
@@ -166,6 +182,14 @@ namespace Game
             foreach (var sheet in sheets)
                 if (sheet.ActorName == name)
                     return sheet.Actor;
+            return null;
+        }
+
+        public SheetInstance FindActorSheet(string name)
+        {
+            foreach (var sheet in sheets)
+                if (name != "Game" && sheet.ActorName == name)
+                    return sheet;
             return null;
         }
 

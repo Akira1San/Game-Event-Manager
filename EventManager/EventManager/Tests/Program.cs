@@ -1,4 +1,4 @@
-using Game;
+﻿using Game;
 using System.Text;
 
 int passed = 0;
@@ -793,16 +793,27 @@ tagEngine.PushContact(TriggerKind.Overlaps, tagSheet.Actor, bomb);
 tagEngine.Tick(0);
 Check(tagEngine.Variables.GetGlobal("TagHits").AsNumber() == 1 && tagEngine.Variables.GetGlobal("FriendHits").Kind == ValueKind.None, "tag conditions read world tags");
 
-Console.WriteLine();
-Console.WriteLine($"{passed} passed, {failed} failed");
-if (failed > 0)
-    Environment.Exit(1);
-
 static List<Token> RawWords(EventParser parser, string source)
 {
     var program = parser.Parse(source);
     var raw = (RawActionNode)program.Events[0].Body[0].Statement!;
     return raw.Words;
+}
+
+static List<Token> LooseWords(params string[] words)
+{
+    var tokens = new List<Token>();
+    foreach (string word in words)
+    {
+        var token = new Token { Type = TokenType.Word, Text = word, Line = 2 };
+        if (double.TryParse(word, out double number))
+        {
+            token.Type = TokenType.Number;
+            token.Number = number;
+        }
+        tokens.Add(token);
+    }
+    return tokens;
 }
 
 var actionParser = new EventParser();
@@ -875,12 +886,12 @@ var destroyMe = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   destroy me"), null);
 Check(destroyMe.Verb == ActionVerb.Destroy && destroyMe.Thing == "me", "`destroy me` parses");
 
-var spawnSpec = ActionWords.Parse(RawWords(actionParser, @"when Other overlaps me
+var spawnSpec = ActionWords.Parse(RawWords(actionParser, @"when me overlaps SpawnPoint
   spawn Bullet at me"), null);
 Check(spawnSpec.Verb == ActionVerb.Spawn && spawnSpec.Thing == "Bullet" && spawnSpec.To == "me",
     "`spawn Bullet at me` parses");
 
-var spawnAtThing = ActionWords.Parse(RawWords(actionParser, @"when Other overlaps me
+var spawnAtThing = ActionWords.Parse(RawWords(actionParser, @"when me overlaps SpawnPoint
   spawn Coin at SpawnPoint"), null);
 Check(spawnAtThing.Verb == ActionVerb.Spawn && spawnAtThing.Thing == "Coin" && spawnAtThing.To == "SpawnPoint",
     "`spawn Coin at SpawnPoint` parses");
@@ -923,14 +934,12 @@ var quitSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   quit game"), null);
 Check(quitSpec.Verb == ActionVerb.QuitGame, "`quit game` parses");
 
-var bananaAction = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
-  banana time"), GrabHint);
+var bananaAction = ActionWords.Parse(LooseWords("banana", "time"), GrabHint);
 Check(bananaAction.Verb == ActionVerb.Unknown && actionHint.Contains("banana"),
     "an odd action line gets the unknown-word explanation");
 
 actionHint = "";
-var oddMove = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
-  move sideways"), GrabHint);
+var oddMove = ActionWords.Parse(LooseWords("move", "sideways"), GrabHint);
 Check(oddMove.Verb == ActionVerb.Unknown && actionHint.Contains("\u201Cmove\u201D"),
     "a bent `move` line explains the shape (move looks like this)");
 
@@ -945,10 +954,11 @@ string fromDeep = EventFiles.LocateGameFiles(Path.Combine(tempBase, "Source", "G
 Check(fromDeep == gameDir, "the loader walks up from a deeper folder");
 Check(EventFiles.LocateGameFiles(tempBase) == gameDir, "the loader finds GameFiles from the project root");
 File.WriteAllText(Path.Combine(tempBase, "Solo.events"), "when game starts\n  set Score to 0");
-Directory.CreateDirectory(Path.Combine(tempBase, "GameFiles"));
-File.WriteAllText(Path.Combine(tempBase, "GameFiles", "Solo.events"), "when game starts\n  set Score to 0");
-Check(EventFiles.LocateGameFiles(tempBase) == Path.Combine(tempBase, "GameFiles"),
-    "a loose GameFiles folder sells too (GameFiles path found)");
+string looseRoot = Path.Combine(tempBase, "Loose");
+Directory.CreateDirectory(Path.Combine(looseRoot, "GameFiles"));
+File.WriteAllText(Path.Combine(looseRoot, "GameFiles", "Solo.events"), "when game starts\n  set Score to 0");
+Check(EventFiles.LocateGameFiles(looseRoot) == Path.Combine(looseRoot, "GameFiles"),
+    "a loose GameFiles folder works too (GameFiles path found)");
 Check(EventFiles.LocateGameFiles(Path.GetTempPath()) == null,
     "no GameFiles anywhere is null (not a crash)");
 
@@ -963,6 +973,65 @@ Check(loaded[1].Error.Length == 0 && loaded[1].File.Events.Count == 1,
     "the good file parses to one event");
 
 Directory.Delete(tempBase, true);
+
+var reloadParser = new EventParser();
+var reloadEngine = FreshEngine(new FakeWorld());
+var timerBefore = reloadParser.Parse(@"when every 1 seconds
+  add 1 to TimerTicks");
+var timerSheet = reloadEngine.AddSheet(new FakeActor("Watcher"), timerBefore);
+reloadEngine.Tick(0.5);
+Check(reloadEngine.Variables.GetGlobal("TimerTicks").Kind == ValueKind.None, "before the swap the timer keeps its old counting");
+reloadEngine.Tick(1);
+Check(reloadEngine.Variables.GetGlobal("TimerTicks").AsNumber() == 1, "the old program fires its own timer first");
+
+reloadEngine.Variables.SetGlobal("Score", ValueBox.OfNumber(5));
+reloadEngine.Variables.SetGlobal("TimerTicks", ValueBox.OfNumber(1));
+var timerAfter = reloadParser.Parse(@"when every 0.5 seconds
+  add 1 to HalfTicks");
+reloadEngine.SwapSheetProgram(timerSheet, timerAfter);
+Check(reloadEngine.Variables.GetGlobal("Score").AsNumber() == 5,
+    "variable values survive the swap untouched");
+reloadEngine.Tick(1.5);
+Check(reloadEngine.Variables.GetGlobal("HalfTicks").AsNumber() == 1 && reloadEngine.Variables.GetGlobal("TimerTicks").AsNumber() == 1,
+    "after the swap the new program's timer runs and the old one is gone");
+
+var waitingBefore = reloadParser.Parse(@"when game starts
+  wait 2 seconds
+  set ResumeLog to Late");
+var waitingSheet = reloadEngine.AddSheet(new FakeActor("Waiter"), waitingBefore);
+reloadEngine.SessionStarted();
+reloadEngine.SwapSheetProgram(waitingSheet, reloadParser.Parse(@"when game starts
+  set ResumeLog to Nope"));
+reloadEngine.Tick(3);
+Check(reloadEngine.Variables.GetGlobal("ResumeLog").Kind == ValueKind.None,
+    "a `wait` from the old tree is dropped on the swap (fresh state)");
+
+var staleSheet = reloadEngine.AddSheet(new FakeActor("EdgeListener"), reloadParser.Parse(@"when K is pressed
+  set StalePress to 1"));
+reloadEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "K" });
+reloadEngine.SwapSheetProgram(staleSheet, reloadParser.Parse(@"when K is pressed
+  set StalePress to 2"));
+reloadEngine.Tick(0);
+Check(reloadEngine.Variables.GetGlobal("StalePress").Kind == ValueKind.None,
+    "queued pushes from before the swap don't fire into the new tree");
+
+var appearSheet = reloadEngine.AddSheet(new FakeActor("Reborn"), reloadParser.Parse(@"when game starts
+  set DummyFlag to 1"));
+reloadEngine.SessionStarted();
+reloadEngine.Tick(0);
+reloadEngine.SwapSheetProgram(appearSheet, reloadParser.Parse(@"when me appears
+  set NewBorn to 1"));
+reloadEngine.Tick(0.1);
+Check(reloadEngine.Variables.GetGlobal("NewBorn").Kind == ValueKind.None,
+    "the swapped tree does not auto-fire `appears` (that only happens on real adds)");
+
+Check(reloadEngine.FindActorSheet("Watcher") == timerSheet && reloadEngine.FindActorSheet("Game") == null,
+    "FindActorSheet dedupes attach lookups and never returns the global sheet");
+
+Console.WriteLine();
+Console.WriteLine($"{passed} passed, {failed} failed");
+if (failed > 0)
+    Environment.Exit(1);
 
 class FakeActor
 {

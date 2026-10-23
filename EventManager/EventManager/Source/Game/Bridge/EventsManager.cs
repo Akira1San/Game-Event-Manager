@@ -12,6 +12,10 @@ namespace Game
         public EventRuntime Runtime = new EventRuntime();
         private readonly FlaxWorld _world = new FlaxWorld();
         private readonly Dictionary<string, bool> _heldLastTick = new Dictionary<string, bool>();
+        private string _gameFilesFolder;
+        private readonly Dictionary<string, string> _fileSignatures = new Dictionary<string, string>();
+        private readonly Dictionary<string, string> _shownErrors = new Dictionary<string, string>();
+        private float _nextWatchCheck;
 
         public void HandleTouch(Actor me, Actor other, bool leaving)
         {
@@ -33,35 +37,16 @@ namespace Game
                 FlaxActions.SetText(thing, value.AsText());
             };
 
-            string folder = EventFiles.LocateGameFiles(System.IO.Directory.GetCurrentDirectory())
+            _gameFilesFolder = EventFiles.LocateGameFiles(System.IO.Directory.GetCurrentDirectory())
                 ?? EventFiles.LocateGameFiles(AppContext.BaseDirectory);
-            if (folder == null)
+            if (_gameFilesFolder == null)
             {
                 Debug.LogWarning("I couldn't find a GameFiles folder with .events files — events won't run this scene.");
                 return;
             }
-            var programs = EventFiles.LoadAll(folder);
-            foreach (EventFileResult program in programs)
-            {
-                if (!string.IsNullOrEmpty(program.Error))
-                {
-                    Debug.LogWarning($"Event sheet: I found a problem in {System.IO.Path.GetFileName(program.Path)} and I'm skipping it for now:\n    {program.Error}");
-                    continue;
-                }
-                if (program.Name == "Game")
-                {
-                    Runtime.AddSheet(new GlobalHost(), program.File);
-                    continue;
-                }
-                foreach (Actor actor in SceneActors())
-                {
-                    if (actor.Name == program.Name)
-                    {
-                        Runtime.AddSheet(actor, program.File);
-                        StickerTo(actor);
-                    }
-                }
-            }
+            var programs = EventFiles.LoadAll(_gameFilesFolder);
+            RememberSignatures(programs);
+            AttachPrograms(programs, startedNow: true);
 
             if (!_gameStartFiredThisSession)
             {
@@ -69,6 +54,120 @@ namespace Game
                 Runtime.SessionStarted();
             }
             Runtime.SceneStarted();
+        }
+
+        private void RememberSignatures(List<EventFileResult> programs)
+        {
+            _fileSignatures.Clear();
+            foreach (EventFileResult program in programs)
+                _fileSignatures[program.Name] = FileSignature(program.Path);
+        }
+
+        private static string FileSignature(string path)
+        {
+            try
+            {
+                return System.IO.File.GetLastWriteTimeUtc(path).Ticks.ToString();
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        private void CheckForChanges()
+        {
+            if (_gameFilesFolder == null || Time.UnscaledGameTime < _nextWatchCheck)
+                return;
+            _nextWatchCheck = Time.UnscaledGameTime + 0.25f;
+            var programs = EventFiles.LoadAll(_gameFilesFolder);
+            bool changed = false;
+            foreach (EventFileResult program in programs)
+            {
+                string signature = FileSignature(program.Path);
+                _fileSignatures.TryGetValue(program.Name, out string known);
+                if (known != null && known == signature)
+                    continue;
+                changed = true;
+                break;
+            }
+            if (!changed)
+                return;
+            RememberSignatures(programs);
+            ApplyReload(programs);
+        }
+
+        private void ApplyReload(List<EventFileResult> programs)
+        {
+            var byName = new Dictionary<string, EventFileResult>();
+            foreach (EventFileResult program in programs)
+                byName[program.Name] = program;
+            foreach (SheetInstance sheet in Runtime.Sheets)
+            {
+                bool global = sheet.ActorName == "Game";
+                byName.TryGetValue(global ? "Game" : sheet.ActorName, out EventFileResult fresh);
+                if (fresh == null)
+                    continue;
+                if (!string.IsNullOrEmpty(fresh.Error))
+                {
+                    if (_shownErrors.TryGetValue(fresh.Name, out string previous) && previous == fresh.Error)
+                        continue;
+                    _shownErrors[fresh.Name] = fresh.Error;
+                    Debug.LogWarning($"Event sheet: your latest edit to {fresh.Name}.events has a problem, so the old version keeps playing for now:\n    {fresh.Error}");
+                    continue;
+                }
+                _shownErrors.Remove(fresh.Name);
+                Runtime.SwapSheetProgram(sheet, fresh.File);
+            }
+            AttachPrograms(programs, startedNow: false);
+        }
+
+        private void AttachPrograms(List<EventFileResult> programs, bool startedNow)
+        {
+            foreach (EventFileResult program in programs)
+            {
+                if (!string.IsNullOrEmpty(program.Error))
+                {
+                    ShowFileError(program, startedNow);
+                    continue;
+                }
+                if (program.Name == "Game")
+                {
+                    if (!HasGlobalSheet())
+                        Runtime.AddSheet(new GlobalHost(), program.File);
+                    continue;
+                }
+                if (Runtime.FindActorSheet(program.Name) != null)
+                    continue;
+                foreach (Actor actor in SceneActors())
+                {
+                    if (actor.Name != program.Name)
+                        continue;
+                    if (Runtime.FindActorSheet(program.Name) != null)
+                        continue;
+                    Runtime.AddSheet(actor, program.File);
+                    StickerTo(actor);
+                }
+            }
+        }
+
+        private void ShowFileError(EventFileResult program, bool startedNow)
+        {
+            string head = startedNow
+                ? $"I found a problem in {program.Name}.events and I'm skipping it for now"
+                : $"your latest edit to {program.Name}.events has a problem, the old version keeps playing";
+            if (_shownErrors.TryGetValue(program.Name, out string previous) && previous == program.Error && !startedNow)
+                return;
+            _shownErrors[program.Name] = program.Error;
+            Debug.LogWarning($"Event sheet: {head}:\n    {program.Error}");
+        }
+
+        private bool HasGlobalSheet()
+        {
+            foreach (SheetInstance sheet in Runtime.Sheets)
+                if (sheet.Actor is GlobalHost)
+                    return true;
+            return false;
         }
 
         private void CancelOneTime(string message)
@@ -88,6 +187,7 @@ namespace Game
         {
             float delta = (float)(Time.DeltaTime > 0 ? Time.DeltaTime : 0.0001);
             FlaxActions.DeltaTime = delta;
+            CheckForChanges();
             InputEdges();
             Runtime.Tick(Time.GameTime);
         }

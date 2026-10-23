@@ -34,7 +34,8 @@
 					"Z": 0.0,
 					"W": 0.9238795042037964
 				}
-			}
+			},
+			"ShadowsResolution": 512
 		},
 		{
 			"ID": "30225d3048efceeb426548a585fbf2c7",
@@ -90,8 +91,14 @@
 			"Transform": {
 				"Translation": {
 					"X": 0.0,
-					"Y": 150.0,
-					"Z": -300.0
+					"Y": 243.1348114013672,
+					"Z": -202.57936096191406
+				},
+				"Orientation": {
+					"X": 0.3585054278373718,
+					"Y": 0.0,
+					"Z": 0.0,
+					"W": 0.9335277080535889
 				}
 			}
 		},
@@ -100,6 +107,169 @@
 			"TypeName": "FlaxEngine.AudioListener",
 			"ParentID": "9ed0df044097dc1da2ffe6bec8ec4f36",
 			"Name": "Audio Listener"
+		},
+		{
+			"ID": "b622752b47787e3a9c71e1af5348d30b",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "c12b45cc40f447e8a2722b9715a79dc0",
+			"Name": "Player",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 79.60505676269531,
+					"Z": 0.0
+				},
+				"Scale": {
+					"X": 0.20000000298023224,
+					"Y": 0.20000000298023224,
+					"Z": 0.20000000298023224
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "97d0c336416d97820af725b36c29376d",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "923634384514367568fdb3aef65dc20a",
+			"TypeName": "Game.EventsManager",
+			"ParentID": "b622752b47787e3a9c71e1af5348d30b",
+			"V": {
+	"Runtime": {
+		"Variables": {
+			"OnWarning": {}
+		},
+		"World": {
+			"$type": "Game.DefaultEventWorld, Game.CSharp"
+		}
+	}
+}
+		},
+		{
+			"ID": "e4ff2916467ceb44ac7a248c45a4fcb4",
+			"TypeName": "FlaxEngine.UICanvas",
+			"ParentID": "c12b45cc40f447e8a2722b9715a79dc0",
+			"Transform": {
+				"Orientation": {
+					"X": 1.0,
+					"Y": 4.371138828673793e-8,
+					"Z": 4.371138828673793e-8,
+					"W": 1.910685465164705e-15
+				}
+			},
+			"V": {}
+		},
+		{
+			"ID": "719f734d483ca7b29a8031a8f7ccf40c",
+			"TypeName": "FlaxEngine.UIControl",
+			"ParentID": "e4ff2916467ceb44ac7a248c45a4fcb4",
+			"Name": "Canvas Scalar",
+			"Control": "FlaxEngine.GUI.CanvasScaler",
+			"Data": {
+	"ResolutionCurve": {
+		"Keyframes": [
+			{
+				"Time": 0.0,
+				"Value": 0.0
+			},
+			{
+				"Time": 480.0,
+				"Value": 0.444
+			},
+			{
+				"Time": 720.0,
+				"Value": 0.666
+			},
+			{
+				"Time": 1080.0,
+				"Value": 1.0
+			},
+			{
+				"Time": 8640.0,
+				"Value": 8.0
+			}
+		]
+	},
+	"DpiCurve": {
+		"Keyframes": [
+			{
+				"Time": 1.0,
+				"Value": 1.0
+			},
+			{
+				"Time": 96.0,
+				"Value": 1.0
+			},
+			{
+				"Time": 200.0,
+				"Value": 2.0
+			},
+			{
+				"Time": 400.0,
+				"Value": 4.0
+			}
+		]
+	},
+	"Scaling": 0,
+	"ScaleFactor": 1.0,
+	"PhysicalUnit": 3,
+	"PhysicalUnitSize": 1.0,
+	"ResolutionMode": 0,
+	"ResolutionMin": {
+		"X": 1.0,
+		"Y": 1.0
+	},
+	"ResolutionMax": {
+		"X": 7680.0,
+		"Y": 4320.0
+	},
+	"ClipChildren": true,
+	"CullChildren": true,
+	"AnchorMin": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"AnchorMax": {
+		"X": 1.0,
+		"Y": 1.0
+	},
+	"Offsets": {
+		"Left": 0.0,
+		"Right": 0.0,
+		"Top": 0.0,
+		"Bottom": 0.0
+	},
+	"Scale": {
+		"X": 1.0,
+		"Y": 1.0
+	},
+	"Pivot": {
+		"X": 0.5,
+		"Y": 0.5
+	},
+	"Shear": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Rotation": 0.0,
+	"BackgroundColor": {
+		"R": 0.0,
+		"G": 0.0,
+		"B": 0.0,
+		"A": 0.0
+	},
+	"BackgroundBrush": null,
+	"Enabled": true,
+	"Visible": true,
+	"AutoFocus": false
+}
 		}
 	]
 }
