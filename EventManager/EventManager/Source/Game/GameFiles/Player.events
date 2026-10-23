@@ -1,9 +1,19 @@
-# Player.events — smoke-test sheet for the bridge (Task 3 Part C verify).
-# Put this next to Game.events; an actor named Player suffices: move is W-hold, space hops the counter.
-# Hot reload (Part D) will refresh saves; for now the sheet attaches on play start.
+# Player.events — smoke-test sheet for the bridge (Task 3 Part C/D verify).
+# An actor named Player suffices: WASD walks at 40, holding Shift while pressing W sprints at 70.
+# The `unless` line is a gate: while Shift is down, the walk move is skipped, and the sprint
+# event (which only runs while W is held too) pushes the faster step instead.
+# Left Mouse / Right Mouse / Middle Mouse and other named keys work the same way.
+
+when game starts
+  set WalkHint to "walk with WASD, hold Shift with W to sprint"
 
 when W is held
+  unless Left Shift is held
   move forward speed 40
+
+when Left Shift is held
+  W is held
+  move forward speed 70
 
 when A is held
   move left speed 40

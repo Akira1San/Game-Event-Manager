@@ -649,6 +649,29 @@ heldWorld.SetHeld("W", false);
 heldEngine.Tick(2);
 Check(heldLog.Count == 2, "`when W is held` fires every tick while held, then stops");
 
+var sprintWorld = new FakeWorld();
+var sprintEngine = FreshEngine(sprintWorld);
+var sprintLog = new List<string>();
+var sprintProgram = parser.Parse(@"when W is held
+  unless Left Shift is held
+  move forward speed 40
+when Left Shift is held
+  W is held
+  move forward speed 70");
+var sprintSheet = sprintEngine.AddSheet(new FakeActor("Runner"), sprintProgram);
+sprintEngine.OnRawAction = (context, words) => sprintLog.Add(words.Count >= 4 ? words[3].Text + " " + words[1].Text : "?");
+sprintWorld.SetHeld("W", true);
+sprintEngine.Tick(0);
+Check(sprintLog.Count == 1 && sprintLog[0] == "40 forward", "walk alone moves the normal speed (sprint cut event)");
+sprintWorld.SetHeld("Left Shift", true);
+sprintLog.Clear();
+sprintEngine.Tick(1);
+Check(sprintLog.Count == 1 && sprintLog[0] == "70 forward", "shift down swaps the step: W walk skipped, sprint runs");
+sprintWorld.SetHeld("W", false);
+sprintLog.Clear();
+sprintEngine.Tick(2);
+Check(sprintLog.Count == 0, "shift alone goes nowhere (sprint is gated to W being held too)");
+
 var watchEngine = FreshEngine(new FakeWorld());
 var watchProgram = parser.Parse(@"when Score changes
   set Hits to Hits + 1
