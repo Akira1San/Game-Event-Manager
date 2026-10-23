@@ -130,11 +130,37 @@ top-to-bottom order.)
   `**` wildcard is avoided — it would swallow Flax's `Game.Build.cs`/`Game.Gen.cs`.)
 
 ### Part B — Execution engine
-- [ ] Tick the event trees exactly per DESIGN.md: pushed trigger queue first, then polled
-  checks, every matching event runs in written order, actions run one-by-one, each event
-  fires at most once per tick.
-- [ ] Implement `wait`, `stop this event`, and `unless`-gating (gates actions below it).
-- [ ] Unit test: an order-dependence scenario produces the scripted results.
+- [x] Trigger descriptors (`Runtime/Triggers.cs`): every trigger token list classifies into a
+  `TriggerKind` with parameters (key names, required partner/thing names, timer seconds,
+  watch variable + target value, message/anim names) — pushed kinds flow through a
+  per-sheet queue, polled kinds (`is held`, `every N seconds`, `becomes`/`changes`
+  watches) are evaluated each tick.
+- [x] Tick engine (`Runtime/EventRuntime.cs`, `Conditions.cs`, `EventWorld.cs`), exactly per
+  DESIGN.md §3/§6: resumes due `wait` continuations first, then pumps the pushed queues
+  (each event fires **at most once per tick** even with multiple queued pushes; two
+  same-tick pushes don't run it twice), then the polled pass. All matching events run
+  in written order, actions one-by-one; sheet order = add order, top wins.
+- [x] `wait` (incl. `wait random a to b seconds` — seeded via `Rng`, suspends only that
+  event, resumption carries the gate state), `stop this event`, `unless` +
+  bare-condition gating (each condition line re-gates until the next one), `send
+  message` routed same-day semantics: queued on the receiving sheet's push queue
+  (processed next tick), broadcast when untargeted. Messages / contacts push via
+  `PushContact`, `RaisePush(All)`, `SendRawMessage`; `Game.events`
+  helpers: `SessionStarted`, `SceneStarted` (scene start refires per session call),
+  `when me appears` auto-pushes on sheet add.
+- [x] Engine-native statements: `set` (one-op math; `+` on text values joins them — noted
+  as an engine convenience), `add`, `set text of` → `OnSetText` hook; everything else
+  dispatches raw to the `OnRawAction` hook (Part C wires the real words there).
+  Engine-native condition kinds: `is/is not/higher/lower`, `exists`/`does not exist`,
+  `near by` (via `IEventWorld.Distance`), `key is held`, `chance N%` (Rng), `has tag`,
+  `my bag has` (bag store pre-built for the items task); unknown conditions warn once
+  and read false.
+- [x] Unit test: order-dependence scenario (all matching events in order, once per tick
+  with duplicate pushes), pushed-before-polled, `wait` resume before fresh polled pass,
+  session/scene/appears lifecycle, gating chains, stop-early, held-key repetition,
+  global + per-object watch edges, message fan-out/targeting, gates by chance/bag/near/
+  exists/tags — **108/108 green**; module build 0/0 (explicit usings quirk once more in
+  `Triggers.cs`).
 
 ### Part C — Flax bridge (words become real)
 - [ ] `EventSheet` script per actor: hooks `OnStart` / `OnUpdate` / triggers / input,
@@ -363,3 +389,4 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 | 2026-10-23 | Task 2 Part B executed: parser → event tree (`ParseException`, `Ast.cs` = ProgramFile/EventNode/BodyLineNode + SetNode/AddNode/RawActionNode, `EventParser.cs`); value forms incl. `random` ranges, `true`/`false` (new `BooleanValue`), `my` vars, one-op `set` math; friendly errors with near-miss suggestions; found + fixed real gap: `when` inside an event body. §7 shooter parses 16/16 events; 40/40 tests green; module build 0/0 | Task 2 B done, next: Part C (word registry) |
 | 2026-10-23 | Task 2 Part C executed: `WordRegistry.cs` (24 trigger shapes + conditions + action entries w/ examples, replaces hardcoded `KnownWords`); trigger-shape validation w/ placeholders, `and` splits, dangling-`and` error; `set text of` → `SetTextNode` so menu vocab parses; every registered example parses (66); 47/47 tests green; module build 0/0 (explicit usings quirk again) | Task 2 C done — Task 2 complete, next: Task 3 (runtime) |
 | 2026-10-23 | User confirmed Task 1's editor play check (scene added, plays clean) → Task 1 `[x]`. Task 3 Part A executed: `Runtime/ValueBox.cs` (typed values, conversions), `Runtime/EventVariables.cs` (globals + per-object hosts, one-time unset warnings, `CarryValuesFrom` hot-reload survival), `Runtime/ValueEvaluator.cs` (all value forms, seeded `Rng`, one-op math); 75/75 tests green; module build 0/0 | Task 3 A done, next: Part B (execution engine) |
+| 2026-10-23 | Task 3 Part B executed: `Runtime/Triggers.cs` (trigger classifier → descriptors/push signals), `Runtime/Conditions.cs` (condition parse + eval), `Runtime/EventWorld.cs` (key/dist/tag world interface), real `Runtime/EventRuntime.cs` (tick engine: wait-resume → pushed queues → polled every/held/watch, once-per-tick, gates, stop, send-message routing, bags prep); engine text-concat convenience for `set X to X + "txt"`; 108/108 tests green; module build 0/0 | Task 3 B done, next: Part C (Flax bridge) |

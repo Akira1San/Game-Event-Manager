@@ -452,6 +452,347 @@ var scoreValue = ValueEvaluator.Evaluate(new VariableValue { Name = "Score", Own
     variable => variable.Owner == "my" ? diceStore.GetLocal(player, variable.Name) : diceStore.GetGlobal(variable.Name));
 Check(scoreValue.Kind == ValueKind.None, "a variable resolves through the runtime's variable context");
 
+// ------------------------------------------------------------------
+// Runtime Part B: execution engine (ticks, pushing, waits, gating)
+// ------------------------------------------------------------------
+
+string J(List<Token> words)
+{
+    var parts = new System.Text.StringBuilder();
+    foreach (var w in words)
+    {
+        if (parts.Length > 0)
+            parts.Append(' ');
+        parts.Append(w.Text);
+    }
+    return parts.ToString();
+}
+
+EventRuntime FreshEngine(FakeWorld world)
+{
+    var engine = new EventRuntime();
+    engine.World = world;
+    return engine;
+}
+
+var overlapWorld = new FakeWorld();
+var overlapEngine = FreshEngine(overlapWorld);
+var overlapLog = new List<string>();
+overlapEngine.OnRawAction = (context, words) => overlapLog.Add(J(words));
+
+var overlapProgram = parser.Parse(@"when game starts
+  set Order to """"
+when me overlaps Bomb
+  set Order to Order + ""A""
+when me overlaps Bomb
+  set Order to Order + ""B""");
+var overlapActor = new FakeActor("Surveyor");
+var bombee = new FakeActor("Bomb");
+overlapEngine.AddSheet(overlapActor, overlapProgram);
+overlapEngine.SessionStarted();
+overlapEngine.PushContact(TriggerKind.Overlaps, overlapActor, bombee);
+overlapEngine.Tick(0);
+var overlapOrder = overlapEngine.Variables.GetGlobal("Order").AsText();
+Check(overlapOrder == "AB", $"all matching events run in written order (got {overlapOrder})");
+
+overlapEngine.PushContact(TriggerKind.Overlaps, overlapActor, bombee);
+overlapEngine.PushContact(TriggerKind.Overlaps, overlapActor, bombee);
+overlapEngine.Tick(0.1);
+overlapOrder = overlapEngine.Variables.GetGlobal("Order").AsText();
+Check(overlapOrder == "ABAB", "an event fires at most once per tick, even with two pushes queued");
+
+overlapEngine.PushContact(TriggerKind.Overlaps, overlapActor, bombee);
+overlapEngine.Tick(0.2);
+overlapOrder = overlapEngine.Variables.GetGlobal("Order").AsText();
+Check(overlapOrder == "ABABAB", "pushed events fire again on the next tick");
+
+var orderWorld = new FakeWorld();
+var orderEngine = FreshEngine(orderWorld);
+orderEngine.OnRawAction = (context, words) => { };
+var orderProgram = parser.Parse(@"when game starts
+  set Order to """"
+when every 2 seconds
+  set Order to Order + ""B""
+when message ""go"" arrives
+  set Order to Order + ""A""");
+var orderActor = new FakeActor("Scheduler");
+orderEngine.AddSheet(orderActor, orderProgram);
+orderEngine.SessionStarted();
+orderEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.Message, Name = "go", Other = orderActor });
+orderEngine.Tick(0);
+Check(orderEngine.Variables.GetGlobal("Order").AsText() == "A", "pushed triggers run before the polled pass");
+orderEngine.Tick(2);
+Check(orderEngine.Variables.GetGlobal("Order").AsText() == "AB", "polled timers fire on their own schedule (2 seconds)");
+
+var sessionProgram = parser.Parse(@"when game starts
+  set SessionLog to SessionLog + ""G""
+when scene starts
+  set SessionLog to SessionLog + ""S""");
+var sessionEngine = FreshEngine(new FakeWorld());
+sessionEngine.AddSheet(new FakeActor("Watcher"), sessionProgram);
+sessionEngine.SessionStarted();
+sessionEngine.SceneStarted();
+sessionEngine.Tick(0);
+Check(sessionEngine.Variables.GetGlobal("SessionLog").AsText() == "GS", "slot: session start (pushed) then scene start in order");
+var sessionEngine2 = FreshEngine(new FakeWorld());
+sessionEngine2.AddSheet(new FakeActor("Watcher"), sessionProgram);
+sessionEngine2.SessionStarted();
+sessionEngine2.SceneStarted();
+sessionEngine2.Tick(0);
+sessionEngine2.SceneStarted();
+sessionEngine2.Tick(1);
+Check(sessionEngine2.Variables.GetGlobal("SessionLog").AsText() == "GSS", "scene start refires on every scene load, game start does not");
+
+var appearProgram = parser.Parse("when me appears\n  set Born to Born + 1");
+var appearEngine = FreshEngine(new FakeWorld());
+appearEngine.AddSheet(new FakeActor("Spawned"), appearProgram);
+appearEngine.Tick(0);
+appearEngine.Tick(1);
+Check(appearEngine.Variables.GetGlobal("Born").AsNumber() == 1, "`when me appears` pushes once when a sheet is added");
+
+var waitWorld = new FakeWorld();
+var waitEngine = FreshEngine(waitWorld);
+waitEngine.OnRawAction = (context, words) => { };
+var waitProgram = parser.Parse(@"when game starts
+  set Order to """"
+when every 3 seconds
+  wait 1 second
+  set Order to Order + ""W""
+when every 4 seconds
+  set Order to Order + ""T""");
+var waitActor = new FakeActor("Clock");
+waitEngine.AddSheet(waitActor, waitProgram);
+waitEngine.SessionStarted();
+waitEngine.Tick(0);
+waitEngine.Tick(3);
+Check(waitEngine.Variables.GetGlobal("Order").AsText() == "", "wait suspends only the event, the game keeps ticking");
+waitEngine.Tick(4);
+Check(waitEngine.Variables.GetGlobal("Order").AsText() == "WT", "suspended continuations resume before the fresh polled pass");
+
+Rng.Seed(11);
+var expectedSpan = ValueEvaluator.Evaluate(new RandomRangeValue { Min = new NumberValue { Value = 0.5 }, Max = new NumberValue { Value = 2 } }, null).AsNumber();
+var randomWaitEngine = FreshEngine(new FakeWorld());
+var randomWaitLog = new List<string>();
+randomWaitEngine.OnRawAction = (context, words) => randomWaitLog.Add(J(words));
+var randomWaitProgram = parser.Parse(@"when me overlaps Bomb
+  wait random 0.5 to 2 seconds
+  set Order to Order + ""late""");
+var randomWaitSheet = randomWaitEngine.AddSheet(new FakeActor("RandomWish"), randomWaitProgram);
+Rng.Seed(11);
+randomWaitEngine.PushContact(TriggerKind.Overlaps, randomWaitSheet.Actor, new FakeActor("Bomb"));
+randomWaitEngine.Tick(3);
+bool pendingFound = false;
+double resumeAt = 0;
+foreach (var waiting in randomWaitSheet.Waiting)
+{
+    pendingFound = true;
+    resumeAt = waiting.ResumeAt;
+}
+Check(pendingFound && Math.Abs(resumeAt - (3 + expectedSpan)) < 0.000001, $"wait random honors the seeded span (expected {3 + expectedSpan}, got {resumeAt})");
+randomWaitEngine.Tick(resumeAt);
+Check(randomWaitEngine.Variables.GetGlobal("Order").AsText() == "late", "the suspended event resumes exactly on time");
+
+var gateWorld = new FakeWorld();
+var gateEngine = FreshEngine(gateWorld);
+var gateLog = new List<string>();
+var gateProgram = parser.Parse(@"when me overlaps Bomb
+  unless Score is 0
+  set Order to Order + ""A""
+  unless Score is 5
+  set Order to Order + ""B""");
+var gateSheet = gateEngine.AddSheet(new FakeActor("Door"), gateProgram);
+var bomb = new FakeActor("Bomb");
+gateEngine.Variables.SetGlobal("Score", ValueBox.OfNumber(0));
+gateEngine.PushContact(TriggerKind.Overlaps, gateSheet.Actor, bomb);
+gateEngine.Tick(0);
+Check(gateEngine.Variables.GetGlobal("Order").AsText() == "B", "an `unless` line gates the actions below it until the next condition line");
+gateEngine.Variables.SetGlobal("Score", ValueBox.OfNumber(5));
+gateEngine.PushContact(TriggerKind.Overlaps, gateSheet.Actor, bomb);
+gateEngine.Tick(1);
+Check(gateEngine.Variables.GetGlobal("Order").AsText() == "BA", "the gate follows each new condition line");
+var gateEngine2 = FreshEngine(new FakeWorld());
+var gateProgram2 = parser.Parse(@"when every 10 seconds
+  my mode is ""chase""
+  set Order to Order + ""!""
+  my mode is ""patrol""
+  set Order to Order + ""?""");
+var gateSheet2 = gateEngine2.AddSheet(new FakeActor("Robot"), gateProgram2);
+gateEngine2.Variables.SetLocal(gateSheet2.Actor, "mode", ValueBox.OfText("chase"));
+gateEngine2.Tick(10);
+Check(gateEngine2.Variables.GetGlobal("Order").AsText() == "!", "bare condition lines gate like `unless` lines (matching = run)");
+
+var stopWorld = new FakeWorld();
+var stopEngine = FreshEngine(stopWorld);
+var stopLog = new List<string>();
+var stopProgram = parser.Parse(@"when me overlaps Bomb
+  set Log to Log + ""S""
+  stop this event
+  set Log to Log + ""NEVER""
+when me overlaps Bomb
+  set Log to Log + ""Z""");
+var stopSheet = stopEngine.AddSheet(new FakeActor("Shield"), stopProgram);
+stopEngine.OnRawAction = (context, words) => stopLog.Add(J(words));
+stopEngine.PushContact(TriggerKind.Overlaps, stopSheet.Actor, bomb);
+stopEngine.Tick(0);
+Check(stopEngine.Variables.GetGlobal("Log").AsText() == "SZ", "stop this event ends it early; other events still run");
+
+var heldWorld = new FakeWorld();
+var heldEngine = FreshEngine(heldWorld);
+var heldLog = new List<string>();
+var heldProgram = parser.Parse("when W is held\n  move forward speed 5");
+var heldSheet = heldEngine.AddSheet(new FakeActor("Hero"), heldProgram);
+heldEngine.OnRawAction = (context, words) => heldLog.Add(J(words));
+heldWorld.SetHeld("W", true);
+heldEngine.Tick(0);
+heldEngine.Tick(1);
+heldWorld.SetHeld("W", false);
+heldEngine.Tick(2);
+Check(heldLog.Count == 2, "`when W is held` fires every tick while held, then stops");
+
+var watchEngine = FreshEngine(new FakeWorld());
+var watchProgram = parser.Parse(@"when Score changes
+  set Hits to Hits + 1
+when Score becomes 5
+  set Wins to Wins + 1");
+watchEngine.AddSheet(new FakeActor("Herald"), watchProgram);
+watchEngine.Tick(0);
+watchEngine.Variables.SetGlobal("Score", ValueBox.OfNumber(1));
+watchEngine.Tick(1);
+watchEngine.Variables.SetGlobal("Score", ValueBox.OfNumber(2));
+watchEngine.Tick(2);
+watchEngine.Tick(3);
+Check(watchEngine.Variables.GetGlobal("Hits").AsNumber() == 2, "`when Score changes` fires once per real change");
+
+var perObjectWatchWorld = new FakeWorld();
+var perObjectWatchEngine = FreshEngine(perObjectWatchWorld);
+var healthProgram = parser.Parse("when my health becomes 0\n  set Died to Died + 1");
+var wounded = new FakeActor("Sorcerer");
+var woundedSheet = perObjectWatchEngine.AddSheet(wounded, healthProgram);
+perObjectWatchEngine.Variables.SetLocal(wounded, "health", ValueBox.OfNumber(3));
+perObjectWatchEngine.Tick(0);
+perObjectWatchEngine.Variables.SetLocal(wounded, "health", ValueBox.OfNumber(0));
+perObjectWatchEngine.Tick(1);
+perObjectWatchEngine.Tick(2);
+Check(perObjectWatchEngine.Variables.GetGlobal("Died").AsNumber() == 1, "`when my health becomes 0` fires once per actor when the value turns");
+perObjectWatchEngine.Variables.SetLocal(wounded, "health", ValueBox.OfNumber(0));
+perObjectWatchEngine.Tick(3);
+Check(perObjectWatchEngine.Variables.GetGlobal("Died").AsNumber() == 1, "watching the same value again does not refire `becomes`");
+
+var perObjectWatchEngine2 = FreshEngine(new FakeWorld());
+var wounded2 = new FakeActor("Oracle");
+var wounded2Sheet = perObjectWatchEngine2.AddSheet(wounded2, healthProgram);
+perObjectWatchEngine2.Variables.SetLocal(wounded2, "health", ValueBox.OfNumber(0));
+perObjectWatchEngine2.Tick(0);
+perObjectWatchEngine2.Variables.SetLocal(wounded2, "health", ValueBox.OfNumber(9));
+perObjectWatchEngine2.Tick(1);
+perObjectWatchEngine2.Variables.SetLocal(wounded2, "health", ValueBox.OfNumber(0));
+perObjectWatchEngine2.Tick(2);
+Check(perObjectWatchEngine2.Variables.GetGlobal("Died").AsNumber() == 1, "each actor copy owns its watch state");
+
+var messageWorld = new FakeWorld();
+var messageEngine = FreshEngine(messageWorld);
+var senderProgram = parser.Parse("when me touches Bomb\n  send message \"hit\"\n  send message \"boom\" to Oracle");
+var enemyProgram = parser.Parse(@"when message ""hit"" arrives
+  set Hits to Hits + 1");
+var listenerProgram = parser.Parse(@"when message ""boom"" arrives
+  set Booms to Booms + 1");
+var swordGuy = new FakeActor("Sorcerer");
+var oracleGuy = new FakeActor("Oracle");
+messageEngine.AddSheet(oracleGuy, listenerProgram);
+messageEngine.AddSheet(swordGuy, enemyProgram);
+messageEngine.AddSheet(swordGuy, senderProgram);
+messageEngine.PushContact(TriggerKind.Touches, swordGuy, new FakeActor("Bomb"));
+messageEngine.Tick(0);
+bool snapshotMessageHits = messageEngine.Variables.GetGlobal("Hits").IsNone();
+Check(snapshotMessageHits, "messages fan out to their sheets on the tick after the push");
+messageEngine.Tick(1);
+Check(messageEngine.Variables.GetGlobal("Hits").AsNumber() == 1, "the targeted sheet received its message");
+Check(messageEngine.Variables.GetGlobal("Booms").AsNumber() == 1, "send message \"...\" to <thing> routes to the named actor");
+var messageEngine2 = FreshEngine(messageWorld);
+messageEngine2.AddSheet(oracleGuy, listenerProgram);
+messageEngine2.SendRawMessage(new PushSignal { Kind = TriggerKind.Message, Name = "boom" }, "Oracle");
+messageEngine2.Tick(0);
+Check(messageEngine2.Variables.GetGlobal("Booms").AsNumber() == 1, "broadcast pushes land via RaisePushAll + engine routing helpers too");
+
+Rng.Seed(5);
+var chanceWorld = new FakeWorld();
+var chanceEngine = FreshEngine(chanceWorld);
+var chanceLog = new List<string>();
+var chanceProgram = parser.Parse(@"when me overlaps Bomb
+  unless chance 100%
+  set Log to Log + ""cold""
+  unless chance 0%
+  set Log to Log + ""hot""");
+var chanceSheet = chanceEngine.AddSheet(new FakeActor("Dicehead"), chanceProgram);
+chanceEngine.PushContact(TriggerKind.Overlaps, chanceSheet.Actor, bomb);
+chanceEngine.Tick(0);
+Check(chanceEngine.Variables.GetGlobal("Log").AsText() == "hot", "chance conditions gate by percentage (100% never blocks, 0% always blocks)");
+
+var bagWorld = new FakeWorld();
+var bagEngine = FreshEngine(bagWorld);
+var bagProgram = parser.Parse(@"when me overlaps Bomb
+  my bag has Sword
+  set Log to Log + ""W""");
+var bagSheet = bagEngine.AddSheet(new FakeActor("BagGuy"), bagProgram);
+bagEngine.PushContact(TriggerKind.Overlaps, bagSheet.Actor, bomb);
+bagEngine.Tick(0);
+Check(bagEngine.Variables.GetGlobal("Log").Kind == ValueKind.None, "an empty bag rejects its condition");
+bagEngine.BagAdd(bagSheet.Actor, "Sword");
+bagEngine.PushContact(TriggerKind.Overlaps, bagSheet.Actor, bomb);
+bagEngine.Tick(1);
+Check(bagEngine.Variables.GetGlobal("Log").AsText() == "W", "`my bag has <thing>` reflects the bag contents");
+bagEngine.BagRemove(bagSheet.Actor, "Sword");
+bagEngine.PushContact(TriggerKind.Overlaps, bagSheet.Actor, bomb);
+bagEngine.Tick(2);
+Check(bagEngine.Variables.GetGlobal("Log").AsText() == "W", "removing a thing from the bag unblocks the condition again");
+
+var unsetEngine = new EventRuntime();
+int runtimeWarnings = 0;
+unsetEngine.OnRuntimeWarning = message => runtimeWarnings++;
+unsetEngine.AddSheet(new FakeActor("Fresh"), parser.Parse("when me appears\n  set Order to Order + \"A\""));
+unsetEngine.SessionStarted();
+unsetEngine.Tick(0);
+Check(runtimeWarnings == 1, "the engine surfaces one unset-read warning and no more");
+
+var nearWorld = new FakeWorld();
+var nearEngine = FreshEngine(nearWorld);
+var humanGuy = new FakeActor("MeGuy");
+var towerGuy = new FakeActor("Tower");
+var nearProgram = parser.Parse(@"when every 1 seconds
+  me is near Tower by 4
+  set NearCount to NearCount + 1");
+nearEngine.AddSheet(humanGuy, nearProgram);
+nearEngine.AddSheet(towerGuy, parser.Parse("# placeholder\n"));
+nearWorld.SetDistance(humanGuy, towerGuy, 2.5);
+nearEngine.Tick(1);
+nearWorld.SetDistance(humanGuy, towerGuy, 9.5);
+nearEngine.Tick(2);
+Check(nearEngine.Variables.GetGlobal("NearCount").AsNumber() == 1, "`me is near <thing> by <dist>` uses world distances");
+
+var existsWorld = new FakeWorld();
+var existEngine = FreshEngine(existsWorld);
+var existsProgram = parser.Parse(@"when every 1 seconds
+  unless Key exists
+  set NoKey to NoKey + 1
+  unless Key does not exist
+  set YesKey to YesKey + 1");
+existEngine.AddSheet(new FakeActor("Digger"), existsProgram);
+existEngine.Tick(1);
+Check(existEngine.Variables.GetGlobal("NoKey").AsNumber() == 1 && existEngine.Variables.GetGlobal("YesKey").IsNone(), "`<thing> exists` / `does not exist` reads the scene");
+
+var tagWorld = new FakeWorld();
+var tagEngine = FreshEngine(tagWorld);
+var tagProgram = parser.Parse(@"when me overlaps Bomb
+  other has tag Enemy
+  set TagHits to TagHits + 1
+  other has tag Friend
+  set FriendHits to FriendHits + 1");
+var tagSheet = tagEngine.AddSheet(new FakeActor("Mapper"), tagProgram);
+tagWorld.SetTag(bomb, "Enemy");
+tagEngine.PushContact(TriggerKind.Overlaps, tagSheet.Actor, bomb);
+tagEngine.Tick(0);
+Check(tagEngine.Variables.GetGlobal("TagHits").AsNumber() == 1 && tagEngine.Variables.GetGlobal("FriendHits").Kind == ValueKind.None, "tag conditions read world tags");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
@@ -469,5 +810,49 @@ class FakeActor
     public override string ToString()
     {
         return Name;
+    }
+}
+
+class FakeWorld : IEventWorld
+{
+    private readonly HashSet<string> held = new HashSet<string>();
+    private readonly Dictionary<(object, object), double> distances = new Dictionary<(object, object), double>();
+    private readonly HashSet<(object, string)> tags = new HashSet<(object, string)>();
+
+    public void SetHeld(string key, bool on)
+    {
+        if (on)
+            held.Add(key);
+        else
+            held.Remove(key);
+    }
+
+    public void SetDistance(object a, object b, double d)
+    {
+        distances[(a, b)] = d;
+    }
+
+    public void SetTag(object target, string tag)
+    {
+        tags.Add((target, tag));
+    }
+
+    public bool IsKeyHeld(string key)
+    {
+        return held.Contains(key);
+    }
+
+    public double Distance(object from, object to)
+    {
+        if (distances.TryGetValue((from, to), out double direct))
+            return direct;
+        if (distances.TryGetValue((to, from), out double reverse))
+            return reverse;
+        return 100000;
+    }
+
+    public bool HasTag(object target, string tag)
+    {
+        return tags.Contains((target, tag));
     }
 }
