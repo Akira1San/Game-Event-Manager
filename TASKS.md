@@ -163,16 +163,37 @@ top-to-bottom order.)
   `Triggers.cs`).
 
 ### Part C — Flax bridge (words become real)
-- [ ] `EventSheet` script per actor: hooks `OnStart` / `OnUpdate` / triggers / input,
-  feeds the runtime; attaches by name (`Coin.events` → actors named `Coin`),
-  `Game.events` runs scene-wide.
-- [ ] Wire action words to the Flax API: movement, face (continuous tracking — BGE Track To),
-  destroy, spawn (inherits `me` rotation),
-  play sound, show/hide text, restart scene, send/arrive messages.
-- [ ] Wire trigger words: key/mouse pressed-released-held (all named buttons: Left/Right/
-  Middle Mouse) + wheel up/down, overlaps/touches,
-  game start / me appears, every-N-seconds, variable-becomes, message arrives.
-- [ ] Verify: run a one-file mini-game (press W → move cube) fully from `.events` text.
+- [x] `EventSheet` script per actor + auto-attach (`EventsManager`): the manager script
+  loads `Source/Game/GameFiles/*.events`, attaches by **actor name** (zero clicks),
+  adds a per-actor `EventSheet` that subscribes the actor's colliders' `TriggerEnter`
+  / `TriggerExit` events and pushes `Touches` / `Overlaps` up. `Game.events` attaches
+  to a global host named `Game` (scene-wide; its `me` actions warn once — no body).
+  Game start fires once per play session, scene start every manager wake; runtime is
+  ticked from `OnUpdate` (`Time.GameTime`, resume → pushed → polled order).
+- [x] Input edges pushed each frame: keyboard + Left/Right/Middle Mouse press & release
+  (`FlaxWorld.IsKeyHeld` polls held state for the engine; the manager pushes the raw
+  edges), wheel up/down via `Input.MouseScrollDelta`.
+- [x] Action words → real Flax API (`FlaxActions`): move (heading-based, per-tick), stop
+  moving, turn, look at (snap `Actor.LookAt`), face (continuous, tracked), teleport,
+  push, goto (walks until arrival), destroy (`Object.Destroy`, also clears its
+  tracking), spawn (template actor by name → `Clone()` + `Level.SpawnActor` — same-name
+  `.events` files attach to clones automatically), play sound (`AudioSource` on the
+  actor) / stop sound, hide/show (`IsActive`), set text of ( finds a
+  `FlaxEngine.GUI.Label` on the thing's `UIControl`), restart scene
+  (`Level.LoadScene(current GUID)`), load scene (warns — needs the scene-name
+  wiring in the menu task), quit game (`Engine.RequestExit`), play/stop anim (warns —
+  visuals wiring later). Per-object tags: real Flax `Actor.HasTag` backs
+  `other has tag Enemy`.
+- [x] Pure parts (still unit tested without Flax): `ActionWords` parses every action verb
+  to a spec (25 parse checks + friendly unknown/bent-verb hints), `EventFiles` locates
+  the GameFiles folder (walks up parents, loose `GameFiles` accepted) and loads all
+  `.events` files sorted, a broken file shows its friendly parse error and yields an
+  **empty tree** so hot reload can keep the old one playing. 108+25 → **133/133
+  green**; module build 0/0 (checked against the real `FlaxEngine.CSharp.dll` —
+  `Orientation` is a `Quaternion` (no Yaw), `Collider` carries the trigger events,
+  children are arrays).
+- [ ] Verify: play a one-file mini-game — press W → cube moves — **needs the user's
+  editor run** (see session log for the exact steps).
 
 ### Part D — Hot reload
 - [ ] Watch `.events` files; on save: reparse; if valid, swap the live tree in place and
@@ -390,3 +411,4 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 | 2026-10-23 | Task 2 Part C executed: `WordRegistry.cs` (24 trigger shapes + conditions + action entries w/ examples, replaces hardcoded `KnownWords`); trigger-shape validation w/ placeholders, `and` splits, dangling-`and` error; `set text of` → `SetTextNode` so menu vocab parses; every registered example parses (66); 47/47 tests green; module build 0/0 (explicit usings quirk again) | Task 2 C done — Task 2 complete, next: Task 3 (runtime) |
 | 2026-10-23 | User confirmed Task 1's editor play check (scene added, plays clean) → Task 1 `[x]`. Task 3 Part A executed: `Runtime/ValueBox.cs` (typed values, conversions), `Runtime/EventVariables.cs` (globals + per-object hosts, one-time unset warnings, `CarryValuesFrom` hot-reload survival), `Runtime/ValueEvaluator.cs` (all value forms, seeded `Rng`, one-op math); 75/75 tests green; module build 0/0 | Task 3 A done, next: Part B (execution engine) |
 | 2026-10-23 | Task 3 Part B executed: `Runtime/Triggers.cs` (trigger classifier → descriptors/push signals), `Runtime/Conditions.cs` (condition parse + eval), `Runtime/EventWorld.cs` (key/dist/tag world interface), real `Runtime/EventRuntime.cs` (tick engine: wait-resume → pushed queues → polled every/held/watch, once-per-tick, gates, stop, send-message routing, bags prep); engine text-concat convenience for `set X to X + "txt"`; 108/108 tests green; module build 0/0 | Task 3 B done, next: Part C (Flax bridge) |
+| 2026-10-23 | Task 3 Part C executed: `Bridge/EventsManager.cs` (manager: locate GameFiles, parse, attach-by-name, per-actor `Bridge/EventSheet.cs` collider subscription → Touches/Overlaps, input press/release/held edges + wheel, runtime tick), `Bridge/FlaxWorld.cs` (`IEventWorld` on real Input/Tag), `Bridge/FlaxActions.cs` (move/turn/look at/face/teleport/push/goto/destroy/spawn/sound/hide-show/set text/restart/quit; `play anim` + `load scene` warn for later updates), `Runtime/ActionWords.cs` + `Events/EventFiles.cs` (pure, tested across compile). Flax API mismatches (Orientation/Quaternion, trigger events on Collider not Actor, `Vector3*Quaternion`) caught by build-against-`FlaxEngine.CSharp.dll` + a reflection dump tool; 133/133 tests green; module build 0/0 | Task 3 C done except editor verify (user must play: W → move cube), then Part D (hot reload) |

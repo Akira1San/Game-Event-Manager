@@ -1,0 +1,21 @@
+# Player.events — smoke-test sheet for the bridge (Task 3 Part C verify).
+# Put this next to Game.events; an actor named Player suffices: move is W-hold, space hops the counter.
+# Hot reload (Part D) will refresh saves; for now the sheet attaches on play start.
+
+when W is held
+  move forward speed 5
+
+when A is held
+  move left speed 5
+
+when D is held
+  move right speed 5
+
+when S is held
+  move backward speed 5
+
+when Space is pressed
+  add 1 to Hops
+
+when Hops becomes 3
+  set text of HopsLabel to "three hops!"

@@ -798,6 +798,172 @@ Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);
 
+static List<Token> RawWords(EventParser parser, string source)
+{
+    var program = parser.Parse(source);
+    var raw = (RawActionNode)program.Events[0].Body[0].Statement!;
+    return raw.Words;
+}
+
+var actionParser = new EventParser();
+string actionHint = "";
+Action<string> GrabHint = message =>
+{
+    actionHint = message;
+};
+
+var moveSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  move forward speed 5"), null);
+Check(moveSpec.Verb == ActionVerb.Move && moveSpec.Dir == "forward" && moveSpec.HasNumber && moveSpec.Number == 5,
+    "`move forward speed 5` parses as Move_LEFT forward 5");
+
+var fastSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  move left speed 9.5"), null);
+Check(fastSpec.Verb == ActionVerb.Move && fastSpec.Dir == "left" && fastSpec.Number == 9.5,
+    "`move left speed 9.5` keeps the decimal speed");
+
+var bareMove = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  move backward"), null);
+Check(bareMove.Verb == ActionVerb.Move && bareMove.Dir == "backward" && bareMove.HasNumber && bareMove.Number == 5,
+    "`move backward` still maps the default speed 5");
+
+var awaySpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  move away from Player"), null);
+Check(awaySpec.Verb == ActionVerb.Move && awaySpec.Dir == "away" && awaySpec.Thing == "Player",
+    "`move away from Player` reads the chaser target");
+
+var stopSpec = ActionWords.Parse(RawWords(actionParser, @"when W is released
+  stop moving"), null);
+Check(stopSpec.Verb == ActionVerb.StopMoving, "`stop moving` parses");
+
+var turnSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  turn left degrees 90"), null);
+Check(turnSpec.Verb == ActionVerb.Turn && turnSpec.Dir == "left" && turnSpec.Number == 90,
+    "`turn left degrees 90` parses");
+
+var lookSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  look at Enemy"), null);
+Check(lookSpec.Verb == ActionVerb.LookAt && lookSpec.Thing == "Enemy",
+    "`look at Enemy` parses");
+
+var faceSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  face Player"), null);
+Check(faceSpec.Verb == ActionVerb.Face && faceSpec.Thing == "Player",
+    "`face Player` parses as the continuous tracker");
+
+var teleportSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  teleport me to SpawnPoint"), null);
+Check(teleportSpec.Verb == ActionVerb.Teleport && teleportSpec.Thing == "me" && teleportSpec.To == "SpawnPoint",
+    "`teleport me to SpawnPoint` reads both things");
+
+var pushSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  push other up strength 10"), null);
+Check(pushSpec.Verb == ActionVerb.Push && pushSpec.Thing == "other" && pushSpec.Dir == "up" && pushSpec.Number == 10,
+    "`push other up strength 10` parses");
+
+var pushQuick = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  push other left"), null);
+Check(pushQuick.Verb == ActionVerb.Push && pushQuick.Dir == "left" && pushQuick.HasNumber && pushQuick.Number == 5,
+    "`push other left` sets the quiet strength 5");
+
+var gotoSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  goto SpawnPoint"), null);
+Check(gotoSpec.Verb == ActionVerb.Goto && gotoSpec.Thing == "SpawnPoint",
+    "`goto SpawnPoint` parses");
+
+var destroyMe = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  destroy me"), null);
+Check(destroyMe.Verb == ActionVerb.Destroy && destroyMe.Thing == "me", "`destroy me` parses");
+
+var spawnSpec = ActionWords.Parse(RawWords(actionParser, @"when Other overlaps me
+  spawn Bullet at me"), null);
+Check(spawnSpec.Verb == ActionVerb.Spawn && spawnSpec.Thing == "Bullet" && spawnSpec.To == "me",
+    "`spawn Bullet at me` parses");
+
+var spawnAtThing = ActionWords.Parse(RawWords(actionParser, @"when Other overlaps me
+  spawn Coin at SpawnPoint"), null);
+Check(spawnAtThing.Verb == ActionVerb.Spawn && spawnAtThing.Thing == "Coin" && spawnAtThing.To == "SpawnPoint",
+    "`spawn Coin at SpawnPoint` parses");
+
+var soundSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  play sound ""Thud.wav"""), null);
+Check(soundSpec.Verb == ActionVerb.PlaySound && soundSpec.Thing == "Thud.wav",
+    "`play sound \"Thud.wav\"` reads the file");
+
+var animSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  play anim ""Attack"""), null);
+Check(animSpec.Verb == ActionVerb.PlayAnim && animSpec.Thing == "Attack", "`play anim \"Attack\"` parses");
+
+var stopSound = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  stop sound"), null);
+Check(stopSound.Verb == ActionVerb.StopSound, "`stop sound` parses");
+
+var stopAnim = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  stop anim"), null);
+Check(stopAnim.Verb == ActionVerb.StopAnim, "`stop anim` parses");
+
+var hideSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  hide me"), null);
+Check(hideSpec.Verb == ActionVerb.Hide && hideSpec.Thing == "me", "`hide me` parses (hiding)");
+
+var showSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  show PausePanel"), null);
+Check(showSpec.Verb == ActionVerb.Show && showSpec.Thing == "PausePanel", "`show PausePanel` parses");
+
+var restartSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  restart scene"), null);
+Check(restartSpec.Verb == ActionVerb.RestartScene, "`restart scene` parses");
+
+var loadSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  load scene ""Menus"""), null);
+Check(loadSpec.Verb == ActionVerb.LoadScene && loadSpec.Thing == "Menus",
+    "`load scene \"Menus\"` parses");
+
+var quitSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  quit game"), null);
+Check(quitSpec.Verb == ActionVerb.QuitGame, "`quit game` parses");
+
+var bananaAction = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  banana time"), GrabHint);
+Check(bananaAction.Verb == ActionVerb.Unknown && actionHint.Contains("banana"),
+    "an odd action line gets the unknown-word explanation");
+
+actionHint = "";
+var oddMove = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  move sideways"), GrabHint);
+Check(oddMove.Verb == ActionVerb.Unknown && actionHint.Contains("\u201Cmove\u201D"),
+    "a bent `move` line explains the shape (move looks like this)");
+
+string tempBase = Path.Combine(Path.GetTempPath(), "evtest-" + Guid.NewGuid().ToString("N"));
+string gameDir = Path.Combine(tempBase, "Source", "Game", "GameFiles");
+Directory.CreateDirectory(gameDir);
+File.WriteAllText(Path.Combine(gameDir, "Player.events"), "when game starts\n  set Score to 0");
+File.WriteAllText(Path.Combine(gameDir, "Broken.events"), "when game starts\n  banana");
+string located = EventFiles.LocateGameFiles(gameDir);
+Check(located == gameDir, "the loader finds the GameFiles folder itself");
+string fromDeep = EventFiles.LocateGameFiles(Path.Combine(tempBase, "Source", "Game"));
+Check(fromDeep == gameDir, "the loader walks up from a deeper folder");
+Check(EventFiles.LocateGameFiles(tempBase) == gameDir, "the loader finds GameFiles from the project root");
+File.WriteAllText(Path.Combine(tempBase, "Solo.events"), "when game starts\n  set Score to 0");
+Directory.CreateDirectory(Path.Combine(tempBase, "GameFiles"));
+File.WriteAllText(Path.Combine(tempBase, "GameFiles", "Solo.events"), "when game starts\n  set Score to 0");
+Check(EventFiles.LocateGameFiles(tempBase) == Path.Combine(tempBase, "GameFiles"),
+    "a loose GameFiles folder sells too (GameFiles path found)");
+Check(EventFiles.LocateGameFiles(Path.GetTempPath()) == null,
+    "no GameFiles anywhere is null (not a crash)");
+
+var loaded = EventFiles.LoadAll(gameDir);
+Check(loaded.Count == 2, "the loader reads both .events files");
+Check(loaded[0].Name == "Broken" && loaded[1].Name == "Player", "the loader sorts files by name");
+Check(loaded[0].Error.Length > 0 && loaded[0].Error.Contains("banana"),
+    "the broken file surfaces its friendly error");
+Check(loaded[0].File != null && loaded[0].File.Events.Count == 0,
+    "a broken parse yields an empty tree (the old tree keeps playing during hot reload)");
+Check(loaded[1].Error.Length == 0 && loaded[1].File.Events.Count == 1,
+    "the good file parses to one event");
+
+Directory.Delete(tempBase, true);
+
 class FakeActor
 {
     public FakeActor(string name)
