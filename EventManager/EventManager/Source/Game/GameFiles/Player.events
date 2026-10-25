@@ -33,9 +33,8 @@ when Left Shift is held
   D is held
   move right speed 90
 
-# ---- shooting: aim at the closest enemy, fire ----
+# ---- shooting: fire in the direction the player faces ----
 when Left Mouse is pressed
-  look at nearest Enemy
   spawn Bullet at me
   play sound "shot.wav"
 
