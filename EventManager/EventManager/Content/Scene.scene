@@ -153,210 +153,22 @@
 }
 		},
 		{
-			"ID": "e4ff2916467ceb44ac7a248c45a4fcb4",
-			"TypeName": "FlaxEngine.UICanvas",
-			"ParentID": "c12b45cc40f447e8a2722b9715a79dc0",
+			"ID": "0939a4304b8c18966c0dc6a8d0deee91",
+			"TypeName": "FlaxEngine.AudioSource",
+			"ParentID": "b622752b47787e3a9c71e1af5348d30b",
+			"Name": "AudioSource",
 			"Transform": {
-				"Orientation": {
-					"X": 1.0,
-					"Y": 4.371138828673793e-8,
-					"Z": 4.371138828673793e-8,
-					"W": 1.910685465164705e-15
+				"Translation": {
+					"X": 0.0,
+					"Y": -398.0252685546875,
+					"Z": 748.1358642578125
+				},
+				"Scale": {
+					"X": 5.0,
+					"Y": 5.0,
+					"Z": 5.0
 				}
-			},
-			"V": {}
-		},
-		{
-			"ID": "719f734d483ca7b29a8031a8f7ccf40c",
-			"TypeName": "FlaxEngine.UIControl",
-			"ParentID": "e4ff2916467ceb44ac7a248c45a4fcb4",
-			"Name": "Canvas Scalar",
-			"Control": "FlaxEngine.GUI.CanvasScaler",
-			"Data": {
-	"ResolutionCurve": {
-		"Keyframes": [
-			{
-				"Time": 0.0,
-				"Value": 0.0
-			},
-			{
-				"Time": 480.0,
-				"Value": 0.444
-			},
-			{
-				"Time": 720.0,
-				"Value": 0.666
-			},
-			{
-				"Time": 1080.0,
-				"Value": 1.0
-			},
-			{
-				"Time": 8640.0,
-				"Value": 8.0
 			}
-		]
-	},
-	"DpiCurve": {
-		"Keyframes": [
-			{
-				"Time": 1.0,
-				"Value": 1.0
-			},
-			{
-				"Time": 96.0,
-				"Value": 1.0
-			},
-			{
-				"Time": 200.0,
-				"Value": 2.0
-			},
-			{
-				"Time": 400.0,
-				"Value": 4.0
-			}
-		]
-	},
-	"Scaling": 0,
-	"ScaleFactor": 1.0,
-	"PhysicalUnit": 3,
-	"PhysicalUnitSize": 1.0,
-	"ResolutionMode": 0,
-	"ResolutionMin": {
-		"X": 1.0,
-		"Y": 1.0
-	},
-	"ResolutionMax": {
-		"X": 7680.0,
-		"Y": 4320.0
-	},
-	"ClipChildren": true,
-	"CullChildren": true,
-	"AnchorMin": {
-		"X": 0.0,
-		"Y": 0.0
-	},
-	"AnchorMax": {
-		"X": 1.0,
-		"Y": 1.0
-	},
-	"Offsets": {
-		"Left": 0.0,
-		"Right": 0.0,
-		"Top": 0.0,
-		"Bottom": 0.0
-	},
-	"Scale": {
-		"X": 1.0,
-		"Y": 1.0
-	},
-	"Pivot": {
-		"X": 0.5,
-		"Y": 0.5
-	},
-	"Shear": {
-		"X": 0.0,
-		"Y": 0.0
-	},
-	"Rotation": 0.0,
-	"BackgroundColor": {
-		"R": 0.0,
-		"G": 0.0,
-		"B": 0.0,
-		"A": 0.0
-	},
-	"BackgroundBrush": null,
-	"Enabled": true,
-	"Visible": true,
-	"AutoFocus": false
-}
-		},
-		{
-			"ID": "ce294d0f43b6febf36c55eb3b6be102f",
-			"TypeName": "FlaxEngine.UIControl",
-			"ParentID": "719f734d483ca7b29a8031a8f7ccf40c",
-			"Name": "GameTex",
-			"Control": "FlaxEngine.GUI.Label",
-			"Data": {
-	"Text": "",
-	"CaseOption": 0,
-	"Bold": false,
-	"Italic": false,
-	"TextColor": {
-		"R": 1.0,
-		"G": 1.0,
-		"B": 1.0,
-		"A": 1.0
-	},
-	"TextColorHighlighted": {
-		"R": 1.0,
-		"G": 1.0,
-		"B": 1.0,
-		"A": 1.0
-	},
-	"HorizontalAlignment": 1,
-	"VerticalAlignment": 1,
-	"Wrapping": 0,
-	"BaseLinesGapScale": 1.0,
-	"Font": {
-		"Font": "4508d98f4aa1f0bd59362b81d47e38f4",
-		"Size": 9.0
-	},
-	"Material": null,
-	"Margin": {
-		"Left": 0.0,
-		"Right": 0.0,
-		"Top": 0.0,
-		"Bottom": 0.0
-	},
-	"ClipText": false,
-	"AutoWidth": false,
-	"AutoHeight": false,
-	"AutoFitText": false,
-	"AutoFitTextRange": {
-		"X": 0.1,
-		"Y": 100.0
-	},
-	"ClipChildren": true,
-	"CullChildren": true,
-	"AnchorMin": {
-		"X": 0.0,
-		"Y": 0.0
-	},
-	"AnchorMax": {
-		"X": 0.0,
-		"Y": 0.0
-	},
-	"Offsets": {
-		"Left": 0.0,
-		"Right": 100.0,
-		"Top": 0.0,
-		"Bottom": 20.0
-	},
-	"Scale": {
-		"X": 1.0,
-		"Y": 1.0
-	},
-	"Pivot": {
-		"X": 0.5,
-		"Y": 0.5
-	},
-	"Shear": {
-		"X": 0.0,
-		"Y": 0.0
-	},
-	"Rotation": 0.0,
-	"BackgroundColor": {
-		"R": 0.0,
-		"G": 0.0,
-		"B": 0.0,
-		"A": 0.0
-	},
-	"BackgroundBrush": null,
-	"Enabled": true,
-	"Visible": true,
-	"AutoFocus": false
-}
 		},
 		{
 			"ID": "c1492206452af6d0abd850a3b48ca273",
@@ -391,10 +203,11 @@
 			"ID": "ae20f37348b76e0299c86e88c605b527",
 			"TypeName": "FlaxEngine.StaticModel",
 			"ParentID": "c12b45cc40f447e8a2722b9715a79dc0",
+			"IsActive": false,
 			"Name": "Bullet",
 			"Transform": {
 				"Translation": {
-					"X": -176.89866638183594,
+					"X": -263.7311096191406,
 					"Y": 75.0,
 					"Z": 35.55823516845703
 				},
@@ -415,6 +228,111 @@
 					}
 				]
 			}
+		},
+		{
+			"ID": "fed0f53b428de3cf2055b891ee40be9b",
+			"TypeName": "FlaxEngine.UICanvas",
+			"ParentID": "c12b45cc40f447e8a2722b9715a79dc0",
+			"Name": "ui canvas",
+			"Transform": {
+				"Orientation": {
+					"X": 1.0,
+					"Y": 4.371138828673793e-8,
+					"Z": 4.371138828673793e-8,
+					"W": 1.910685465164705e-15
+				}
+			},
+			"V": {}
+		},
+		{
+			"ID": "9052fe2d4720b0e554c5cda4576ea92f",
+			"TypeName": "FlaxEngine.UIControl",
+			"ParentID": "fed0f53b428de3cf2055b891ee40be9b",
+			"Name": "GameText",
+			"Control": "FlaxEngine.GUI.Label",
+			"Data": {
+	"Text": {
+		"Id": "Health",
+		"Value": "300"
+	},
+	"CaseOption": 0,
+	"Bold": true,
+	"Italic": false,
+	"TextColor": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"TextColorHighlighted": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"HorizontalAlignment": 1,
+	"VerticalAlignment": 1,
+	"Wrapping": 0,
+	"BaseLinesGapScale": 1.0,
+	"Font": {
+		"Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+		"Size": 14.0
+	},
+	"Material": null,
+	"Margin": {
+		"Left": 0.0,
+		"Right": 0.0,
+		"Top": 0.0,
+		"Bottom": 0.0
+	},
+	"ClipText": false,
+	"AutoWidth": false,
+	"AutoHeight": false,
+	"AutoFitText": false,
+	"AutoFitTextRange": {
+		"X": 0.1,
+		"Y": 100.0
+	},
+	"ClipChildren": true,
+	"CullChildren": true,
+	"AnchorMin": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"AnchorMax": {
+		"X": 1.0,
+		"Y": 0.0
+	},
+	"Offsets": {
+		"Left": 0.0,
+		"Right": 861.0,
+		"Top": 0.0,
+		"Bottom": 20.0
+	},
+	"Scale": {
+		"X": 1.0,
+		"Y": 1.0
+	},
+	"Pivot": {
+		"X": 0.5,
+		"Y": 0.5
+	},
+	"Shear": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Rotation": 0.0,
+	"BackgroundColor": {
+		"R": 0.0,
+		"G": 0.0,
+		"B": 0.0,
+		"A": 0.0
+	},
+	"BackgroundBrush": null,
+	"Enabled": true,
+	"Visible": true,
+	"AutoFocus": false
+}
 		}
 	]
 }

@@ -372,7 +372,7 @@ namespace Game
         private static void HideHudText()
         {
             var actor = Level.FindActor("GameText");
-            var label = actor?.GetScript<UIControl>().Control as FlaxEngine.GUI.Label;
+            var label = actor?.GetScript<UIControl>()?.Control as FlaxEngine.GUI.Label;
             if (label != null)
                 label.Visible = false;
             else
