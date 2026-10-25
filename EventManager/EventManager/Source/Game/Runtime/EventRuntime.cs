@@ -236,19 +236,20 @@ namespace Game
         public void Tick(double time)
         {
             Time = time;
-            foreach (var sheet in sheets)
+            var snapshot = sheets.ToArray();
+            foreach (var sheet in snapshot)
             {
                 for (int i = 0; i < sheet.FiredThisTick.Length; i++)
                     sheet.FiredThisTick[i] = false;
             }
 
-            foreach (var sheet in sheets)
+            foreach (var sheet in snapshot)
             {
                 if (sheet.Waiting.Count == 0)
                     continue;
-                var snapshot = new List<PendingRun>(sheet.Waiting);
+                var pendingSnapshot = new List<PendingRun>(sheet.Waiting);
                 sheet.Waiting.Clear();
-                foreach (var pending in snapshot)
+                foreach (var pending in pendingSnapshot)
                 {
                     if (pending.ResumeAt <= Time)
                         RunBody(pending.Sheet, pending.Event, pending.Context, pending.LineIndex, pending.Gate);
@@ -257,7 +258,7 @@ namespace Game
                 }
             }
 
-            foreach (var sheet in sheets)
+            foreach (var sheet in snapshot)
             {
                 while (sheet.PushQueue.Count > 0)
                 {
@@ -273,7 +274,7 @@ namespace Game
                 }
             }
 
-            foreach (var sheet in sheets)
+            foreach (var sheet in snapshot)
             {
                 for (int eventIndex = 0; eventIndex < sheet.Program.Events.Count; eventIndex++)
                 {

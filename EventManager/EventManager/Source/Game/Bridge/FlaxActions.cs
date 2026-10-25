@@ -163,6 +163,18 @@ namespace Game
                         WarnOnce("\u201Cmove me\u201D needs to run on an actor's sheet — the global Game sheet has no body to move.");
                         return;
                     }
+                    if (!string.IsNullOrEmpty(spec.Thing))
+                    {
+                        var target = ResolveThing(context, spec.Thing) as Actor;
+                        if (target != null)
+                        {
+                            Vector3 delta = target.Position - me.Position;
+                            float length = delta.Length;
+                            if (length > 0.001f)
+                                me.Position = me.Position + delta / length * (float)ResolveNumber(context, spec) * DeltaTime;
+                        }
+                        break;
+                    }
                     me.Position = me.Position + DirectionOf(me, spec.Dir) * (float)ResolveNumber(context, spec) * DeltaTime;
                     break;
                 }

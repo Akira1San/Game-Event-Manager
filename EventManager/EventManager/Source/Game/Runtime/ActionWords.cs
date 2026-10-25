@@ -239,6 +239,29 @@ namespace Game
                 }
                 return Finish(spec, ActionVerb.Move, words, words.Count);
             }
+            if (words.Count >= 2 && words[1].Text == "toward")
+            {
+                string target = ThingAt(words, 2, out int used);
+                if (target != null)
+                {
+                    spec.Thing = target;
+                    int afterThing = 2 + used;
+                    if (words.Count >= afterThing + 2 && words[afterThing].Text == "speed")
+                    {
+                        spec.AmountNode = ValueNodeAt(words, words.Count - 1);
+                        spec.HasNumber = words[words.Count - 1].Type == TokenType.Number;
+                        if (spec.HasNumber)
+                            spec.Number = words[words.Count - 1].Number;
+                    }
+                    else
+                    {
+                        spec.Number = 5;
+                        spec.HasNumber = true;
+                    }
+                    return Finish(spec, ActionVerb.Move, words, words.Count);
+                }
+                return Unknown(spec, words, "\"move toward\" needs a target, like \"move toward Player speed 2\"", warn);
+            }
             if (words.Count >= 2 && IsDirection(words[1].Text))
             {
                 spec.Dir = words[1].Text == "back" ? "backward" : words[1].Text;

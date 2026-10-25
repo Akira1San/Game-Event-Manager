@@ -1,4 +1,7 @@
 # ---------------- Enemy.events ----------------
+when me appears
+  set my health to 3
+
 when every 0.1 seconds
   move toward Player speed 2
 
