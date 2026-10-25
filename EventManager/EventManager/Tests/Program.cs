@@ -1,4 +1,4 @@
-﻿using Game;
+using Game;
 using System.Text;
 
 int passed = 0;
@@ -712,6 +712,25 @@ perObjectWatchEngine2.Variables.SetLocal(wounded2, "health", ValueBox.OfNumber(0
 perObjectWatchEngine2.Tick(2);
 Check(perObjectWatchEngine2.Variables.GetGlobal("Died").AsNumber() == 1, "each actor copy owns its watch state");
 
+var crossingEngine = FreshEngine(new FakeWorld());
+var crossingProgram = parser.Parse(@"when message ""hit"" arrives
+  add -1 to my health
+
+when my health becomes 0
+  set Died to Died + 1");
+var crossingGuy = new FakeActor("Enemy");
+crossingEngine.AddSheet(crossingGuy, crossingProgram);
+crossingEngine.Tick(0);
+Check(crossingEngine.Variables.GetGlobal("Died").IsNone(), "a fresh enemy with unset health has not died yet");
+crossingEngine.SendRawMessage(new PushSignal { Kind = TriggerKind.Message, Name = "hit" }, "Enemy");
+crossingEngine.Tick(1);
+Check(crossingEngine.Variables.GetGlobal("Died").AsNumber() == 1,
+    "the shooter's `my health becomes 0` fires on the first hit when health counts down from unset | Died=" +
+    crossingEngine.Variables.GetGlobal("Died").AsNumber() + " HealthKind=" + crossingEngine.Variables.GetLocal(crossingGuy, "health").Kind + " Health=" + crossingEngine.Variables.GetLocal(crossingGuy, "health").AsNumber());
+crossingEngine.SendRawMessage(new PushSignal { Kind = TriggerKind.Message, Name = "hit" }, "Enemy");
+crossingEngine.Tick(2);
+Check(crossingEngine.Variables.GetGlobal("Died").AsNumber() == 1, "walking further below zero does not refire `becomes 0`");
+
 var messageWorld = new FakeWorld();
 var messageEngine = FreshEngine(messageWorld);
 var senderProgram = parser.Parse("when me touches Bomb\n  send message \"hit\"\n  send message \"boom\" to Oracle");
@@ -861,6 +880,11 @@ var bareMove = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
 Check(bareMove.Verb == ActionVerb.Move && bareMove.Dir == "backward" && bareMove.HasNumber && bareMove.Number == 5,
     "`move backward` still maps the default speed 5");
 
+var backMove = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  move back speed 5"), null);
+Check(backMove.Verb == ActionVerb.Move && backMove.Dir == "backward" && backMove.HasNumber && backMove.Number == 5,
+    "`move back speed 5` (the DESIGN �5 dir list) runs like `backward`");
+
 var awaySpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   move away from Player"), null);
 Check(awaySpec.Verb == ActionVerb.Move && awaySpec.Dir == "away" && awaySpec.Thing == "Player",
@@ -878,7 +902,26 @@ Check(turnSpec.Verb == ActionVerb.Turn && turnSpec.Dir == "left" && turnSpec.Num
 var lookSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   look at Enemy"), null);
 Check(lookSpec.Verb == ActionVerb.LookAt && lookSpec.Thing == "Enemy",
-    "`look at Enemy` parses");
+    "`look at Enemy` parses | V=" + lookSpec.Verb + " T=" + lookSpec.Thing + " LO=" + lookSpec.Leftover.Count);
+
+var nearestLook = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  look at nearest Enemy"), null);
+Check(nearestLook.Verb == ActionVerb.LookAt && nearestLook.Thing == "nearest Enemy",
+    "`look at nearest Enemy` carries the qualifier through");
+
+var randomGoto = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  goto random Waypoint"), null);
+Check(randomGoto.Verb == ActionVerb.Goto && randomGoto.Thing == "random Waypoint",
+    "`goto random Waypoint` carries the qualifier through");
+
+var showTextSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  show text ""Game Over"""), null);
+Check(showTextSpec.Verb == ActionVerb.ShowText && showTextSpec.Thing == "Game Over",
+    "`show text \"Game Over\"` becomes the HUD text word");
+
+var hideTextSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  hide text"), null);
+Check(hideTextSpec.Verb == ActionVerb.HideText, "`hide text` becomes its own word");
 
 var faceSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   face Player"), null);
@@ -1114,3 +1157,4 @@ class FakeWorld : IEventWorld
         return tags.Contains((target, tag));
     }
 }
+

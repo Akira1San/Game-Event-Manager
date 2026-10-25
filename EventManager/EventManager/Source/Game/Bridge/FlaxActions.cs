@@ -45,10 +45,77 @@ namespace Game
                 return context.Me;
             if (thing == "other")
                 return context.Other;
+            if (thing.StartsWith("nearest ", StringComparison.OrdinalIgnoreCase))
+                return NearestTo(context, thing.Substring("nearest ".Length));
+            if (thing.StartsWith("random ", StringComparison.OrdinalIgnoreCase))
+                return RandomOf(thing.Substring("random ".Length));
             object fromSheets = context.Runtime.FindNamedActor(thing);
             if (fromSheets != null)
                 return fromSheets;
             return Level.FindActor(thing);
+        }
+
+        private static object NearestTo(EventContext context, string thing)
+        {
+            var me = context.Me as Actor;
+            var candidates = ActorsNamed(thing);
+            Actor best = null;
+            double bestDistance = double.MaxValue;
+            foreach (Actor candidate in candidates)
+            {
+                double distance = me != null
+                    ? Vector3.Distance(me.Position, candidate.Position)
+                    : candidate.Position.Length;
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = candidate;
+                }
+            }
+            if (best != null)
+                return best;
+            WarnOnce($"I couldn't find any \u201C{thing}\u201D to pick the nearest of.");
+            return null;
+        }
+
+        private static object RandomOf(string thing)
+        {
+            var candidates = ActorsNamed(thing);
+            if (candidates.Count == 0)
+            {
+                WarnOnce($"I couldn't find any \u201C{thing}\u201D to pick a random one of.");
+                return null;
+            }
+            int index = (int)(Rng.NextDouble() * candidates.Count);
+            if (index >= candidates.Count)
+                index = candidates.Count - 1;
+            return candidates[index];
+        }
+
+        private static List<Actor> ActorsNamed(string name)
+        {
+            var found = new List<Actor>();
+            var scenes = Level.Scenes;
+            for (int s = 0; s < scenes.Length; s++)
+            {
+                var scene = scenes[s];
+                if (scene == null)
+                    continue;
+                CollectNamed(scene, name, found);
+            }
+            return found;
+        }
+
+        private static void CollectNamed(Actor node, string name, List<Actor> found)
+        {
+            foreach (Actor child in node.Children)
+            {
+                if (child == null)
+                    continue;
+                if (child.Name == name && child.IsActive)
+                    found.Add(child);
+                CollectNamed(child, name, found);
+            }
         }
 
         public static void Step(float deltaTime)
@@ -190,6 +257,12 @@ namespace Game
                 case ActionVerb.Show:
                     SetActive(context, spec.Thing, true);
                     break;
+                case ActionVerb.ShowText:
+                    ShowHudText(spec.Thing);
+                    break;
+                case ActionVerb.HideText:
+                    HideHudText();
+                    break;
                 case ActionVerb.RestartScene:
                 {
                     Scene[] scenes = Level.Scenes;
@@ -223,6 +296,7 @@ namespace Game
             {
                 case "forward":
                     return Vector3.Transform(Vector3.Forward, actor.Orientation);
+                case "back":
                 case "backward":
                     return -Vector3.Transform(Vector3.Forward, actor.Orientation);
                 case "left":
@@ -248,7 +322,11 @@ namespace Game
         private static void SetActive(EventContext context, string thing, bool on)
         {
             if (ResolveThing(context, thing) is Actor actor)
+            {
                 actor.IsActive = on;
+                if (on)
+                    EventsManager.Instance?.AttachSpawnedActor(actor);
+            }
             else
                 WarnOnce($"I couldn't find the thing \u201C{thing}\u201D to {(on ? "show" : "hide")}.");
         }
@@ -263,9 +341,42 @@ namespace Game
             }
             Actor spawnAt = ResolveThing(context, spec.To) as Actor;
             var clone = template.Clone();
+            clone.IsActive = true;
             if (spawnAt != null)
+            {
                 clone.Position = spawnAt.Position;
+                clone.Orientation = spawnAt.Orientation;
+            }
             Level.SpawnActor(clone);
+            EventsManager.Instance?.AttachSpawnedActor(clone);
+        }
+
+        private static void ShowHudText(string text)
+        {
+            if (!SetLabel("GameText", text))
+                WarnOnce("I couldn't find the HUD text (an actor called \u201CGameText\u201D with a Label on a UIControl) to show text on.");
+        }
+
+        private static void HideHudText()
+        {
+            var actor = Level.FindActor("GameText");
+            var label = actor?.GetScript<UIControl>().Control as FlaxEngine.GUI.Label;
+            if (label != null)
+                label.Visible = false;
+            else
+                WarnOnce("I couldn't find the HUD text (an actor called \u201CGameText\u201D with a Label on a UIControl) to hide.");
+        }
+
+        private static bool SetLabel(string thing, string text)
+        {
+            var actor = string.IsNullOrEmpty(thing) ? null : Level.FindActor(thing);
+            var uiControl = actor != null ? actor.GetScript<UIControl>() : null;
+            var label = uiControl != null && uiControl.Control is FlaxEngine.GUI.Label textLabel ? textLabel : null;
+            if (label == null)
+                return false;
+            label.Text = text;
+            label.Visible = true;
+            return true;
         }
 
         private static void PlaySound(EventContext context, ActionSpec spec)
@@ -282,15 +393,13 @@ namespace Game
 
         public static void SetText(string thing, string text)
         {
-            var actor = string.IsNullOrEmpty(thing) ? null : Level.FindActor(thing);
-            var uiControl = actor != null ? actor.GetScript<UIControl>() : null;
-            var label = uiControl != null && uiControl.Control is FlaxEngine.GUI.Label textLabel ? textLabel : null;
-            if (label != null)
+            if (string.IsNullOrEmpty(thing))
             {
-                label.Text = text;
+                WarnOnce("\u201Cset text of\u201D needs the name of the thing whose text changes — like \u201Cset text of ScoreLabel to Score\u201D.");
                 return;
             }
-            WarnOnce($"\u201Cset text of\u201D needs an actor with a Label on a UIControl (I couldn't find one called \u201C{thing}\u201D).");
+            if (!SetLabel(thing, text))
+                WarnOnce($"\u201Cset text of\u201D needs an actor with a Label on a UIControl (I couldn't find one called \u201C{thing}\u201D).");
         }
     }
 }

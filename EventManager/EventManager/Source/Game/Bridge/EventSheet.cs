@@ -13,16 +13,32 @@ namespace Game
 
         public override void OnStart()
         {
-            Subscribe(Actor as Collider);
-            foreach (Collider collider in Actor.GetChildren<Collider>())
-                Subscribe(collider);
+            SubscribeTree(Actor);
         }
 
         public override void OnDestroy()
         {
-            Unsubscribe(Actor as Collider);
-            foreach (Collider collider in Actor.GetChildren<Collider>())
+            UnsubscribeTree(Actor);
+        }
+
+        private void SubscribeTree(Actor actor)
+        {
+            if (actor == null)
+                return;
+            if (actor is Collider collider)
+                Subscribe(collider);
+            foreach (Actor child in actor.Children)
+                SubscribeTree(child);
+        }
+
+        private void UnsubscribeTree(Actor actor)
+        {
+            if (actor == null)
+                return;
+            if (actor is Collider collider)
                 Unsubscribe(collider);
+            foreach (Actor child in actor.Children)
+                UnsubscribeTree(child);
         }
 
         private void Subscribe(Collider collider)

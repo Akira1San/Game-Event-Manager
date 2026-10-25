@@ -117,7 +117,7 @@
 				"Translation": {
 					"X": 0.0,
 					"Y": 79.60505676269531,
-					"Z": 0.0
+					"Z": -149.62716674804688
 				},
 				"Scale": {
 					"X": 0.20000000298023224,
@@ -270,6 +270,151 @@
 	"Visible": true,
 	"AutoFocus": false
 }
+		},
+		{
+			"ID": "ce294d0f43b6febf36c55eb3b6be102f",
+			"TypeName": "FlaxEngine.UIControl",
+			"ParentID": "719f734d483ca7b29a8031a8f7ccf40c",
+			"Name": "GameTex",
+			"Control": "FlaxEngine.GUI.Label",
+			"Data": {
+	"Text": "",
+	"CaseOption": 0,
+	"Bold": false,
+	"Italic": false,
+	"TextColor": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"TextColorHighlighted": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"HorizontalAlignment": 1,
+	"VerticalAlignment": 1,
+	"Wrapping": 0,
+	"BaseLinesGapScale": 1.0,
+	"Font": {
+		"Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+		"Size": 9.0
+	},
+	"Material": null,
+	"Margin": {
+		"Left": 0.0,
+		"Right": 0.0,
+		"Top": 0.0,
+		"Bottom": 0.0
+	},
+	"ClipText": false,
+	"AutoWidth": false,
+	"AutoHeight": false,
+	"AutoFitText": false,
+	"AutoFitTextRange": {
+		"X": 0.1,
+		"Y": 100.0
+	},
+	"ClipChildren": true,
+	"CullChildren": true,
+	"AnchorMin": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"AnchorMax": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Offsets": {
+		"Left": 0.0,
+		"Right": 100.0,
+		"Top": 0.0,
+		"Bottom": 20.0
+	},
+	"Scale": {
+		"X": 1.0,
+		"Y": 1.0
+	},
+	"Pivot": {
+		"X": 0.5,
+		"Y": 0.5
+	},
+	"Shear": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Rotation": 0.0,
+	"BackgroundColor": {
+		"R": 0.0,
+		"G": 0.0,
+		"B": 0.0,
+		"A": 0.0
+	},
+	"BackgroundBrush": null,
+	"Enabled": true,
+	"Visible": true,
+	"AutoFocus": false
+}
+		},
+		{
+			"ID": "c1492206452af6d0abd850a3b48ca273",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "c12b45cc40f447e8a2722b9715a79dc0",
+			"Name": "Enemy",
+			"Transform": {
+				"Translation": {
+					"X": -101.62320709228516,
+					"Y": 75.00001525878906,
+					"Z": 54.976043701171875
+				},
+				"Scale": {
+					"X": 0.28434544801712036,
+					"Y": 0.28434544801712036,
+					"Z": 0.3238812983036041
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "ae20f37348b76e0299c86e88c605b527",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "c12b45cc40f447e8a2722b9715a79dc0",
+			"Name": "Bullet",
+			"Transform": {
+				"Translation": {
+					"X": -176.89866638183594,
+					"Y": 75.0,
+					"Z": 35.55823516845703
+				},
+				"Scale": {
+					"X": 0.08061450719833374,
+					"Y": 0.08061450719833374,
+					"Z": 0.08061450719833374
+				}
+			},
+			"Model": "e573d5ca49210c5230e55ea7405519c8",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "6c36bd0c457513d7f50b3991ac54007b",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
 		}
 	]
 }

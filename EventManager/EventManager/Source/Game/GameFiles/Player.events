@@ -1,31 +1,51 @@
-# Player.events — smoke-test sheet for the bridge (Task 3 Part C/D verify).
-# An actor named Player suffices: WASD walks at 40, holding Shift while pressing W sprints at 70.
-# The `unless` line is a gate: while Shift is down, the walk move is skipped, and the sprint
-# event (which only runs while W is held too) pushes the faster step instead.
-# Left Mouse / Right Mouse / Middle Mouse and other named keys work the same way.
+# ---------------- Player.events ----------------
 
-when game starts
-  set WalkHint to "walk with WASD, hold Shift with W to sprint"
-
+# ---- movement ----
 when W is held
   unless Left Shift is held
-  move forward speed 40
+  move forward speed 45
 
 when Left Shift is held
   W is held
-  move forward speed 70
-
-when A is held
-  move left speed 40
-
-when D is held
-  move right speed 40
+  move forward speed 90
 
 when S is held
-  move backward speed 40
+  unless Left Shift is held
+  move back speed 45
 
-when Space is pressed
-  add 1 to Hops
+when Left Shift is held
+  S is held
+  move back speed 90
 
-when Hops becomes 3
-  set text of HopsLabel to "three hops!"
+when A is held
+  unless Left Shift is held
+  move left speed 45
+
+when Left Shift is held
+  A is held
+  move left speed 90
+
+when D is held
+  unless Left Shift is held
+  move right speed 45
+
+when Left Shift is held
+  D is held
+  move right speed 90
+
+# ---- shooting: aim at the closest enemy, fire ----
+when Left Mouse is pressed
+  look at nearest Enemy
+  spawn Bullet at me
+  play sound "shot.wav"
+
+# ---- getting hurt: brief invulnerability by hiding ----
+when me overlaps Enemy
+  unless my Invulnerable is true
+  play sound "hurt.wav"
+  add -1 to Lives
+  set my Invulnerable to true
+  hide me
+  wait 1 second
+  show me
+  set my Invulnerable to false

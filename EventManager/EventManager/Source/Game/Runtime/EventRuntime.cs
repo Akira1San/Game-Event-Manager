@@ -129,6 +129,15 @@ namespace Game
             sheets.Clear();
         }
 
+        public void RemoveActorSheet(object actor)
+        {
+            for (int i = sheets.Count - 1; i >= 0; i--)
+            {
+                if (ReferenceEquals(sheets[i].Actor, actor))
+                    sheets.RemoveAt(i);
+            }
+        }
+
         public void SessionStarted()
         {
             foreach (var sheet in sheets)
@@ -521,7 +530,12 @@ namespace Game
                     fires = changed;
                     break;
                 case TriggerKind.WatchBecomes:
-                    fires = matchesTarget && !lastMatchesTarget;
+                    // an equality edge, or a numeric transition that passes through the target
+                    // from above (health counting down from unset crosses 0 on the first hit)
+                    fires = matchesTarget && !lastMatchesTarget ||
+                            (target.Kind == ValueKind.Number && state.Last.Kind == ValueKind.Number &&
+                             current.Kind == ValueKind.Number &&
+                             state.Last.Number >= target.Number && current.Number < target.Number);
                     break;
                 default:
                     fires = !matchesTarget && lastMatchesTarget;

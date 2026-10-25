@@ -22,6 +22,8 @@ namespace Game
         StopAnim,
         Hide,
         Show,
+        ShowText,
+        HideText,
         RestartScene,
         LoadScene,
         QuitGame,
@@ -41,7 +43,7 @@ namespace Game
 
     public static class ActionWords
     {
-        public static string[] DirectionWords = { "forward", "backward", "left", "right", "up", "down" };
+        public static string[] DirectionWords = { "forward", "back", "backward", "left", "right", "up", "down" };
 
         public static string[] KeyNamesForScanning = BuildKeyNames();
 
@@ -80,12 +82,15 @@ namespace Game
                     return Move(spec, words, warn);
 
                 case "goto":
-                    if (words.Count >= 2 && IsThing(words[1]))
+                {
+                    string gotoThing = ThingAt(words, 1, out int gotoUsed);
+                    if (gotoThing != null)
                     {
-                        spec.Thing = words[1].Text;
-                        return Finish(spec, ActionVerb.Goto, words, 2);
+                        spec.Thing = gotoThing;
+                        return Finish(spec, ActionVerb.Goto, words, 1 + gotoUsed);
                     }
                     return Unknown(spec, words, "\u201Cgoto\u201D needs a thing, like \u201Cgoto SpawnPoint\u201D", warn);
+                }
 
                 case "turn":
                     if (words.Count >= 2 && IsDirection(words[1].Text) && words.Count >= 4 && words[2].Text == "degrees" &&
@@ -99,20 +104,29 @@ namespace Game
                     return Unknown(spec, words, "\u201Cturn\u201D looks like this: \u201Cturn left degrees 90\u201D", warn);
 
                 case "look":
-                    if (words.Count >= 3 && words[1].Text == "at" && IsThing(words[2]))
+                {
+                    if (words.Count >= 3 && words[1].Text == "at")
                     {
-                        spec.Thing = words[2].Text;
-                        return Finish(spec, ActionVerb.LookAt, words, 3);
+                        string lookThing = ThingAt(words, 2, out int lookUsed);
+                        if (lookThing != null)
+                        {
+                            spec.Thing = lookThing;
+                            return Finish(spec, ActionVerb.LookAt, words, 2 + lookUsed);
+                        }
                     }
-                    return Unknown(spec, words, "\u201Clook\u201D looks like this: \u201Clook at Player\u201D", warn);
+                    return Unknown(spec, words, "\u201Clook\u201D looks like this: \u201Clook at Player\u201D (or \u201Clook at nearest Enemy\u201D)", warn);
+                }
 
                 case "face":
-                    if (words.Count >= 2 && IsThing(words[1]))
+                {
+                    string faceThing = ThingAt(words, 1, out int faceUsed);
+                    if (faceThing != null)
                     {
-                        spec.Thing = words[1].Text;
-                        return Finish(spec, ActionVerb.Face, words, 2);
+                        spec.Thing = faceThing;
+                        return Finish(spec, ActionVerb.Face, words, 1 + faceUsed);
                     }
                     return Unknown(spec, words, "\u201Cface\u201D needs a thing, like \u201Cface Player\u201D", warn);
+                }
 
                 case "teleport":
                     if (words.Count >= 4 && IsThing(words[1]) && words[2].Text == "to" && IsThing(words[3]))
@@ -174,6 +188,20 @@ namespace Game
             }
             if (words.Count >= 2 && words[0].Text == "play" && words[1].Text == "anim")
                 return Unknown(spec, words, "\u201Cplay anim\u201D needs a name in quotes, like \u201Cplay anim \"Attack\"\u201D", warn);
+            if (words.Count >= 2 && (words[0].Text == "show" || words[0].Text == "hide") && words[1].Text == "text")
+            {
+                bool showText = words[0].Text == "show";
+                if (showText && words.Count >= 3 && words[2].Type == TokenType.Str)
+                {
+                    spec.Thing = words[2].Text;
+                    return Finish(spec, ActionVerb.ShowText, words, 3);
+                }
+                if (!showText && words.Count == 2)
+                    return Finish(spec, ActionVerb.HideText, words, 2);
+                return Unknown(spec, words, showText
+                    ? "\u201Cshow text\u201D displays quoted text, like \u201Cshow text \"Game Over\"\""
+                    : "\u201Chide text\u201D takes nothing after it", warn);
+            }
             if (words.Count >= 2 && (words[0].Text == "hide" || words[0].Text == "show") && IsThing(words[1]))
             {
                 spec.Thing = words[1].Text;
@@ -213,7 +241,7 @@ namespace Game
             }
             if (words.Count >= 2 && IsDirection(words[1].Text))
             {
-                spec.Dir = words[1].Text;
+                spec.Dir = words[1].Text == "back" ? "backward" : words[1].Text;
                 if (words.Count >= 4 && words[2].Text == "speed")
                 {
                     spec.AmountNode = ValueNodeAt(words, words.Count - 1);
@@ -241,6 +269,25 @@ namespace Game
         private static bool IsThing(Token token)
         {
             return token.Type == TokenType.Word;
+        }
+
+        private static bool IsQualifier(string word)
+        {
+            return word == "nearest" || word == "random";
+        }
+
+        private static string ThingAt(List<Token> words, int index, out int used)
+        {
+            used = 1;
+            if (index >= words.Count || words[index].Type != TokenType.Word)
+                return null;
+            string first = words[index].Text;
+            if (IsQualifier(first) && index + 1 < words.Count && words[index + 1].Type == TokenType.Word)
+            {
+                used = 2;
+                return first + " " + words[index + 1].Text;
+            }
+            return first;
         }
 
         private static bool IsDirection(string word)

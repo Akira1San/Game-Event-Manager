@@ -15,13 +15,15 @@ namespace Game
         private string _gameFilesFolder;
         private readonly Dictionary<string, string> _fileSignatures = new Dictionary<string, string>();
         private readonly Dictionary<string, string> _shownErrors = new Dictionary<string, string>();
+        private List<EventFileResult> _programs = new List<EventFileResult>();
         private float _nextWatchCheck;
 
         public void HandleTouch(Actor me, Actor other, bool leaving)
         {
-            if (other == null)
+            if (other == null || leaving)
                 return;
-            Runtime.PushContact(leaving ? TriggerKind.Overlaps : TriggerKind.Touches, me, other);
+            Runtime.PushContact(TriggerKind.Touches, me, other);
+            Runtime.PushContact(TriggerKind.Overlaps, me, other);
         }
 
         public override void OnStart()
@@ -45,8 +47,10 @@ namespace Game
                 return;
             }
             var programs = EventFiles.LoadAll(_gameFilesFolder);
+            _programs = programs;
             RememberSignatures(programs);
             AttachPrograms(programs, startedNow: true);
+            Level.ActorDeleted += ActorGoneAway;
 
             if (!_gameStartFiredThisSession)
             {
@@ -99,6 +103,8 @@ namespace Game
 
         private void ApplyReload(List<EventFileResult> programs)
         {
+            _programs = programs;
+            _shownErrors.Clear();
             var byName = new Dictionary<string, EventFileResult>();
             foreach (EventFileResult program in programs)
                 byName[program.Name] = program;
@@ -137,18 +143,37 @@ namespace Game
                         Runtime.AddSheet(new GlobalHost(), program.File);
                     continue;
                 }
-                if (Runtime.FindActorSheet(program.Name) != null)
-                    continue;
                 foreach (Actor actor in SceneActors())
                 {
-                    if (actor.Name != program.Name)
+                    if (actor.Name != program.Name || !actor.IsActive)
                         continue;
-                    if (Runtime.FindActorSheet(program.Name) != null)
-                        continue;
-                    Runtime.AddSheet(actor, program.File);
-                    StickerTo(actor);
+                    AttachSpawnedActor(actor);
                 }
             }
+        }
+
+        public void AttachSpawnedActor(Actor actor)
+        {
+            if (actor == null || actor.Name == "Game")
+                return;
+            foreach (SheetInstance sheet in Runtime.Sheets)
+            {
+                if (ReferenceEquals(sheet.Actor, actor))
+                    return;
+            }
+            foreach (EventFileResult program in _programs)
+            {
+                if (program.Name != actor.Name || !string.IsNullOrEmpty(program.Error))
+                    continue;
+                Runtime.AddSheet(actor, program.File);
+                StickerTo(actor);
+                return;
+            }
+        }
+
+        private void ActorGoneAway(Actor actor)
+        {
+            Runtime.RemoveActorSheet(actor);
         }
 
         private void ShowFileError(EventFileResult program, bool startedNow)
@@ -179,6 +204,7 @@ namespace Game
         {
             if (Instance == this)
                 Instance = null;
+            Level.ActorDeleted -= ActorGoneAway;
             FlaxActions.ClearSession();
             Runtime.RemoveAllSheets();
         }

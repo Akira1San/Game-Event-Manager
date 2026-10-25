@@ -1,0 +1,10 @@
+# ---------------- Bullet.events ----------------
+when me appears
+  move forward speed 20
+
+when me touches Enemy
+  send message "hit"
+  destroy me
+
+when every 1 seconds
+  destroy me

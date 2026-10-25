@@ -1,0 +1,11 @@
+# ---------------- Enemy.events ----------------
+when every 0.1 seconds
+  move toward Player speed 2
+
+when message "hit" arrives
+  add -1 to my health
+
+when my health becomes 0
+  add 1 to Score
+  play sound "boom.wav"
+  destroy me
