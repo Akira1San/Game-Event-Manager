@@ -253,7 +253,7 @@ namespace Game
                 case ActionVerb.StopSound:
                 {
                     var me = context.Me as Actor;
-                    var audio = me != null ? me.GetScript<AudioSource>() : null;
+            var audio = me != null ? me.GetScript<AudioSource>() : null;
                     audio?.Stop();
                     break;
                 }
@@ -393,14 +393,47 @@ namespace Game
 
         private static void PlaySound(EventContext context, ActionSpec spec)
         {
-            var me = context.Me as Actor;
-            var audio = me != null ? me.GetScript<AudioSource>() : null;
-            if (audio != null)
+            if (string.IsNullOrEmpty(spec.Thing))
             {
-                audio.Play();
+                WarnOnce("\u201Cplay sound\u201D needs a clip name, like \u201Cplay sound \"shot\"\u201D.");
                 return;
             }
-            WarnOnce($"To \u201Cplay sound\u201D attach an AudioSource (with the clip set) to this actor — \u201Cplay sound \"{spec.Thing}\"\u201D is waiting for one.");
+
+            var clip = LoadAudioClip(spec.Thing);
+            if (clip == null)
+            {
+                WarnOnce($"Could not load sound clip \u201C{spec.Thing}\u201D. Make sure the audio file is imported in the Flax Content browser.");
+                return;
+            }
+
+            var audio = new AudioSource
+            {
+                HideFlags = HideFlags.DontSave,
+                Volume = 1,
+                Clip = clip,
+            };
+            Level.SpawnActor(audio);
+            audio.Play();
+            FlaxEngine.Object.Destroy(audio, clip.Length);
+        }
+
+        private static AudioClip LoadAudioClip(string name)
+        {
+            var candidates = new[]
+            {
+                "Content/" + name + ".flax",
+                "Content/" + name,
+                name,
+            };
+            foreach (var path in candidates)
+            {
+                if (string.IsNullOrEmpty(path))
+                    continue;
+                var clip = Content.Load<AudioClip>(path);
+                if (clip != null)
+                    return clip;
+            }
+            return null;
         }
 
         public static void SetText(string thing, string text)

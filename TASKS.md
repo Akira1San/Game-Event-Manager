@@ -223,9 +223,9 @@ Goal: the DESIGN.md Section 7 example exists as real files and is playable. Depe
 Tasks 1–3. **This is the acceptance test for the whole v0.1 system.**
 
 ### Part A — Convert the example
-- [ ] Write `Game.events`, `Player.events`, `Bullet.events`, `Enemy.events` exactly as the
+- [x] Write `Game.events`, `Player.events`, `Bullet.events`, `Enemy.events` exactly as the
   DESIGN.md Section 7 listing.
-- [ ] Scene setup: Player, Bullet, Enemy, SpawnPoint actors, top-down camera.
+- [x] Scene setup: Player, Bullet, Enemy, SpawnPoint actors, top-down camera.
 
 ### Part B — Acceptance pass
 - [ ] Play: move with WASD, shoot with mouse, kill 5 enemies, see "You win!", scene restarts.

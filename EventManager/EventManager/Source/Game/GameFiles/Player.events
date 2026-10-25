@@ -36,7 +36,10 @@ when Left Shift is held
 # ---- shooting: fire in the direction the player faces ----
 when Left Mouse is pressed
   spawn Bullet at me
-  play sound "shot.wav"
+  play sound "shot"
+
+when Space is pressed
+  play sound "shot"
 
 # ---- getting hurt: brief invulnerability by hiding ----
 when me overlaps Enemy

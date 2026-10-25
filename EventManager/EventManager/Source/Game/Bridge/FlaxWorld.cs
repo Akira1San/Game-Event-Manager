@@ -21,8 +21,19 @@ namespace Game
             }
             if (name.StartsWith("Wheel", StringComparison.OrdinalIgnoreCase))
                 return false;
-            if (Enum.TryParse(name.Replace(" ", ""), true, out KeyboardKeys keys))
+            if (TryParseKey(name.Replace(" ", ""), out KeyboardKeys keys))
                 return Input.GetKey(keys);
+            return false;
+        }
+
+        static bool TryParseKey(string name, out KeyboardKeys keys)
+        {
+            keys = default;
+            foreach (var candidate in new[] { name, name + "Bar", "SpaceBar", "Space_Key", "SpaceKey" })
+            {
+                if (Enum.TryParse(candidate, true, out keys))
+                    return true;
+            }
             return false;
         }
 
