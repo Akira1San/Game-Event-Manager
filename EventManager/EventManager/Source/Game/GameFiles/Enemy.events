@@ -3,7 +3,7 @@ when me appears
   set my health to 3
 
 when every 0.1 seconds
-  move toward Player speed 2
+  move toward Player speed 80
 
 when message "hit" arrives
   add -1 to my health

@@ -1,6 +1,6 @@
 # ---------------- Bullet.events ----------------
-when me appears
-  move forward speed 20
+when every 0 seconds
+  move forward speed 80
 
 when me touches Enemy
   send message "hit"

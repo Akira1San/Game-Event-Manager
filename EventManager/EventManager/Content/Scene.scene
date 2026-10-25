@@ -103,12 +103,6 @@
 			}
 		},
 		{
-			"ID": "c8885f294fa0d5ee7387fe98eabbdb37",
-			"TypeName": "FlaxEngine.AudioListener",
-			"ParentID": "9ed0df044097dc1da2ffe6bec8ec4f36",
-			"Name": "Audio Listener"
-		},
-		{
 			"ID": "b622752b47787e3a9c71e1af5348d30b",
 			"TypeName": "FlaxEngine.StaticModel",
 			"ParentID": "c12b45cc40f447e8a2722b9715a79dc0",
@@ -168,12 +162,14 @@
 					"Y": 5.0,
 					"Z": 5.0
 				}
-			}
+			},
+			"Clip": "240fe7f047519c9d72bbe58f06a9c681"
 		},
 		{
 			"ID": "c1492206452af6d0abd850a3b48ca273",
 			"TypeName": "FlaxEngine.StaticModel",
 			"ParentID": "c12b45cc40f447e8a2722b9715a79dc0",
+			"IsActive": false,
 			"Name": "Enemy",
 			"Transform": {
 				"Translation": {

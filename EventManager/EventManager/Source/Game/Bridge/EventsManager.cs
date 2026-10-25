@@ -213,6 +213,7 @@ namespace Game
         {
             float delta = (float)(Time.DeltaTime > 0 ? Time.DeltaTime : 0.0001);
             FlaxActions.DeltaTime = delta;
+            FlaxActions.Step(delta);
             CheckForChanges();
             InputEdges();
             Runtime.Tick(Time.GameTime);

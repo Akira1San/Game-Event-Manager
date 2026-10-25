@@ -19,7 +19,7 @@ when Left Shift is held
 
 when A is held
   unless Left Shift is held
-  move left speed 45
+  move left speed 50
 
 when Left Shift is held
   A is held
@@ -27,7 +27,7 @@ when Left Shift is held
 
 when D is held
   unless Left Shift is held
-  move right speed 45
+  move right speed 50
 
 when Left Shift is held
   D is held

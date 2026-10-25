@@ -101,7 +101,8 @@ namespace Game
         private static TriggerDescriptor KeyDescriptor(string[] words, List<Token> trigger)
         {
             int isIndex = words.Length - 2;
-            var key = new TriggerDescriptor { Key = Join(trigger, 0, isIndex) };
+            var keyName = Join(trigger, 0, isIndex);
+            var key = new TriggerDescriptor { Key = keyName, RequireName = keyName };
             switch (words[words.Length - 1])
             {
                 case "pressed":
