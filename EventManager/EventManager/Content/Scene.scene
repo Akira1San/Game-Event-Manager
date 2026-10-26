@@ -95,10 +95,10 @@
 					"Z": -170.0
 				},
 				"Orientation": {
-					"X": 0.5372996063038788,
+					"X": 0.537299633026123,
 					"Y": 0.0,
 					"Z": 0.0,
-					"W": 0.8433914458318736
+					"W": 0.8433914184570313
 				}
 			}
 		},
@@ -114,9 +114,9 @@
 					"Z": 100.0
 				},
 				"Scale": {
-					"X": 0.2,
-					"Y": 0.2,
-					"Z": 0.2
+					"X": 0.20000000298023224,
+					"Y": 0.20000000298023224,
+					"Z": 0.20000000298023224
 				}
 			},
 			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
@@ -452,35 +452,101 @@
 	"Enabled": true,
 	"Visible": true,
 	"AutoFocus": false
-	}
+}
 		},
 		{
 			"ID": "a111b222c333d444e555f666a777b888",
 			"TypeName": "FlaxEngine.UIControl",
 			"ParentID": "fed0f53b428de3cf2055b891ee40be9b",
 			"Name": "ScoreLabel",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 575.0,
+					"Z": 0.0
+				}
+			},
 			"Control": "FlaxEngine.GUI.Label",
 			"Data": {
-		"Text": "0",
-		"CaseOption": 0,
-		"Bold": true,
-		"Italic": false,
-		"TextColor": {
-			"R": 1.0,
-			"G": 1.0,
-			"B": 1.0,
-			"A": 1.0
-		},
-		"HorizontalAlignment": 1,
-		"VerticalAlignment": 1,
-		"Font": {
-			"Font": "4508d98f4aa1f0bd59362b81d47e38f4",
-			"Size": 14.0
-		},
-		"Enabled": true,
-		"Visible": true,
-		"AutoFocus": false
-	}
+	"Text": "0",
+	"CaseOption": 0,
+	"Bold": true,
+	"Italic": false,
+	"TextColor": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"TextColorHighlighted": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"HorizontalAlignment": 1,
+	"VerticalAlignment": 1,
+	"Wrapping": 0,
+	"BaseLinesGapScale": 1.0,
+	"Font": {
+		"Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+		"Size": 14.0
+	},
+	"Material": null,
+	"Margin": {
+		"Left": 0.0,
+		"Right": 0.0,
+		"Top": 0.0,
+		"Bottom": 0.0
+	},
+	"ClipText": false,
+	"AutoWidth": false,
+	"AutoHeight": false,
+	"AutoFitText": false,
+	"AutoFitTextRange": {
+		"X": 0.1,
+		"Y": 100.0
+	},
+	"ClipChildren": true,
+	"CullChildren": true,
+	"AnchorMin": {
+		"X": 0.0,
+		"Y": 1.0
+	},
+	"AnchorMax": {
+		"X": 1.0,
+		"Y": 1.0
+	},
+	"Offsets": {
+		"Left": 0.0,
+		"Right": 861.0,
+		"Top": -505.0,
+		"Bottom": 20.0
+	},
+	"Scale": {
+		"X": 1.0,
+		"Y": 1.0
+	},
+	"Pivot": {
+		"X": 0.5,
+		"Y": 0.5
+	},
+	"Shear": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Rotation": 0.0,
+	"BackgroundColor": {
+		"R": 0.0,
+		"G": 0.0,
+		"B": 0.0,
+		"A": 0.0
+	},
+	"BackgroundBrush": null,
+	"Enabled": true,
+	"Visible": true,
+	"AutoFocus": false
+}
 		},
 		{
 			"ID": "b222c333d444e555f666a777b888c999",
@@ -489,26 +555,85 @@
 			"Name": "LivesLabel",
 			"Control": "FlaxEngine.GUI.Label",
 			"Data": {
-		"Text": "3",
-		"CaseOption": 0,
-		"Bold": true,
-		"Italic": false,
-		"TextColor": {
-			"R": 1.0,
-			"G": 1.0,
-			"B": 1.0,
-			"A": 1.0
-		},
-		"HorizontalAlignment": 1,
-		"VerticalAlignment": 1,
-		"Font": {
-			"Font": "4508d98f4aa1f0bd59362b81d47e38f4",
-			"Size": 14.0
-		},
-		"Enabled": true,
-		"Visible": true,
-		"AutoFocus": false
-	}
+	"Text": "3",
+	"CaseOption": 0,
+	"Bold": true,
+	"Italic": false,
+	"TextColor": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"TextColorHighlighted": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"HorizontalAlignment": 1,
+	"VerticalAlignment": 1,
+	"Wrapping": 0,
+	"BaseLinesGapScale": 1.0,
+	"Font": {
+		"Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+		"Size": 14.0
+	},
+	"Material": null,
+	"Margin": {
+		"Left": 0.0,
+		"Right": 0.0,
+		"Top": 0.0,
+		"Bottom": 0.0
+	},
+	"ClipText": false,
+	"AutoWidth": false,
+	"AutoHeight": false,
+	"AutoFitText": false,
+	"AutoFitTextRange": {
+		"X": 0.1,
+		"Y": 100.0
+	},
+	"ClipChildren": true,
+	"CullChildren": true,
+	"AnchorMin": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"AnchorMax": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Offsets": {
+		"Left": 0.0,
+		"Right": 100.0,
+		"Top": 0.0,
+		"Bottom": 20.0
+	},
+	"Scale": {
+		"X": 1.0,
+		"Y": 1.0
+	},
+	"Pivot": {
+		"X": 0.5,
+		"Y": 0.5
+	},
+	"Shear": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Rotation": 0.0,
+	"BackgroundColor": {
+		"R": 0.0,
+		"G": 0.0,
+		"B": 0.0,
+		"A": 0.0
+	},
+	"BackgroundBrush": null,
+	"Enabled": true,
+	"Visible": true,
+	"AutoFocus": false
+}
 		},
 		{
 			"ID": "dab3de054e9b61cae2c43a973ea1a22d",

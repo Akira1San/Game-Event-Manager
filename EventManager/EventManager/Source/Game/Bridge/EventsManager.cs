@@ -28,6 +28,14 @@ namespace Game
             Runtime.PushContact(TriggerKind.Overlaps, me, other);
         }
 
+        /// <summary>An animation one-shot finished on this actor — push an AnimEnd trigger to its sheet.</summary>
+        public void HandleAnimEnd(Actor actor, string animName)
+        {
+            if (actor == null || string.IsNullOrEmpty(animName))
+                return;
+            Runtime.RaisePush(actor, new PushSignal { Kind = TriggerKind.AnimEnd, Name = animName });
+        }
+
         public override void OnStart()
         {
             // Exactly one EventsManager per scene may run. A second one (usually an accident —

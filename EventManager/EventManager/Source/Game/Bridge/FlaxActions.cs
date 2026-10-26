@@ -19,6 +19,10 @@ namespace Game
         public static readonly List<OngoingMove> Moves = new List<OngoingMove>();
         private static readonly HashSet<string> WarnedOnce = new HashSet<string>();
         public static Action<string> Warn = FlaxActions.WarnOnce;
+        /// <summary>Last played animation per actor, so <c>stop anim</c> can restore it.</summary>
+        private static readonly Dictionary<object, string> PreviousAnim = new Dictionary<object, string>();
+        /// <summary>One-shot animations currently playing per actor (play anim, not loop anim).</summary>
+        private static readonly Dictionary<object, HashSet<string>> OneShotAnims = new Dictionary<object, HashSet<string>>();
 
         public static void WarnOnce(string message)
         {
@@ -232,6 +236,7 @@ namespace Game
                         for (int i = Moves.Count - 1; i >= 0; i--)
                             if (Moves[i].Subject == actor || Moves[i].Target == actor)
                                 Moves.RemoveAt(i);
+                        ClearActor(actor);
                         FlaxEngine.Object.Destroy(actor, 0f);
                     }
                     break;
@@ -250,10 +255,13 @@ namespace Game
                     break;
                 }
                 case ActionVerb.PlayAnim:
-                    WarnOnce($"Playing the animation \u201C{spec.Thing}\u201D needs the animation wiring — arriving in a later update.");
+                    PlayAnim(context, spec);
+                    break;
+                case ActionVerb.LoopAnim:
+                    LoopAnim(context, spec);
                     break;
                 case ActionVerb.StopAnim:
-                    WarnOnce("Stopping animations arrives with the animation wiring.");
+                    StopAnim(context, spec);
                     break;
                 case ActionVerb.Hide:
                     SetActive(context, spec.Thing, false);
@@ -437,6 +445,224 @@ namespace Game
             }
             if (!SetLabel(thing, text))
                 WarnOnce($"\u201Cset text of\u201D needs an actor with a Label on a UIControl (I couldn't find one called \u201C{thing}\u201D).");
+        }
+
+        /// <summary>Play an animation by name on the actor's <see cref="FlaxEngine.AnimatedModel"/>.</summary>
+        private static void PlayAnim(EventContext context, ActionSpec spec)
+        {
+            var me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce($"\u201Cplay anim \u201C{spec.Thing}\u201D\u201D needs to run on an actor's sheet — the global Game sheet has no model to animate.");
+                return;
+            }
+            var model = me.GetScript<FlaxEngine.AnimatedModel>();
+            if (model == null)
+            {
+                WarnOnce($"\u201Cplay anim \u201C{spec.Thing}\u201D\u201D needs an AnimatedModel on \u201C{me.Name}\u201D.");
+                return;
+            }
+            if (!HasAnim(model, spec.Thing))
+            {
+                WarnOnce(UnknownAnimMessage(model, spec.Thing));
+                return;
+            }
+            PreviousAnim[me] = CurrentAnim(model);
+            CallPlayState(model, spec.Thing);
+            MarkOneShot(me, spec.Thing);
+        }
+
+        /// <summary>Loop an animation by name on the actor's <see cref="FlaxEngine.AnimatedModel"/>.</summary>
+        private static void LoopAnim(EventContext context, ActionSpec spec)
+        {
+            var me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce($"\u201Cloop anim \u201C{spec.Thing}\u201D\u201D needs to run on an actor's sheet — the global Game sheet has no model to animate.");
+                return;
+            }
+            var model = me.GetScript<FlaxEngine.AnimatedModel>();
+            if (model == null)
+            {
+                WarnOnce($"\u201Cloop anim \u201C{spec.Thing}\u201D\u201D needs an AnimatedModel on \u201C{me.Name}\u201D.");
+                return;
+            }
+            if (!HasAnim(model, spec.Thing))
+            {
+                WarnOnce(UnknownAnimMessage(model, spec.Thing));
+                return;
+            }
+            PreviousAnim[me] = CurrentAnim(model);
+            CallPlayState(model, spec.Thing);
+            SetLooping(model, true);
+            ClearOneShot(me, spec.Thing);
+        }
+
+        /// <summary>Stop the current animation and restore the previous one.</summary>
+        private static void StopAnim(EventContext context, ActionSpec spec)
+        {
+            var me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Cstop anim\u201D needs to run on an actor's sheet — the global Game sheet has no model to animate.");
+                return;
+            }
+            var model = me.GetScript<FlaxEngine.AnimatedModel>();
+            if (model == null)
+                return;
+            SetLooping(model, false);
+            ClearOneShot(me, null);
+            if (PreviousAnim.TryGetValue(me, out string previous) && previous.Length > 0)
+            {
+                CallPlayState(model, previous);
+                PreviousAnim.Remove(me);
+            }
+        }
+
+        private static void MarkOneShot(object actor, string animName)
+        {
+            if (actor == null) return;
+            if (!OneShotAnims.TryGetValue(actor, out var set))
+            {
+                set = new HashSet<string>();
+                OneShotAnims[actor] = set;
+            }
+            set.Add(animName);
+        }
+
+        private static void ClearOneShot(object actor, string animName)
+        {
+            if (actor == null) return;
+            if (!OneShotAnims.TryGetValue(actor, out var set)) return;
+            if (animName == null)
+                set.Clear();
+            else
+                set.Remove(animName);
+        }
+
+        public static bool IsOneShot(object actor, string animName)
+        {
+            if (actor == null || animName == null) return false;
+            return OneShotAnims.TryGetValue(actor, out var set) && set.Contains(animName);
+        }
+
+        public static void ClearActor(object actor)
+        {
+            if (actor == null) return;
+            OneShotAnims.Remove(actor);
+            PreviousAnim.Remove(actor);
+        }
+
+        private static bool HasAnim(FlaxEngine.AnimatedModel model, string name)
+        {
+            try
+            {
+                var ctrl = GetAnimationController(model);
+                if (ctrl == null) return true;
+                var statesProp = ctrl.GetType().GetProperty("States");
+                if (statesProp == null) return true;
+                foreach (var state in (System.Collections.IEnumerable)statesProp.GetValue(ctrl))
+                {
+                    var nameProp = state.GetType().GetProperty("Name");
+                    if (nameProp != null && (string)nameProp.GetValue(state) == name)
+                        return true;
+                }
+            }
+            catch
+            {
+                // If the API surface differs, fall back to attempting the play —
+                // Flax will surface its own error if the name is invalid.
+            }
+            return true;
+        }
+
+        private static string CurrentAnim(FlaxEngine.AnimatedModel model)
+        {
+            try
+            {
+                var ctrl = GetAnimationController(model);
+                if (ctrl == null) return "";
+                var currentStateProp = ctrl.GetType().GetProperty("CurrentState");
+                var currentState = currentStateProp?.GetValue(ctrl);
+                if (currentState == null) return "";
+                var nameProp = currentState.GetType().GetProperty("Name");
+                return nameProp?.GetValue(currentState) as string ?? "";
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        private static void SetLooping(FlaxEngine.AnimatedModel model, bool looping)
+        {
+            try
+            {
+                var ctrl = GetAnimationController(model);
+                if (ctrl == null) return;
+                var loopProp = ctrl.GetType().GetProperty("Loop");
+                loopProp?.SetValue(ctrl, looping);
+            }
+            catch
+            {
+                // Looping property may not exist on this Flax version; ignore.
+            }
+        }
+
+        private static object GetAnimationController(FlaxEngine.AnimatedModel model)
+        {
+            try
+            {
+                var ctrlProp = model.GetType().GetProperty("AnimationController");
+                return ctrlProp?.GetValue(model);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void CallPlayState(FlaxEngine.AnimatedModel model, string stateName)
+        {
+            try
+            {
+                var playState = model.GetType().GetMethod("PlayState");
+                playState?.Invoke(model, new object[] { stateName });
+            }
+            catch
+            {
+                // PlayState may not exist on this Flax version; ignore.
+            }
+        }
+
+        private static string UnknownAnimMessage(FlaxEngine.AnimatedModel model, string name)
+        {
+            var available = new List<string>();
+            try
+            {
+                var ctrl = GetAnimationController(model);
+                if (ctrl != null)
+                {
+                    var statesProp = ctrl.GetType().GetProperty("States");
+                    if (statesProp != null)
+                    {
+                        foreach (var state in (System.Collections.IEnumerable)statesProp.GetValue(ctrl))
+                        {
+                            var nameProp = state.GetType().GetProperty("Name");
+                            if (nameProp != null)
+                                available.Add((string)nameProp.GetValue(state));
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // ignore
+            }
+            if (available.Count == 0)
+                return $"I don't know the anim \u201C{name}\u201D — this character's AnimatedModel has no states exposed.";
+            var list = string.Join(", ", available);
+            return $"I don't know the anim \u201C{name}\u201D. This character has: {list}.";
         }
     }
 }

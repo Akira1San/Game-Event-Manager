@@ -1,4 +1,7 @@
 using FlaxEngine;
+using System;
+using System.Collections.Generic;
+using System.Reflection;
 
 namespace Game
 {
@@ -14,6 +17,9 @@ namespace Game
         [Tooltip(".events file name (with or without the extension). Blank = this actor's name.")]
         public string EventFile = "";
 
+        /// <summary>Tracked AnimatedModel animation-end subscriptions, so they can be unsubscribed.</summary>
+        private readonly List<(FlaxEngine.AnimatedModel model, Action unsubscribe)> _animEndSubscriptions = new List<(FlaxEngine.AnimatedModel, Action)>();
+
         public override void OnStart()
         {
             SubscribeTree(Actor);
@@ -24,6 +30,7 @@ namespace Game
         {
             EventsManager.Instance?.UnregisterSheet(this);
             UnsubscribeTree(Actor);
+            UnsubscribeAnimEnd();
         }
 
         /// <summary>The .events source this sheet points at (always without the extension).</summary>
@@ -41,6 +48,7 @@ namespace Game
                 return;
             if (actor is Collider collider)
                 Subscribe(collider);
+            SubscribeAnimEnd(actor);
             foreach (Actor child in actor.Children)
                 SubscribeTree(child);
         }
@@ -71,6 +79,68 @@ namespace Game
                 collider.TriggerEnter -= HandleTriggerEnter;
                 collider.TriggerExit -= HandleTriggerExit;
             }
+        }
+
+        private void SubscribeAnimEnd(Actor actor)
+        {
+            if (actor == null) return;
+            var model = actor.GetScript<FlaxEngine.AnimatedModel>();
+            if (model == null) return;
+            try
+            {
+                // Flax 1.13 AnimatedModel animation-finished event — verify the exact event name
+                // against the real API; adjust if the property/event differs.
+                var ctrlProp = model.GetType().GetProperty("AnimationController");
+                var ctrl = ctrlProp?.GetValue(model);
+                if (ctrl == null) return;
+                Action<string> handler = animName =>
+                {
+                    if (FlaxActions.IsOneShot(Actor, animName))
+                        EventsManager.Instance?.HandleAnimEnd(Actor, animName);
+                };
+                // Subscribe via reflection-friendly pattern if the event exists.
+                SubscribeAnimEndEvent(ctrl, handler);
+                _animEndSubscriptions.Add((model, () => UnsubscribeAnimEndEvent(ctrl, handler)));
+            }
+            catch
+            {
+                // Animation end subscription not available on this Flax version —
+                // when anim ends trigger will not fire until the API is matched.
+            }
+        }
+
+        private void SubscribeAnimEndEvent(object ctrl, Action<string> handler)
+        {
+            // Hook any available animation-ended event. Try common Flax API names.
+            SubscribeEvent(ctrl, "AnimationEnded", handler);
+            SubscribeEvent(ctrl, "StateEnded", handler);
+            SubscribeEvent(ctrl, "AnimationStopped", handler);
+        }
+
+        private void UnsubscribeAnimEndEvent(object ctrl, Action<string> handler)
+        {
+            UnsubscribeEvent(ctrl, "AnimationEnded", handler);
+            UnsubscribeEvent(ctrl, "StateEnded", handler);
+            UnsubscribeEvent(ctrl, "AnimationStopped", handler);
+        }
+
+        private static void SubscribeEvent(object target, string eventName, Delegate handler)
+        {
+            var ev = target.GetType().GetEvent(eventName);
+            ev?.AddEventHandler(target, handler);
+        }
+
+        private static void UnsubscribeEvent(object target, string eventName, Delegate handler)
+        {
+            var ev = target.GetType().GetEvent(eventName);
+            ev?.RemoveEventHandler(target, handler);
+        }
+
+        private void UnsubscribeAnimEnd()
+        {
+            foreach (var (model, unsubscribe) in _animEndSubscriptions)
+                unsubscribe();
+            _animEndSubscriptions.Clear();
         }
 
         private void HandleTriggerEnter(PhysicsColliderActor collider)

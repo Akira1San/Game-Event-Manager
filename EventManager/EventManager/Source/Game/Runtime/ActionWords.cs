@@ -19,6 +19,7 @@ namespace Game
         PlaySound,
         StopSound,
         PlayAnim,
+        LoopAnim,
         StopAnim,
         Hide,
         Show,
@@ -189,6 +190,13 @@ namespace Game
             }
             if (words.Count >= 2 && words[0].Text == "play" && words[1].Text == "anim")
                 return Unknown(spec, words, "\u201Cplay anim\u201D needs a name in quotes, like \u201Cplay anim \"Attack\"\u201D", warn);
+            if (words.Count >= 3 && words[0].Text == "loop" && words[1].Text == "anim" && words[2].Type == TokenType.Str)
+            {
+                spec.Thing = words[2].Text;
+                return Finish(spec, ActionVerb.LoopAnim, words, 3);
+            }
+            if (words.Count >= 2 && words[0].Text == "loop" && words[1].Text == "anim")
+                return Unknown(spec, words, "\u201Cloop anim\u201D needs a name in quotes, like \u201Cloop anim \"Walk\"\u201D", warn);
             if (words.Count >= 2 && (words[0].Text == "show" || words[0].Text == "hide") && words[1].Text == "text")
             {
                 bool showText = words[0].Text == "show";

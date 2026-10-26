@@ -336,6 +336,12 @@ var sight = parser.Parse("when me appears\n  hide me\n\nwhen me stops seeing Pla
 Check(sight.Events.Count == 2 && sight.Events[1].Trigger.Count == 6,
       "`when me stops seeing Player by 8` validates through the alt trigger shape");
 
+var animEnd = parser.Parse("when anim \"Shoot\" ends\n  play anim \"Idle\"\n");
+Check(animEnd.Events.Count == 1, "`when anim \"Shoot\" ends` parses as an event");
+var animDesc = TriggerClassifier.Classify(animEnd.Events[0]);
+Check(animDesc.Kind == TriggerKind.AnimEnd && animDesc.RequireName == "Shoot",
+      "`when anim \"Shoot\" ends` classifies to AnimEnd with RequireName \"Shoot\"");
+
 var hud = parser.Parse("when scene starts\n  set text of ScoreLabel to Score\n");
 var hudSet = (SetTextNode)hud.Events[0].Body[0].Statement!;
 Check(hudSet.Target == "ScoreLabel" && hudSet.Value is VariableValue hv && hv.Name == "Score",
@@ -978,6 +984,10 @@ Check(stopSound.Verb == ActionVerb.StopSound, "`stop sound` parses");
 var stopAnim = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   stop anim"), null);
 Check(stopAnim.Verb == ActionVerb.StopAnim, "`stop anim` parses");
+
+var loopAnim = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  loop anim ""Walk"""), null);
+Check(loopAnim.Verb == ActionVerb.LoopAnim && loopAnim.Thing == "Walk", "`loop anim \"Walk\"` parses");
 
 var hideSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   hide me"), null);
