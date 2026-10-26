@@ -149,7 +149,10 @@ An `.events` file reaches an actor one of two ways — **explicit first, name fa
   "did you mean …?" suggestion, then attaches the moment the file exists).
 - **Global sheet:** `Game.events` attaches to the scene-wide host by itself — no component,
   no actor named `Game` needed. One `EventsManager` script in the scene is still required
-  (it ticks the runtime); it warns the one time when it's missing.
+  (it ticks the runtime); it warns the one time when it's missing. **Never add a second
+  one — and never on a spawned template**: each clone would boot its own runtime
+  (`Clone()` copies scripts, so every `Bullet` copy would carry a manager that runs
+  `Game.events` again). A duplicate is now turned away with a friendly warning.
 
 Inside a sheet, **`me`** means that actor, and **`other`** means the actor involved in the
 trigger (the one touching, the one hit, the one which sent a message).

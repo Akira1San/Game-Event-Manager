@@ -30,6 +30,15 @@ namespace Game
 
         public override void OnStart()
         {
+            // Exactly one EventsManager per scene may run. A second one (usually an accident —
+            // adding the manager to an actor that gets cloned) would double every trigger and,
+            // because Flax Clone() copies scripts, multiply itself with every spawned copy.
+            if (Instance != null && Instance != this && Instance) // `Instance` truthy = still a live engine object
+            {
+                Debug.LogWarning($"Event sheet: two EventsManager scripts in this scene — the one on \"{(Actor == null ? "an actor" : Actor.Name)}\" is ignored. Keep exactly one, somewhere permanent (never on a template that gets spawned).");
+                Enabled = false;
+                return;
+            }
             Instance = this;
             FlaxActions.Warn = FlaxActions.WarnOnce;
             Runtime.World = _world;
@@ -308,6 +317,8 @@ namespace Game
 
         public override void OnUpdate()
         {
+            if (Instance != this)
+                return; // a disabled duplicate or a re-enabled stray never ticks
             float delta = (float)(Time.DeltaTime > 0 ? Time.DeltaTime : 0.0001);
             FlaxActions.DeltaTime = delta;
             FlaxActions.Step(delta);
