@@ -7,7 +7,6 @@ namespace Game
     public class EventsManager : Script
     {
         public static EventsManager Instance;
-        private static bool _gameStartFiredThisSession;
 
         public EventRuntime Runtime = new EventRuntime();
         private readonly FlaxWorld _world = new FlaxWorld();
@@ -52,11 +51,7 @@ namespace Game
             AttachPrograms(programs, startedNow: true);
             Level.ActorDeleted += ActorGoneAway;
 
-            if (!_gameStartFiredThisSession)
-            {
-                _gameStartFiredThisSession = true;
-                Runtime.SessionStarted();
-            }
+            Runtime.SessionStarted();
             Runtime.SceneStarted();
 
             Runtime.Variables.SetGlobal("cameraFollow", ValueBox.OfNumber(1));
