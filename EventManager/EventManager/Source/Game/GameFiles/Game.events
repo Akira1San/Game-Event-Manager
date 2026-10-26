@@ -5,10 +5,20 @@ when game starts
   show text "Shoot the enemies!"
   wait 2 seconds
   hide text
+  set text of ScoreLabel to Score
+  set text of LivesLabel to Lives
+  set text of HealthLabel to Lives
 
 when every 5 seconds
   unless Score is 5
   spawn Enemy at SpawnPoint
+
+when Score changes
+  set text of ScoreLabel to Score
+
+when Lives changes
+  set text of LivesLabel to Lives
+  set text of HealthLabel to Lives
 
 when Score becomes 5
   show text "You win!"
