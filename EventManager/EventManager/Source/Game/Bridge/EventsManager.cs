@@ -58,6 +58,11 @@ namespace Game
                 Runtime.SessionStarted();
             }
             Runtime.SceneStarted();
+
+            Runtime.Variables.SetGlobal("cameraFollow", ValueBox.OfNumber(1));
+            Runtime.Variables.SetGlobal("cameraHeight", ValueBox.OfNumber(260));
+            Runtime.Variables.SetGlobal("cameraDepth", ValueBox.OfNumber(-170));
+            Runtime.Variables.SetGlobal("LookAtMouse", ValueBox.OfNumber(0));
         }
 
         private void RememberSignatures(List<EventFileResult> programs)
@@ -216,7 +221,58 @@ namespace Game
             FlaxActions.Step(delta);
             CheckForChanges();
             InputEdges();
+            UpdateCameraFollow();
+            UpdatePlayerLookAtMouse();
             Runtime.Tick(Time.GameTime);
+        }
+
+        private void UpdateCameraFollow()
+        {
+            var player = Level.FindActor("Player") as Actor;
+            var camera = Level.FindActor("Camera") as Actor;
+            if (player == null || camera == null)
+                return;
+            if (Runtime.Variables.GetGlobal("cameraFollow").AsNumber() <= 0)
+                return;
+            float height = (float)Runtime.Variables.GetGlobal("cameraHeight").AsNumber();
+            float depth = (float)Runtime.Variables.GetGlobal("cameraDepth").AsNumber();
+            camera.Position = player.Position + new Vector3(0f, height, depth);
+        }
+
+        private void UpdatePlayerLookAtMouse()
+        {
+            var player = Level.FindActor("Player") as Actor;
+            var camera = Level.FindActor("Camera") as Actor;
+            if (player == null || camera == null)
+                return;
+            if (Runtime.Variables.GetGlobal("LookAtMouse").AsNumber() <= 0)
+                return;
+
+            Float2 mousePos = Input.MousePosition;
+            Float2 screenSize = Screen.Size;
+            if (screenSize.LengthSquared <= 0)
+                return;
+
+            // Normalize mouse to -1..1 screen space (Y flipped: up is positive)
+            float nx = (mousePos.X - screenSize.X * 0.5f) / (screenSize.X * 0.5f);
+            float ny = (screenSize.Y * 0.5f - mousePos.Y) / (screenSize.Y * 0.5f);
+
+            // Camera world axes, flattened to the ground plane (XZ)
+            Vector3 camRight = Vector3.Transform(Vector3.Right, camera.Orientation);
+            Vector3 camForward = Vector3.Transform(Vector3.Forward, camera.Orientation);
+            camRight.Y = 0;
+            camForward.Y = 0;
+            if (camRight.LengthSquared > 0)
+                camRight.Normalize();
+            if (camForward.LengthSquared > 0)
+                camForward.Normalize();
+
+            Vector3 targetDir = camRight * nx + camForward * ny;
+            if (targetDir.LengthSquared > 0.0001f)
+            {
+                targetDir.Normalize();
+                player.LookAt(player.Position + targetDir);
+            }
         }
 
         private void InputEdges()

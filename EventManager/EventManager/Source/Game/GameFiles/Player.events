@@ -33,6 +33,10 @@ when Left Shift is held
   D is held
   move right speed 90
 
+# ---- mouse rotation: user opts in here; C# faces the player toward the mouse ----
+when game starts
+  set LookAtMouse to 1
+
 # ---- shooting: fire in the direction the player faces ----
 when Left Mouse is pressed
   spawn Bullet at me

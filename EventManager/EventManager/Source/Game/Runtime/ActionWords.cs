@@ -93,12 +93,13 @@ namespace Game
                 }
 
                 case "turn":
-                    if (words.Count >= 2 && IsDirection(words[1].Text) && words.Count >= 4 && words[2].Text == "degrees" &&
-                        words[3].Type == TokenType.Number)
+                    if (words.Count >= 2 && IsDirection(words[1].Text) && words.Count >= 4 && words[2].Text == "degrees")
                     {
                         spec.Dir = words[1].Text;
-                        spec.Number = words[3].Number;
-                        spec.HasNumber = true;
+                        spec.AmountNode = ValueNodeAt(words, words.Count - 1);
+                        spec.HasNumber = words[words.Count - 1].Type == TokenType.Number;
+                        if (spec.HasNumber)
+                            spec.Number = words[words.Count - 1].Number;
                         return Finish(spec, ActionVerb.Turn, words, 4);
                     }
                     return Unknown(spec, words, "\u201Cturn\u201D looks like this: \u201Cturn left degrees 90\u201D", warn);

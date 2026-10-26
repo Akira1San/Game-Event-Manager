@@ -91,15 +91,44 @@
 			"Transform": {
 				"Translation": {
 					"X": 0.0,
-					"Y": 243.1348114013672,
-					"Z": -202.57936096191406
+					"Y": 260.0,
+					"Z": -170.0
 				},
 				"Orientation": {
-					"X": 0.3585054278373718,
+					"X": 0.5372996063038788,
 					"Y": 0.0,
 					"Z": 0.0,
-					"W": 0.9335277080535889
+					"W": 0.8433914458318736
 				}
+			}
+		},
+		{
+			"ID": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "c12b45cc40f447e8a2722b9715a79dc0",
+			"Name": "SpawnPoint",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 79.0,
+					"Z": 100.0
+				},
+				"Scale": {
+					"X": 0.2,
+					"Y": 0.2,
+					"Z": 0.2
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "1771b53343d461faacdf2c8581b1fdbb",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
 			}
 		},
 		{
