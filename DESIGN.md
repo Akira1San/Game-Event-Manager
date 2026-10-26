@@ -135,11 +135,24 @@ when other touches me            <- trigger (may carry its own condition words)
 
 ### Attachment: per-object + global
 
-A `.events` file is attached to an actor by **matching name**:
+An `.events` file reaches an actor one of two ways — **explicit first, name fallback second**:
 
-- `Coin.events` automatically attaches to every actor named `Coin` in the scene.
-- Inside it, **`me`** means that actor, and **`other`** means the actor involved in the trigger
-  (the one touching, the one hit, the one which sent a message).
+- **EventSheet component (the engine way):** select the actor → *Add Script → EventSheet* →
+  set its **Event File** field (e.g. `Player`). Clones inherit it, so a `spawn Bullet` copy
+  carries its logic automatically. One file can be assigned to **many actors** — a single
+  `Enemy.events` can drive five prefabs, and `my …` variables stay per-copy.
+- **Name matching (the zero-click fallback):** an actor with *no* EventSheet component and
+  the same name as a file gets it automatically — `Coin.events` + actor `Coin` = logic
+  sticks on. A throwaway test actor needs nothing but its name.
+- **Priority:** a component beats a name match, always; an actor with a component is never
+  also name-matched (even if its file is missing — the missing file gets a warning with a
+  "did you mean …?" suggestion, then attaches the moment the file exists).
+- **Global sheet:** `Game.events` attaches to the scene-wide host by itself — no component,
+  no actor named `Game` needed. One `EventsManager` script in the scene is still required
+  (it ticks the runtime); it warns the one time when it's missing.
+
+Inside a sheet, **`me`** means that actor, and **`other`** means the actor involved in the
+trigger (the one touching, the one hit, the one which sent a message).
 - A file named **`Game.events`** (or anything in a `Global/` folder) is a global sheet: it runs
   scene-wide, `me` refers to the scene itself, and `other` is usually undefined.
 
@@ -596,7 +609,7 @@ generated per-sheet).
 |---|---|---|
 | `EventLexer` / `EventParser` | text â†’ event tree, with friendly errors | once |
 | `EventRuntime` (scene manager) | owns all sheets, ticks them, routes `me`/`other` | once |
-| `EventSheet` (per-actor small script) | hooks Flax events (OnUpdate, OnTriggerâ€¦) and reports them up | once |
+| `EventSheet` | the user-facing component actors carry: Event File field + collider hooks; clones inherit it | per actor |
 | `Words.*` (TriggerWords, ActionWords) | each word = tiny C# function bridging to the Flax API | per word (~40 files, each ~5 lines) |
 | `EventAsset` | wraps the text file as a Flax asset, so it shows in Content window | once |
 
@@ -613,9 +626,10 @@ Project/
     Bomb.events
 ```
 
-- **Auto-attach rule:** an actor named `Coin` + a file `Coin.events` = logic sticks on. Zero clicks.
-- **Manual override (later):** an EventSheet component in the editor can point at any file, for
-  renames or shared sheets.
+- **EventSheet component (now shipped):** select the actor → *Add Script → EventSheet* → set its
+  **Event File** (blank = actor name). Clones inherit it; one file can drive many actors.
+- **Auto-attach fallback:** an actor named `Coin` + a file `Coin.events` = logic sticks on.
+  Zero clicks — still there for throwaway tests. Explicit components always win.
 
 ### Trigger mechanics: polled vs. pushed
 
@@ -728,7 +742,7 @@ when Lives becomes 0
   restart scene
 ```
 
-Every concept from Sections 3â€“5 appears in this ~60-line game: attachment by name, `me`/`other`,
+Every concept from Sections 3â€“5 appears in this ~60-line game: attachment (EventSheet components or the name fallback), `me`/`other`,
 global variables (`Score`, `Lives`) vs. per-object ones (`my Invulnerable`, `my health`),
 `nearest`-qualified aiming, spawning bullets that inherit your facing, message events between
 objects (`send message "hit"`), timers (`every N seconds`), waits, mouse input â€” and a full
@@ -810,6 +824,6 @@ window around a broken runtime.
 Event Manager is a text-first game-logic system for non-programmers, inspired by Blender Game
 Engine's logic bricks and GDevelop's event sheets, but built for plain readable files instead of
 panels and wires. You write stacked events â€” a `when` line, optional `unless` lines, then indented
-actions â€” in a fixed ~40-word vocabulary, saved as `.events` files that attach to Flax actors by
-name. A once-written C# interpreter runs them live and hot-reloads instantly; no code is ever
+actions â€” in a fixed ~40-word vocabulary, saved as `.events` files that attach to Flax actors
+(either by an EventSheet component you place, or automatically by actor name). A once-written C# interpreter runs them live and hot-reloads instantly; no code is ever
 generated. The result reads like stage directions for your game, and small games get made.

@@ -1038,6 +1038,14 @@ Check(loaded[0].File != null && loaded[0].File.Events.Count == 0,
 Check(loaded[1].Error.Length == 0 && loaded[1].File.Events.Count == 1,
     "the good file parses to one event");
 
+var nameCandidates = new List<string> { "Player", "Game", "Bullet", "Enemy" };
+Check(EventFiles.SuggestFileName("Playr", nameCandidates) == "Player",
+    "a typo file name suggests the closest real file (Playr → Player)");
+Check(EventFiles.SuggestFileName("bullet", nameCandidates) == "Bullet",
+    "case differences still suggest the file (bullet → Bullet)");
+Check(EventFiles.SuggestFileName("Wombat", nameCandidates) == null,
+    "a far-off file name gets no suggestion instead of a wrong one");
+
 Directory.Delete(tempBase, true);
 
 var reloadParser = new EventParser();
@@ -1093,6 +1101,36 @@ Check(reloadEngine.Variables.GetGlobal("NewBorn").Kind == ValueKind.None,
 
 Check(reloadEngine.FindActorSheet("Watcher") == timerSheet && reloadEngine.FindActorSheet("Game") == null,
     "FindActorSheet dedupes attach lookups and never returns the global sheet");
+
+var pairEngine = FreshEngine(new FakeWorld());
+var sharedProgram = reloadParser.Parse(@"when every 1 seconds
+  add 1 to Ticks");
+var enemyA = new FakeActor("Enemy_A");
+var enemyB = new FakeActor("Enemy_B");
+var sheetA = pairEngine.AddSheet(enemyA, sharedProgram, "Enemy");
+var sheetB = pairEngine.AddSheet(enemyB, sharedProgram, "Enemy");
+Check(sheetA.SourceName == "Enemy" && sheetA.ActorName == "Enemy_A" && sheetB.ActorName == "Enemy_B",
+    "SourceName (which file) stays separate from ActorName (which object)");
+pairEngine.Tick(1);
+Check(pairEngine.Variables.GetGlobal("Ticks").AsNumber() == 2, "two actors sharing one .events file both tick");
+Check(pairEngine.Variables.GetLocal(enemyA, "Ticks").Kind == ValueKind.None,
+    "a shared sheet still keeps `my` variables per-object");
+
+var usingEnemy = pairEngine.SheetsUsingSource("Enemy");
+Check(usingEnemy.Count == 2 && usingEnemy.Contains(sheetA) && usingEnemy.Contains(sheetB),
+    "SheetsUsingSource fans out to every actor on one file");
+
+var gameSheet = pairEngine.AddSheet(new GlobalHost(), sharedProgram);
+Check(gameSheet.SourceName == "Game" && pairEngine.SheetsUsingSource("Game").Count == 1,
+    "the global host rides in as a sheet sourced from Game.events");
+Check(pairEngine.FindSheetFor(new GlobalHost()) == null && pairEngine.FindSheetFor(gameSheet.Actor) == null,
+    "FindSheetFor never returns the Game host (it is not a real actor)");
+
+pairEngine.RemoveSheet(sheetB);
+Check(pairEngine.FindSheetFor(enemyB) == null && pairEngine.FindSheetFor(enemyA) == sheetA,
+    "RemoveSheet drops exactly that one sheet");
+pairEngine.RemoveSheet(sheetB);
+Check(pairEngine.SheetsUsingSource("Enemy").Count == 1, "removing an already-removed sheet changes nothing");
 
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");

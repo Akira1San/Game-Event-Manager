@@ -3,6 +3,15 @@ using System.Collections.Generic;
 
 namespace Game
 {
+    /// <summary>Body for the global Game.events sheet — no actor, but `me` reads as "Game".</summary>
+    public class GlobalHost
+    {
+        public override string ToString()
+        {
+            return "Game";
+        }
+    }
+
     public class EventContext
     {
         public EventVariables Variables;
@@ -54,6 +63,8 @@ namespace Game
     {
         public object Actor;
         public string ActorName = "";
+        /// <summary>Which .events file drives this sheet (e.g. "Enemy"); several actors can share one.</summary>
+        public string SourceName = "";
         public ProgramFile Program = new ProgramFile();
         public List<TriggerDescriptor> Triggers = new List<TriggerDescriptor>();
         public Queue<PushSignal> PushQueue = new Queue<PushSignal>();
@@ -86,10 +97,16 @@ namespace Game
 
         public SheetInstance AddSheet(object actor, ProgramFile program)
         {
+            return AddSheet(actor, program, actor == null ? "" : actor.ToString());
+        }
+
+        public SheetInstance AddSheet(object actor, ProgramFile program, string sourceName)
+        {
             var sheet = new SheetInstance
             {
                 Actor = actor,
                 ActorName = actor == null ? "" : actor.ToString(),
+                SourceName = sourceName ?? "",
                 Program = program,
                 AnchorTime = Time,
             };
@@ -200,6 +217,34 @@ namespace Game
                 if (name != "Game" && sheet.ActorName == name)
                     return sheet;
             return null;
+        }
+
+        /// <summary>The sheet bound to this exact object, or null. The global Game host never matches.</summary>
+        public SheetInstance FindSheetFor(object actor)
+        {
+            if (actor == null)
+                return null;
+            foreach (var sheet in sheets)
+                if (ReferenceEquals(sheet.Actor, actor) && !(sheet.Actor is GlobalHost))
+                    return sheet;
+            return null;
+        }
+
+        /// <summary>Every sheet driven by one .events file (several actor instances can share it).</summary>
+        public List<SheetInstance> SheetsUsingSource(string sourceName)
+        {
+            var found = new List<SheetInstance>();
+            foreach (var sheet in sheets)
+                if (sheet.SourceName == sourceName)
+                    found.Add(sheet);
+            return found;
+        }
+
+        public void RemoveSheet(SheetInstance sheet)
+        {
+            for (int i = sheets.Count - 1; i >= 0; i--)
+                if (ReferenceEquals(sheets[i], sheet))
+                    sheets.RemoveAt(i);
         }
 
         public void BagAdd(object owner, string thing)
@@ -532,11 +577,14 @@ namespace Game
                     break;
                 case TriggerKind.WatchBecomes:
                     // an equality edge, or a numeric transition that passes through the target
-                    // from above (health counting down from unset crosses 0 on the first hit)
+                    // from above (health counting down from unset crosses 0 on the first hit —
+                    // an unset value reads as its numeric default, 0)
+                    double lastNumber = state.Last.Kind == ValueKind.Number ? state.Last.Number
+                        : state.Last.Kind == ValueKind.None ? 0 : double.NaN;
                     fires = matchesTarget && !lastMatchesTarget ||
-                            (target.Kind == ValueKind.Number && state.Last.Kind == ValueKind.Number &&
-                             current.Kind == ValueKind.Number &&
-                             state.Last.Number >= target.Number && current.Number < target.Number);
+                            (target.Kind == ValueKind.Number && current.Kind == ValueKind.Number &&
+                             !double.IsNaN(lastNumber) &&
+                             lastNumber >= target.Number && current.Number < target.Number);
                     break;
                 default:
                     fires = !matchesTarget && lastMatchesTarget;

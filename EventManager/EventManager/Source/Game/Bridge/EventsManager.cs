@@ -14,7 +14,10 @@ namespace Game
         private string _gameFilesFolder;
         private readonly Dictionary<string, string> _fileSignatures = new Dictionary<string, string>();
         private readonly Dictionary<string, string> _shownErrors = new Dictionary<string, string>();
+        private readonly HashSet<string> _missingShown = new HashSet<string>();
+        private readonly List<EventSheet> _components = new List<EventSheet>();
         private List<EventFileResult> _programs = new List<EventFileResult>();
+        private bool _booted;
         private float _nextWatchCheck;
 
         public void HandleTouch(Actor me, Actor other, bool leaving)
@@ -48,7 +51,9 @@ namespace Game
             var programs = EventFiles.LoadAll(_gameFilesFolder);
             _programs = programs;
             RememberSignatures(programs);
+            SweepComponents();
             AttachPrograms(programs, startedNow: true);
+            _booted = true;
             Level.ActorDeleted += ActorGoneAway;
 
             Runtime.SessionStarted();
@@ -105,13 +110,13 @@ namespace Game
         {
             _programs = programs;
             _shownErrors.Clear();
+            _missingShown.Clear();
             var byName = new Dictionary<string, EventFileResult>();
             foreach (EventFileResult program in programs)
                 byName[program.Name] = program;
             foreach (SheetInstance sheet in Runtime.Sheets)
             {
-                bool global = sheet.ActorName == "Game";
-                byName.TryGetValue(global ? "Game" : sheet.ActorName, out EventFileResult fresh);
+                byName.TryGetValue(sheet.SourceName, out EventFileResult fresh);
                 if (fresh == null)
                     continue;
                 if (!string.IsNullOrEmpty(fresh.Error))
@@ -130,6 +135,7 @@ namespace Game
 
         private void AttachPrograms(List<EventFileResult> programs, bool startedNow)
         {
+            _programs = programs;
             foreach (EventFileResult program in programs)
             {
                 if (!string.IsNullOrEmpty(program.Error))
@@ -137,42 +143,132 @@ namespace Game
                     ShowFileError(program, startedNow);
                     continue;
                 }
-                if (program.Name == "Game")
-                {
-                    if (!HasGlobalSheet())
-                        Runtime.AddSheet(new GlobalHost(), program.File);
+                if (program.Name == "Game" && !HasGlobalSheet())
+                    Runtime.AddSheet(new GlobalHost(), program.File);
+            }
+            // Explicit components win: every registered EventSheet points at its file.
+            foreach (EventSheet component in _components)
+                TryAttachComponent(component);
+            // Name fallback: only actors without any EventSheet component.
+            foreach (Actor actor in SceneActors())
+            {
+                if (!actor.IsActive)
                     continue;
-                }
-                foreach (Actor actor in SceneActors())
-                {
-                    if (actor.Name != program.Name || !actor.IsActive)
-                        continue;
-                    AttachSpawnedActor(actor);
-                }
+                if (actor.GetScript<EventSheet>() != null)
+                    continue;
+                if (Runtime.FindSheetFor(actor) != null)
+                    continue;
+                AttachByName(actor, actor.Name);
             }
         }
 
+        /// <summary>An EventSheet component appeared (scene sweep, editor-added, clone). Give it its
+        /// event tree if it doesn't have one yet; priority rules live here.</summary>
+        public void RegisterSheet(EventSheet component)
+        {
+            if (component == null || component.Actor == null)
+                return;
+            if (_components.Contains(component))
+                return;
+            _components.Add(component);
+            TryAttachComponent(component);
+        }
+
+        public void UnregisterSheet(EventSheet component)
+        {
+            _components.Remove(component);
+            if (component != null && component.Actor != null)
+                Runtime.RemoveActorSheet(component.Actor);
+        }
+
+        private void TryAttachComponent(EventSheet component)
+        {
+            Actor actor = component == null ? null : component.Actor;
+            if (actor == null)
+                return;
+            if (Runtime.FindSheetFor(actor) != null)
+                return;
+            string source = component.SourceName();
+            EventFileResult program = ProgramNamed(source);
+            if (program == null)
+            {
+                WarnMissingFile(source, actor.Name);
+                return;
+            }
+            if (!string.IsNullOrEmpty(program.Error))
+            {
+                ShowFileError(program, !_booted);
+                return;
+            }
+            _missingShown.Remove(source);
+            Runtime.AddSheet(actor, program.File, source);
+        }
+
+        /// <summary>Name-based fallback: attach <paramref name="source"/>.events to one actor by
+        /// standing up an EventSheet component for it, so clones inherit logic too.</summary>
+        private void AttachByName(Actor actor, string source)
+        {
+            EventFileResult program = ProgramNamed(source);
+            if (program == null || !string.IsNullOrEmpty(program.Error))
+                return;
+            var added = actor.AddScript<EventSheet>();
+            if (added == null)
+            {
+                Runtime.AddSheet(actor, program.File, source);
+                return;
+            }
+            added.EventFile = source;
+            if (!_components.Contains(added))
+                _components.Add(added);
+            TryAttachComponent(added);
+        }
+
+        /// <summary>Runtime spawns / show: the actor carries its component (clones copy scripts),
+        /// so component-first wins; name fallback otherwise.</summary>
         public void AttachSpawnedActor(Actor actor)
         {
             if (actor == null || actor.Name == "Game")
                 return;
-            foreach (SheetInstance sheet in Runtime.Sheets)
+            if (Runtime.FindSheetFor(actor) != null)
+                return;
+            var component = actor.GetScript<EventSheet>();
+            if (component != null)
             {
-                if (ReferenceEquals(sheet.Actor, actor))
-                    return;
-            }
-            foreach (EventFileResult program in _programs)
-            {
-                if (program.Name != actor.Name || !string.IsNullOrEmpty(program.Error))
-                    continue;
-                Runtime.AddSheet(actor, program.File);
-                StickerTo(actor);
+                RegisterSheet(component);
                 return;
             }
+            AttachByName(actor, actor.Name);
+        }
+
+        private EventFileResult ProgramNamed(string sourceName)
+        {
+            foreach (EventFileResult program in _programs)
+                if (program.Name == sourceName)
+                    return program;
+            return null;
+        }
+
+        private void WarnMissingFile(string source, string actorName)
+        {
+            if (_missingShown.Contains(source))
+                return;
+            _missingShown.Add(source);
+            var names = new List<string>();
+            foreach (EventFileResult program in _programs)
+                names.Add(program.Name);
+            string suggestion = EventFiles.SuggestFileName(source, names);
+            string hint = suggestion == null ? "" : $" Did you mean \"{suggestion}.events\"?";
+            Debug.LogWarning($"Event sheet: the Event Sheet on \"{actorName}\" points at \"{source}.events\", but no such file exists in the GameFiles folder.{hint} I'll attach it the moment that file shows up.");
         }
 
         private void ActorGoneAway(Actor actor)
         {
+            for (int i = _components.Count - 1; i >= 0; i--)
+            {
+                var component = _components[i];
+                if (component == null || ReferenceEquals(component.Actor, actor))
+                    _components.RemoveAt(i);
+            }
             Runtime.RemoveActorSheet(actor);
         }
 
@@ -206,6 +302,7 @@ namespace Game
                 Instance = null;
             Level.ActorDeleted -= ActorGoneAway;
             FlaxActions.ClearSession();
+            _components.Clear();
             Runtime.RemoveAllSheets();
         }
 
@@ -294,10 +391,19 @@ namespace Game
                 Runtime.RaisePushAll(new PushSignal { Kind = TriggerKind.WheelScrollDown });
         }
 
-        private static void StickerTo(Actor actor)
+        /// <summary>Collect every EventSheet component currently on scene actors, so manager and
+        /// component `OnStart` can happen in either order.</summary>
+        private void SweepComponents()
         {
-            var sticker = actor.AddScript<EventSheet>();
-            sticker?.Setup(Instance);
+            foreach (Actor actor in SceneActors())
+            {
+                foreach (EventSheet component in actor.GetScripts<EventSheet>())
+                {
+                    if (component == null || _components.Contains(component))
+                        continue;
+                    _components.Add(component);
+                }
+            }
         }
 
         private static List<Actor> SceneActors()

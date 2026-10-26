@@ -4,14 +4,6 @@ using FlaxEngine;
 
 namespace Game
 {
-    public class GlobalHost
-    {
-        public override string ToString()
-        {
-            return "Game";
-        }
-    }
-
     public class OngoingMove
     {
         public Actor Subject;

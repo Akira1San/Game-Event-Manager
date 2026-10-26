@@ -33,6 +33,26 @@ namespace Game
             return null;
         }
 
+        /// <summary>Closest existing file name to what the user wrote, or null when nothing is near
+        /// (same near-miss rule the parser uses: distance at most 2 — "Playr" suggests "Player").</summary>
+        public static string SuggestFileName(string wanted, System.Collections.Generic.IEnumerable<string> knownNames)
+        {
+            if (string.IsNullOrEmpty(wanted) || knownNames == null)
+                return null;
+            string best = null;
+            int bestDistance = int.MaxValue;
+            foreach (string name in knownNames)
+            {
+                int distance = WordDistance.Between(wanted, name);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = name;
+                }
+            }
+            return bestDistance <= 2 ? best : null;
+        }
+
         public static List<EventFileResult> LoadAll(string folder)
         {
             var results = new List<EventFileResult>();

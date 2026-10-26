@@ -164,8 +164,9 @@ top-to-bottom order.)
 
 ### Part C — Flax bridge (words become real)
 - [x] `EventSheet` script per actor + auto-attach (`EventsManager`): the manager script
-  loads `Source/Game/GameFiles/*.events`, attaches by **actor name** (zero clicks),
-  adds a per-actor `EventSheet` that subscribes the actor's colliders' `TriggerEnter`
+  loads `Source/Game/GameFiles/*.events` and attaches sheets (component-first since
+  **Part E**; originally by **actor name** zero-click fallback), adding a per-actor
+  `EventSheet` that subscribes the actor's colliders' `TriggerEnter`
   / `TriggerExit` events and pushes `Touches` / `Overlaps` up. `Game.events` attaches
   to a global host named `Game` (scene-wide; its `me` actions warn once — no body).
   Game start fires once per play session, scene start every manager wake; runtime is
@@ -176,8 +177,9 @@ top-to-bottom order.)
 - [x] Action words → real Flax API (`FlaxActions`): move (heading-based, per-tick), stop
   moving, turn, look at (snap `Actor.LookAt`), face (continuous, tracked), teleport,
   push, goto (walks until arrival), destroy (`Object.Destroy`, also clears its
-  tracking), spawn (template actor by name → `Clone()` + `Level.SpawnActor` — same-name
-  `.events` files attach to clones automatically), play sound (`AudioSource` on the
+  tracking), spawn (template actor by name → `Clone()` + `Level.SpawnActor`; clone
+  logic attach is handled by **Part E**: `Clone()` copies scripts, so clones carry the
+  template's `EventSheet`), play sound (`AudioSource` on the
   actor) / stop sound, hide/show (`IsActive`), set text of ( finds a
   `FlaxEngine.GUI.Label` on the thing's `UIControl`), restart scene
   (`Level.LoadScene(current GUID)`), load scene (warns — needs the scene-name
@@ -215,17 +217,63 @@ top-to-bottom order.)
   change takes effect during the same play session without a restart; save a typo — the
   friendly error appears and the old behavior keeps running until the fix saves.
 
+### Part E — Per-actor event sheets (the component way)
+
+User decision (2026-10-26): attach event logic like every engine does — select the actor,
+*Add Script → EventSheet*, point it at an `.events` file. A **global manager with
+find-actor targeting** was considered and **rejected** (contact triggers only reach the
+sheets of the colliding pair, and every action line would need an explicit subject —
+that's a different language, not a policy change). The file is a **shared script**: one
+`Enemy.events` can be assigned to many actor instances; `my …` variables stay per-object,
+so shared sheets never collide. Not a redesign — `EventRuntime` is attachment-agnostic;
+only the *policy* of who gets which tree changes.
+
+- [x] `SheetInstance.SourceName` (which `.events` file drives this sheet) split from
+  `ActorName` (routing, `me`/`other`, registration lookups). `EventRuntime.AddSheet`
+  takes the source name explicitly (old two-arg call keeps `ActorName` as source).
+- [x] `Runtime`: `AddSheet(actor, program, sourceName)`, `FindSheetFor(actor)` (dedupe by
+  actor identity, never returns the `Game` host), `SheetsUsingSource(source)`, and
+  `RemoveSheet(sheet)` (`GlobalHost` moved to the pure runtime file so tests can play it).
+- [x] `EventSheet` is a user-facing component: public `Event File` string field
+  (blank = the actor's name, keeping today's zero-click default), visible in the editor.
+  It self-registers with `EventsManager.Instance` on `OnStart` (late registration works —
+  clones and `AddScript` calls included) and unregisters on `OnDestroy`. Collider
+  touch/overlap subscription stays on it.
+- [x] `EventsManager` attach priority, deduped by actor: **explicit component
+  first → name fallback (only actors without a component) → global `Game.events` host**.
+  Scenes are swept on start; spawned actors register themselves via their component.
+- [x] Hot reload keys on `SourceName` and fans out: **all sheets using a file swap
+  together** (several enemies, one `Enemy.events`); missing file (component points at
+  `Playr.events`) → single warning with a near-miss suggestion via the engine's word
+  distance (`did you mean "Player.events"?`), re-checked whenever the folder changes.
+- [x] Dropped the runtime `StickerTo` on spawn/show — clones already carry the component
+  (Flax `Clone()` copies scripts), so the old path **double-subscribed** trigger events on
+  every clone. The Part C bullet claiming name-based clone attach is corrected.
+- [x] The template actor must carry the component (that's what makes `spawn Bullet`
+  inherit logic) — scene-setup note for Part 4 A.
+- [x] Unit tests: SourceName reload fan-out (two sheets, one file → both tick with
+  variables surviving per-object), `FindSheetFor`/dedupe, `RemoveSheet`,
+  component-beats-name (priority by design: a component never falls back to name-matching,
+  even when its file is missing), near-miss helper. **174/174 green**; module build 0/0.
+- [ ] Verify (user, editor): assign `EventSheet` to Player/Bullet/Enemy with their files;
+  a blank-field dummy still works by name; clones shoot/move via the template's component.
+
 ---
 
 ## Task 4 — The Top-Down Shooter, playable `[ ]`
 
 Goal: the DESIGN.md Section 7 example exists as real files and is playable. Depends on
-Tasks 1–3. **This is the acceptance test for the whole v0.1 system.**
+Tasks 1–3. **This is the acceptance test for the whole v0.1 system.** Part A amended by
+Task 3 Part E: actors use explicit `EventSheet` components instead of name-only attach.
 
 ### Part A — Convert the example
 - [x] Write `Game.events`, `Player.events`, `Bullet.events`, `Enemy.events` exactly as the
   DESIGN.md Section 7 listing.
 - [x] Scene setup: Player, Bullet, Enemy, SpawnPoint actors, top-down camera.
+- [ ] Scene setup (Part E amendment): Player/Bullet/Enemy carry an `EventSheet` component
+  pointing at `Player.events` / `Bullet.events` / `Enemy.events` (`Game` keeps no
+  component — `Game.events` stays auto-global); one throwaway actor with a blank field to
+  prove the name fallback still works.
 
 ### Part B — Acceptance pass
 - [ ] Play: move with WASD, shoot with mouse, kill 5 enemies, see "You win!", scene restarts.
@@ -426,3 +474,5 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 | 2026-10-23 | Task 3 Part B executed: `Runtime/Triggers.cs` (trigger classifier → descriptors/push signals), `Runtime/Conditions.cs` (condition parse + eval), `Runtime/EventWorld.cs` (key/dist/tag world interface), real `Runtime/EventRuntime.cs` (tick engine: wait-resume → pushed queues → polled every/held/watch, once-per-tick, gates, stop, send-message routing, bags prep); engine text-concat convenience for `set X to X + "txt"`; 108/108 tests green; module build 0/0 | Task 3 B done, next: Part C (Flax bridge) |
 | 2026-10-23 | Task 3 Part C executed: `Bridge/EventsManager.cs` (manager: locate GameFiles, parse, attach-by-name, per-actor `Bridge/EventSheet.cs` collider subscription → Touches/Overlaps, input press/release/held edges + wheel, runtime tick), `Bridge/FlaxWorld.cs` (`IEventWorld` on real Input/Tag), `Bridge/FlaxActions.cs` (move/turn/look at/face/teleport/push/goto/destroy/spawn/sound/hide-show/set text/restart/quit; `play anim` + `load scene` warn for later updates), `Runtime/ActionWords.cs` + `Events/EventFiles.cs` (pure, tested across compile). Flax API mismatches (Orientation/Quaternion, trigger events on Collider not Actor, `Vector3*Quaternion`) caught by build-against-`FlaxEngine.CSharp.dll` + a reflection dump tool; 133/133 tests green; module build 0/0 | Task 3 C done except editor verify (user must play: W → move cube), then Part D (hot reload) |
 | 2026-10-23 | User verified Part C in the editor (WASD move works after speeding to 40; also discovered `set text of` needs a real Canvas/UIControl-Label `HopsLabel` — UI labels need editor setup; note word `show text "..."` candidate for backlog). Task 3 Part D executed: `EventRuntime.SwapSheetProgram` (+ shared `ReadyTree` init), manager-side mtime poll (0.25s) → per-file reload semantics (valid = swap in place, broken = keep old tree + friendly error once per message, new file = attach immediately); variables untouched by swaps (survival by name); reload core covered by 44 new-ish engine tests → **152/152 green**; module build 0/0 | Task 3 D done except user editor verify (edit-while-playing); Task 3 fully code-complete, next: Task 4 (shooter) |
+| 2026-10-26 | Design session: reviewed the shipped code (`16483a8`…`40f64f9`: Task 4 A files + scene, camera-follow + mouse-look globals, spawn/show attach, session-start fix). User wanted engine-style script assignment on actors; also float-tested a global manager with find-actor targeting and **rejected** it (collision triggers only reach the colliding pair's sheets; explicit-subject actions would rewrite the language). Locked decision: **Task 3 Part E** — user-facing `EventSheet` component with an `Event File` field (blank = actor name), one required `EventsManager` per scene, `Game.events` auto-global, shared files across instances, component→name→global priority, `SourceName`-keyed reload fan-out; fixes the clone double-`EventSheet` bug (Flax `Clone()` copies scripts). Part E scoped in TASKS.md; Task 4 A amended; implementation not started | Task 3 E (planned), Task 4 A amended |
+| 2026-10-26 | Task 3 Part E executed: `Runtime/EventRuntime.cs` (`SheetInstance.SourceName`, `AddSheet(actor, program, sourceName)`, `FindSheetFor` (never the Game host), `SheetsUsingSource`, `RemoveSheet`, `GlobalHost` moved here so tests can play it), `Bridge/EventSheet.cs` (user-facing component: `Event File` field w/ `.events`-suffix tolerance, blank = actor name, self-registers on `OnStart` / unregisters on `OnDestroy`), `Bridge/EventsManager.cs` (scene sweep + late-registration handshake; attach priority component → name fallback → `Game.events` host; `SourceName`-keyed reload fan-out; missing-file single warning with `EventFiles.SuggestFileName` near-miss; `StickerTo`/double-subscribe removed; spawned/show actors attach via `AttachSpawnedActor` component-first), `Bridge/FlaxActions.cs` (GlobalHost moved out). **Fixed a pre-existing failure from the Task 4 commits**: `my <var> becomes 0` never fired when counting down from unset — crossing branch now treats unset as its numeric default (0); 174/174 green; module build 0/0 | Task 3 E code-complete (user editor verify pending); next: Task 4 A scene amendment (components on Player/Bullet/Enemy), then Part B acceptance |
