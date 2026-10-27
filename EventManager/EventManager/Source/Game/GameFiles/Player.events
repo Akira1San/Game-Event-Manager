@@ -1,5 +1,9 @@
 # ---------------- Player.events ----------------
 
+# ---- per-life state (avoids an unset-variable warning on the first hurt) ----
+when me appears
+  set my Invulnerable to false
+
 # ---- movement ----
 when W is held
   unless Left Shift is held

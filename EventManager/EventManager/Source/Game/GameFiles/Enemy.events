@@ -10,5 +10,5 @@ when message "hit" arrives
 
 when my health becomes 0
   add 1 to Score
-  play sound "boom.wav"
+  play sound "boom"
   destroy me

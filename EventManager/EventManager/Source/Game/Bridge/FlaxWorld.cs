@@ -6,6 +6,9 @@ namespace Game
 {
     public class FlaxWorld : IEventWorld
     {
+        /// <summary>Slack added to the two bounding-sphere radii so grazing hits count.</summary>
+        private const float ContactMargin = 2f;
+
         public bool IsKeyHeld(string key)
         {
             string name = key.Trim();
@@ -51,7 +54,49 @@ namespace Game
             Actor actor = target as Actor;
             if (actor == null)
                 return false;
-            return actor.Name == tag;
+            return actor.HasTag(tag);
+        }
+
+        public string NameOf(object actor)
+        {
+            return (actor as Actor)?.Name ?? actor?.ToString() ?? "";
+        }
+
+        public bool IsTouching(object a, object b)
+        {
+            var first = a as Actor;
+            var second = b as Actor;
+            if (first == null || second == null || !first || !second)
+                return false;
+            if (!first.IsActive || !second.IsActive)
+                return false;
+            float radius = first.BoundingSphere.Radius + second.BoundingSphere.Radius + ContactMargin;
+            return Vector3.Distance(first.Position, second.Position) <= radius;
+        }
+
+        public IReadOnlyList<object> Actors()
+        {
+            var found = new List<object>();
+            var scenes = Level.Scenes;
+            for (int s = 0; s < scenes.Length; s++)
+            {
+                var scene = scenes[s];
+                if (scene == null)
+                    continue;
+                Collect(scene, found);
+            }
+            return found;
+        }
+
+        private static void Collect(Actor node, List<object> found)
+        {
+            foreach (Actor child in node.Children)
+            {
+                if (child == null || !child.IsActive)
+                    continue; // templates are inactive and must never be contact targets
+                found.Add(child);
+                Collect(child, found);
+            }
         }
     }
 }

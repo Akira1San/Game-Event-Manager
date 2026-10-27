@@ -153,6 +153,9 @@ An `.events` file reaches an actor one of two ways — **explicit first, name fa
   one — and never on a spawned template**: each clone would boot its own runtime
   (`Clone()` copies scripts, so every `Bullet` copy would carry a manager that runs
   `Game.events` again). A duplicate is now turned away with a friendly warning.
+  Put the one manager on a **permanent scene-root actor** — never on an actor the game
+  hides or spawns: `IsActive = false` (from `hide me`) also disables the manager's
+  `OnUpdate`, so pending waits could never resume.
 
 Inside a sheet, **`me`** means that actor, and **`other`** means the actor involved in the
 trigger (the one touching, the one hit, the one which sent a message).
@@ -255,9 +258,9 @@ like GDevelop, so the editor teaches the vocabulary passively.
 | `when <key> is held` | `when Left Shift is held`, `when Right Mouse is held` | fires every tick while held â€” hold-to-aim lives here |
 | `when wheel scrolls up` | `when wheel scrolls up` | fires **once per detent** (a fast spin = several events, which is usually what you want) â€” zoom, cycling, scrolling lists |
 | `when wheel scrolls down` | `when wheel scrolls down` | same as above, the other way; no amount-read word in v0.1 (grammar cost â‰¥ benefit) |
-| `when other touches me` | | needs physics (or distance check) |
-| `when me touches <thing>` | `when me touches Water` | tag- or name-based |
-| `when me overlaps <thing>` | | distance-based, no physics needed |
+| `when other touches me` | | contact enter-edge — physics collider or distance, selectable |
+| `when me touches <thing>` | `when me touches Water` | name-based contact — physics collider or distance, selectable |
+| `when me overlaps <thing>` | | distance-based in every mode, no physics needed |
 | `when game starts` | | global sheets â€” fires **once per play session** (very first scene) |
 | `when scene starts` | | fires on **every** scene load â€” the menu/level reset word |
 | `when <thing> is clicked` | `when PlayButton is clicked` | menus: works on `me` too, if the sheet is attached to the button |
@@ -643,6 +646,20 @@ input presses (`Input.GetAction`), `OnStart`.
 `EventSheet` subscribes to the pushed ones once. Every tick the runtime walks all sheets
 top-to-bottom: pushed events fire their queue first, then polled events are checked.
 
+### Contacts: distance, colliders, or both
+
+`EventsManager.Contact Mode` chooses how `touches` is detected:
+
+- **`Distance`** — no colliders needed. Each tick, active actors are compared by name and
+  bounding-sphere distance; a pair fires once on enter, and again only after it separates.
+- **`Colliders`** — Flax `Collider.TriggerEnter` events (the final target setup: Bullet
+  `SphereCollider` trigger + Enemy `BoxCollider` solid, both under kinematic `RigidBody`s).
+- **`Both`** — collider pushes plus distance polling, deduped so a pair fires once.
+
+`overlaps` stays **distance-based in every mode**; the Player needs no collider. Contact
+ownership walks up from a collider to the nearest actor carrying an `EventSheet`
+(`SphereCollider` → `RigidBody` → `Bullet`).
+
 ### Hot reload
 
 - Watching the `.events` files. On save: re-parse; if valid, swap the live event tree **in place**,
@@ -779,8 +796,9 @@ window around a broken runtime.
 - **Physics vs. kinematic movement:** does `move forward` use rigidbody physics or transform move?
   Proposal: transform move by default; `push` is the physics word. Confirm by feel in M2.
 - **Persistence:** do global variables survive scene *reload* (not just scene *change*)? Proposal for now: yes, and a `wipe game variables` action to explicitly reset.
-- **`me touches` without physics:** distance-based overlap implemented but name `touches` being
-  used for both is confusing. Maybe rename to `me gets close to`? Feel it in M2.
+- **`me touches` without physics:** supported now via `Contact Mode = Distance` (bounding-sphere
+  contact); `overlaps` remains distance-based in every mode. The two words still overlap
+  conceptually — maybe rename to `me gets close to`? Feel it in M2.
 - **Scenes with same-name actors** (multiple Coins): currently all copies of the actor get the
   sheet â€” good. But what distinguishes copies in text? Maybe auto unique-id word (`my copy number`)
   rather than solving namespacing now.

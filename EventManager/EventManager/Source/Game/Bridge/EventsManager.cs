@@ -4,6 +4,16 @@ using FlaxEngine;
 
 namespace Game
 {
+    public enum EventContactMode
+    {
+        /// <summary>Distance checks only — works with no colliders at all.</summary>
+        Distance,
+        /// <summary>Flax physics trigger events only — needs the Bullet/Enemy collider setup.</summary>
+        Colliders,
+        /// <summary>Both sources, deduped, while comparing them.</summary>
+        Both,
+    }
+
     public class EventsManager : Script
     {
         public static EventsManager Instance;
@@ -20,9 +30,14 @@ namespace Game
         private bool _booted;
         private float _nextWatchCheck;
 
+        [Tooltip("How touches/overlaps are detected. Distance needs no colliders; Colliders uses Flax trigger events; Both compares them without double-firing.")]
+        public EventContactMode ContactMode = EventContactMode.Both;
+
         public void HandleTouch(Actor me, Actor other, bool leaving)
         {
             if (other == null || leaving)
+                return;
+            if (ContactMode == EventContactMode.Distance)
                 return;
             Runtime.PushContact(TriggerKind.Touches, me, other);
             Runtime.PushContact(TriggerKind.Overlaps, me, other);
@@ -50,6 +65,8 @@ namespace Game
             Instance = this;
             FlaxActions.Warn = FlaxActions.WarnOnce;
             Runtime.World = _world;
+            Runtime.PollOverlaps = true; // overlaps is distance-based in every mode
+            Runtime.PollTouches = ContactMode != EventContactMode.Colliders;
             Runtime.OnRuntimeWarning = message => Debug.LogWarning("Event sheet: " + message);
             Runtime.OnRawAction = (context, words) =>
                 FlaxActions.Execute(context, ActionWords.Parse(words, CancelOneTime));

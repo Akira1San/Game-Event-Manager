@@ -281,10 +281,41 @@ Task 3 Part E: actors use explicit `EventSheet` components instead of name-only 
   prove the name fallback still works.
 
 ### Part B — Acceptance pass
+- [ ] Follow-up fix for the current shooter blockers (contact detection, name lookups,
+      targeted `hit`, manager placement, collider setup): work through
+      **`TASK_FIX_SHOOTER.md`** first, then run this acceptance pass.
+      **Code complete** (Parts A–D + unit tests): real actor names via `IEventWorld.NameOf`,
+      `Distance`/`Colliders`/`Both` contact modes (default `Both`; `overlaps` stays distance),
+      collider-owner ancestor walk, `send message "hit" to other`, and the Flax tag fix.
+      192/192 unit tests green; module builds clean. **Editor steps still yours:** move
+      `EventsManager` to a permanent scene-root actor; then run the three mode checks.
 - [ ] Play: move with WASD, shoot with mouse, kill 5 enemies, see "You win!", scene restarts.
 - [ ] Get hit 3 times: invulnerability blink works, "Game Over" shows.
 - [ ] Play a full session reading only the `.events` files — note any word or behavior that
   felt wrong, file a line in `Section 9 Open Questions` of DESIGN.md.
+
+### Part C — Velocity/force movement (physics-native)
+Goal: let actors move through their `RigidBody` velocity/forces instead of assigning
+`Position` every tick, so collision response, CCD, and physics interactions work. Depends
+on Part B colliders. Keep the current transform movement as the default; this is an explicit
+opt-in so the existing example and `Distance` mode stay unchanged.
+
+- [ ] Decide the opt-in syntax: a qualifier on the existing move words (for example
+  `move forward speed 80 with physics`) or a per-actor `EventSheet` flag. Prefer the
+  smallest addition that reads naturally; record the choice in DESIGN §5/§9.
+- [ ] `FlaxActions`: when physics movement is requested and the actor has a `RigidBody`,
+  drive it with `LinearVelocity` (dynamic) or the kinematic target/`AddMovement`
+  (kinematic) instead of assigning `Position`. Keep the transform path for actors without
+  a physics body.
+- [ ] Test a dynamic bullet body (`EnableGravity = false`, `UseCCD = true`) driven by
+  velocity: trigger collider, no tunneling at speed 80, and `destroy me` on hit still works.
+- [ ] Evaluate velocity-based Player/Enemy movement: decide whether they stay kinematic or
+  become dynamic, and confirm hurt → `hide me` → `wait 1 second` → `show me` still resumes.
+- [ ] Keep `push` transform-based until this part decides whether it should become a real
+  impulse/force (`AddImpulse` / `AddForce`), and add the matching word/tests if so.
+- [ ] Tests: pure-runtime coverage for the new word/flag; editor acceptance in `Colliders`
+  mode with no PhysX console errors. Document the final body settings (kinematic vs
+  dynamic, CCD, gravity) in DESIGN.
 
 ---
 
@@ -482,3 +513,8 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 | 2026-10-26 | Task 3 Part E executed: `Runtime/EventRuntime.cs` (`SheetInstance.SourceName`, `AddSheet(actor, program, sourceName)`, `FindSheetFor` (never the Game host), `SheetsUsingSource`, `RemoveSheet`, `GlobalHost` moved here so tests can play it), `Bridge/EventSheet.cs` (user-facing component: `Event File` field w/ `.events`-suffix tolerance, blank = actor name, self-registers on `OnStart` / unregisters on `OnDestroy`), `Bridge/EventsManager.cs` (scene sweep + late-registration handshake; attach priority component → name fallback → `Game.events` host; `SourceName`-keyed reload fan-out; missing-file single warning with `EventFiles.SuggestFileName` near-miss; `StickerTo`/double-subscribe removed; spawned/show actors attach via `AttachSpawnedActor` component-first), `Bridge/FlaxActions.cs` (GlobalHost moved out). **Fixed a pre-existing failure from the Task 4 commits**: `my <var> becomes 0` never fired when counting down from unset — crossing branch now treats unset as its numeric default (0); 174/174 green; module build 0/0 | Task 3 E code-complete (user editor verify pending); next: Task 4 A scene amendment (components on Player/Bullet/Enemy), then Part B acceptance |
 | 2026-10-26 | Editor incident + guard: user added a second `EventsManager` to the Bullet template (`Clone()` copies scripts → every spawned bullet would boot its own full runtime → engine freeze); user also confirmed the zero-click name fallback alone runs the whole shooter. Added a one-way safety net: a second manager warns friendly + disables itself (`Script.Enabled = false`) and `OnUpdate` refuses to tick for strays; verified `Script.Enabled`/`op_Implicit`→bool liveness against the real API. DESIGN.md §6 now documents "one manager, never on a spawned template". 174/174 green; module build 0/0 | Task 3 E follow-up guard; Task 4 A amended (components optional — name fallback covers the default shooter scene) |
 | 2026-10-27 | Task 5 Part B/C complete: animation words (`play anim`/`loop anim`/`stop anim`/`when anim ends`) wired via reflective `AnimatedModel.PlayState` + `EventSheet` anim-end subscription; `Character.events` + `dragon.events` written per DESIGN.md §5; all 177 unit tests pass; module builds clean. Editor verify: `dragon.events` → `play anim "Idle"` plays the idle on the BGE dragon with no console warnings (Part A verified). Remaining: walk/shoot not yet exported (expected unknown-anim warnings until exported). | Task 5 A/B/C complete (Part A editor-verified; Part B/C code-complete) |
+| 2026-10-27 | Shooter diagnosis: bullet→enemy never kills. Root causes: `Actor.ToString()` used as the sheet name (Flax returns `"Name (Type; id)"`), no collider/distance contacts for `touches`/`overlaps`, `EventsManager` parented to the hideable `Player`, broadcast `hit`, `OwnerOf` stopping at `RigidBody`, `HasTag` comparing names. Locked plan: implement `Distance`/`Colliders`/`Both` contact modes (physics colliders final; `overlaps` stays distance), targeted `hit to other`, manager moved to scene root by user. Scoped the work in `TASK_FIX_SHOOTER.md`; no code changed yet. | Task 4 B follow-up scoped (`TASK_FIX_SHOOTER.md`); next: implement Parts A–E |
+| 2026-10-27 | Shooter fix code landed (`TASK_FIX_SHOOTER.md` Parts A–E): `IEventWorld` gained `NameOf`/`IsTouching`/`Actors`; sheet names now come from `FlaxWorld.NameOf` (real `Actor.Name`); distance contact polling with per-trigger enter-edge sets, `when other touches me` wildcard, and `Both`-mode dedupe; `EventSheet.OwnerOf` walks colliders up to the nearest `EventSheet` actor; `EventsManager` gained `Contact Mode` (`Distance`/`Colliders`/`Both`, default `Both`); `send message ... to me/other` routes by sheet identity; `Bullet.events` sends `hit` to `other`; `HasTag` uses `actor.HasTag`. New regression/contact/message tests → **192/192 green**, module build clean. Editor acceptance pending: manager to scene root, then compare the three contact modes. | Task 4 B code-complete (editor acceptance pending); `TASK_FIX_SHOOTER.md` A–E code done |
+| 2026-10-27 | Editor collider test: PhysX reports `kinematic bodies with CCD enabled are not supported! CCD will be ignored` on the Bullet. Corrected the setup to **UseCCD = false**; CCD is a dynamic-body feature and the transform-driven kinematic bullet doesn't need it (speed/contact offset/`Both` cover misses). | Task 4 B editor setup correction |
+| 2026-10-27 | Editor hurt test: the one-time `Invulnerable was read before it was ever set` warning came from `unless my Invulnerable is true` on the first touch. `Player.events` now initializes it on `when me appears`. Reminder: if touch makes the game appear frozen, `EventsManager` must be on a permanent scene-root actor (a manager parented to the hidden Player stops ticking). | Task 4 B editor note |
+| 2026-10-27 | Scoped Task 4 Part C: physics-native movement via `RigidBody` velocity/forces (opt-in; transform movement stays default), dynamic bullet/CCD experiment, and a decision on whether `push` becomes an impulse/force. | Task 4 C (planned) |

@@ -161,21 +161,6 @@
 			}
 		},
 		{
-			"ID": "923634384514367568fdb3aef65dc20a",
-			"TypeName": "Game.EventsManager",
-			"ParentID": "b622752b47787e3a9c71e1af5348d30b",
-			"V": {
-	"Runtime": {
-		"Variables": {
-			"OnWarning": {}
-		},
-		"World": {
-			"$type": "Game.DefaultEventWorld, Game.CSharp"
-		}
-	}
-}
-		},
-		{
 			"ID": "0939a4304b8c18966c0dc6a8d0deee91",
 			"TypeName": "FlaxEngine.AudioSource",
 			"ParentID": "b622752b47787e3a9c71e1af5348d30b",
@@ -216,12 +201,32 @@
 			"Buffer": {
 				"Entries": [
 					{
-						"Material": "00000000000000000000000000000000",
+						"Material": "a1852a094f0b1724190436a225ab5cc8",
 						"ShadowsMode": 3,
 						"Visible": true,
 						"ReceiveDecals": true
 					}
 				]
+			}
+		},
+		{
+			"ID": "dce6da9345c3ff5365fde68699b02025",
+			"TypeName": "FlaxEngine.RigidBody",
+			"ParentID": "c1492206452af6d0abd850a3b48ca273",
+			"Name": "RigidBody",
+			"StaticFlags": 0,
+			"IsKinematic": true,
+			"EnableGravity": false
+		},
+		{
+			"ID": "76a27f314029ff9f7233c2a73cb5b50c",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "dce6da9345c3ff5365fde68699b02025",
+			"Name": "BoxCollider",
+			"Size": {
+				"X": 99.99998474121094,
+				"Y": 99.99999237060547,
+				"Z": 99.99999237060547
 			}
 		},
 		{
@@ -253,6 +258,30 @@
 					}
 				]
 			}
+		},
+		{
+			"ID": "e15a63094020e970830659a1da15a85a",
+			"TypeName": "FlaxEngine.RigidBody",
+			"ParentID": "ae20f37348b76e0299c86e88c605b527",
+			"Name": "RigidBody",
+			"StaticFlags": 0,
+			"IsKinematic": true,
+			"EnableGravity": false
+		},
+		{
+			"ID": "756706754a010dba647b05a4a8416241",
+			"TypeName": "FlaxEngine.SphereCollider",
+			"ParentID": "e15a63094020e970830659a1da15a85a",
+			"Name": "SphereCollider",
+			"Transform": {
+				"Scale": {
+					"X": 0.5,
+					"Y": 0.19999998807907104,
+					"Z": 0.5
+				}
+			},
+			"IsTrigger": true,
+			"Radius": 16.228012084960938
 		},
 		{
 			"ID": "fed0f53b428de3cf2055b891ee40be9b",
@@ -647,6 +676,27 @@
 					"Z": 0.000030517578125
 				}
 			}
+		},
+		{
+			"ID": "b4722f1d42fe442abe3ce5af8dcba4f8",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "c12b45cc40f447e8a2722b9715a79dc0",
+			"Name": "eventMaanager"
+		},
+		{
+			"ID": "f45932244997ce58b838a9a85d283682",
+			"TypeName": "Game.EventsManager",
+			"ParentID": "b4722f1d42fe442abe3ce5af8dcba4f8",
+			"V": {
+	"Runtime": {
+		"Variables": {
+			"OnWarning": {}
+		},
+		"World": {
+			"$type": "Game.DefaultEventWorld, Game.CSharp"
+		}
+	}
+}
 		}
 	]
 }

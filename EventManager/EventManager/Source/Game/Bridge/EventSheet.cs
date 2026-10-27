@@ -157,10 +157,18 @@ namespace Game
         {
             if (collider == null)
                 return null;
-            var above = collider.Parent;
-            if (above != null && !(above is Scene) && !(above is PhysicsColliderActor))
-                return above;
-            return collider;
+            // Walk up from the collider (Bullet → RigidBody → SphereCollider) until we find the
+            // actor that actually carries the event sheet; fall back to the topmost actor below Scene.
+            Actor topmost = null;
+            Actor node = collider;
+            while (node != null && !(node is Scene))
+            {
+                if (node.GetScript<EventSheet>() != null)
+                    return node;
+                topmost = node;
+                node = node.Parent;
+            }
+            return topmost ?? collider;
         }
     }
 }

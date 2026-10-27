@@ -69,6 +69,10 @@ namespace Game
         public List<TriggerDescriptor> Triggers = new List<TriggerDescriptor>();
         public Queue<PushSignal> PushQueue = new Queue<PushSignal>();
         public List<PendingRun> Waiting = new List<PendingRun>();
+        /// <summary>One enter-edge set per trigger: pairs already touching, so a poll fires once.</summary>
+        public HashSet<object>[] Contacts = new HashSet<object>[0];
+        /// <summary>Pairs the distance poll fired for; lets Both mode ignore a later collider push for the same pair.</summary>
+        public HashSet<object>[] PolledContacts = new HashSet<object>[0];
         public bool[] FiredThisTick = new bool[0];
         public double[] LastFire = new double[0];
         public WatchState[] Watches = new WatchState[0];
@@ -80,6 +84,10 @@ namespace Game
         public EventVariables Variables = new EventVariables();
         public IEventWorld World = new DefaultEventWorld();
         public double Time;
+        /// <summary>Bridge flag: poll `touches` from world contacts (distance mode / both mode).</summary>
+        public bool PollTouches;
+        /// <summary>Bridge flag: poll `overlaps` from world contacts (always on under EventsManager).</summary>
+        public bool PollOverlaps = true;
         public Action<string> OnRuntimeWarning = message => { };
         public Action<EventContext, List<Token>> OnRawAction = (context, words) => { };
         public Action<EventContext, string, ValueBox> OnSetText = (context, thing, value) => { };
@@ -105,7 +113,7 @@ namespace Game
             var sheet = new SheetInstance
             {
                 Actor = actor,
-                ActorName = actor == null ? "" : actor.ToString(),
+                ActorName = World.NameOf(actor),
                 SourceName = sourceName ?? "",
                 Program = program,
                 AnchorTime = Time,
@@ -132,11 +140,15 @@ namespace Game
             sheet.FiredThisTick = new bool[count];
             sheet.LastFire = new double[count];
             sheet.Watches = new WatchState[count];
+            sheet.Contacts = new HashSet<object>[count];
+            sheet.PolledContacts = new HashSet<object>[count];
             sheet.Triggers.Clear();
             for (int i = 0; i < count; i++)
             {
                 sheet.LastFire[i] = Time;
                 sheet.Watches[i] = new WatchState();
+                sheet.Contacts[i] = new HashSet<object>();
+                sheet.PolledContacts[i] = new HashSet<object>();
                 sheet.Triggers.Add(TriggerClassifier.Classify(program.Events[i]));
             }
         }
@@ -314,6 +326,13 @@ namespace Game
                             continue;
                         if (!Matches(sheet.Triggers[eventIndex], signal))
                             continue;
+                        if (IsContactKind(signal.Kind) && signal.Other != null)
+                        {
+                            // A distance poll already fired this pair: ignore the collider's echo.
+                            if (sheet.PolledContacts[eventIndex].Contains(signal.Other))
+                                continue;
+                            sheet.Contacts[eventIndex].Add(signal.Other); // and don't let a later poll refire it
+                        }
                         RunEvent(sheet, eventIndex, signal.Other);
                     }
                 }
@@ -330,9 +349,14 @@ namespace Game
             }
         }
 
-        private static string NameOf(object actor)
+        private string NameOf(object actor)
         {
-            return actor == null ? "" : actor.ToString();
+            return World.NameOf(actor);
+        }
+
+        private static bool IsContactKind(TriggerKind kind)
+        {
+            return kind == TriggerKind.Touches || kind == TriggerKind.Overlaps;
         }
 
         private Dictionary<string, int> BagOf(object owner)
@@ -350,6 +374,9 @@ namespace Game
             if (descriptor.Kind != signal.Kind)
                 return false;
             if (descriptor.RequireName.Length == 0)
+                return true;
+            // `when other touches me` / `when other overlaps me` means "any toucher".
+            if (descriptor.RequireName == "me" && IsContactKind(descriptor.Kind))
                 return true;
             return signal.Name == descriptor.RequireName;
         }
@@ -484,7 +511,18 @@ namespace Game
             string targetName = "";
             if (words.Count >= 5 && words[3].Type == TokenType.Word && words[3].Text == "to" && words[4].Type == TokenType.Word)
                 targetName = words[4].Text;
-            SendRawMessage(new PushSignal { Kind = TriggerKind.Message, Name = message, Other = context.Me }, targetName);
+            var signal = new PushSignal { Kind = TriggerKind.Message, Name = message, Other = context.Me };
+            if (targetName == "me")
+            {
+                FindSheetFor(context.Me)?.PushQueue.Enqueue(signal);
+                return;
+            }
+            if (targetName == "other")
+            {
+                FindSheetFor(context.Other)?.PushQueue.Enqueue(signal);
+                return;
+            }
+            SendRawMessage(signal, targetName);
         }
 
         private static bool IsStopThisEvent(RawActionNode raw)
@@ -538,12 +576,58 @@ namespace Game
                     }
                     break;
                 }
+                case TriggerKind.Touches:
+                    if (PollTouches)
+                        PollContact(sheet, eventIndex, descriptor);
+                    break;
+                case TriggerKind.Overlaps:
+                    if (PollOverlaps)
+                        PollContact(sheet, eventIndex, descriptor);
+                    break;
                 case TriggerKind.WatchBecomes:
                 case TriggerKind.WatchBecomesNot:
                 case TriggerKind.WatchChanges:
                     TickWatch(sheet, eventIndex, descriptor);
                     break;
             }
+        }
+
+        /// <summary>Enter-edge distance contact: fires once per pair, again only after separation.</summary>
+        private void PollContact(SheetInstance sheet, int eventIndex, TriggerDescriptor descriptor)
+        {
+            HashSet<object> contacts = sheet.Contacts[eventIndex];
+            HashSet<object> polled = sheet.PolledContacts[eventIndex];
+            var touching = new List<object>();
+            foreach (object other in World.Actors())
+            {
+                if (other == null || ReferenceEquals(other, sheet.Actor))
+                    continue;
+                if (!NameMatches(descriptor, other))
+                    continue;
+                if (World.IsTouching(sheet.Actor, other))
+                    touching.Add(other);
+            }
+            contacts.RemoveWhere(other => !touching.Contains(other));
+            polled.RemoveWhere(other => !touching.Contains(other));
+            foreach (object other in touching)
+            {
+                if (contacts.Contains(other))
+                    continue; // still touching the same pair — enter edge only
+                if (sheet.FiredThisTick[eventIndex])
+                    continue; // this event already ran this tick; try the pair next tick
+                contacts.Add(other);
+                polled.Add(other);
+                RunEvent(sheet, eventIndex, other);
+            }
+        }
+
+        private bool NameMatches(TriggerDescriptor descriptor, object other)
+        {
+            if (descriptor.RequireName.Length == 0)
+                return true;
+            if (descriptor.RequireName == "me")
+                return true; // `other touches me` = any toucher
+            return World.NameOf(other) == descriptor.RequireName;
         }
 
         private void TickWatch(SheetInstance sheet, int eventIndex, TriggerDescriptor descriptor)

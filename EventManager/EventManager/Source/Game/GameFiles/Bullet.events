@@ -3,7 +3,7 @@ when every 0 seconds
   move forward speed 80
 
 when me touches Enemy
-  send message "hit"
+  send message "hit" to other
   destroy me
 
 when every 1 seconds

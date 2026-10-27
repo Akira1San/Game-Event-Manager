@@ -1142,6 +1142,182 @@ Check(pairEngine.FindSheetFor(enemyB) == null && pairEngine.FindSheetFor(enemyA)
 pairEngine.RemoveSheet(sheetB);
 Check(pairEngine.SheetsUsingSource("Enemy").Count == 1, "removing an already-removed sheet changes nothing");
 
+// ------------------------------------------------------------------
+// Task 4 follow-up: real actor names, distance contacts, targeted messages
+// ------------------------------------------------------------------
+
+var shippedGameFiles = Path.Combine(Path.GetDirectoryName(FindUpward("DESIGN.md"))!,
+    "EventManager", "EventManager", "Source", "Game", "GameFiles");
+var shippedPrograms = EventFiles.LoadAll(shippedGameFiles);
+bool shippedFilesParse = shippedPrograms.Count > 0;
+foreach (EventFileResult shipped in shippedPrograms)
+{
+    if (!string.IsNullOrEmpty(shipped.Error))
+        shippedFilesParse = false;
+}
+Check(shippedFilesParse, "every shipped GameFiles .events file parses (including `hit to other`)");
+
+var decoratedWorld = new FakeWorld();
+var decoratedBullet = new DecoratedActor("Bullet");
+var decoratedEnemy = new DecoratedActor("Enemy");
+var decoratedProbe = new FakeActor("Probe");
+decoratedWorld.AddActor(decoratedBullet);
+decoratedWorld.AddActor(decoratedEnemy);
+decoratedWorld.AddActor(decoratedProbe);
+decoratedWorld.SetDistance(decoratedProbe, decoratedEnemy, 1);
+var decoratedEngine = FreshEngine(decoratedWorld);
+var decoratedBulletSheet = decoratedEngine.AddSheet(decoratedBullet, parser.Parse(@"when me touches Enemy
+  set Touched to Touched + ""T""
+  send message ""hit"" to Enemy"));
+var decoratedEnemySheet = decoratedEngine.AddSheet(decoratedEnemy, parser.Parse(@"when message ""hit"" arrives
+  add -1 to my health"));
+decoratedEngine.Variables.SetLocal(decoratedEnemy, "health", ValueBox.OfNumber(3));
+var decoratedProbeSheet = decoratedEngine.AddSheet(decoratedProbe, parser.Parse(@"when every 1 seconds
+  unless Enemy exists
+  set Missing to Missing + 1
+  me is near Enemy by 5
+  set NearDecorated to NearDecorated + 1"));
+decoratedEngine.PollTouches = true;
+decoratedWorld.SetTouching(decoratedBullet, decoratedEnemy, true);
+decoratedEngine.Tick(0);
+decoratedEngine.Tick(1);
+Check(decoratedBulletSheet.ActorName == "Bullet" && decoratedEnemySheet.ActorName == "Enemy",
+    "sheet names come from World.NameOf, not a decorated ToString()");
+Check(decoratedEngine.Variables.GetGlobal("Touched").AsText() == "T", "`me touches Enemy` matches the clean actor name");
+Check(decoratedEngine.Variables.GetLocal(decoratedEnemy, "health").AsNumber() == 2,
+    "`send message \"hit\" to Enemy` reaches the clean name after naming fix");
+Check(decoratedEngine.Variables.GetGlobal("Missing").IsNone(), "`Enemy exists` finds a decorated actor by its real name");
+Check(decoratedEngine.Variables.GetGlobal("NearDecorated").AsNumber() == 1, "`me is near Enemy` finds a decorated actor by its real name");
+
+var enterWorld = new FakeWorld();
+var enterA = new FakeActor("Toucher");
+var enterB = new FakeActor("Target");
+enterWorld.AddActor(enterA);
+enterWorld.AddActor(enterB);
+var enterEngine = FreshEngine(enterWorld);
+enterEngine.AddSheet(enterA, parser.Parse("when me touches Target\n  set TouchCount to TouchCount + 1"));
+enterEngine.PollTouches = true;
+enterWorld.SetTouching(enterA, enterB, true);
+enterEngine.Tick(0);
+enterEngine.Tick(1);
+Check(enterEngine.Variables.GetGlobal("TouchCount").AsNumber() == 1,
+    "a distance touch fires once on enter, not every tick");
+enterWorld.SetTouching(enterA, enterB, false);
+enterEngine.Tick(2);
+enterWorld.SetTouching(enterA, enterB, true);
+enterEngine.Tick(3);
+Check(enterEngine.Variables.GetGlobal("TouchCount").AsNumber() == 2,
+    "a distance touch re-fires after separation and re-entry");
+
+var pollOverlapWorld = new FakeWorld();
+var pollOverlapA = new FakeActor("Prober");
+var pollOverlapB = new FakeActor("Enemy");
+pollOverlapWorld.AddActor(pollOverlapA);
+pollOverlapWorld.AddActor(pollOverlapB);
+pollOverlapWorld.SetTouching(pollOverlapA, pollOverlapB, true);
+var pollOverlapEngine = FreshEngine(pollOverlapWorld);
+pollOverlapEngine.PollTouches = false;
+pollOverlapEngine.PollOverlaps = true;
+pollOverlapEngine.AddSheet(pollOverlapA, parser.Parse("when me overlaps Enemy\n  add 1 to OverlapPolls"));
+pollOverlapEngine.Tick(0);
+pollOverlapEngine.Tick(1);
+Check(pollOverlapEngine.Variables.GetGlobal("OverlapPolls").AsNumber() == 1,
+    "`overlaps` polls even when touches polling is disabled (colliders mode)");
+
+var noOverlapWorld = new FakeWorld();
+var noOverlapA = new FakeActor("Prober");
+var noOverlapB = new FakeActor("Enemy");
+noOverlapWorld.AddActor(noOverlapA);
+noOverlapWorld.AddActor(noOverlapB);
+noOverlapWorld.SetTouching(noOverlapA, noOverlapB, true);
+var noOverlapEngine = FreshEngine(noOverlapWorld);
+noOverlapEngine.PollOverlaps = false;
+noOverlapEngine.AddSheet(noOverlapA, parser.Parse("when me overlaps Enemy\n  add 1 to OverlapOff"));
+noOverlapEngine.Tick(0);
+Check(noOverlapEngine.Variables.GetGlobal("OverlapOff").IsNone(),
+    "`overlaps` polling can be switched off explicitly");
+
+var dedupeWorld = new FakeWorld();
+var dedupeA = new FakeActor("Bullet");
+var dedupeB = new FakeActor("Enemy");
+dedupeWorld.AddActor(dedupeA);
+dedupeWorld.AddActor(dedupeB);
+dedupeWorld.SetTouching(dedupeA, dedupeB, true);
+var dedupeEngine = FreshEngine(dedupeWorld);
+dedupeEngine.PollTouches = true;
+dedupeEngine.AddSheet(dedupeA, parser.Parse("when me touches Enemy\n  add 1 to Dedupe"));
+dedupeEngine.PushContact(TriggerKind.Touches, dedupeA, dedupeB);
+dedupeEngine.Tick(0);
+dedupeEngine.Tick(1);
+Check(dedupeEngine.Variables.GetGlobal("Dedupe").AsNumber() == 1,
+    "Both mode: a collider push followed by distance polling fires one event, not two");
+
+var dedupeReverseWorld = new FakeWorld();
+var dedupeReverseA = new FakeActor("Bullet");
+var dedupeReverseB = new FakeActor("Enemy");
+dedupeReverseWorld.AddActor(dedupeReverseA);
+dedupeReverseWorld.AddActor(dedupeReverseB);
+dedupeReverseWorld.SetTouching(dedupeReverseA, dedupeReverseB, true);
+var dedupeReverseEngine = FreshEngine(dedupeReverseWorld);
+dedupeReverseEngine.PollTouches = true;
+dedupeReverseEngine.AddSheet(dedupeReverseA, parser.Parse("when me touches Enemy\n  add 1 to DedupeReverse"));
+dedupeReverseEngine.Tick(0); // distance poll fires first
+dedupeReverseEngine.PushContact(TriggerKind.Touches, dedupeReverseA, dedupeReverseB); // collider echo next tick
+dedupeReverseEngine.Tick(1);
+Check(dedupeReverseEngine.Variables.GetGlobal("DedupeReverse").AsNumber() == 1,
+    "Both mode: a distance poll followed by a collider push fires one event, not two");
+
+var targetedWorld = new FakeWorld();
+var targetedBullet = new FakeActor("Bullet");
+var targetedEnemyA = new FakeActor("Enemy");
+var targetedEnemyB = new FakeActor("Enemy");
+targetedWorld.AddActor(targetedBullet);
+targetedWorld.AddActor(targetedEnemyA);
+targetedWorld.AddActor(targetedEnemyB);
+targetedWorld.SetTouching(targetedBullet, targetedEnemyA, true);
+var targetedEngine = FreshEngine(targetedWorld);
+var hurtProgram = parser.Parse(@"when message ""hit"" arrives
+  add -1 to my health");
+var targetedSheetA = targetedEngine.AddSheet(targetedEnemyA, hurtProgram);
+var targetedSheetB = targetedEngine.AddSheet(targetedEnemyB, hurtProgram);
+targetedEngine.Variables.SetLocal(targetedEnemyA, "health", ValueBox.OfNumber(3));
+targetedEngine.Variables.SetLocal(targetedEnemyB, "health", ValueBox.OfNumber(3));
+targetedEngine.AddSheet(targetedBullet, parser.Parse(@"when me touches Enemy
+  send message ""hit"" to other
+  destroy me"));
+targetedEngine.PollTouches = true;
+targetedEngine.Tick(0);
+targetedEngine.Tick(1);
+Check(targetedEngine.Variables.GetLocal(targetedEnemyA, "health").AsNumber() == 2 &&
+      targetedEngine.Variables.GetLocal(targetedEnemyB, "health").AsNumber() == 3,
+    "`send message \"hit\" to other` damages only the touched enemy");
+
+var broadcastEngine = FreshEngine(new FakeWorld());
+var broadcastA = new FakeActor("Enemy");
+var broadcastB = new FakeActor("Enemy");
+var broadcastSheetA = broadcastEngine.AddSheet(broadcastA, hurtProgram);
+var broadcastSheetB = broadcastEngine.AddSheet(broadcastB, hurtProgram);
+broadcastEngine.Variables.SetLocal(broadcastA, "health", ValueBox.OfNumber(3));
+broadcastEngine.Variables.SetLocal(broadcastB, "health", ValueBox.OfNumber(3));
+broadcastEngine.SendRawMessage(new PushSignal { Kind = TriggerKind.Message, Name = "hit" }, "");
+broadcastEngine.Tick(0);
+Check(broadcastEngine.Variables.GetLocal(broadcastA, "health").AsNumber() == 2 &&
+      broadcastEngine.Variables.GetLocal(broadcastB, "health").AsNumber() == 2,
+    "a message with no target still broadcasts to every matching sheet");
+
+var wildcardWorld = new FakeWorld();
+var wildcardMe = new FakeActor("Me");
+var wildcardOther = new FakeActor("Anything");
+wildcardWorld.AddActor(wildcardMe);
+wildcardWorld.AddActor(wildcardOther);
+wildcardWorld.SetTouching(wildcardMe, wildcardOther, true);
+var wildcardEngine = FreshEngine(wildcardWorld);
+wildcardEngine.PollTouches = true;
+wildcardEngine.AddSheet(wildcardMe, parser.Parse("when other touches me\n  add 1 to Wildcard"));
+wildcardEngine.Tick(0);
+Check(wildcardEngine.Variables.GetGlobal("Wildcard").AsNumber() == 1,
+    "`when other touches me` matches any toucher by distance");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
@@ -1162,11 +1338,29 @@ class FakeActor
     }
 }
 
+/// <summary>Mimics Flax's Actor.ToString() shape: the real name plus type/id decoration.</summary>
+class DecoratedActor
+{
+    public DecoratedActor(string name)
+    {
+        Name = name;
+    }
+
+    public string Name;
+
+    public override string ToString()
+    {
+        return $"{Name} (FlaxEngine.StaticModel; {Guid.NewGuid():N})";
+    }
+}
+
 class FakeWorld : IEventWorld
 {
     private readonly HashSet<string> held = new HashSet<string>();
     private readonly Dictionary<(object, object), double> distances = new Dictionary<(object, object), double>();
     private readonly HashSet<(object, string)> tags = new HashSet<(object, string)>();
+    private readonly List<object> actors = new List<object>();
+    private readonly HashSet<(object, object)> touching = new HashSet<(object, object)>();
 
     public void SetHeld(string key, bool on)
     {
@@ -1186,6 +1380,20 @@ class FakeWorld : IEventWorld
         tags.Add((target, tag));
     }
 
+    public void AddActor(object actor)
+    {
+        if (!actors.Contains(actor))
+            actors.Add(actor);
+    }
+
+    public void SetTouching(object a, object b, bool on)
+    {
+        if (on)
+            touching.Add((a, b));
+        else
+            touching.Remove((a, b));
+    }
+
     public bool IsKeyHeld(string key)
     {
         return held.Contains(key);
@@ -1203,6 +1411,25 @@ class FakeWorld : IEventWorld
     public bool HasTag(object target, string tag)
     {
         return tags.Contains((target, tag));
+    }
+
+    public string NameOf(object actor)
+    {
+        if (actor is FakeActor fake)
+            return fake.Name;
+        if (actor is DecoratedActor decorated)
+            return decorated.Name;
+        return actor == null ? "" : actor.ToString();
+    }
+
+    public bool IsTouching(object a, object b)
+    {
+        return touching.Contains((a, b)) || touching.Contains((b, a));
+    }
+
+    public IReadOnlyList<object> Actors()
+    {
+        return actors;
     }
 }
 
