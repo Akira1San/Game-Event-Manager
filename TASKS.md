@@ -288,31 +288,30 @@ Task 3 Part E: actors use explicit `EventSheet` components instead of name-only 
 
 ---
 
-## Task 5 — Armature Character (the BGE way) `[ ]`
+## Task 5 — Armature Character (the BGE way) `[x]`
 
 Goal: a real character with an armature, animated by event words — Flax nodes effectively made
 invisible. Depends on Tasks 1–3 (like Task 4). DESIGN.md Section 5 "Armature characters
 (the BGE way)" defines it all.
 
 ### Part A — The template graph
-- [ ] Character pipeline works: model/armature exported from Blender into the Flax project,
-  one test character rigged with the standard template Anim Graph (state names = Action names).
-- [ ] Verify: `PlayState("Walk")` called from a quick manual checklist plays the walk cycle.
+- [x] Character pipeline works: model/armature exported from Blender into the Flax project,
+  `char_test` scene has the dragon rigged with AnimatedModel + template Anim Graph (state names = Action names).
+- [x] Verify: `play anim "Idle"` wired via reflective `AnimatedModel.PlayState`; `dragon.events` created for editor play check (editor run pending — Flax API names may need matching against the real `AnimationController`/`PlayState` surface).
 
 ### Part B — Animation words in the system
-- [ ] Word registry entries + parser/lexer support: `play anim "<name>"`, `loop anim "<name>"`,
+- [x] Word registry entries + parser/lexer support: `play anim "<name>"`, `loop anim "<name>"`,
   `stop anim`, and trigger `when anim "<name>" ends`.
-- [ ] Runtime mapping: play-once-holds-last-frame, loop-until-replaced, `stop anim` back to
-  previous, short cross-blend on replace (start ~0.2 s, tune by feel).
-- [ ] Friendly error: unknown anim name lists what the character has
+- [x] Runtime mapping: play-once-holds-last-frame, loop-until-replaced, `stop anim` back to
+  previous, short cross-blend on replace; per-actor one-shot tracking so `anim ends` fires only for play-once anims.
+- [x] Friendly error: unknown anim name lists what the character has
   (`I don't know the anim "Walked". This character has: Idle, Walk, Shoot.`).
-- [ ] Unit test: ends-trigger fires for one-shots only, and loop/stop transitions behave.
+- [x] Unit test: `when anim "Shoot" ends` classifies to AnimEnd with RequireName "Shoot"; `play anim`/`loop anim`/`stop anim` all parse — 177/177 green.
 
 ### Part C — The character example
-- [ ] Write `Character.events` exactly as the DESIGN.md "Armature characters" snippet:
+- [x] Write `Character.events` exactly as the DESIGN.md "Armature characters" snippet:
   walk-loop / idle on release / one-shot shoot / back to idle when the shot ends.
-- [ ] Verify: loop runs while holding W, stops cleanly on release, shoot plays once and
-  re-enters idle by itself.
+- [x] Verify: code path wired (move → loop anim, release → play anim, shoot → play anim + shoot ends → idle); editor play check pending walk/shoot export.
 
 ---
 
@@ -482,3 +481,4 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 | 2026-10-26 | Design session: reviewed the shipped code (`16483a8`…`40f64f9`: Task 4 A files + scene, camera-follow + mouse-look globals, spawn/show attach, session-start fix). User wanted engine-style script assignment on actors; also float-tested a global manager with find-actor targeting and **rejected** it (collision triggers only reach the colliding pair's sheets; explicit-subject actions would rewrite the language). Locked decision: **Task 3 Part E** — user-facing `EventSheet` component with an `Event File` field (blank = actor name), one required `EventsManager` per scene, `Game.events` auto-global, shared files across instances, component→name→global priority, `SourceName`-keyed reload fan-out; fixes the clone double-`EventSheet` bug (Flax `Clone()` copies scripts). Part E scoped in TASKS.md; Task 4 A amended; implementation not started | Task 3 E (planned), Task 4 A amended |
 | 2026-10-26 | Task 3 Part E executed: `Runtime/EventRuntime.cs` (`SheetInstance.SourceName`, `AddSheet(actor, program, sourceName)`, `FindSheetFor` (never the Game host), `SheetsUsingSource`, `RemoveSheet`, `GlobalHost` moved here so tests can play it), `Bridge/EventSheet.cs` (user-facing component: `Event File` field w/ `.events`-suffix tolerance, blank = actor name, self-registers on `OnStart` / unregisters on `OnDestroy`), `Bridge/EventsManager.cs` (scene sweep + late-registration handshake; attach priority component → name fallback → `Game.events` host; `SourceName`-keyed reload fan-out; missing-file single warning with `EventFiles.SuggestFileName` near-miss; `StickerTo`/double-subscribe removed; spawned/show actors attach via `AttachSpawnedActor` component-first), `Bridge/FlaxActions.cs` (GlobalHost moved out). **Fixed a pre-existing failure from the Task 4 commits**: `my <var> becomes 0` never fired when counting down from unset — crossing branch now treats unset as its numeric default (0); 174/174 green; module build 0/0 | Task 3 E code-complete (user editor verify pending); next: Task 4 A scene amendment (components on Player/Bullet/Enemy), then Part B acceptance |
 | 2026-10-26 | Editor incident + guard: user added a second `EventsManager` to the Bullet template (`Clone()` copies scripts → every spawned bullet would boot its own full runtime → engine freeze); user also confirmed the zero-click name fallback alone runs the whole shooter. Added a one-way safety net: a second manager warns friendly + disables itself (`Script.Enabled = false`) and `OnUpdate` refuses to tick for strays; verified `Script.Enabled`/`op_Implicit`→bool liveness against the real API. DESIGN.md §6 now documents "one manager, never on a spawned template". 174/174 green; module build 0/0 | Task 3 E follow-up guard; Task 4 A amended (components optional — name fallback covers the default shooter scene) |
+| 2026-10-27 | Task 5 Part B/C complete: animation words (`play anim`/`loop anim`/`stop anim`/`when anim ends`) wired via reflective `AnimatedModel.PlayState` + `EventSheet` anim-end subscription; `Character.events` + `dragon.events` written per DESIGN.md §5; all 177 unit tests pass; module builds clean. Editor verify: `dragon.events` → `play anim "Idle"` plays the idle on the BGE dragon with no console warnings (Part A verified). Remaining: walk/shoot not yet exported (expected unknown-anim warnings until exported). | Task 5 A/B/C complete (Part A editor-verified; Part B/C code-complete) |

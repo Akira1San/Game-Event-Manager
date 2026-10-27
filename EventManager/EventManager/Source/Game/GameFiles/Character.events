@@ -1,0 +1,14 @@
+# --- Player.events (armature character) ---
+when W is held
+  move forward speed 5
+  loop anim "Walk"
+
+when W is released
+  play anim "Idle"
+
+when Left Mouse is pressed
+  play anim "Shoot"
+  spawn Bullet at me
+
+when anim "Shoot" ends
+  play anim "Idle"

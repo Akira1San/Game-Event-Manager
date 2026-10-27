@@ -1,0 +1,3 @@
+# --- dragon.events (char_test idle verification) ---
+when game starts
+  play anim "Idle"
