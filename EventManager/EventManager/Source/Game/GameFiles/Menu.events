@@ -5,13 +5,13 @@ when scene starts
   show QuitButton
 
 when PlayButton is clicked
-  load scene "Level1"
+  load scene "load_level_test"
 
 when QuitButton is clicked
   quit game
 
 when Enter is pressed
-  load scene "Level1"
+  load scene "load_level_test"
 
 when Q is pressed
   quit game
