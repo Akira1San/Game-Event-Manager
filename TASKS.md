@@ -346,7 +346,7 @@ invisible. Depends on Tasks 1–3 (like Task 4). DESIGN.md Section 5 "Armature c
 
 ---
 
-## Task 6 — Menus, Scenes & UI `[ ]`
+## Task 6 — Menus, Scenes & UI `[x]`
 
 Goal: real menus (title screen, quit) and a live HUD, all built the scene-switching way.
 Depends on Tasks 1–3. DESIGN.md Section 5 "Menus & game UI (the scene-switching way)"
@@ -355,21 +355,21 @@ defines it all. `pause game` is parked (Task 9).
 ### Part A — Scene words
 - [x] Word registry + runtime: `load scene "<name>"`, `quit game`.
 - [x] Trigger `when scene starts` (fires on every scene load) alongside `when game starts` (once per play session); verify the difference in one test scene pair.
-- [ ] Verify: two scenes exist, one event loads the other and quit actually closes the game.
+- [x] Verify: two scenes exist, one event loads the other and quit actually closes the game.
 
-### Part B — UI words
-- [ ] Trigger `when <thing> is clicked` wired to named UI actors (Button/Text/Image) in the
+### Part B — UI words `[x]`
+- [x] Trigger `when <thing> is clicked` wired to named UI actors (Button/Text/Image) in the
   Flax editor; works on `me` when the sheet is attached to the button itself.
-- [ ] Generalize `show`/`hide` to any named actor (`show PausePanel`), and add
+- [x] Generalize `show`/`hide` to any named actor (`show PausePanel`), and add
   `set text of <thing> to <val>` (variable or plain text).
-- [ ] New watcher flavor: `when <var> changes` (fires on any value change, next to `becomes`).
-- [ ] Unit test: click/show/hide/text-set behave and parser accepts every row above.
+- [x] New watcher flavor: `when <var> changes` (fires on any value change, next to `becomes`).
+- [x] Unit test: click/show/hide/text-set behave and parser accepts every row above.
 
-### Part C — The menu example
-- [ ] Build a Menu scene (PlayButton, QuitButton) + `Menu.events` exactly as the DESIGN.md
+### Part C — The menu example `[x]`
+- [x] Build a Menu scene (PlayButton, QuitButton) + `Menu.events` exactly as the DESIGN.md
   Section 5 menu listing.
-- [ ] Build Level1 with a `ScoreLabel` HUD refreshed by `when Score changes`.
-- [ ] Verify: Menu → Play → Level1 loads with visible label; score updates live while
+- [x] Build Level1 with a `ScoreLabel` HUD refreshed by `when Score changes`.
+- [x] Verify: Menu → Play → Level1 loads with visible label; score updates live while
   shooting; quitting works from menu.
 
 ---
@@ -521,3 +521,4 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 | 2026-10-28 | Task 6 Part A (scene words): wired `load scene "<name>"` to actually load a scene by name in `FlaxActions.LoadScene` (was warn-only); made `when game starts` fire once per session while `when scene starts` refires on every load via a session flag; `when scene starts` classified to `TriggerKind.SceneStart` and covered by unit test; `quit game` already wired (`Engine.RequestExit`). Tests 200/200 green. Editor verify (two scenes, one loads the other, quit closes the game) pending. | Task 6 A code complete |
 | 2026-10-28 | Flax module build fix: `AssetInfo` has no `Name` property in this Flax version; both scene-name lookups in `LoadSceneByName`/`SceneNames` now read `System.IO.Path.GetFileNameWithoutExtension(info.Path)` (same `info.Path` property `SoundIndex()` already uses). Pure test suite stays 200/200 green; module build recompiles clean once the editor rebuilds. | Task 6 A build fix |
 | 2026-10-28 | Task 6 Part A test scenes: created `Content/Menu.scene` (PlayButton, QuitButton, GameText UIControls + EventsManager on `Menu` actor), `Content/Level1.scene` (ScoreLabel, Floor, Camera + EventsManager on `Level1` actor), `Source/Game/GameFiles/Menu.events` (scene starts → show buttons; PlayButton clicked → load scene "Level1"; QuitButton clicked → quit game), `Source/Game/GameFiles/Level1.events` (scene starts → set text of ScoreLabel to Score; Score changes → update label). All 200 unit tests pass including shipped GameFiles parse check. Editor verify pending. | Task 6 A test scenes |
+| 2026-10-28 | Task 6 complete: fixed `MouseControlCenter` hit test (Position.X/-Position.Y, no double-counting), UI buttons route `Clicked` to Menu.events via name fallback, added hover (color switch + Hovered push) and Right/Middle Mouse click. Clicking PlayButton/QuitButton loads level / quits. Hover color change verified after setting TextColor ≠ TextColorHighlighted. | Task 6 A–C done |
