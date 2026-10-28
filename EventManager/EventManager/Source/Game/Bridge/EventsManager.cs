@@ -28,6 +28,9 @@ namespace Game
         private readonly List<EventSheet> _components = new List<EventSheet>();
         private List<EventFileResult> _programs = new List<EventFileResult>();
         private bool _booted;
+        /// <summary>True once <c>when game starts</c> has fired this play session, so it runs
+        /// only in the very first scene; <c>when scene starts</c> fires on every scene load.</summary>
+        private static bool _sessionBegan;
         private float _nextWatchCheck;
 
         [Tooltip("How touches/overlaps are detected. Distance needs no colliders; Colliders uses Flax trigger events; Both compares them without double-firing.")]
@@ -90,7 +93,11 @@ namespace Game
             _booted = true;
             Level.ActorDeleted += ActorGoneAway;
 
-            Runtime.SessionStarted();
+            if (!_sessionBegan)
+            {
+                _sessionBegan = true;
+                Runtime.SessionStarted();
+            }
             Runtime.SceneStarted();
 
             Runtime.Variables.SetGlobal("cameraFollow", ValueBox.OfNumber(1));

@@ -313,8 +313,11 @@ namespace Game
                     break;
                 }
                 case ActionVerb.LoadScene:
-                    WarnOnce("\u201Cload scene\u201D arrives with the menu work — scenes are not wired for names yet.");
+                {
+                    if (!LoadSceneByName(spec.Thing))
+                        WarnOnce($"I couldn't find a scene named \u201C{spec.Thing}\u201D. Scenes: {SceneNames()}.");
                     break;
+                }
                 case ActionVerb.QuitGame:
                     Engine.RequestExit(0, FatalErrorType.None);
                     break;
@@ -564,6 +567,43 @@ namespace Game
             }
             if (!SetLabel(thing, text))
                 WarnOnce($"\u201Cset text of\u201D needs an actor with a Label on a UIControl (I couldn't find one called \u201C{thing}\u201D). Labels in this scene: {LabelActorNames()}.");
+        }
+
+        /// <summary>Loads a scene asset by its name (folder, extension and case ignored), so
+        /// <c>load scene "Level1"</c> can switch to any scene in the project.</summary>
+        private static bool LoadSceneByName(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return false;
+            foreach (var scene in Level.Scenes)
+                if (scene != null && scene.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                {
+                    Level.LoadScene(scene.ID);
+                    return true;
+                }
+            foreach (var id in Content.GetAllAssetsByType(typeof(Scene)))
+            {
+                if (!Content.GetAssetInfo(id, out AssetInfo info))
+                    continue;
+                if (System.IO.Path.GetFileNameWithoutExtension(info.Path).Equals(name, StringComparison.OrdinalIgnoreCase))
+                {
+                    Level.LoadScene(id);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static string SceneNames()
+        {
+            var names = new List<string>();
+            foreach (var scene in Level.Scenes)
+                if (scene != null)
+                    names.Add(scene.Name);
+            foreach (var id in Content.GetAllAssetsByType(typeof(Scene)))
+                if (Content.GetAssetInfo(id, out AssetInfo info))
+                    names.Add(System.IO.Path.GetFileNameWithoutExtension(info.Path));
+            return names.Count == 0 ? "(none)" : string.Join(", ", names);
         }
 
         /// <summary>Play an animation by name on the actor's <see cref="FlaxEngine.AnimatedModel"/>.</summary>

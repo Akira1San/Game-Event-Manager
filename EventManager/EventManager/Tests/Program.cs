@@ -340,7 +340,13 @@ var animEnd = parser.Parse("when anim \"Shoot\" ends\n  play anim \"Idle\"\n");
 Check(animEnd.Events.Count == 1, "`when anim \"Shoot\" ends` parses as an event");
 var animDesc = TriggerClassifier.Classify(animEnd.Events[0]);
 Check(animDesc.Kind == TriggerKind.AnimEnd && animDesc.RequireName == "Shoot",
-      "`when anim \"Shoot\" ends` classifies to AnimEnd with RequireName \"Shoot\"");
+    "`when anim \"Shoot\" ends` classifies to AnimEnd with RequireName \"Shoot\"");
+
+var sceneStart = parser.Parse("when scene starts\n  set Score to 0\n");
+Check(sceneStart.Events.Count == 1, "`when scene starts` parses as an event");
+var sceneDesc = TriggerClassifier.Classify(sceneStart.Events[0]);
+Check(sceneDesc.Kind == TriggerKind.SceneStart, "`when scene starts` classifies to SceneStart");
+
 
 var hud = parser.Parse("when scene starts\n  set text of ScoreLabel to Score\n");
 var hudSet = (SetTextNode)hud.Events[0].Body[0].Statement!;
