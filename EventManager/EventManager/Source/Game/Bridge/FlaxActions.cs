@@ -319,7 +319,8 @@ namespace Game
                     break;
                 }
                 case ActionVerb.QuitGame:
-                    Engine.RequestExit(0, FatalErrorType.None);
+                    Debug.LogWarning("QuitGame action triggered — calling Engine.Exit");
+                    Engine.Exit(0, FatalErrorType.None);
                     break;
             }
         }
