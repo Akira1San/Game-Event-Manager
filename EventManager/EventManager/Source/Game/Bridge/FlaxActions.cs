@@ -582,16 +582,19 @@ namespace Game
                     Level.LoadScene(scene.ID);
                     return true;
                 }
+            var scenePaths = new List<string>();
             foreach (var id in Content.GetAllAssetsByType(typeof(Scene)))
             {
                 if (!Content.GetAssetInfo(id, out AssetInfo info))
                     continue;
+                scenePaths.Add(info.Path);
                 if (System.IO.Path.GetFileNameWithoutExtension(info.Path).Equals(name, StringComparison.OrdinalIgnoreCase))
                 {
                     Level.LoadScene(id);
                     return true;
                 }
             }
+            Debug.LogWarning($"I couldn't find a scene named \u201C{name}\u201D. Scenes: {SceneNames()}. Scene asset paths: {string.Join(", ", scenePaths)}.");
             return false;
         }
 
