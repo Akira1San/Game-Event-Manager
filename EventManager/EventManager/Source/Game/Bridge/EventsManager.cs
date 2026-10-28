@@ -33,6 +33,10 @@ namespace Game
         private static bool _sessionBegan;
         private float _nextWatchCheck;
         private bool _leftMouseDownLastFrame;
+        private bool _rightMouseDownLastFrame;
+        private bool _middleMouseDownLastFrame;
+        private UIControl _hoveredUI;
+        private Color _hoveredBaseColor;
 
         [Tooltip("How touches/overlaps are detected. Distance needs no colliders; Colliders uses Flax trigger events; Both compares them without double-firing.")]
         public EventContactMode ContactMode = EventContactMode.Both;
@@ -418,6 +422,10 @@ namespace Game
 
         private void InputEdges()
         {
+            Float2 mousePos = Input.MousePosition;
+            Float2 screenSize = Screen.Size;
+            Float2 screenCenter = screenSize * 0.5f;
+
             foreach (string key in ActionWords.KeyNamesForScanning)
             {
                 bool held = _world.IsKeyHeld(key);
@@ -439,40 +447,101 @@ namespace Game
             else if (wheel < 0)
                 Runtime.RaisePushAll(new PushSignal { Kind = TriggerKind.WheelScrollDown });
 
-            // Mouse click detection for `when <thing> is clicked`
+            // Hover detection (every frame) with visual text-color feedback
+            UpdateHover(mousePos);
+
+            // Mouse click detection for `when <thing> is clicked` / right / middle
             bool leftMouseDown = Input.GetMouseButtonDown(MouseButton.Left);
             if (leftMouseDown && !_leftMouseDownLastFrame)
-            {
-                Float2 mousePos = Input.MousePosition;
-                Float2 screenSize = Screen.Size;
-                Float2 screenCenter = screenSize * 0.5f;
-                var actors = SceneActors();
-                int uiCount = 0;
-                foreach (Actor actor in actors)
-                {
-                    if (actor == null || !actor.IsActive)
-                        continue;
-                    var ui = actor as UIControl;
-                    if (ui == null)
-                        continue;
-                    uiCount++;
-                    if (MouseOverUIControl(ui, mousePos))
-                    {
-                        Runtime.RaisePush(actor, new PushSignal { Kind = TriggerKind.Clicked, Name = actor.Name });
-                        Debug.LogWarning($"Clicked UI actor: {actor.Name}");
-                    }
-                    else
-                    {
-                        // Debug: show computed screen-space center vs mouse so coordinate
-                        // conversion can be verified in-editor.
-                        string text = ui.Control != null ? ((FlaxEngine.GUI.Label)ui.Control).Text ?? "" : "";
-                        Float2 center = MouseControlCenter(ui);
-                        Debug.LogWarning($"  No hit: actor={actor.Name}, text=\"{text}\", center=({center.X:0},{center.Y:0}), uiPos=({ui.Position.X:0},{ui.Position.Y:0},{ui.Position.Z:0}), mouse=({mousePos.X:0},{mousePos.Y:0}), screenCenter=({screenCenter.X:0},{screenCenter.Y:0})");
-                    }
-                }
-                Debug.LogWarning($"Mouse down: actors={actors.Count}, uiControls={uiCount}, mouse=({mousePos.X:0},{mousePos.Y:0}), screenCenter=({screenCenter.X:0},{screenCenter.Y:0})");
-            }
+                HandleMouseClick(mousePos, screenCenter, TriggerKind.Clicked);
             _leftMouseDownLastFrame = leftMouseDown;
+
+            bool rightMouseDown = Input.GetMouseButtonDown(MouseButton.Right);
+            if (rightMouseDown && !_rightMouseDownLastFrame)
+                HandleMouseClick(mousePos, screenCenter, TriggerKind.RightClicked);
+            _rightMouseDownLastFrame = rightMouseDown;
+
+            bool middleMouseDown = Input.GetMouseButtonDown(MouseButton.Middle);
+            if (middleMouseDown && !_middleMouseDownLastFrame)
+                HandleMouseClick(mousePos, screenCenter, TriggerKind.MiddleClicked);
+            _middleMouseDownLastFrame = middleMouseDown;
+        }
+
+        /// <summary>Per-frame hover tracking: when the mouse enters a UIControl, switch its
+        /// label to the highlighted color and raise a Hovered push; when it leaves, restore
+        /// the base color.</summary>
+        private void UpdateHover(Float2 mousePos)
+        {
+            UIControl newHovered = null;
+            foreach (Actor actor in SceneActors())
+            {
+                if (actor == null || !actor.IsActive)
+                    continue;
+                var ui = actor as UIControl;
+                if (ui == null)
+                    continue;
+                if (MouseOverUIControl(ui, mousePos))
+                {
+                    newHovered = ui;
+                    break;
+                }
+            }
+
+            if (newHovered == _hoveredUI)
+                return;
+
+            // Leave previous
+            if (_hoveredUI != null)
+            {
+                var prevLabel = _hoveredUI.Control as FlaxEngine.GUI.Label;
+                if (prevLabel != null)
+                    prevLabel.TextColor = _hoveredBaseColor;
+            }
+
+            // Enter new
+            _hoveredUI = newHovered;
+            if (_hoveredUI != null)
+            {
+                var label = _hoveredUI.Control as FlaxEngine.GUI.Label;
+                if (label != null)
+                {
+                    _hoveredBaseColor = label.TextColor;
+                    label.TextColor = label.TextColorHighlighted;
+                    Runtime.RaisePush(_hoveredUI, new PushSignal { Kind = TriggerKind.Hovered, Name = _hoveredUI.Name });
+                    Debug.LogWarning($"Hovered UI actor: {_hoveredUI.Name}");
+                }
+            }
+        }
+
+        /// <summary>Runs the hit test against all UIControls for one mouse button and raises
+        /// the matching trigger kind on any actor under the cursor.</summary>
+        private void HandleMouseClick(Float2 mousePos, Float2 screenCenter, TriggerKind kind)
+        {
+            var actors = SceneActors();
+            int uiCount = 0;
+            foreach (Actor actor in actors)
+            {
+                if (actor == null || !actor.IsActive)
+                    continue;
+                var ui = actor as UIControl;
+                if (ui == null)
+                    continue;
+                uiCount++;
+                if (MouseOverUIControl(ui, mousePos))
+                {
+                    Runtime.RaisePush(actor, new PushSignal { Kind = kind, Name = actor.Name });
+                    Debug.LogWarning($"{kind} UI actor: {actor.Name}");
+                }
+                else
+                {
+                    // Debug: show computed screen-space center vs mouse so coordinate
+                    // conversion can be verified in-editor.
+                    string text = ui.Control != null ? ((FlaxEngine.GUI.Label)ui.Control).Text ?? "" : "";
+                    Float2 center = MouseControlCenter(ui);
+                    Debug.LogWarning($"  No hit: actor={actor.Name}, text=\"{text}\", center=({center.X:0},{center.Y:0}), uiPos=({ui.Position.X:0},{ui.Position.Y:0},{ui.Position.Z:0}), mouse=({mousePos.X:0},{mousePos.Y:0}), screenCenter=({screenCenter.X:0},{screenCenter.Y:0})");
+                }
+            }
+            Debug.LogWarning($"Mouse {kind} down: actors={actors.Count}, uiControls={uiCount}, mouse=({mousePos.X:0},{mousePos.Y:0}), screenCenter=({screenCenter.X:0},{screenCenter.Y:0})");
         }
 
         /// <summary>Screen-space center of a UIControl (top-left origin, Y down), matching

@@ -17,6 +17,9 @@ namespace Game
         Touches,
         Overlaps,
         Clicked,
+        RightClicked,
+        MiddleClicked,
+        Hovered,
         Arrives,
         Sees,
         StopsSeeing,
@@ -66,6 +69,10 @@ namespace Game
                 return new TriggerDescriptor { Kind = TriggerKind.SceneStart };
             if (words.Length >= 3 && words[words.Length - 2] == "is" && words[words.Length - 1] != "clicked")
                 return KeyDescriptor(words, trigger);
+            if (words.Length >= 4 && words[words.Length - 3] == "is" && words[words.Length - 2] == "right" && words[words.Length - 1] == "clicked")
+                return new TriggerDescriptor { Kind = TriggerKind.RightClicked, RequireName = Join(trigger, 0, words.Length - 3) };
+            if (words.Length >= 4 && words[words.Length - 3] == "is" && words[words.Length - 2] == "middle" && words[words.Length - 1] == "clicked")
+                return new TriggerDescriptor { Kind = TriggerKind.MiddleClicked, RequireName = Join(trigger, 0, words.Length - 3) };
             if (words.Length >= 3 && words[words.Length - 2] == "is" && words[words.Length - 1] == "clicked")
                 return new TriggerDescriptor { Kind = TriggerKind.Clicked, RequireName = Join(trigger, 0, words.Length - 2) };
             if (words.Length >= 3 && words[0] == "message")
