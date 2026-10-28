@@ -1,0 +1,329 @@
+{
+	"ID": "450ba9a347ab8e49e44cc9b02a23de3e",
+	"TypeName": "FlaxEngine.SceneAsset",
+	"EngineBuild": 7012,
+	"Data": [
+		{
+			"ID": "450ba9a347ab8e49e44cc9b02a23de3e",
+			"TypeName": "FlaxEngine.Scene",
+			"LightmapSettings": {
+				"IndirectLightingIntensity": 1.0,
+				"GlobalObjectsScale": 1.0,
+				"ChartsPadding": 3,
+				"AtlasSize": 1024,
+				"BounceCount": 1,
+				"CompressLightmaps": true,
+				"UseGeometryWithNoMaterials": true,
+				"Quality": 10
+			}
+		},
+		{
+			"ID": "1761fbd842363ac1a13f0388b3bea3a3",
+			"TypeName": "FlaxEngine.DirectionalLight",
+			"ParentID": "450ba9a347ab8e49e44cc9b02a23de3e",
+			"Name": "Sun",
+			"Transform": {
+				"Translation": {
+					"X": 40.0,
+					"Y": 160.0,
+					"Z": 0.0
+				},
+				"Orientation": {
+					"X": 0.3826834559440613,
+					"Y": 0.0,
+					"Z": 0.0,
+					"W": 0.9238795042037964
+				}
+			}
+		},
+		{
+			"ID": "0cb1ea7c4f32dde7b68bd9a968d53572",
+			"TypeName": "FlaxEngine.Sky",
+			"ParentID": "450ba9a347ab8e49e44cc9b02a23de3e",
+			"Name": "Sky",
+			"Transform": {
+				"Translation": {
+					"X": 40.0,
+					"Y": 150.0,
+					"Z": 0.0
+				}
+			},
+			"Sun": "1761fbd842363ac1a13f0388b3bea3a3"
+		},
+		{
+			"ID": "f7a3b4b648d29f3410bf09bcd3e7749c",
+			"TypeName": "FlaxEngine.SkyLight",
+			"ParentID": "450ba9a347ab8e49e44cc9b02a23de3e",
+			"Name": "SkyLight",
+			"Brightness": 2.5,
+			"CustomTexture": "c54410104ff39427bc11e5bc761d66b0"
+		},
+		{
+			"ID": "5bc349224caed009477c3fa90c7a1a11",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "450ba9a347ab8e49e44cc9b02a23de3e",
+			"Name": "Floor",
+			"Transform": {
+				"Scale": {
+					"X": 4.0,
+					"Y": 0.5,
+					"Z": 4.0
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "1771b53343d461faacdf2c8581b1fdbb",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "48e215ff48f6695274cf8fa7a188812b",
+			"TypeName": "FlaxEngine.Camera",
+			"ParentID": "450ba9a347ab8e49e44cc9b02a23de3e",
+			"Name": "Camera",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 150.0,
+					"Z": -300.0
+				}
+			}
+		},
+		{
+			"ID": "4e92145141a39c4d1c8ecca59bd32872",
+			"TypeName": "FlaxEngine.AudioListener",
+			"ParentID": "48e215ff48f6695274cf8fa7a188812b",
+			"Name": "Audio Listener"
+		},
+		{
+			"ID": "05811b0b40b7dccfcda9499dd677a0fc",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "450ba9a347ab8e49e44cc9b02a23de3e",
+			"Name": "Menu"
+		},
+		{
+			"ID": "a40384b7497bee26ba3b269d692e04e6",
+			"TypeName": "Game.EventsManager",
+			"ParentID": "05811b0b40b7dccfcda9499dd677a0fc",
+			"V": {
+	"Runtime": {
+		"Variables": {
+			"OnWarning": {}
+		},
+		"World": {
+			"$type": "Game.DefaultEventWorld, Game.CSharp"
+		}
+	}
+}
+		},
+		{
+			"ID": "776512dc4ae4898e89f2edb9bfb899e9",
+			"TypeName": "FlaxEngine.UICanvas",
+			"ParentID": "450ba9a347ab8e49e44cc9b02a23de3e",
+			"Name": "uicanvas",
+			"Transform": {
+				"Orientation": {
+					"X": 1.0,
+					"Y": 4.371138828673793e-8,
+					"Z": 4.371138828673793e-8,
+					"W": 1.910685465164705e-15
+				}
+			},
+			"V": {}
+		},
+		{
+			"ID": "ff6414af41dcc5616f31d895dbadf203",
+			"TypeName": "FlaxEngine.UIControl",
+			"ParentID": "776512dc4ae4898e89f2edb9bfb899e9",
+			"Name": "PlayButton",
+			"Transform": {
+				"Translation": {
+					"X": 936.8333129882813,
+					"Y": 580.8333129882813,
+					"Z": 0.0
+				}
+			},
+			"Control": "FlaxEngine.GUI.Label",
+			"Data": {
+	"Text": "Play",
+	"CaseOption": 0,
+	"Bold": true,
+	"Italic": false,
+	"TextColor": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"TextColorHighlighted": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"HorizontalAlignment": 1,
+	"VerticalAlignment": 1,
+	"Wrapping": 0,
+	"BaseLinesGapScale": 1.0,
+	"Font": {
+		"Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+		"Size": 9.0
+	},
+	"Material": null,
+	"Margin": {
+		"Left": 0.0,
+		"Right": 0.0,
+		"Top": 0.0,
+		"Bottom": 0.0
+	},
+	"ClipText": false,
+	"AutoWidth": false,
+	"AutoHeight": false,
+	"AutoFitText": false,
+	"AutoFitTextRange": {
+		"X": 0.1,
+		"Y": 100.0
+	},
+	"ClipChildren": true,
+	"CullChildren": true,
+	"AnchorMin": {
+		"X": 0.5,
+		"Y": 0.5
+	},
+	"AnchorMax": {
+		"X": 0.5,
+		"Y": 0.5
+	},
+	"Offsets": {
+		"Left": -23.166687,
+		"Right": 100.0,
+		"Top": 40.833313,
+		"Bottom": 20.0
+	},
+	"Scale": {
+		"X": 2.0,
+		"Y": 2.0
+	},
+	"Pivot": {
+		"X": 0.5,
+		"Y": 0.5
+	},
+	"Shear": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Rotation": 0.0,
+	"BackgroundColor": {
+		"R": 0.0,
+		"G": 0.0,
+		"B": 0.0,
+		"A": 0.8666667
+	},
+	"BackgroundBrush": null,
+	"Enabled": true,
+	"Visible": true,
+	"AutoFocus": false
+}
+		},
+		{
+			"ID": "46a5a7ad4e3f5b5eca1c53aba9a3d7d4",
+			"TypeName": "FlaxEngine.UIControl",
+			"ParentID": "776512dc4ae4898e89f2edb9bfb899e9",
+			"Name": "QuitButton",
+			"Transform": {
+				"Translation": {
+					"X": 937.4999389648438,
+					"Y": 625.5,
+					"Z": 0.0
+				}
+			},
+			"Control": "FlaxEngine.GUI.Label",
+			"Data": {
+	"Text": "Quit",
+	"CaseOption": 0,
+	"Bold": true,
+	"Italic": false,
+	"TextColor": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"TextColorHighlighted": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"HorizontalAlignment": 1,
+	"VerticalAlignment": 1,
+	"Wrapping": 0,
+	"BaseLinesGapScale": 1.0,
+	"Font": {
+		"Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+		"Size": 9.0
+	},
+	"Material": null,
+	"Margin": {
+		"Left": 0.0,
+		"Right": 0.0,
+		"Top": 0.0,
+		"Bottom": 0.0
+	},
+	"ClipText": false,
+	"AutoWidth": false,
+	"AutoHeight": false,
+	"AutoFitText": false,
+	"AutoFitTextRange": {
+		"X": 0.1,
+		"Y": 100.0
+	},
+	"ClipChildren": true,
+	"CullChildren": true,
+	"AnchorMin": {
+		"X": 0.5,
+		"Y": 0.5
+	},
+	"AnchorMax": {
+		"X": 0.5,
+		"Y": 0.5
+	},
+	"Offsets": {
+		"Left": -22.500061,
+		"Right": 100.0,
+		"Top": 85.5,
+		"Bottom": 20.0
+	},
+	"Scale": {
+		"X": 2.0,
+		"Y": 2.0
+	},
+	"Pivot": {
+		"X": 0.5,
+		"Y": 0.5
+	},
+	"Shear": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Rotation": 0.0,
+	"BackgroundColor": {
+		"R": 0.0,
+		"G": 0.0,
+		"B": 0.0,
+		"A": 0.8666667
+	},
+	"BackgroundBrush": null,
+	"Enabled": true,
+	"Visible": true,
+	"AutoFocus": false
+}
+		}
+	]
+}

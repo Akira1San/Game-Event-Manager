@@ -309,7 +309,7 @@ namespace Game
                 {
                     Scene[] scenes = Level.Scenes;
                     if (scenes.Length > 0)
-                        Level.LoadScene(scenes[0].ID);
+                        ReplaceScene(scenes[0].ID);
                     break;
                 }
                 case ActionVerb.LoadScene:
@@ -572,16 +572,29 @@ namespace Game
 
         /// <summary>Loads a scene asset by its name (folder, extension and case ignored), so
         /// <c>load scene "Level1"</c> can switch to any scene in the project.</summary>
+        private static void ReplaceScene(Guid sceneId)
+        {
+            // Unload all currently loaded scenes so the new one replaces them
+            foreach (var scene in Level.Scenes)
+                if (scene != null)
+                    Level.UnloadScene(scene.ID);
+            Level.LoadScene(sceneId);
+        }
+
         private static bool LoadSceneByName(string name)
         {
             if (string.IsNullOrEmpty(name))
                 return false;
+
+            // 1. Check currently loaded scenes (in memory)
             foreach (var scene in Level.Scenes)
                 if (scene != null && scene.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
                 {
-                    Level.LoadScene(scene.ID);
+                    ReplaceScene(scene.ID);
                     return true;
                 }
+
+            // 2. Check imported content database
             var scenePaths = new List<string>();
             foreach (var id in Content.GetAllAssetsByType(typeof(Scene)))
             {
@@ -590,10 +603,38 @@ namespace Game
                 scenePaths.Add(info.Path);
                 if (System.IO.Path.GetFileNameWithoutExtension(info.Path).Equals(name, StringComparison.OrdinalIgnoreCase))
                 {
-                    Level.LoadScene(id);
+                    ReplaceScene(id);
                     return true;
                 }
             }
+
+            // 3. Fallback: scan raw .scene files on disk (Content folder)
+            string contentDir = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "Content");
+            if (System.IO.Directory.Exists(contentDir))
+            {
+                foreach (var file in System.IO.Directory.GetFiles(contentDir, "*.scene", System.IO.SearchOption.AllDirectories))
+                {
+                    if (System.IO.Path.GetFileNameWithoutExtension(file).Equals(name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        scenePaths.Add(file);
+                        try
+                        {
+                            string contentPath = "Content/" + file.Substring(contentDir.Length + 1).Replace('\\', '/');
+                            var sceneAsset = Content.Load<SceneAsset>(contentPath, 0);
+                            if (sceneAsset != null)
+                            {
+                                ReplaceScene(sceneAsset.ID);
+                                return true;
+                            }
+                        }
+                        catch
+                        {
+                            // Content.Load<SceneAsset>(string) or SceneAsset.ID may not exist in this Flax version
+                        }
+                    }
+                }
+            }
+
             Debug.LogWarning($"I couldn't find a scene named \u201C{name}\u201D. Scenes: {SceneNames()}. Scene asset paths: {string.Join(", ", scenePaths)}.");
             return false;
         }
