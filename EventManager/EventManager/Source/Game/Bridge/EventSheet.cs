@@ -84,7 +84,9 @@ namespace Game
         private void SubscribeAnimEnd(Actor actor)
         {
             if (actor == null) return;
-            var model = actor.GetScript<FlaxEngine.AnimatedModel>();
+            // SubscribeTree walks every node, so only the model actor itself subscribes here —
+            // a FindActor search would double-subscribe when the model is a child.
+            var model = actor as FlaxEngine.AnimatedModel;
             if (model == null) return;
             try
             {

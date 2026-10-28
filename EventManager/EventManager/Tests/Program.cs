@@ -973,6 +973,14 @@ var soundSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
 Check(soundSpec.Verb == ActionVerb.PlaySound && soundSpec.Thing == "Thud.wav",
     "`play sound \"Thud.wav\"` reads the file");
 
+// Sound lookup keys ignore folder, .flax and the audio extension, case-insensitively.
+Check(AssetNames.Key("sounds/hurt.wav.flax") == "hurt", "sound key strips folder and .flax and .wav");
+Check(AssetNames.Key(@"Content\sounds\boom.flax") == "boom", "sound key accepts backslash paths");
+Check(AssetNames.Key("Hurt.WAV") == "hurt", "sound key is case-insensitive");
+Check(AssetNames.Key("shot") == "shot", "sound key leaves a plain name alone");
+Check(AssetNames.Key("boom9") == "boom9", "sound key keeps digits");
+Check(AssetNames.Key("") == "" && AssetNames.Key(null) == "", "sound key handles empty input");
+
 var animSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   play anim ""Attack"""), null);
 Check(animSpec.Verb == ActionVerb.PlayAnim && animSpec.Thing == "Attack", "`play anim \"Attack\"` parses");

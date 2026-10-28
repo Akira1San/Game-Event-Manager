@@ -23,6 +23,10 @@ namespace Game
         private static readonly Dictionary<object, string> PreviousAnim = new Dictionary<object, string>();
         /// <summary>One-shot animations currently playing per actor (play anim, not loop anim).</summary>
         private static readonly Dictionary<object, HashSet<string>> OneShotAnims = new Dictionary<object, HashSet<string>>();
+        /// <summary>Sources spawned by <c>play sound</c>, with the actor whose sheet started them.</summary>
+        private static readonly List<(Actor Owner, AudioSource Source)> ActiveSounds = new List<(Actor, AudioSource)>();
+        /// <summary>Clip key (see <see cref="AssetNames"/>) to asset id, built once per play session.</summary>
+        private static Dictionary<string, Guid> SoundIndexCache;
 
         public static void WarnOnce(string message)
         {
@@ -33,6 +37,8 @@ namespace Game
         public static void ClearSession()
         {
             Moves.Clear();
+            ActiveSounds.Clear();
+            SoundIndexCache = null;
         }
 
         public static object ResolveThing(EventContext context, string thing)
@@ -117,6 +123,9 @@ namespace Game
         public static void Step(float deltaTime)
         {
             DeltaTime = deltaTime;
+            for (int i = ActiveSounds.Count - 1; i >= 0; i--)
+                if (ActiveSounds[i].Source == null)
+                    ActiveSounds.RemoveAt(i);
             for (int i = Moves.Count - 1; i >= 0; i--)
             {
                 OngoingMove move = Moves[i];
@@ -175,10 +184,13 @@ namespace Game
                     break;
                 }
                 case ActionVerb.StopMoving:
+                {
+                    var mover = context.Me as Actor;
                     for (int i = Moves.Count - 1; i >= 0; i--)
-                        if (Moves[i].Subject == context.Me && !Moves[i].FaceTarget)
+                        if (Moves[i].Subject == mover && !Moves[i].FaceTarget)
                             Moves.RemoveAt(i);
                     break;
+                }
                 case ActionVerb.Turn:
                 {
                     var me = context.Me as Actor;
@@ -250,8 +262,26 @@ namespace Game
                 case ActionVerb.StopSound:
                 {
                     var me = context.Me as Actor;
-            var audio = me != null ? me.GetScript<AudioSource>() : null;
-                    audio?.Stop();
+
+                    // The actor's own AudioSource (the one you drop on it in the editor).
+                    if (me != null)
+                        me.FindActor<AudioSource>()?.Stop();
+
+                    // And everything `play sound` spawned for this actor (all, from the global sheet).
+                    for (int i = ActiveSounds.Count - 1; i >= 0; i--)
+                    {
+                        var (owner, source) = ActiveSounds[i];
+                        if (source == null)
+                        {
+                            ActiveSounds.RemoveAt(i);
+                            continue;
+                        }
+                        if (me != null && owner != me)
+                            continue;
+                        source.Stop();
+                        FlaxEngine.Object.Destroy(source);
+                        ActiveSounds.RemoveAt(i);
+                    }
                     break;
                 }
                 case ActionVerb.PlayAnim:
@@ -366,27 +396,90 @@ namespace Game
         private static void ShowHudText(string text)
         {
             if (!SetLabel("GameText", text))
-                WarnOnce("I couldn't find the HUD text (an actor called \u201CGameText\u201D with a Label on a UIControl) to show text on.");
+                WarnOnce($"I couldn't find the HUD text. Create a UIControl actor named \u201CGameText\u201D with a Label. Labels in this scene: {LabelActorNames()}.");
         }
 
         private static void HideHudText()
         {
-            var actor = Level.FindActor("GameText");
-            var label = actor?.GetScript<UIControl>()?.Control as FlaxEngine.GUI.Label;
+            var label = FindLabel("GameText", out _);
             if (label != null)
                 label.Visible = false;
             else
-                WarnOnce("I couldn't find the HUD text (an actor called \u201CGameText\u201D with a Label on a UIControl) to hide.");
+                WarnOnce($"I couldn't find the HUD text. Create a UIControl actor named \u201CGameText\u201D with a Label. Labels in this scene: {LabelActorNames()}.");
+        }
+
+        /// <summary>
+        /// Finds the GUI label named by an event. The name is a UIControl actor, or a parent
+        /// actor that owns exactly one label (a panel/canvas). <c>UIControl</c> is an Actor,
+        /// so this uses <c>as</c>, never <c>GetScript&lt;UIControl&gt;</c>.
+        /// </summary>
+        private static FlaxEngine.GUI.Label FindLabel(string thing, out UIControl ui)
+        {
+            ui = null;
+            if (string.IsNullOrEmpty(thing))
+                return null;
+
+            Actor actor = Level.FindActor(thing);
+            if (actor == null)
+                return null;
+
+            ui = actor as UIControl;
+            if (ui == null)
+            {
+                var found = new List<UIControl>();
+                CollectLabels(actor, found);
+                if (found.Count != 1)
+                    return null;
+                ui = found[0];
+            }
+
+            return ui.Control as FlaxEngine.GUI.Label;
+        }
+
+        private static void CollectLabels(Actor node, List<UIControl> found)
+        {
+            foreach (Actor child in node.Children)
+            {
+                if (child == null)
+                    continue;
+                if (child is UIControl ui && ui.Control is FlaxEngine.GUI.Label)
+                    found.Add(ui);
+                CollectLabels(child, found);
+            }
+        }
+
+        /// <summary>Names of the label actors in the scene, for "I couldn't find it" warnings.</summary>
+        private static string LabelActorNames()
+        {
+            var names = new List<string>();
+            Scene[] scenes = Level.Scenes;
+            for (int s = 0; s < scenes.Length; s++)
+                if (scenes[s] != null)
+                    CollectLabelNames(scenes[s], names);
+            return names.Count == 0 ? "(none)" : string.Join(", ", names);
+        }
+
+        private static void CollectLabelNames(Actor node, List<string> names)
+        {
+            foreach (Actor child in node.Children)
+            {
+                if (child == null)
+                    continue;
+                if (child is UIControl ui && ui.Control is FlaxEngine.GUI.Label)
+                    names.Add(child.Name);
+                CollectLabelNames(child, names);
+            }
         }
 
         private static bool SetLabel(string thing, string text)
         {
-            var actor = string.IsNullOrEmpty(thing) ? null : Level.FindActor(thing);
-            var uiControl = actor != null ? actor.GetScript<UIControl>() : null;
-            var label = uiControl != null && uiControl.Control is FlaxEngine.GUI.Label textLabel ? textLabel : null;
+            var label = FindLabel(thing, out UIControl ui);
             if (label == null)
                 return false;
-            label.Text = text;
+            // A `hide GameText` earlier in the session must not brick `show text`.
+            if (!ui.IsActive)
+                ui.IsActive = true;
+            label.Text = text; // Label.Text is a LocalizedString; string converts implicitly
             label.Visible = true;
             return true;
         }
@@ -402,38 +495,64 @@ namespace Game
             var clip = LoadAudioClip(spec.Thing);
             if (clip == null)
             {
-                WarnOnce($"Could not load sound clip \u201C{spec.Thing}\u201D. Make sure the audio file is imported in the Flax Content browser.");
+                WarnOnce($"Could not load sound clip \u201C{spec.Thing}\u201D. Imported clips: {AvailableSoundNames()}.");
                 return;
             }
 
+            var me = context.Me as Actor;
             var audio = new AudioSource
             {
                 HideFlags = HideFlags.DontSave,
                 Volume = 1,
                 Clip = clip,
+                Position = me != null ? me.Position : Vector3.Zero,
             };
             Level.SpawnActor(audio);
             audio.Play();
+            ActiveSounds.Add((me, audio));
             FlaxEngine.Object.Destroy(audio, clip.Length);
         }
 
+        /// <summary>
+        /// Resolves a clip by name, ignoring folder and extension: "shot", "shot.wav" and
+        /// "sounds/shot.flax" all find the same imported <see cref="AudioClip"/>.
+        /// </summary>
         private static AudioClip LoadAudioClip(string name)
         {
-            var candidates = new[]
+            var index = SoundIndex();
+            return index.TryGetValue(AssetNames.Key(name), out Guid id) ? Content.Load<AudioClip>(id) : null;
+        }
+
+        /// <summary>
+        /// Clip key to asset id, built from the asset registry once per play session.
+        /// Loading by id never probes paths, so a missing name cannot spam "Missing file" errors.
+        /// </summary>
+        private static Dictionary<string, Guid> SoundIndex()
+        {
+            if (SoundIndexCache != null)
+                return SoundIndexCache;
+
+            var index = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+            foreach (Guid id in Content.GetAllAssetsByType(typeof(AudioClip)))
             {
-                "Content/" + name + ".flax",
-                "Content/" + name,
-                name,
-            };
-            foreach (var path in candidates)
-            {
-                if (string.IsNullOrEmpty(path))
+                if (!Content.GetAssetInfo(id, out AssetInfo info))
                     continue;
-                var clip = Content.Load<AudioClip>(path);
-                if (clip != null)
-                    return clip;
+                string key = AssetNames.Key(info.Path);
+                if (key.Length == 0 || index.ContainsKey(key))
+                    continue;
+                index[key] = id;
             }
-            return null;
+            SoundIndexCache = index;
+            return index;
+        }
+
+        private static string AvailableSoundNames()
+        {
+            var names = new List<string>(SoundIndex().Keys);
+            if (names.Count == 0)
+                return "(none)";
+            names.Sort(StringComparer.OrdinalIgnoreCase);
+            return string.Join(", ", names);
         }
 
         public static void SetText(string thing, string text)
@@ -444,7 +563,7 @@ namespace Game
                 return;
             }
             if (!SetLabel(thing, text))
-                WarnOnce($"\u201Cset text of\u201D needs an actor with a Label on a UIControl (I couldn't find one called \u201C{thing}\u201D).");
+                WarnOnce($"\u201Cset text of\u201D needs an actor with a Label on a UIControl (I couldn't find one called \u201C{thing}\u201D). Labels in this scene: {LabelActorNames()}.");
         }
 
         /// <summary>Play an animation by name on the actor's <see cref="FlaxEngine.AnimatedModel"/>.</summary>
@@ -456,7 +575,7 @@ namespace Game
                 WarnOnce($"\u201Cplay anim \u201C{spec.Thing}\u201D\u201D needs to run on an actor's sheet — the global Game sheet has no model to animate.");
                 return;
             }
-            var model = me.GetScript<FlaxEngine.AnimatedModel>();
+            var model = me.FindActor<FlaxEngine.AnimatedModel>();
             if (model == null)
             {
                 WarnOnce($"\u201Cplay anim \u201C{spec.Thing}\u201D\u201D needs an AnimatedModel on \u201C{me.Name}\u201D.");
@@ -481,7 +600,7 @@ namespace Game
                 WarnOnce($"\u201Cloop anim \u201C{spec.Thing}\u201D\u201D needs to run on an actor's sheet — the global Game sheet has no model to animate.");
                 return;
             }
-            var model = me.GetScript<FlaxEngine.AnimatedModel>();
+            var model = me.FindActor<FlaxEngine.AnimatedModel>();
             if (model == null)
             {
                 WarnOnce($"\u201Cloop anim \u201C{spec.Thing}\u201D\u201D needs an AnimatedModel on \u201C{me.Name}\u201D.");
@@ -507,7 +626,7 @@ namespace Game
                 WarnOnce("\u201Cstop anim\u201D needs to run on an actor's sheet — the global Game sheet has no model to animate.");
                 return;
             }
-            var model = me.GetScript<FlaxEngine.AnimatedModel>();
+            var model = me.FindActor<FlaxEngine.AnimatedModel>();
             if (model == null)
                 return;
             SetLooping(model, false);

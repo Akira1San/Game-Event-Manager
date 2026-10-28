@@ -309,7 +309,8 @@ like GDevelop, so the editor teaches the vocabulary passively.
 | `make <target> unmovable` | `make me solid` | physics toggle |
 | `destroy <me/other/thing>` | `destroy me` | |
 | `spawn <thing> at <thing>` | `spawn Coin at SpawnPoint` | thing must be a prefab or scene-named object |
-| `play sound "<file>"` | `play sound "hit.wav"` | |
+| `play sound "<file>"` | `play sound "hit.wav"` | clip **name** only: `"hit"`, `"hit.wav"`, `"sounds/hit"` are the same imported clip |
+| `stop sound` | `stop sound` | stops this object's playing clips (from a global sheet: every clip) |
 | `set <var> to <value>` | `set Score to 0` | |
 | `add <n> to <var>` | `add 1 to Score` | |
 | `send message "<name>" to <thing>` | `send message "die"` | broadcast if no target |
@@ -425,6 +426,26 @@ when Score changes
 ```
 
 Note the last event: `when <var> changes` is allowed next to `becomes` â€” same watcher, any value.
+
+**HUD details (and the one magic name):**
+
+- A label is a `UIControl` actor holding a `FlaxEngine.GUI.Label`, parented under a
+  `UICanvas`. Screen-space canvases resize with the window, so anchor the labels.
+- `show text` / `hide text` use the actor named **`GameText`** - the only name the words
+  assume. Create one if you want centre-screen messages.
+- `set text of <name>` takes any label actor by name. Naming a panel works when it owns
+  exactly one label; with several, name the label itself.
+- A label hidden with `hide <name>` comes back on the next `show text` / `set text of`.
+- Labels keep the text the editor saved until an event writes one; an empty `Text` means
+  nothing shows yet.
+
+**Sound names:** clips are looked up by name, so folders, the `.flax` extension and letter
+case never matter (`"shot"`, `"Shot.WAV"`, `"sounds/shot.flax"` all work). A miss warns once
+and lists the clips the project has. `stop sound` stops this object's sounds; on a global
+sheet it stops every sound the game started.
+
+**Bridge note:** `UIControl`, `AudioSource` and `AnimatedModel` are **actors**, not
+scripts - the bridge finds them as actors (`FindActor<T>()` / `as`), never `GetScript<T>()`.
 
 Pause menus (`pause game` / `resume game`) are deliberately **not** in v0.1 â€” the tricky rule
 ("UI keeps ticking, world actors freeze") needs its own decision; see Section 9.
