@@ -1,0 +1,7 @@
+# ---------------- Level1.events (level scene) ----------------
+
+when scene starts
+  set text of ScoreLabel to Score
+
+when Score changes
+  set text of ScoreLabel to Score

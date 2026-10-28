@@ -1,0 +1,20 @@
+# ---------------- Menu.events (menu scene) ----------------
+
+when scene starts
+  show PlayButton
+  show QuitButton
+
+when PlayButton is clicked
+  load scene "Level1"
+
+when QuitButton is clicked
+  quit game
+
+when Enter is pressed
+  load scene "Level1"
+
+when Q is pressed
+  quit game
+
+when Escape is pressed
+  quit game

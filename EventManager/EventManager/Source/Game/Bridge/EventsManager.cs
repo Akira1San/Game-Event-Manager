@@ -32,6 +32,7 @@ namespace Game
         /// only in the very first scene; <c>when scene starts</c> fires on every scene load.</summary>
         private static bool _sessionBegan;
         private float _nextWatchCheck;
+        private bool _leftMouseDownLastFrame;
 
         [Tooltip("How touches/overlaps are detected. Distance needs no colliders; Colliders uses Flax trigger events; Both compares them without double-firing.")]
         public EventContactMode ContactMode = EventContactMode.Both;
@@ -432,6 +433,50 @@ namespace Game
                 Runtime.RaisePushAll(new PushSignal { Kind = TriggerKind.WheelScrollUp });
             else if (wheel < 0)
                 Runtime.RaisePushAll(new PushSignal { Kind = TriggerKind.WheelScrollDown });
+
+            // Mouse click detection for `when <thing> is clicked`
+            bool leftMouseDown = Input.GetMouseButtonDown(MouseButton.Left);
+            if (leftMouseDown && !_leftMouseDownLastFrame)
+            {
+                Float2 mousePos = Input.MousePosition;
+                foreach (Actor actor in SceneActors())
+                {
+                    if (actor == null || !actor.IsActive)
+                        continue;
+                    var ui = actor as UIControl;
+                    if (ui == null)
+                        continue;
+                    if (MouseOverUIControl(ui, mousePos))
+                    {
+                        Runtime.RaisePush(actor, new PushSignal { Kind = TriggerKind.Clicked, Name = actor.Name });
+                    }
+                }
+            }
+            _leftMouseDownLastFrame = leftMouseDown;
+        }
+
+        /// <summary>Approximate screen-space hit test for a UIControl on a screen-space canvas.</summary>
+        private static bool MouseOverUIControl(UIControl ui, Float2 mousePos)
+        {
+            if (ui.Control == null)
+                return false;
+            var label = ui.Control as FlaxEngine.GUI.Label;
+            if (label == null)
+                return false;
+
+            Vector3 pos = ui.Position;
+            Float2 center = new Float2(pos.X, pos.Y);
+
+            // Estimate the button size from its text and font size.
+            string text = label.Text ?? "";
+            float fontSize = label.Font.Size > 0 ? label.Font.Size : 14f;
+            float textWidth = text.Length * fontSize * 0.6f;
+            float textHeight = fontSize * 1.2f;
+            Float2 size = new Float2(Math.Max(textWidth, 80f), Math.Max(textHeight, 30f));
+            Float2 halfSize = size * 0.5f;
+
+            return mousePos.X >= center.X - halfSize.X && mousePos.X <= center.X + halfSize.X &&
+                   mousePos.Y >= center.Y - halfSize.Y && mousePos.Y <= center.Y + halfSize.Y;
         }
 
         /// <summary>Collect every EventSheet component currently on scene actors, so manager and
