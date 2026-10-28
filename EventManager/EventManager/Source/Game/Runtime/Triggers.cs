@@ -26,7 +26,6 @@ namespace Game
         Equipped,
         Unequipped,
         Dropped,
-        Hovered,
         Every,
         WatchBecomes,
         WatchBecomesNot,
