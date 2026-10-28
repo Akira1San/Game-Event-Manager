@@ -439,7 +439,6 @@ namespace Game
             if (leftMouseDown && !_leftMouseDownLastFrame)
             {
                 Float2 mousePos = Input.MousePosition;
-                Float2 screenCenter = new Float2(Screen.MainWindow.Size.X * 0.5f, Screen.MainWindow.Size.Y * 0.5f);
                 var actors = SceneActors();
                 int uiCount = 0;
                 foreach (Actor actor in actors)
@@ -450,26 +449,25 @@ namespace Game
                     if (ui == null)
                         continue;
                     uiCount++;
-                    if (MouseOverUIControl(ui, mousePos, screenCenter))
+                    if (MouseOverUIControl(ui, mousePos))
                     {
                         Runtime.RaisePush(actor, new PushSignal { Kind = TriggerKind.Clicked, Name = actor.Name });
                         Debug.LogWarning($"Clicked UI actor: {actor.Name}");
                     }
                     else
                     {
-                        // Debug: show why it didn't match
-                        Float2 center = MouseControlCenter(ui, screenCenter);
+                        // Debug: show raw Position and why it didn't match
                         string text = ui.Control != null ? ((FlaxEngine.GUI.Label)ui.Control).Text ?? "" : "";
-                        Debug.LogWarning($"  No hit: actor={actor.Name}, text=\"{text}\", center=({center.X:0},{center.Y:0}), mouse=({mousePos.X:0},{mousePos.Y:0})");
+                        Debug.LogWarning($"  No hit: actor={actor.Name}, text=\"{text}\", rawPos=({ui.Position.X:0},{ui.Position.Y:0},{ui.Position.Z:0}), mouse=({mousePos.X:0},{mousePos.Y:0})");
                     }
                 }
-                Debug.LogWarning($"Mouse down: actors={actors.Count}, uiControls={uiCount}, mouse=({mousePos.X:0},{mousePos.Y:0}), screenCenter=({screenCenter.X:0},{screenCenter.Y:0})");
+                Debug.LogWarning($"Mouse down: actors={actors.Count}, uiControls={uiCount}, mouse=({mousePos.X:0},{mousePos.Y:0})");
             }
             _leftMouseDownLastFrame = leftMouseDown;
         }
 
         /// <summary>Approximate screen-space hit test for a UIControl on a screen-space canvas.</summary>
-        private static bool MouseOverUIControl(UIControl ui, Float2 mousePos, Float2 screenCenter)
+        private static bool MouseOverUIControl(UIControl ui, Float2 mousePos)
         {
             if (ui.Control == null)
                 return false;
@@ -477,22 +475,8 @@ namespace Game
             if (label == null)
                 return false;
 
-            // Accumulate position from this control up through UIControl parents
-            Float2 pos = new Float2(ui.Position.X, ui.Position.Y);
-            Actor parent = ui.Parent;
-            while (parent != null)
-            {
-                var parentUi = parent as UIControl;
-                if (parentUi != null)
-                {
-                    pos.X += parentUi.Position.X;
-                    pos.Y += parentUi.Position.Y;
-                }
-                parent = parent.Parent;
-            }
-
-            // Center-anchored UIControl: screen position = screen center + accumulated local position
-            Float2 center = new Float2(screenCenter.X + pos.X, screenCenter.Y + pos.Y);
+            // UIControl.Position is already in screen-space coordinates (top-left origin).
+            Float2 center = new Float2(ui.Position.X, ui.Position.Y);
 
             // Estimate hit box from text size (generous minimum so small buttons are easy to hit)
             string text = label.Text ?? "";
@@ -511,22 +495,10 @@ namespace Game
             return xHit && (yHit || yHitInverted);
         }
 
-        /// <summary>Returns the estimated screen-space center of a UIControl (for debug output).</summary>
-        private static Float2 MouseControlCenter(UIControl ui, Float2 screenCenter)
+        /// <summary>Returns the raw UIControl Position (for debug output).</summary>
+        private static Float2 MouseControlCenter(UIControl ui)
         {
-            Float2 pos = new Float2(ui.Position.X, ui.Position.Y);
-            Actor parent = ui.Parent;
-            while (parent != null)
-            {
-                var parentUi = parent as UIControl;
-                if (parentUi != null)
-                {
-                    pos.X += parentUi.Position.X;
-                    pos.Y += parentUi.Position.Y;
-                }
-                parent = parent.Parent;
-            }
-            return new Float2(screenCenter.X + pos.X, screenCenter.Y + pos.Y);
+            return new Float2(ui.Position.X, ui.Position.Y);
         }
 
         /// <summary>Collect every EventSheet component currently on scene actors, so manager and
