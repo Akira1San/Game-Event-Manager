@@ -6,32 +6,34 @@ This document helps debug the `when <thing> is clicked` and `load scene` issues.
 
 **Symptom:** Pressing Enter shows `[Warning] I couldn't find a scene named "Level1". Scenes: Scene.`
 
-**Cause:** `Menu.scene` and `Level1.scene` were hand-written as JSON files, but Flax needs valid imported scene assets. `Content.GetAllAssetsByType(typeof(Scene))` only returns scenes the editor has imported — currently only `Scene` (the original `Scene.scene`).
+**Cause:** `Content.GetAllAssetsByType(typeof(Scene))` only returns scenes imported by the Flax editor. If your `.scene` files aren't showing up in the debug output's "Scene asset paths" list, Flax hasn't imported them as Scene assets.
 
-**Fix:** Create the scenes through the **Flax editor UI** (most reliable):
+**Fix — try these in order:**
 
-1. Open `EventManager.flaxproj` in the Flax editor
-2. **Create Menu scene:** File → New Scene → save as `Content/Menu.scene`
-   - Add UICanvas actor
-   - Add UIControl actors named `PlayButton`, `QuitButton`, `GameText` as children of UICanvas
-   - Add `EventsManager` script on a scene-root actor named `Menu`
-3. **Create Level1 scene:** File → New Scene → save as `Content/Level1.scene`
-   - Add `ScoreLabel` UIControl under UICanvas
-   - Add `EventsManager` script on a scene-root actor named `Level1`
-4. Wait for the editor to import the new scenes (check Content browser)
-5. Run the game — `load scene "Level1"` should now find the imported `Level1` scene asset
+### 1. Move scenes to root Content folder (most likely fix)
+Flax may not scan subfolders for scene assets. Move your scenes:
+- `Content/scenes/menu_test.scene` → `Content/menu_test.scene`
+- `Content/scenes/load_level_test.scene` → `Content/load_level_test.scene`
+- Then in Content browser: RMB → **Reimport** on both files
+- Update `Menu.events` if needed: `load scene "load_level_test"` (base name, no path)
 
-**Why hand-written .scene files may not work:** Flax scene assets are serialized binary/bloated JSON with engine-specific GUIDs and references. Hand-written files may be missing required fields or have wrong GUID formats, so the editor skips them during import.
+### 2. Create scenes directly in Content browser at root
+- Content browser → RMB → New Scene → name it `Menu`
+- Content browser → RMB → New Scene → name it `Level1`
+- Add UICanvas + ScoreLabel + EventsManager to Level1
+- Update `Menu.events`: `load scene "Level1"`
+- Reimport and test
 
-**Verify in editor Content browser:** You should see `Menu.scene` and `Level1.scene` with scene icons. If they don't appear, the editor isn't recognizing them as valid scene assets.
+### 3. Check Build Settings
+Open `EventManager.flaxproj` in Flax editor → File → Build Settings → check if there's a "Scenes in Build" list that needs your scenes added.
+
+### 4. Restart the Flax editor
+Force a full re-import of all assets.
 
 **Debug output to watch:**
-- `[Warning] I couldn't find a scene named "Level1". Scenes: Scene.` — Level1 not imported yet
-- No warning + scene changes — working
-
----
-
-## Issue 2: Mouse click not firing `when <thing> is clicked`
+- `[Warning] I couldn't find a scene named "load_level_test". Scenes: Scene. Scene asset paths: ...` — compare the paths listed against your scene file paths
+- If `load_level_test` appears in `Scene asset paths` but with a different name → update `Menu.events` to match
+- If nothing appears → scenes not imported yet
 
 **Symptom:** Clicking PlayButton or QuitButton does nothing, but the debug log shows mouse down events.
 
