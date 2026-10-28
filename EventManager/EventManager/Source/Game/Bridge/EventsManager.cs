@@ -439,18 +439,23 @@ namespace Game
             if (leftMouseDown && !_leftMouseDownLastFrame)
             {
                 Float2 mousePos = Input.MousePosition;
-                foreach (Actor actor in SceneActors())
+                var actors = SceneActors();
+                int uiCount = 0;
+                foreach (Actor actor in actors)
                 {
                     if (actor == null || !actor.IsActive)
                         continue;
                     var ui = actor as UIControl;
                     if (ui == null)
                         continue;
+                    uiCount++;
                     if (MouseOverUIControl(ui, mousePos))
                     {
                         Runtime.RaisePush(actor, new PushSignal { Kind = TriggerKind.Clicked, Name = actor.Name });
+                        Debug.LogWarning($"Clicked UI actor: {actor.Name}");
                     }
                 }
+                Debug.LogWarning($"Mouse down: actors={actors.Count}, uiControls={uiCount}, mouse=({mousePos.X:0},{mousePos.Y:0})");
             }
             _leftMouseDownLastFrame = leftMouseDown;
         }
@@ -464,11 +469,8 @@ namespace Game
             if (label == null)
                 return false;
 
-            // Screen-space canvas: UIControl.Position is offset from anchor (default center),
-            // so add half the window size to convert to screen coordinates.
-            Vector2 win = Screen.MainWindow.Size;
             Vector3 pos = ui.Position;
-            Float2 center = new Float2(win.X * 0.5f + pos.X, win.Y * 0.5f + pos.Y);
+            Float2 center = new Float2(pos.X, pos.Y);
 
             // Estimate the button size from its text and font size.
             string text = label.Text ?? "";
