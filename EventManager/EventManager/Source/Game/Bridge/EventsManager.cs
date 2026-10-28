@@ -200,7 +200,12 @@ namespace Game
                     continue;
                 if (Runtime.FindSheetFor(actor) != null)
                     continue;
-                AttachByName(actor, actor.Name);
+                // UI buttons share Menu.events (defines `when <button> is clicked`);
+                // no PlayButton.events/QuitButton.events exists, so fall back to Menu.
+                string source = actor.Name;
+                if (actor is UIControl && ProgramNamed(actor.Name) == null)
+                    source = "Menu";
+                AttachByName(actor, source);
             }
         }
 
@@ -439,6 +444,8 @@ namespace Game
             if (leftMouseDown && !_leftMouseDownLastFrame)
             {
                 Float2 mousePos = Input.MousePosition;
+                Float2 screenSize = Screen.Size;
+                Float2 screenCenter = screenSize * 0.5f;
                 var actors = SceneActors();
                 int uiCount = 0;
                 foreach (Actor actor in actors)
@@ -456,14 +463,27 @@ namespace Game
                     }
                     else
                     {
-                        // Debug: show raw Position and why it didn't match
+                        // Debug: show computed screen-space center vs mouse so coordinate
+                        // conversion can be verified in-editor.
                         string text = ui.Control != null ? ((FlaxEngine.GUI.Label)ui.Control).Text ?? "" : "";
-                        Debug.LogWarning($"  No hit: actor={actor.Name}, text=\"{text}\", rawPos=({ui.Position.X:0},{ui.Position.Y:0},{ui.Position.Z:0}), mouse=({mousePos.X:0},{mousePos.Y:0})");
+                        Float2 center = MouseControlCenter(ui);
+                        Debug.LogWarning($"  No hit: actor={actor.Name}, text=\"{text}\", center=({center.X:0},{center.Y:0}), uiPos=({ui.Position.X:0},{ui.Position.Y:0},{ui.Position.Z:0}), mouse=({mousePos.X:0},{mousePos.Y:0}), screenCenter=({screenCenter.X:0},{screenCenter.Y:0})");
                     }
                 }
-                Debug.LogWarning($"Mouse down: actors={actors.Count}, uiControls={uiCount}, mouse=({mousePos.X:0},{mousePos.Y:0})");
+                Debug.LogWarning($"Mouse down: actors={actors.Count}, uiControls={uiCount}, mouse=({mousePos.X:0},{mousePos.Y:0}), screenCenter=({screenCenter.X:0},{screenCenter.Y:0})");
             }
             _leftMouseDownLastFrame = leftMouseDown;
+        }
+
+        /// <summary>Screen-space center of a UIControl (top-left origin, Y down), matching
+        /// Input.MousePosition. Actor.Position is already world-space (includes the parent
+        /// UICanvas transform); for UI on a screen-space canvas the X component lines up with
+        /// screen space while Y is world up, so we flip Y only. We deliberately do NOT add
+        /// Screen.Size*0.5 (that would double-count) and do NOT re-walk the parent chain
+        /// (Position already includes it — walking would double-count).</summary>
+        private static Float2 MouseControlCenter(UIControl ui)
+        {
+            return new Float2(ui.Position.X, -ui.Position.Y);
         }
 
         /// <summary>Approximate screen-space hit test for a UIControl on a screen-space canvas.</summary>
@@ -475,8 +495,7 @@ namespace Game
             if (label == null)
                 return false;
 
-            // UIControl.Position is already in screen-space coordinates (top-left origin).
-            Float2 center = new Float2(ui.Position.X, ui.Position.Y);
+            Float2 center = MouseControlCenter(ui);
 
             // Estimate hit box from text size (generous minimum so small buttons are easy to hit)
             string text = label.Text ?? "";
@@ -489,16 +508,7 @@ namespace Game
             bool xHit = mousePos.X >= center.X - halfSize.X && mousePos.X <= center.X + halfSize.X;
             bool yHit = mousePos.Y >= center.Y - halfSize.Y && mousePos.Y <= center.Y + halfSize.Y;
 
-            // Also try Y-inverted (some Flax builds use Y-up for UI coordinates)
-            bool yHitInverted = mousePos.Y >= -center.Y - halfSize.Y && mousePos.Y <= -center.Y + halfSize.Y;
-
-            return xHit && (yHit || yHitInverted);
-        }
-
-        /// <summary>Returns the raw UIControl Position (for debug output).</summary>
-        private static Float2 MouseControlCenter(UIControl ui)
-        {
-            return new Float2(ui.Position.X, ui.Position.Y);
+            return xHit && yHit;
         }
 
         /// <summary>Collect every EventSheet component currently on scene actors, so manager and

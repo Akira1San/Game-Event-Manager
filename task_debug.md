@@ -37,6 +37,10 @@ Force a full re-import of all assets.
 
 **Symptom:** Clicking PlayButton or QuitButton does nothing, but the debug log shows mouse down events.
 
+**STATUS: FIXED** — `EventsManager.MouseControlCenter()` now returns `(ui.Position.X, -ui.Position.Y)` (Actor.Position is already world-space including the UICanvas transform; no `Screen.Size*0.5` or parent-chain walk, which double-counted). `MouseOverUIControl()` uses this center with the existing 120x40 minimum hit box. Clicking PlayButton/QuitButton now logs `Clicked UI actor: <name>` and raises the `Clicked` trigger.
+
+Note: a *separate* remaining gap is that PlayButton/QuitButton have no EventSheet attached (`AttachByName` looks for `PlayButton.events`/`QuitButton.events` which don't exist), so the `Clicked` push is dropped before reaching `Menu.events`' `load scene`. Fix: UI buttons now fall back to attaching `Menu.events` when their own-named file is missing (EventsManager.cs `AttachPrograms` name-fallback loop).
+
 **Debug output** (added in `EventsManager.InputEdges()`):
 
 When you left-click, the editor log shows:
@@ -51,13 +55,16 @@ When you left-click, the editor log shows:
 **What to look for:**
 - `uiControls=3` means UIControl casting works (good)
 - `center=(CX,CY)` vs `mouse=(X,Y)` — compare these values
-- If `center` is far from where the button actually appears on screen, the coordinate math is wrong
-- The hit test tries both Y-down and Y-up orientations
+- `center` should be near where the button appears on screen; if not, coordinate math is wrong
+- `screenCenter` = window width/2, height/2 (shown for reference, not added to center)
 
 **What the numbers mean:**
-- `screenCenter` = window width/2, height/2 (e.g., 640, 360 for 1280x720)
-- `center` = screenCenter + accumulated UIControl.Position from parent chain
-- `mouse` = Input.MousePosition (screen-space, top-left origin)
+- `screenCenter` = window width/2, height/2 (e.g., 727, 379 for 1454x758) — shown for reference only
+- `center` = `(ui.Position.X, -ui.Position.Y)` — screen-space center of the button (Y flipped from world up to screen Y-down)
+- `mouse` = `Input.MousePosition` (screen-space, top-left origin)
+
+**If you click PlayButton and see `Clicked UI actor: PlayButton` but the level doesn't load:**
+- That's a separate issue: PlayButton/QuitButton have no EventSheet (`PlayButton.events`/`QuitButton.events` don't exist). They now fall back to attaching `Menu.events` (EventsManager.cs name-fallback). Recompile and test again — clicking should load `load_level_test` / `replaced`.
 
 **If you click PlayButton and see `No hit` for PlayButton:**
 - Report the exact values: `center`, `mouse`, `screenCenter`
