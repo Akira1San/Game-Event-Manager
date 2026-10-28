@@ -464,8 +464,11 @@ namespace Game
             if (label == null)
                 return false;
 
+            // Screen-space canvas: UIControl.Position is offset from anchor (default center),
+            // so add half the window size to convert to screen coordinates.
+            Vector2 win = Screen.MainWindow.Size;
             Vector3 pos = ui.Position;
-            Float2 center = new Float2(pos.X, pos.Y);
+            Float2 center = new Float2(win.X * 0.5f + pos.X, win.Y * 0.5f + pos.Y);
 
             // Estimate the button size from its text and font size.
             string text = label.Text ?? "";

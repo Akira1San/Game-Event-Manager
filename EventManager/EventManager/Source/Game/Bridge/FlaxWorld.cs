@@ -32,6 +32,8 @@ namespace Game
         static bool TryParseKey(string name, out KeyboardKeys keys)
         {
             keys = default;
+            // Flax uses KeyboardKeys.Return, not KeyboardKeys.Enter
+            if (name == "Enter") name = "Return";
             foreach (var candidate in new[] { name, name + "Bar", "SpaceBar", "Space_Key", "SpaceKey" })
             {
                 if (Enum.TryParse(candidate, true, out keys))
