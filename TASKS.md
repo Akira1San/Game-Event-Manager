@@ -487,6 +487,26 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 
 ---
 
+## Task 11 — State Machines (BGE logic bricks) `[ ]`
+
+Goal: per-actor state machines so one `.events` file can encode multiple behavior modes (patrol/chase/attack, menu/playing/paused/gameover). Depends on Tasks 1–3.
+
+### Part A — Core state words
+- [ ] Word registry: `state <name>` trigger modifier, `set state <name>`, `when state is <name>`, `my state` value.
+- [ ] Parser: `state` list on `when` line; `set state` as an action statement; `when state is` classified to a new edge trigger kind.
+- [ ] Runtime: per-sheet `CurrentState` (default `"default"`); `set state` writes it; `when state is` fires once on entry edge; gated polled events skip when actor not in listed state.
+
+### Part B — The state example
+- [ ] Write `Guard.events`: patrol → chase on sight → attack in melee → back to patrol when sight lost, using `set state` and `state patrol/chase/attack` gates.
+- [ ] Scene: Guard cube + Player + a couple of waypoints.
+- [ ] Verify: guard patrols waypoints, chases when player comes near, attacks up close, returns to patrol when player leaves.
+
+### Part C — Global game states (bonus)
+- [ ] `Game.events`: `when game starts → set state menu`; menu buttons `set state playing` / `set state paused` / `set state gameover`; HUD text driven by `state menu/playing/paused/gameover`.
+- [ ] Verify: title → play → pause → game over → restart flows only through `.events` words.
+
+---
+
 ## Session Log (append one line after each session)
 
 | Date | Session did | Tasks/Parts touched |
@@ -522,3 +542,4 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 | 2026-10-28 | Flax module build fix: `AssetInfo` has no `Name` property in this Flax version; both scene-name lookups in `LoadSceneByName`/`SceneNames` now read `System.IO.Path.GetFileNameWithoutExtension(info.Path)` (same `info.Path` property `SoundIndex()` already uses). Pure test suite stays 200/200 green; module build recompiles clean once the editor rebuilds. | Task 6 A build fix |
 | 2026-10-28 | Task 6 Part A test scenes: created `Content/Menu.scene` (PlayButton, QuitButton, GameText UIControls + EventsManager on `Menu` actor), `Content/Level1.scene` (ScoreLabel, Floor, Camera + EventsManager on `Level1` actor), `Source/Game/GameFiles/Menu.events` (scene starts → show buttons; PlayButton clicked → load scene "Level1"; QuitButton clicked → quit game), `Source/Game/GameFiles/Level1.events` (scene starts → set text of ScoreLabel to Score; Score changes → update label). All 200 unit tests pass including shipped GameFiles parse check. Editor verify pending. | Task 6 A test scenes |
 | 2026-10-28 | Task 6 complete: fixed `MouseControlCenter` hit test (Position.X/-Position.Y, no double-counting), UI buttons route `Clicked` to Menu.events via name fallback, added hover (color switch + Hovered push) and Right/Middle Mouse click. Clicking PlayButton/QuitButton loads level / quits. Hover color change verified after setting TextColor ≠ TextColorHighlighted. | Task 6 A–C done |
+| 2026-10-29 | Added Task 11 — State Machines (BGE logic bricks): per-actor state machine with `state <name>` trigger modifier, `set state <name>` action, `when state is <name>` edge trigger, `my state` value; Guard example (patrol→chase→attack) + global game states (menu/playing/paused/gameover). | Task 11 (planned) |
