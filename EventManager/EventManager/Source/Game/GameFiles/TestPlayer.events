@@ -1,0 +1,12 @@
+# ---------------- TestPlayer.events ----------------
+when W is held
+  move forward speed 100
+
+when S is held
+  move back speed 100
+
+when A is held
+  move left speed 100
+
+when D is held
+  move right speed 100

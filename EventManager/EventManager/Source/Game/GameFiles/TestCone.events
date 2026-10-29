@@ -1,0 +1,11 @@
+# ---------------- TestCone.events ----------------
+when me is hovered
+  show text "E"
+  wait 1 second
+  hide text
+
+when every 0.016 seconds
+  me is near TestPlayer by 400
+  show text "we have a message"
+  wait 2 seconds
+  hide text

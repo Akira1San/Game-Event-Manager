@@ -1,0 +1,3 @@
+# ---------------- Test2.events ----------------
+when scene starts
+  set text of GameText to ""

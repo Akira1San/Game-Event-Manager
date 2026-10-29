@@ -1,0 +1,10 @@
+# ---------------- TestCube.events ----------------
+when scene starts
+  set my rotating to true
+
+when every 0.016 seconds
+  my rotating is true
+  turn left degrees 2
+
+when T is pressed
+  set my rotating to 1 - my rotating

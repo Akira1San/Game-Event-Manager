@@ -1,0 +1,7 @@
+# ---------------- TestCylinder.events ----------------
+when every 0.016 seconds
+  me is near TestPlayer by 150
+  show text "+1 cylinder"
+  wait 2 seconds
+  hide text
+  hide me

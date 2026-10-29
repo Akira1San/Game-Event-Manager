@@ -1,0 +1,19 @@
+# ---------------- TestPlatform.events ----------------
+when scene starts
+  set my dir to "right"
+
+when every 0.016 seconds
+  me is near LeftEdge by 5
+  set my dir to "right"
+
+when every 0.016 seconds
+  me is near RightEdge by 5
+  set my dir to "left"
+
+when every 0.016 seconds
+  my dir is "right"
+  move right speed 20
+
+when every 0.016 seconds
+  my dir is "left"
+  move left speed 20
