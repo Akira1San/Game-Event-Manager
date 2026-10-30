@@ -404,6 +404,18 @@ DESIGN.md Section 5 "Enemy brains & navigation (the BGE way)" defines everything
   "hurt"`), the player leans on the Menus/example patterns for feedback.
 - [ ] Verify the full loop: patrol around waypoints -> spots the player -> chases (re-target
   during the chase) -> attacks within melee range -> loses sight -> back to patrol.
+
+### Part D — Debug: guard stops after some laps
+- [x] PollArrival previously used `World.FindActor` which returns only one actor named
+  `<thing>`. `goto random Waypoint` picks a random actor, so arrival was checked against
+  the wrong waypoint and never fired after the first waypoint.
+- [x] Fixed: `PollArrival` now iterates all active actors matching the required name
+  (same pattern as `PollContact` for touches), tracking arrived contacts per target.
+- [x] 209/209 tests green; Flax module build 0 warnings / 0 errors; debug logging
+  added to `FlaxActions.goto`, `FlaxActions.Step`, and `EventRuntime.PollArrival`
+  for future diagnostics.
+- [ ] Editor verify: guard patrols indefinitely across waypoint moves/rebuilds —
+  pending user's editor run.
 - [ ] Note any behavior that felt wrong or vocabulary gap, file a line in DESIGN.md §9.
 
 ---
@@ -545,4 +557,6 @@ Goal: per-actor state machines so one `.events` file can encode multiple behavio
 | 2026-10-28 | Task 6 complete: fixed `MouseControlCenter` hit test (Position.X/-Position.Y, no double-counting), UI buttons route `Clicked` to Menu.events via name fallback, added hover (color switch + Hovered push) and Right/Middle Mouse click. Clicking PlayButton/QuitButton loads level / quits. Hover color change verified after setting TextColor ≠ TextColorHighlighted. | Task 6 A–C done |
 | 2026-10-29 | Added Task 11 — State Machines (BGE logic bricks): per-actor state machine with `state <name>` trigger modifier, `set state <name>` action, `when state is <name>` edge trigger, `my state` value; Guard example (patrol→chase→attack) + global game states (menu/playing/paused/gameover). | Task 11 (planned) |
 | 2026-10-29 | Task 7 Part A — nav bridge: `goto <thing>` now paths via `Navigation.FindPath` on the baked NavMesh and follows waypoints per tick (`FlaxActions.OngoingMove.Path`); `when me arrives at <thing>` polled as an enter-edge arrival (`EventRuntime.ArrivalSlack`, `IEventWorld.FindActor`); `random <thing>`/`nearest <thing>` target qualifiers already resolve through `FlaxActions.ResolveThing`. Tests 207/207 green; Flax module build 0 warnings / 0 errors. Editor verify (baked NavMesh + Waypoint scene, cube walks to random waypoint) pending user's editor run. | Task 7 A code-done |
+| 2026-10-30 | Task 7 Part A verified in editor: cube walks to random Waypoint after baking NavMesh + placing Waypoint actors. Added `goto <thing> speed <n>` qualifier (default 5 units/sec) so patrol speed is configurable; 209/209 tests green; Flax module build 0 warnings / 0 errors. All Task 7 Part A boxes checked. | Task 7 A complete |
+| 2026-10-30 | Task 7 Part D — Arrival bug fix: `PollArrival` iterates all actors matching `<thing>` name (not just `FindActor` which returns one), so `when me arrives at Waypoint` fires reliably even when `goto random Waypoint` picks a different waypoint each lap. Debug logging added to `goto` (path found), `Step` (waypoint reached/final arrival), and `PollArrival` (distance to candidates, arrival fired). 209/209 green; module build 0/0. Editor verify pending. | Task 7 D debug |
 | 2026-10-30 | Task 7 Part A verified in editor: cube walks to random Waypoint after baking NavMesh + placing Waypoint actors. Added `goto <thing> speed <n>` qualifier (default 5 units/sec) so patrol speed is configurable; 209/209 tests green; Flax module build 0/0. All Task 7 Part A boxes checked. | Task 7 A complete |
