@@ -635,28 +635,33 @@ namespace Game
             return World.NameOf(other) == descriptor.RequireName;
         }
 
-        /// <summary>Enter-edge arrival: fires once when <c>me</c> reaches its <c>goto</c>
-        /// target (path done or close enough), then re-arms after the actor leaves again.</summary>
+        /// <summary>Enter-edge arrival: fires once when <c>me</c> reaches any actor matching
+        /// <paramref name="descriptor"/>'s name (path done or close enough), then re-arms
+        /// after leaving that actor's range again.</summary>
         private void PollArrival(SheetInstance sheet, int eventIndex, TriggerDescriptor descriptor)
         {
             if (descriptor.RequireName.Length == 0)
                 return;
-            var target = World.FindActor(descriptor.RequireName);
-            if (target == null || ReferenceEquals(target, sheet.Actor))
-                return;
-            bool arrived = World.Distance(sheet.Actor, target) <= ArrivalSlack;
             HashSet<object> contacts = sheet.Contacts[eventIndex];
-            if (arrived)
+            var arriving = new List<object>();
+            foreach (object other in World.Actors())
             {
-                if (contacts.Contains(target))
-                    return; // already arrived — still here, no refire
-                contacts.Add(target);
-                if (!sheet.FiredThisTick[eventIndex])
-                    RunEvent(sheet, eventIndex, target);
+                if (other == null || ReferenceEquals(other, sheet.Actor))
+                    continue;
+                if (!NameMatches(descriptor, other))
+                    continue;
+                if (World.Distance(sheet.Actor, other) <= ArrivalSlack)
+                    arriving.Add(other);
             }
-            else
+            contacts.RemoveWhere(other => !arriving.Contains(other));
+            foreach (object other in arriving)
             {
-                contacts.Remove(target); // left — next approach fires again
+                if (contacts.Contains(other))
+                    continue; // already arrived — still here, no refire
+                if (sheet.FiredThisTick[eventIndex])
+                    continue;
+                contacts.Add(other);
+                RunEvent(sheet, eventIndex, other);
             }
         }
 
