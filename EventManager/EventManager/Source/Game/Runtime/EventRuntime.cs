@@ -650,7 +650,11 @@ namespace Game
                     continue;
                 if (!NameMatches(descriptor, other))
                     continue;
-                if (World.Distance(sheet.Actor, other) <= ArrivalSlack)
+                double dist = World.Distance(sheet.Actor, other);
+                string meName = World.NameOf(sheet.Actor);
+                string otherName = World.NameOf(other);
+                OnRuntimeWarning($"[NavBridge] {meName} dist to {descriptor.RequireName}({otherName}) = {dist:F2} (slack {ArrivalSlack:F2})");
+                if (dist <= ArrivalSlack)
                     arriving.Add(other);
             }
             contacts.RemoveWhere(other => !arriving.Contains(other));
@@ -661,6 +665,8 @@ namespace Game
                 if (sheet.FiredThisTick[eventIndex])
                     continue;
                 contacts.Add(other);
+                string meName = World.NameOf(sheet.Actor);
+                OnRuntimeWarning($"[NavBridge] {meName} ARRIVED at {World.NameOf(other)} — firing event");
                 RunEvent(sheet, eventIndex, other);
             }
         }

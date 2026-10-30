@@ -164,8 +164,11 @@ namespace Game
                         if (move.PathIndex >= move.Path.Length)
                         {
                             move.Subject.Position = move.Target.Position;
+                            Debug.LogWarning($"[NavBridge] {move.Subject.Name} arrived at {move.Target.Name} (final waypoint reached)");
                             Moves.RemoveAt(i);
                         }
+                        else
+                            Debug.LogWarning($"[NavBridge] {move.Subject.Name} reached waypoint {move.PathIndex}/{move.Path.Length}");
                     }
                     else
                         move.Subject.Position = move.Subject.Position + delta / length * step;
@@ -268,6 +271,7 @@ namespace Game
                         WarnOnce($"No NavMesh path from \u201C{me.Name}\u201D to \u201C{target.Name}\u201D — bake a NavMesh for this level first.");
                         break;
                     }
+                    Debug.LogWarning($"[NavBridge] {me.Name} goto {target.Name}: path found, {path.Length} waypoints, speed {spec.Number}");
                     Remember(new OngoingMove { Subject = me, Target = target, Goto = true, Path = path, PathIndex = 0, Speed = spec.Number });
                     break;
                 }
