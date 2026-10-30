@@ -382,10 +382,10 @@ DESIGN.md Section 5 "Enemy brains & navigation (the BGE way)" defines everything
 
 ### Part A — The nav bridge
 - [ ] Scene setup contract works: a level with a **baked NavMesh** and a couple of
-  `Waypoint` actor markers (no AI tools opened).
-- [ ] Word registry + runtime: action `goto <thing>` (Flax NavMesh pathfinding) and trigger
+  `Waypoint` actor markers (no AI tools opened) — editor step, pending user's editor run.
+- [x] Word registry + runtime: action `goto <thing>` (Flax NavMesh pathfinding) and trigger
   `when me arrives at <thing>` (path finished or close enough).
-- [ ] Target qualifier `random <thing>` works with `goto`.
+- [x] Target qualifier `random <thing>` works with `goto`.
 - [ ] Verify: a cube walks to a random waypoint, waits, picks the next one — no walls clipped.
 
 ### Part B — Sight words
@@ -543,3 +543,4 @@ Goal: per-actor state machines so one `.events` file can encode multiple behavio
 | 2026-10-28 | Task 6 Part A test scenes: created `Content/Menu.scene` (PlayButton, QuitButton, GameText UIControls + EventsManager on `Menu` actor), `Content/Level1.scene` (ScoreLabel, Floor, Camera + EventsManager on `Level1` actor), `Source/Game/GameFiles/Menu.events` (scene starts → show buttons; PlayButton clicked → load scene "Level1"; QuitButton clicked → quit game), `Source/Game/GameFiles/Level1.events` (scene starts → set text of ScoreLabel to Score; Score changes → update label). All 200 unit tests pass including shipped GameFiles parse check. Editor verify pending. | Task 6 A test scenes |
 | 2026-10-28 | Task 6 complete: fixed `MouseControlCenter` hit test (Position.X/-Position.Y, no double-counting), UI buttons route `Clicked` to Menu.events via name fallback, added hover (color switch + Hovered push) and Right/Middle Mouse click. Clicking PlayButton/QuitButton loads level / quits. Hover color change verified after setting TextColor ≠ TextColorHighlighted. | Task 6 A–C done |
 | 2026-10-29 | Added Task 11 — State Machines (BGE logic bricks): per-actor state machine with `state <name>` trigger modifier, `set state <name>` action, `when state is <name>` edge trigger, `my state` value; Guard example (patrol→chase→attack) + global game states (menu/playing/paused/gameover). | Task 11 (planned) |
+| 2026-10-29 | Task 7 Part A — nav bridge: `goto <thing>` now paths via `Navigation.FindPath` on the baked NavMesh and follows waypoints per tick (`FlaxActions.OngoingMove.Path`); `when me arrives at <thing>` polled as an enter-edge arrival (`EventRuntime.ArrivalSlack`, `IEventWorld.FindActor`); `random <thing>`/`nearest <thing>` target qualifiers already resolve through `FlaxActions.ResolveThing`. Tests 207/207 green; Flax module build 0 warnings / 0 errors. Editor verify (baked NavMesh + Waypoint scene, cube walks to random waypoint) pending user's editor run. | Task 7 A code-done |

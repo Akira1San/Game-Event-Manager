@@ -11,6 +11,10 @@ namespace Game
         public double Speed = 5;
         public bool FaceTarget;
         public bool Goto;
+        /// <summary>NavMesh waypoints from the last <c>FindPath</c> (null = plain target move).</summary>
+        public Vector3[] Path;
+        /// <summary>Index of the waypoint the subject is walking toward.</summary>
+        public int PathIndex;
     }
 
     public static class FlaxActions
@@ -143,15 +147,28 @@ namespace Game
                     move.Subject.LookAt(move.Target.Position);
                 else if (move.Goto)
                 {
-                    Vector3 delta = move.Target.Position - move.Subject.Position;
-                    float length = delta.Length;
-                    if (length < 0.001f || length <= DeltaTime * (float)move.Speed)
+                    if (move.Path == null || move.PathIndex >= move.Path.Length)
                     {
                         move.Subject.Position = move.Target.Position;
                         Moves.RemoveAt(i);
+                        continue;
+                    }
+                    Vector3 waypoint = move.Path[move.PathIndex];
+                    Vector3 delta = waypoint - move.Subject.Position;
+                    float length = delta.Length;
+                    float step = (float)move.Speed * DeltaTime;
+                    if (length < 0.001f || length <= step)
+                    {
+                        move.Subject.Position = waypoint;
+                        move.PathIndex++;
+                        if (move.PathIndex >= move.Path.Length)
+                        {
+                            move.Subject.Position = move.Target.Position;
+                            Moves.RemoveAt(i);
+                        }
                     }
                     else
-                        move.Subject.Position = move.Subject.Position + delta / length * (float)move.Speed * DeltaTime;
+                        move.Subject.Position = move.Subject.Position + delta / length * step;
                 }
             }
         }
@@ -234,10 +251,24 @@ namespace Game
                 }
                 case ActionVerb.Goto:
                 {
-                    var target = ResolveThing(context, spec.Thing) as Actor;
                     var me = context.Me as Actor;
-                    if (target != null && me != null)
-                        Remember(new OngoingMove { Subject = me, Target = target, Goto = true });
+                    var target = ResolveThing(context, spec.Thing) as Actor;
+                    if (me == null)
+                    {
+                        WarnOnce("\u201Cgoto\u201D needs to run on an actor's sheet — the global Game sheet has no body to move.");
+                        break;
+                    }
+                    if (target == null)
+                    {
+                        WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D to goto it.");
+                        break;
+                    }
+                    if (!Navigation.FindPath(me.Position, target.Position, out Vector3[] path) || path == null || path.Length == 0)
+                    {
+                        WarnOnce($"No NavMesh path from \u201C{me.Name}\u201D to \u201C{target.Name}\u201D — bake a NavMesh for this level first.");
+                        break;
+                    }
+                    Remember(new OngoingMove { Subject = me, Target = target, Goto = true, Path = path, PathIndex = 0 });
                     break;
                 }
                 case ActionVerb.Destroy:
@@ -331,7 +362,11 @@ namespace Game
             {
                 if (existing.Subject == move.Subject && existing.Target == move.Target &&
                     existing.FaceTarget == move.FaceTarget && existing.Goto == move.Goto)
+                {
+                    if (move.Goto)
+                        existing.Path = move.Path; // re-targeting: walk the fresh path
                     return;
+                }
             }
             Moves.Add(move);
         }

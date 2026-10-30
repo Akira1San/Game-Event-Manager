@@ -1,0 +1,7 @@
+# ---------------- guard.events (patrol: goto random Waypoint) ----------------
+when me appears
+  goto random Waypoint
+
+when me arrives at Waypoint
+  wait random 0.5 to 2 seconds
+  goto random Waypoint

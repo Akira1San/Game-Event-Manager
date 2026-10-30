@@ -843,9 +843,47 @@ var tagProgram = parser.Parse(@"when me overlaps Bomb
   set FriendHits to FriendHits + 1");
 var tagSheet = tagEngine.AddSheet(new FakeActor("Mapper"), tagProgram);
 tagWorld.SetTag(bomb, "Enemy");
-tagEngine.PushContact(TriggerKind.Overlaps, tagSheet.Actor, bomb);
-tagEngine.Tick(0);
-Check(tagEngine.Variables.GetGlobal("TagHits").AsNumber() == 1 && tagEngine.Variables.GetGlobal("FriendHits").Kind == ValueKind.None, "tag conditions read world tags");
+    tagEngine.PushContact(TriggerKind.Overlaps, tagSheet.Actor, bomb);
+    tagEngine.Tick(0);
+    Check(tagEngine.Variables.GetGlobal("TagHits").AsNumber() == 1 && tagEngine.Variables.GetGlobal("FriendHits").Kind == ValueKind.None, "tag conditions read world tags");
+
+    // ------------------------------------------------------------------
+    // Task 7 Part A: `goto` / `when me arrives at <thing>` (nav bridge)
+    // ------------------------------------------------------------------
+
+    var arrives = parser.Parse("when me appears\n  set Ready to 1\n\nwhen me arrives at Waypoint\n  set Arrived to 1\n");
+    Check(arrives.Events.Count == 2, "`when me arrives at Waypoint` parses as an event");
+    var arriveDesc = TriggerClassifier.Classify(arrives.Events[1]);
+    Check(arriveDesc.Kind == TriggerKind.Arrives && arriveDesc.RequireName == "Waypoint",
+        "`when me arrives at Waypoint` classifies to Arrives with RequireName \"Waypoint\"");
+
+    var arriveWorld = new FakeWorld();
+    var arriveSeeker = new FakeActor("Seeker");
+    var arriveWaypoint = new FakeActor("Waypoint");
+    arriveWorld.AddActor(arriveSeeker);
+    arriveWorld.AddActor(arriveWaypoint);
+    var arriveEngine = FreshEngine(arriveWorld);
+    var arriveSheet = arriveEngine.AddSheet(arriveSeeker, parser.Parse("when me arrives at Waypoint\n  set Arrived to Arrived + 1"));
+    arriveWorld.SetDistance(arriveSeeker, arriveWaypoint, 0.1);
+    arriveEngine.Tick(0);
+    Check(arriveEngine.Variables.GetGlobal("Arrived").AsNumber() == 1, "`when me arrives at <thing>` fires once on arrival");
+    arriveEngine.Tick(1);
+    Check(arriveEngine.Variables.GetGlobal("Arrived").AsNumber() == 1, "still in range does not refire (enter edge)");
+    arriveWorld.SetDistance(arriveSeeker, arriveWaypoint, 99);
+    arriveEngine.Tick(2);
+    Check(arriveEngine.Variables.GetGlobal("Arrived").AsNumber() == 1, "leaving range arms arrival again");
+    arriveWorld.SetDistance(arriveSeeker, arriveWaypoint, 0.1);
+    arriveEngine.Tick(3);
+    Check(arriveEngine.Variables.GetGlobal("Arrived").AsNumber() == 2, "coming back in range refires");
+
+    var noArriveWorld = new FakeWorld();
+    var noArriveSeeker = new FakeActor("Seeker");
+    noArriveWorld.AddActor(noArriveSeeker);
+    var noArriveEngine = FreshEngine(noArriveWorld);
+    noArriveEngine.AddSheet(noArriveSeeker, parser.Parse("when me arrives at Nowhere\n  set Arrived to Arrived + 1"));
+    noArriveEngine.Tick(0);
+    Check(noArriveEngine.Variables.GetGlobal("Arrived").IsNone(), "an arrival target that does not exist never fires");
+
 
 static List<Token> RawWords(EventParser parser, string source)
 {
@@ -1439,6 +1477,14 @@ class FakeWorld : IEventWorld
     public bool IsTouching(object a, object b)
     {
         return touching.Contains((a, b)) || touching.Contains((b, a));
+    }
+
+    public object FindActor(string name)
+    {
+        foreach (var actor in actors)
+            if (NameOf(actor) == name)
+                return actor;
+        return null;
     }
 
     public IReadOnlyList<object> Actors()

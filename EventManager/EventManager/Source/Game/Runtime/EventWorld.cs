@@ -11,6 +11,8 @@ namespace Game
         string NameOf(object actor);
         /// <summary>Distance-based contact test, used when no colliders are present.</summary>
         bool IsTouching(object a, object b);
+        /// <summary>Finds a live scene actor by name (waypoints, goto targets, ...), or null.</summary>
+        object FindActor(string name);
         /// <summary>Every live actor a contact poll may consider (active only, no templates).</summary>
         IReadOnlyList<object> Actors();
     }
@@ -40,6 +42,11 @@ namespace Game
         public bool IsTouching(object a, object b)
         {
             return false;
+        }
+
+        public object FindActor(string name)
+        {
+            return null;
         }
 
         public IReadOnlyList<object> Actors()

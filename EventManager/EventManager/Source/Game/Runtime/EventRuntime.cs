@@ -88,6 +88,8 @@ namespace Game
         public bool PollTouches;
         /// <summary>Bridge flag: poll `overlaps` from world contacts (always on under EventsManager).</summary>
         public bool PollOverlaps = true;
+        /// <summary>Close enough to count as having arrived at a <c>goto</c> target.</summary>
+        public const double ArrivalSlack = 0.5;
         public Action<string> OnRuntimeWarning = message => { };
         public Action<EventContext, List<Token>> OnRawAction = (context, words) => { };
         public Action<EventContext, string, ValueBox> OnSetText = (context, thing, value) => { };
@@ -589,6 +591,9 @@ namespace Game
                 case TriggerKind.WatchChanges:
                     TickWatch(sheet, eventIndex, descriptor);
                     break;
+                case TriggerKind.Arrives:
+                    PollArrival(sheet, eventIndex, descriptor);
+                    break;
             }
         }
 
@@ -628,6 +633,31 @@ namespace Game
             if (descriptor.RequireName == "me")
                 return true; // `other touches me` = any toucher
             return World.NameOf(other) == descriptor.RequireName;
+        }
+
+        /// <summary>Enter-edge arrival: fires once when <c>me</c> reaches its <c>goto</c>
+        /// target (path done or close enough), then re-arms after the actor leaves again.</summary>
+        private void PollArrival(SheetInstance sheet, int eventIndex, TriggerDescriptor descriptor)
+        {
+            if (descriptor.RequireName.Length == 0)
+                return;
+            var target = World.FindActor(descriptor.RequireName);
+            if (target == null || ReferenceEquals(target, sheet.Actor))
+                return;
+            bool arrived = World.Distance(sheet.Actor, target) <= ArrivalSlack;
+            HashSet<object> contacts = sheet.Contacts[eventIndex];
+            if (arrived)
+            {
+                if (contacts.Contains(target))
+                    return; // already arrived — still here, no refire
+                contacts.Add(target);
+                if (!sheet.FiredThisTick[eventIndex])
+                    RunEvent(sheet, eventIndex, target);
+            }
+            else
+            {
+                contacts.Remove(target); // left — next approach fires again
+            }
         }
 
         private void TickWatch(SheetInstance sheet, int eventIndex, TriggerDescriptor descriptor)

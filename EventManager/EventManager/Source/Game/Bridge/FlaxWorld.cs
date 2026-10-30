@@ -76,6 +76,11 @@ namespace Game
             return Vector3.Distance(first.Position, second.Position) <= radius;
         }
 
+        public object FindActor(string name)
+        {
+            return Level.FindActor(name);
+        }
+
         public IReadOnlyList<object> Actors()
         {
             var found = new List<object>();
