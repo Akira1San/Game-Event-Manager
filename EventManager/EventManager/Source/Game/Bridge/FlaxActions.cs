@@ -358,17 +358,20 @@ namespace Game
 
         private static void Remember(OngoingMove move)
         {
-            foreach (OngoingMove existing in Moves)
+            // A new goto for the same subject replaces any previous goto (target may differ).
+            if (move.Goto)
             {
-                if (existing.Subject == move.Subject && existing.Target == move.Target &&
-                    existing.FaceTarget == move.FaceTarget && existing.Goto == move.Goto)
+                for (int i = Moves.Count - 1; i >= 0; i--)
+                    if (Moves[i].Subject == move.Subject && Moves[i].Goto)
+                        Moves.RemoveAt(i);
+            }
+            else
+            {
+                foreach (OngoingMove existing in Moves)
                 {
-                if (move.Goto)
-                {
-                    existing.Path = move.Path; // re-targeting: walk the fresh path
-                    existing.Speed = move.Speed; // pick up a new speed qualifier
-                }
-                return;
+                    if (existing.Subject == move.Subject && existing.Target == move.Target &&
+                        existing.FaceTarget == move.FaceTarget && existing.Goto == move.Goto)
+                        return;
                 }
             }
             Moves.Add(move);
