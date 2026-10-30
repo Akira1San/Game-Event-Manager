@@ -268,7 +268,7 @@ namespace Game
                         WarnOnce($"No NavMesh path from \u201C{me.Name}\u201D to \u201C{target.Name}\u201D — bake a NavMesh for this level first.");
                         break;
                     }
-                    Remember(new OngoingMove { Subject = me, Target = target, Goto = true, Path = path, PathIndex = 0 });
+                    Remember(new OngoingMove { Subject = me, Target = target, Goto = true, Path = path, PathIndex = 0, Speed = spec.Number });
                     break;
                 }
                 case ActionVerb.Destroy:
@@ -363,9 +363,12 @@ namespace Game
                 if (existing.Subject == move.Subject && existing.Target == move.Target &&
                     existing.FaceTarget == move.FaceTarget && existing.Goto == move.Goto)
                 {
-                    if (move.Goto)
-                        existing.Path = move.Path; // re-targeting: walk the fresh path
-                    return;
+                if (move.Goto)
+                {
+                    existing.Path = move.Path; // re-targeting: walk the fresh path
+                    existing.Speed = move.Speed; // pick up a new speed qualifier
+                }
+                return;
                 }
             }
             Moves.Add(move);

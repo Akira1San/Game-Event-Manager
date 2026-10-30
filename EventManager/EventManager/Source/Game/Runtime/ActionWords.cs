@@ -88,7 +88,20 @@ namespace Game
                     if (gotoThing != null)
                     {
                         spec.Thing = gotoThing;
-                        return Finish(spec, ActionVerb.Goto, words, 1 + gotoUsed);
+                        int afterThing = 1 + gotoUsed;
+                        if (words.Count >= afterThing + 2 && words[afterThing].Text == "speed")
+                        {
+                            spec.AmountNode = ValueNodeAt(words, words.Count - 1);
+                            spec.HasNumber = words[words.Count - 1].Type == TokenType.Number;
+                            if (spec.HasNumber)
+                                spec.Number = words[words.Count - 1].Number;
+                        }
+                        else
+                        {
+                            spec.Number = 5;
+                            spec.HasNumber = true;
+                        }
+                        return Finish(spec, ActionVerb.Goto, words, words.Count);
                     }
                     return Unknown(spec, words, "\u201Cgoto\u201D needs a thing, like \u201Cgoto SpawnPoint\u201D", warn);
                 }

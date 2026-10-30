@@ -998,6 +998,18 @@ var gotoSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
 Check(gotoSpec.Verb == ActionVerb.Goto && gotoSpec.Thing == "SpawnPoint",
     "`goto SpawnPoint` parses");
 
+var gotoSpeedSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  goto random Waypoint speed 40"), null);
+Check(gotoSpeedSpec.Verb == ActionVerb.Goto && gotoSpeedSpec.Thing == "random Waypoint" &&
+      gotoSpeedSpec.HasNumber && gotoSpeedSpec.Number == 40,
+    "`goto random Waypoint speed 40` carries qualifier and speed");
+
+var gotoDefaultSpeedSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  goto SpawnPoint"), null);
+Check(gotoDefaultSpeedSpec.Verb == ActionVerb.Goto && gotoDefaultSpeedSpec.HasNumber &&
+      gotoDefaultSpeedSpec.Number == 5,
+    "`goto SpawnPoint` defaults to speed 5");
+
 var destroyMe = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   destroy me"), null);
 Check(destroyMe.Verb == ActionVerb.Destroy && destroyMe.Thing == "me", "`destroy me` parses");
