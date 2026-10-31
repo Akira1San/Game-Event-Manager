@@ -90,6 +90,9 @@ namespace Game
         public bool PollOverlaps = true;
         /// <summary>Close enough to count as having arrived at a <c>goto</c> target.</summary>
         public const double ArrivalSlack = 0.5;
+
+        public static Action<object, object> ClearArrivalContact = (subject, target) => { };
+
         public Action<string> OnRuntimeWarning = message => { };
         public Action<EventContext, List<Token>> OnRawAction = (context, words) => { };
         public Action<EventContext, string, ValueBox> OnSetText = (context, thing, value) => { };
@@ -101,6 +104,19 @@ namespace Game
         public EventRuntime()
         {
             Variables.OnWarning = message => OnRuntimeWarning(message);
+            ClearArrivalContact = ClearArrivalContactForSubjectTarget;
+        }
+
+        private void ClearArrivalContactForSubjectTarget(object subject, object target)
+        {
+            foreach (var sheet in sheets)
+            {
+                if (ReferenceEquals(sheet.Actor, subject))
+                {
+                    for (int i = 0; i < sheet.Contacts.Length; i++)
+                        sheet.Contacts[i].Remove(target);
+                }
+            }
         }
 
         public IReadOnlyList<SheetInstance> Sheets => sheets;

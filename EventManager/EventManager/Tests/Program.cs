@@ -884,6 +884,22 @@ tagWorld.SetTag(bomb, "Enemy");
     noArriveEngine.Tick(0);
     Check(noArriveEngine.Variables.GetGlobal("Arrived").IsNone(), "an arrival target that does not exist never fires");
 
+    // Test: arrival re-arms when goto same waypoint twice (fix for guard stopping after laps)
+    var rearmWorld = new FakeWorld();
+    var rearmSeeker = new FakeActor("Guard");
+    var rearmWaypoint = new FakeActor("Waypoint");
+    rearmWorld.AddActor(rearmSeeker);
+    rearmWorld.AddActor(rearmWaypoint);
+    rearmWorld.SetDistance(rearmSeeker, rearmWaypoint, 0.1); // already at waypoint (within ArrivalSlack)
+    var rearmEngine = FreshEngine(rearmWorld);
+    var rearmSheet = rearmEngine.AddSheet(rearmSeeker, parser.Parse("when me arrives at Waypoint\n  set Arrived to Arrived + 1"));
+    rearmEngine.Tick(0);
+    Check(rearmEngine.Variables.GetGlobal("Arrived").AsNumber() == 1, "initial arrival fires once");
+    // Simulate what FlaxActions.Remember does: call ClearArrivalContact when new goto targets same position
+    EventRuntime.ClearArrivalContact(rearmSeeker, rearmWaypoint);
+    rearmEngine.Tick(1);
+    Check(rearmEngine.Variables.GetGlobal("Arrived").AsNumber() == 2, "after ClearArrivalContact, arrival re-arms and fires again");
+
 
 static List<Token> RawWords(EventParser parser, string source)
 {

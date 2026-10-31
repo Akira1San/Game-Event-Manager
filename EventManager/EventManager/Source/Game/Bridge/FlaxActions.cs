@@ -368,6 +368,15 @@ namespace Game
                 for (int i = Moves.Count - 1; i >= 0; i--)
                     if (Moves[i].Subject == move.Subject && Moves[i].Goto)
                         Moves.RemoveAt(i);
+
+                // If subject is already at the target (within ArrivalSlack), clear the arrival contact
+                // so PollArrival can re-arm when the same waypoint is chosen again.
+                if (move.Subject != null && move.Target != null)
+                {
+                    double distance = Vector3.Distance(move.Subject.Position, move.Target.Position);
+                    if (distance <= EventRuntime.ArrivalSlack)
+                        EventRuntime.ClearArrivalContact(move.Subject, move.Target);
+                }
             }
             else
             {
