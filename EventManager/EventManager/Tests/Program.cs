@@ -901,7 +901,134 @@ tagWorld.SetTag(bomb, "Enemy");
     Check(rearmEngine.Variables.GetGlobal("Arrived").AsNumber() == 2, "after ClearArrivalContact, arrival re-arms and fires again");
 
 
-static List<Token> RawWords(EventParser parser, string source)
+    // ------------------------------------------------------------------
+    // Task 7 Part B: `when me sees <thing> by <dist>` / `when me stops seeing <thing>`
+    // ------------------------------------------------------------------
+
+    var sees = parser.Parse("when me sees Player by 8\n  set Spotted to Spotted + 1\n");
+    Check(sees.Events.Count == 1, "`when me sees Player by 8` parses as an event");
+    var seesDesc = TriggerClassifier.Classify(sees.Events[0]);
+    Check(seesDesc.Kind == TriggerKind.Sees && seesDesc.RequireName == "Player" && seesDesc.Distance == 8,
+        "`when me sees Player by 8` classifies to Sees with RequireName \"Player\" and Distance 8");
+
+    var stops = parser.Parse("when me stops seeing Player\n  set Lost to Lost + 1\n");
+    Check(stops.Events.Count == 1, "`when me stops seeing Player` parses as an event");
+    var stopsDesc = TriggerClassifier.Classify(stops.Events[0]);
+    Check(stopsDesc.Kind == TriggerKind.StopsSeeing && stopsDesc.RequireName == "Player" && stopsDesc.Distance == -1,
+        "`when me stops seeing Player` classifies to StopsSeeing with no distance (-1)");
+
+    var stopsBy = parser.Parse("when me stops seeing Player by 8\n  set Lost to Lost + 1\n");
+    var stopsByDesc = TriggerClassifier.Classify(stopsBy.Events[0]);
+    Check(stopsByDesc.Kind == TriggerKind.StopsSeeing && stopsByDesc.Distance == 8,
+        "`when me stops seeing Player by 8` keeps its own distance");
+
+    var sightWorld = new FakeWorld();
+    var sightSeeker = new FakeActor("Guard");
+    var sightTarget = new FakeActor("Player");
+    sightWorld.AddActor(sightSeeker);
+    sightWorld.AddActor(sightTarget);
+    sightWorld.SetDistance(sightSeeker, sightTarget, 2);
+    var sightEngine = FreshEngine(sightWorld);
+    sightEngine.AddSheet(sightSeeker, parser.Parse("when me sees Player by 8\n  set Spotted to Spotted + 1"));
+    sightWorld.SetBlocking(sightSeeker, sightTarget, false);
+    sightEngine.Tick(0);
+    Check(sightEngine.Variables.GetGlobal("Spotted").AsNumber() == 1, "sight fires once when a target enters range with line of sight");
+    sightEngine.Tick(1);
+    Check(sightEngine.Variables.GetGlobal("Spotted").AsNumber() == 1, "still in sight does not refire (enter edge)");
+    sightWorld.SetDistance(sightSeeker, sightTarget, 99);
+    sightEngine.Tick(2);
+    sightWorld.SetDistance(sightSeeker, sightTarget, 2);
+    sightEngine.Tick(3);
+    Check(sightEngine.Variables.GetGlobal("Spotted").AsNumber() == 2, "leaving sight and coming back refires");
+
+    // Walls block sight.
+    sightWorld.SetDistance(sightSeeker, sightTarget, 2);
+    sightWorld.SetBlocking(sightSeeker, sightTarget, true);
+    sightEngine.Tick(4);
+    Check(sightEngine.Variables.GetGlobal("Spotted").AsNumber() == 2, "sight does not fire through a wall");
+    sightWorld.SetBlocking(sightSeeker, sightTarget, false);
+    sightEngine.Tick(5);
+    Check(sightEngine.Variables.GetGlobal("Spotted").AsNumber() == 3, "sight refires once the wall is gone");
+
+    // Falling edge: `stops seeing` fires once when sight ends.
+    var lostWorld = new FakeWorld();
+    var lostSeeker = new FakeActor("Guard");
+    var lostTarget = new FakeActor("Player");
+    lostWorld.AddActor(lostSeeker);
+    lostWorld.AddActor(lostTarget);
+    lostWorld.SetDistance(lostSeeker, lostTarget, 2);
+    var lostEngine = FreshEngine(lostWorld);
+    lostEngine.AddSheet(lostSeeker, parser.Parse("when me sees Player by 8\n  set Spotted to Spotted + 1\n\nwhen me stops seeing Player\n  set Lost to Lost + 1"));
+    lostWorld.SetBlocking(lostSeeker, lostTarget, false);
+    lostEngine.Tick(0);
+    Check(lostEngine.Variables.GetGlobal("Spotted").AsNumber() == 1 && lostEngine.Variables.GetGlobal("Lost").IsNone(), "sight starts; nothing lost yet");
+    lostWorld.SetBlocking(lostSeeker, lostTarget, true);
+    lostEngine.Tick(1);
+    Check(lostEngine.Variables.GetGlobal("Spotted").AsNumber() == 1 && lostEngine.Variables.GetGlobal("Lost").AsNumber() == 1, "`stops seeing` fires once when sight ends");
+    lostEngine.Tick(2);
+    Check(lostEngine.Variables.GetGlobal("Spotted").AsNumber() == 1 && lostEngine.Variables.GetGlobal("Lost").AsNumber() == 1, "still out of sight does not refire");
+    lostWorld.SetBlocking(lostSeeker, lostTarget, false);
+    lostEngine.Tick(3);
+    Check(lostEngine.Variables.GetGlobal("Lost").AsNumber() == 1, "back in sight does not refire `stops seeing`");
+    lostWorld.SetBlocking(lostSeeker, lostTarget, true);
+    lostEngine.Tick(4);
+    Check(lostEngine.Variables.GetGlobal("Lost").AsNumber() == 2, "losing sight again refires `stops seeing`");
+
+    // `stops seeing` without `by <dist>` reuses the last `sees` range.
+    var reuseWorld = new FakeWorld();
+    var reuseSeeker = new FakeActor("Guard");
+    var reuseTarget = new FakeActor("Player");
+    reuseWorld.AddActor(reuseSeeker);
+    reuseWorld.AddActor(reuseTarget);
+    reuseWorld.SetDistance(reuseSeeker, reuseTarget, 6);
+    var reuseEngine = FreshEngine(reuseWorld);
+    reuseEngine.AddSheet(reuseSeeker, parser.Parse("when me sees Player by 8\n  set Spotted to Spotted + 1\n\nwhen me stops seeing Player\n  set Lost to Lost + 1"));
+    reuseWorld.SetBlocking(reuseSeeker, reuseTarget, false);
+    reuseEngine.Tick(0);
+    Check(reuseEngine.Variables.GetGlobal("Spotted").AsNumber() == 1 && reuseEngine.Variables.GetGlobal("Lost").IsNone(), "sight established at range 6 within the configured 8");
+    reuseWorld.SetDistance(reuseSeeker, reuseTarget, 10);
+    reuseEngine.Tick(1);
+    Check(reuseEngine.Variables.GetGlobal("Spotted").AsNumber() == 1 && reuseEngine.Variables.GetGlobal("Lost").AsNumber() == 1, "moving past 8 makes distance-less `stops seeing` fire (reuses range 8)");
+
+    // ------------------------------------------------------------------
+    // Task 7 Part B: `when me is near <thing> by <dist>` (near trigger)
+    // ------------------------------------------------------------------
+
+    var near = parser.Parse("when me is near Player by 1.5\n  set Nearing to Nearing + 1\n");
+    Check(near.Events.Count == 1, "`when me is near Player by 1.5` parses as an event");
+    var nearDesc = TriggerClassifier.Classify(near.Events[0]);
+    Check(nearDesc.Kind == TriggerKind.Near && nearDesc.RequireName == "Player" && nearDesc.Distance == 1.5,
+        "`when me is near Player by 1.5` classifies to Near with RequireName \"Player\" and Distance 1.5");
+
+    var nearNoDist = parser.Parse("when me is near Player\n  set Nearing to Nearing + 1\n");
+    var nearNoDistDesc = TriggerClassifier.Classify(nearNoDist.Events[0]);
+    Check(nearNoDistDesc.Kind == TriggerKind.Near && nearNoDistDesc.Distance == -1,
+        "`when me is near Player` classifies to Near with no distance (-1)");
+
+    var nearTriggerWorld = new FakeWorld();
+    var nearTriggerSeeker = new FakeActor("Guard");
+    var nearTriggerTarget = new FakeActor("Player");
+    nearTriggerWorld.AddActor(nearTriggerSeeker);
+    nearTriggerWorld.AddActor(nearTriggerTarget);
+    nearTriggerWorld.SetDistance(nearTriggerSeeker, nearTriggerTarget, 99); // out of range (> 1.5)
+    var nearTriggerEngine = FreshEngine(nearTriggerWorld);
+    nearTriggerEngine.AddSheet(nearTriggerSeeker, parser.Parse("when me is near Player by 1.5\n  set Nearing to Nearing + 1"));
+    nearTriggerWorld.SetBlocking(nearTriggerSeeker, nearTriggerTarget, false);
+    nearTriggerEngine.Tick(0);
+    Check(nearTriggerEngine.Variables.GetGlobal("Nearing").IsNone(), "near does not fire when out of range");
+    nearTriggerWorld.SetDistance(nearTriggerSeeker, nearTriggerTarget, 1); // enter range
+    nearTriggerEngine.Tick(1);
+    Check(nearTriggerEngine.Variables.GetGlobal("Nearing").AsNumber() == 1, "near fires once when a target enters range");
+    nearTriggerEngine.Tick(2);
+    Check(nearTriggerEngine.Variables.GetGlobal("Nearing").AsNumber() == 1, "still in range does not refire (enter edge)");
+    nearTriggerWorld.SetDistance(nearTriggerSeeker, nearTriggerTarget, 99); // leave range
+    nearTriggerEngine.Tick(3);
+    Check(nearTriggerEngine.Variables.GetGlobal("Nearing").AsNumber() == 1, "leaving range does not refire");
+    nearTriggerWorld.SetDistance(nearTriggerSeeker, nearTriggerTarget, 1); // re-enter range
+    nearTriggerEngine.Tick(4);
+    Check(nearTriggerEngine.Variables.GetGlobal("Nearing").AsNumber() == 2, "coming back into range refires near");
+
+    static List<Token> RawWords(EventParser parser, string source)
 {
     var program = parser.Parse(source);
     var raw = (RawActionNode)program.Events[0].Body[0].Statement!;
@@ -1233,7 +1360,10 @@ bool shippedFilesParse = shippedPrograms.Count > 0;
 foreach (EventFileResult shipped in shippedPrograms)
 {
     if (!string.IsNullOrEmpty(shipped.Error))
+    {
         shippedFilesParse = false;
+        Console.WriteLine($"  SHIPPED FILE ERROR [{shipped.Name}]: {shipped.Error}");
+    }
 }
 Check(shippedFilesParse, "every shipped GameFiles .events file parses (including `hit to other`)");
 
@@ -1519,5 +1649,21 @@ class FakeWorld : IEventWorld
     {
         return actors;
     }
+
+    /// <summary>Blocks (walls) or unblocks the straight line between two actors, both directions.</summary>
+    public void SetBlocking(object a, object b, bool on)
+    {
+        if (on)
+            blocking.Add((a, b));
+        else
+            blocking.Remove((a, b));
+    }
+
+    public bool HasLineOfSight(object from, object to)
+    {
+        return !blocking.Contains((from, to)) && !blocking.Contains((to, from));
+    }
+
+    private readonly HashSet<(object, object)> blocking = new HashSet<(object, object)>();
 }
 

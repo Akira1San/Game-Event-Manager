@@ -11,6 +11,8 @@ namespace Game
         string NameOf(object actor);
         /// <summary>Distance-based contact test, used when no colliders are present.</summary>
         bool IsTouching(object a, object b);
+        /// <summary>True when nothing (walls included) blocks the straight line from <paramref name="from"/> to <paramref name="to"/>.</summary>
+        bool HasLineOfSight(object from, object to);
         /// <summary>Finds a live scene actor by name (waypoints, goto targets, ...), or null.</summary>
         object FindActor(string name);
         /// <summary>Every live actor a contact poll may consider (active only, no templates).</summary>
@@ -42,6 +44,11 @@ namespace Game
         public bool IsTouching(object a, object b)
         {
             return false;
+        }
+
+        public bool HasLineOfSight(object from, object to)
+        {
+            return true;
         }
 
         public object FindActor(string name)

@@ -62,6 +62,7 @@
 			"ID": "4b116a5f4c6c3eac7bf36c989a8ff819",
 			"TypeName": "FlaxEngine.StaticModel",
 			"ParentID": "0e024b964c20ea63b4b8bdaa805c544c",
+			"IsActive": false,
 			"Name": "Floor",
 			"Transform": {
 				"Translation": {
@@ -88,30 +89,6 @@
 			}
 		},
 		{
-			"ID": "dc60e0d54dc8b7fea33b619723f73217",
-			"TypeName": "FlaxEngine.BoxCollider",
-			"ParentID": "4b116a5f4c6c3eac7bf36c989a8ff819",
-			"Name": "BoxCollider"
-		},
-		{
-			"ID": "63989de8469c37d552b4c19c5aa1ab4a",
-			"TypeName": "FlaxEngine.NavMeshBoundsVolume",
-			"ParentID": "4b116a5f4c6c3eac7bf36c989a8ff819",
-			"Name": "NavMeshBoundsVolume",
-			"Transform": {
-				"Translation": {
-					"X": 0.0,
-					"Y": 52.0,
-					"Z": 0.0
-				},
-				"Scale": {
-					"X": 0.10000000149011612,
-					"Y": 0.13548612594604492,
-					"Z": 0.10000000149011612
-				}
-			}
-		},
-		{
 			"ID": "213c4e4140c904c5860d26a078e8c63e",
 			"TypeName": "FlaxEngine.Camera",
 			"ParentID": "0e024b964c20ea63b4b8bdaa805c544c",
@@ -133,7 +110,7 @@
 			"Transform": {
 				"Translation": {
 					"X": 70.67604064941406,
-					"Y": 59.770477294921875,
+					"Y": 109.77047729492188,
 					"Z": -606.5006103515625
 				}
 			},
@@ -158,55 +135,53 @@
 }
 		},
 		{
-			"ID": "b3f419954130a965574d6bb9d3b4afc2",
+			"ID": "72a007a042fbebaadececdbdaadaa705",
 			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "0e024b964c20ea63b4b8bdaa805c544c",
+			"Name": "Waypoint",
+			"Transform": {
+				"Translation": {
+					"X": -681.9864501953125,
+					"Y": 41.113670349121094,
+					"Z": 594.802978515625
+				}
+			}
+		},
+		{
+			"ID": "f7daadea490f3c3704a527a849125ed7",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "0e024b964c20ea63b4b8bdaa805c544c",
+			"Name": "Waypoint",
+			"Transform": {
+				"Translation": {
+					"X": 308.54803466796875,
+					"Y": 41.113670349121094,
+					"Z": 594.802978515625
+				}
+			}
+		},
+		{
+			"ID": "14171c7a4adf22a250e38693a6609c1b",
+			"TypeName": "FlaxEngine.StaticModel",
 			"ParentID": "0e024b964c20ea63b4b8bdaa805c544c",
 			"Name": "Waypoint ",
 			"Transform": {
 				"Translation": {
-					"X": 766.8811645507813,
-					"Y": 41.113670349121094,
-					"Z": 594.802978515625
+					"X": -145.22543334960938,
+					"Y": 115.0,
+					"Z": 716.900390625
 				}
-			}
-		},
-		{
-			"ID": "72a007a042fbebaadececdbdaadaa705",
-			"TypeName": "FlaxEngine.EmptyActor",
-			"ParentID": "0e024b964c20ea63b4b8bdaa805c544c",
-			"Name": "Waypoint  0",
-			"Transform": {
-				"Translation": {
-					"X": -681.9864501953125,
-					"Y": 41.113670349121094,
-					"Z": 594.802978515625
-				}
-			}
-		},
-		{
-			"ID": "fedc4c0345f1f63585ca3482570f00c3",
-			"TypeName": "FlaxEngine.EmptyActor",
-			"ParentID": "0e024b964c20ea63b4b8bdaa805c544c",
-			"Name": "Waypoint  1",
-			"Transform": {
-				"Translation": {
-					"X": -681.9864501953125,
-					"Y": 41.113670349121094,
-					"Z": -886.5263671875
-				}
-			}
-		},
-		{
-			"ID": "8f8aa08446a6f08e4b886a8f8f9c0a08",
-			"TypeName": "FlaxEngine.EmptyActor",
-			"ParentID": "0e024b964c20ea63b4b8bdaa805c544c",
-			"Name": "Waypoint  2",
-			"Transform": {
-				"Translation": {
-					"X": 773.6669311523438,
-					"Y": 41.113670349121094,
-					"Z": -886.5263671875
-				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
 			}
 		},
 		{
@@ -273,18 +248,29 @@
 			}
 		},
 		{
-			"ID": "14171c7a4adf22a250e38693a6609c1b",
+			"ID": "ff94260d4525689604c76f9314e54a68",
 			"TypeName": "FlaxEngine.StaticModel",
 			"ParentID": "0e024b964c20ea63b4b8bdaa805c544c",
-			"Name": "Waypoint ",
+			"Name": "Plane",
 			"Transform": {
 				"Translation": {
-					"X": 172.38482666015625,
-					"Y": 44.9998779296875,
-					"Z": 716.900390625
+					"X": -373.2420654296875,
+					"Y": 44.99937438964844,
+					"Z": 3.714630126953125
+				},
+				"Orientation": {
+					"X": -0.7071068286895752,
+					"Y": 0.0,
+					"Z": 0.0,
+					"W": 0.7071068286895752
+				},
+				"Scale": {
+					"X": 20.0,
+					"Y": 20.0,
+					"Z": 10.0
 				}
 			},
-			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Model": "54a1ff4a42af9f018234f7b39b1366b3",
 			"Buffer": {
 				"Entries": [
 					{
@@ -297,7 +283,38 @@
 			}
 		},
 		{
-			"ID": "9ae5ed484d12f95f4bdb0bbc9055482f",
+			"ID": "911b445743c88a627ac87e88b5a8a4df",
+			"TypeName": "FlaxEngine.MeshCollider",
+			"ParentID": "ff94260d4525689604c76f9314e54a68",
+			"Name": "MeshCollider",
+			"CollisionData": "4cf30084437f4a867124aa92c65b4fca"
+		},
+		{
+			"ID": "1994762e4d5d17f1b23b4786a9f3df1e",
+			"TypeName": "FlaxEngine.NavMeshBoundsVolume",
+			"ParentID": "ff94260d4525689604c76f9314e54a68",
+			"Name": "NavMeshBoundsVolume",
+			"Transform": {
+				"Translation": {
+					"X": 18.6621036529541,
+					"Y": 0.18573378026485443,
+					"Z": -4.499969959259033
+				},
+				"Orientation": {
+					"X": 0.7071068286895752,
+					"Y": 0.0,
+					"Z": 0.0,
+					"W": 0.7071068286895752
+				},
+				"Scale": {
+					"X": 0.10000000149011612,
+					"Y": 0.05000000074505806,
+					"Z": 0.2700567841529846
+				}
+			}
+		},
+		{
+			"ID": "65453eef482fe7b65e5e1783b4534fac",
 			"TypeName": "FlaxEngine.NavMesh",
 			"ParentID": "0e024b964c20ea63b4b8bdaa805c544c",
 			"Name": "NavMesh.Default",

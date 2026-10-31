@@ -73,6 +73,11 @@ namespace Game
         public HashSet<object>[] Contacts = new HashSet<object>[0];
         /// <summary>Pairs the distance poll fired for; lets Both mode ignore a later collider push for the same pair.</summary>
         public HashSet<object>[] PolledContacts = new HashSet<object>[0];
+        /// <summary>Actors currently in sight for each polled sight trigger (enter/falling edge state).</summary>
+        public HashSet<object>[] InSight = new HashSet<object>[0];
+        /// <summary>Last distance at which <c>sees name</c> established sight; reused by a
+        /// distance-less <c>stops seeing name</c>.</summary>
+        public Dictionary<string, double> LastSeenRange = new Dictionary<string, double>();
         public bool[] FiredThisTick = new bool[0];
         public double[] LastFire = new double[0];
         public WatchState[] Watches = new WatchState[0];
@@ -160,6 +165,7 @@ namespace Game
             sheet.Watches = new WatchState[count];
             sheet.Contacts = new HashSet<object>[count];
             sheet.PolledContacts = new HashSet<object>[count];
+            sheet.InSight = new HashSet<object>[count];
             sheet.Triggers.Clear();
             for (int i = 0; i < count; i++)
             {
@@ -167,6 +173,7 @@ namespace Game
                 sheet.Watches[i] = new WatchState();
                 sheet.Contacts[i] = new HashSet<object>();
                 sheet.PolledContacts[i] = new HashSet<object>();
+                sheet.InSight[i] = new HashSet<object>();
                 sheet.Triggers.Add(TriggerClassifier.Classify(program.Events[i]));
             }
         }
@@ -610,7 +617,71 @@ namespace Game
                 case TriggerKind.Arrives:
                     PollArrival(sheet, eventIndex, descriptor);
                     break;
+                case TriggerKind.Sees:
+                case TriggerKind.StopsSeeing:
+                    PollSight(sheet, eventIndex, descriptor);
+                    break;
+                case TriggerKind.Near:
+                    PollNear(sheet, eventIndex, descriptor);
+                    break;
             }
+        }
+
+        /// <summary>Sight triggers: distance check + line of sight, both edge triggers.
+        /// <c>Sees</c> fires once when a matching target comes into sight; <c>StopsSeeing</c>
+        /// fires once when a seen target leaves sight or range. A distance-less
+        /// <c>StopsSeeing</c> reuses the last range a <c>Sees</c> sighted that target at.</summary>
+        private void PollSight(SheetInstance sheet, int eventIndex, TriggerDescriptor descriptor)
+        {
+            var inSight = sheet.InSight[eventIndex];
+            var seeing = new List<object>();
+            double range = descriptor.Distance;
+            if (descriptor.Kind == TriggerKind.StopsSeeing && range < 0)
+                range = sheet.LastSeenRange.GetValueOrDefault(descriptor.RequireName, double.MaxValue);
+            foreach (object other in World.Actors())
+            {
+                if (other == null || ReferenceEquals(other, sheet.Actor))
+                    continue;
+                if (!NameMatches(descriptor, other))
+                    continue;
+                if (range >= 0 && World.Distance(sheet.Actor, other) > range)
+                    continue;
+                if (!World.HasLineOfSight(sheet.Actor, other))
+                    continue;
+                seeing.Add(other);
+            }
+            if (descriptor.Kind == TriggerKind.Sees)
+            {
+                if (range >= 0 && descriptor.RequireName.Length > 0)
+                    sheet.LastSeenRange[descriptor.RequireName] = range;
+                foreach (object other in seeing)
+                {
+                    if (inSight.Contains(other))
+                        continue; // still in sight — the enter edge fired already
+                    if (sheet.FiredThisTick[eventIndex])
+                        continue; // one sighting per tick, try the rest next tick
+                    inSight.Add(other);
+                    RunEvent(sheet, eventIndex, other);
+                }
+                inSight.RemoveWhere(other => !seeing.Contains(other));
+                return;
+            }
+            // StopsSeeing — falling edge: fire once per target that was seen and isn't anymore.
+            var stillSeeing = new HashSet<object>(seeing);
+            var lostSight = new List<object>();
+            foreach (object other in inSight)
+                if (!stillSeeing.Contains(other))
+                    lostSight.Add(other);
+            foreach (object other in lostSight)
+            {
+                if (sheet.FiredThisTick[eventIndex])
+                    continue;
+                inSight.Remove(other);
+                RunEvent(sheet, eventIndex, other);
+            }
+            foreach (object other in seeing)
+                if (!inSight.Contains(other))
+                    inSight.Add(other); // (re)sighted — arms a future exit edge
         }
 
         /// <summary>Enter-edge distance contact: fires once per pair, again only after separation.</summary>
@@ -638,6 +709,35 @@ namespace Game
                     continue; // this event already ran this tick; try the pair next tick
                 contacts.Add(other);
                 polled.Add(other);
+                RunEvent(sheet, eventIndex, other);
+            }
+        }
+
+        /// <summary>Enter-edge distance near: fires once per target that comes within
+        /// <c>descriptor.Distance</c>, then re-arms after the target leaves that range.</summary>
+        private void PollNear(SheetInstance sheet, int eventIndex, TriggerDescriptor descriptor)
+        {
+            if (descriptor.RequireName.Length == 0 || descriptor.Distance < 0)
+                return;
+            var contacts = sheet.Contacts[eventIndex];
+            var inRange = new List<object>();
+            foreach (object other in World.Actors())
+            {
+                if (other == null || ReferenceEquals(other, sheet.Actor))
+                    continue;
+                if (!NameMatches(descriptor, other))
+                    continue;
+                if (World.Distance(sheet.Actor, other) <= descriptor.Distance)
+                    inRange.Add(other);
+            }
+            contacts.RemoveWhere(other => !inRange.Contains(other));
+            foreach (object other in inRange)
+            {
+                if (contacts.Contains(other))
+                    continue; // still in range — enter edge fired already
+                if (sheet.FiredThisTick[eventIndex])
+                    continue; // one near firing per tick
+                contacts.Add(other);
                 RunEvent(sheet, eventIndex, other);
             }
         }

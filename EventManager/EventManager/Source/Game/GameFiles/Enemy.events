@@ -1,14 +1,26 @@
-# ---------------- Enemy.events ----------------
+# ---------------- Enemy.events (patrol -> chase -> attack) ----------------
 when me appears
-  set my health to 3
+  set my mode to "patrol"
+  goto random Waypoint                  # pathfinds around walls automatically
+  loop anim "Walk"
 
-when every 0.1 seconds
-  move toward Player speed 80
+when me arrives at Waypoint
+  wait random 0.5 to 2 seconds
+  goto random Waypoint
 
-when message "hit" arrives
-  add -1 to my health
+when me sees Player by 8                   # one-shot the moment the player is spotted
+  set my mode to "chase"
+  loop anim "Run"
+  goto Player
 
-when my health becomes 0
-  add 1 to Score
-  play sound "boom"
-  destroy me
+when every 0.2 seconds                     # chase keeps re-targeting the moving player
+  my mode is "chase"
+  goto Player
+
+when me stops seeing Player                # went out of sight — resume patrol
+  set my mode to "patrol"
+
+when me is near Player by 1.5
+  my mode is "chase"
+  play anim "Attack"
+  send message "hurt" to Player

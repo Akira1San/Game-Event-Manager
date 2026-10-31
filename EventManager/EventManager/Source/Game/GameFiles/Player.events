@@ -49,8 +49,8 @@ when Left Mouse is pressed
 when Space is pressed
   play sound "shot"
 
-# ---- getting hurt: brief invulnerability by hiding ----
-when me overlaps Enemy
+# ---- getting hurt: the enemy sends "hurt" on contact; brief invulnerability by hiding ----
+when message "hurt" arrives
   unless my Invulnerable is true
   play sound "hurt.wav"
   add -1 to Lives

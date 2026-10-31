@@ -23,6 +23,7 @@ namespace Game
             new WordEntry { Kind = "trigger", Word = "when other touches me", Example = "when other touches me" },
             new WordEntry { Kind = "trigger", Word = "when me touches <thing>", Example = "when me touches Water" },
             new WordEntry { Kind = "trigger", Word = "when me overlaps <thing>", Example = "when me overlaps Enemy" },
+            new WordEntry { Kind = "trigger", Word = "when me is near <thing>", Example = "when me is near Player", AltShape = "when me is near <thing> by <dist>" },
             new WordEntry { Kind = "trigger", Word = "when game starts", Example = "when game starts" },
             new WordEntry { Kind = "trigger", Word = "when scene starts", Example = "when scene starts" },
             new WordEntry { Kind = "trigger", Word = "when <thing> is clicked", Example = "when PlayButton is clicked" },

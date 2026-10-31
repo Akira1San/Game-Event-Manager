@@ -1,7 +1,10 @@
 # ---------------- guard.events (patrol: goto random Waypoint) ----------------
 when me appears
-  goto random Waypoint
+  goto random Waypoint speed 200
 
 when me arrives at Waypoint
   wait random 0.5 to 2 seconds
-  goto random Waypoint
+  goto random Waypoint speed 200
+
+when W is held
+  move forward speed 100

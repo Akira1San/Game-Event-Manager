@@ -76,6 +76,26 @@ namespace Game
             return Vector3.Distance(first.Position, second.Position) <= radius;
         }
 
+        public bool HasLineOfSight(object from, object to)
+        {
+            var first = from as Actor;
+            var second = to as Actor;
+            if (first == null || second == null || !first || !second)
+                return false;
+            if (!first.IsActive || !second.IsActive)
+                return false;
+            if (!Physics.LineCastAll(first.Position, second.Position, out var hits, ~0u, true))
+                return true; // nothing between the two actors — sight is clear
+            foreach (var hit in hits)
+            {
+                // hit is a PhysicsColliderActor (: Actor). Only me or the target itself may
+                // be hit; anything else (a wall, ...) blocks sight.
+                if (!ReferenceEquals(hit, first) && !ReferenceEquals(hit, second))
+                    return false;
+            }
+            return true;
+        }
+
         public object FindActor(string name)
         {
             return Level.FindActor(name);

@@ -16,6 +16,7 @@ namespace Game
         WheelScrollDown,
         Touches,
         Overlaps,
+        Near,
         Clicked,
         RightClicked,
         MiddleClicked,
@@ -175,6 +176,13 @@ namespace Game
             if (words.Length >= 3 && words[1] == "is" && words[2] == "hovered")
             {
                 descriptor.Kind = TriggerKind.Hovered;
+                return descriptor;
+            }
+            if (words.Length >= 4 && words[1] == "is" && words[2] == "near")
+            {
+                descriptor.Kind = TriggerKind.Near;
+                descriptor.RequireName = trigger[3].Text;
+                descriptor.Distance = DistanceBy(trigger);
                 return descriptor;
             }
             if (words.Length >= 2 && words[1] == "appears")

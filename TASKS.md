@@ -390,17 +390,17 @@ DESIGN.md Section 5 "Enemy brains & navigation (the BGE way)" defines everything
   `goto <thing> speed <n>` qualifier added (default 5 units/second) so speed is configurable.
 
 ### Part B — Sight words
-- [ ] Trigger `when me sees <thing> by <dist>` — true **edge** trigger (fires once when sight
+- [x] Trigger `when me sees <thing> by <dist>` — true **edge** trigger (fires once when sight
   starts), implemented as distance check + raycast so walls block it.
-- [ ] Trigger `when me stops seeing <thing> by <dist>` — falling edge (fires once when sight
+- [x] Trigger `when me stops seeing <thing> by <dist>` — falling edge (fires once when sight
   ends; no `by <dist>` reuses the last triggered range).
-- [ ] Verify: sighting fires once on entering range, stops firing while standing still in
+- [x] Verify: sighting fires once on entering range, stops firing while standing still in
   sight, re-fires only after a sight break, and does not fire through a wall.
 
 ### Part C — The enemy example
-- [ ] Write `Enemy.events` exactly as the DESIGN.md enemy listing (patrol -> chase -> attack
+- [x] Write `Enemy.events` exactly as the DESIGN.md enemy listing (patrol -> chase -> attack
   with `my mode` flags).
-- [ ] Pair it with `Player.events`: the enemy hurts the player on contact (`send message
+- [x] Pair it with `Player.events`: the enemy hurts the player on contact (`send message
   "hurt"`), the player leans on the Menus/example patterns for feedback.
 - [ ] Verify the full loop: patrol around waypoints -> spots the player -> chases (re-target
   during the chase) -> attacks within melee range -> loses sight -> back to patrol.
@@ -417,6 +417,26 @@ DESIGN.md Section 5 "Enemy brains & navigation (the BGE way)" defines everything
 - [ ] Editor verify: guard patrols indefinitely across waypoint moves/rebuilds —
   pending user's editor run.
 - [ ] Note any behavior that felt wrong or vocabulary gap, file a line in DESIGN.md §9.
+
+### Part E — Forward-facing goto movement
+Goal: make `goto` orient the actor in its travel direction so walking characters face forward.
+- [ ] In `FlaxActions.Step()`, when processing a `Goto` move, rotate the subject toward the
+  next waypoint using `LookAt(waypoint)` or smoothly interpolate orientation (like `face` does).
+- [ ] Flax forward is `Vector3.Forward` (0, 0, -1); world forward = `Vector3.Transform(Vector3.Forward, actor.Orientation)`.
+- [ ] Add optional qualifier `goto <thing> facing forward` (or make it default) to opt in.
+- [ ] Test: cube patrol shows correct orientation; armature character walks with face forward.
+- [ ] Note any vocabulary gap in DESIGN.md §9.
+
+### Part F — Numbered waypoint sequences
+Goal: allow waypoints with user-defined names + numbers (`orc_waypoint1`, `orc_waypoint2`, …)
+and have `goto` follow them in numerical order so patrols can be written generically.
+- [ ] Add word/qualifier for numbered sequences (e.g. `goto orc_waypoint <n>` resolves to
+  `orc_waypoint1`, `orc_waypoint2`, … by incrementing the suffix).
+- [ ] Track per-subject current waypoint index so `goto <base> next` or `goto <base> <n>`
+  advances through the numbered sequence.
+- [ ] Handle gaps/missing numbers gracefully (skip to next existing waypoint or warn).
+- [ ] Test: `goto random Waypoint` replacement that cycles `waypoint1 → waypoint2 → waypoint3 → back to 1`.
+- [ ] Note any vocabulary gap in DESIGN.md §9.
 
 ---
 
@@ -520,6 +540,41 @@ Goal: per-actor state machines so one `.events` file can encode multiple behavio
 
 ---
 
+## Task 12 — Character Physics Movement `[ ]`
+
+Goal: replace transform-based Position assignment with physics-native movement for character meshes using Character Controller / RigidBody + LinearVelocity, so collisions, slopes, and ground detection work properly. Depends on Tasks 4 C (physics-native movement) and 5 (Armature Character).
+
+### Part A — Character Controller component
+- [ ] Add `CharacterController` component (Flax) or kinematic `RigidBody` with `LinearVelocity` drive to character mesh actors.
+- [ ] Configure capsule collider, step offset, slope limit, ground check distance.
+- [ ] Per-actor flag (e.g. `EventSheet` field `Use Physics Movement`) to opt in instead of transform `Position` writes.
+
+### Part B — Physics-native move/goto
+- [ ] `FlaxActions`: when physics movement is enabled and actor has `CharacterController` / `RigidBody`, drive movement via `LinearVelocity` (or `AddMovement` for kinematic) instead of `Position +=`.
+- [ ] `move forward speed <n>` → sets velocity in facing direction.
+- [ ] `goto <thing>` → pathfinds via NavMesh, then moves along path using velocity with forward-facing rotation (Part 7 E).
+- [ ] `face <thing>` → still uses `LookAt` (rotation), but movement respects physics body.
+
+### Part C — Ground / slope / collision handling
+- [ ] Ground detection: only apply horizontal velocity when grounded; vertical velocity from gravity.
+- [ ] Slope limit: respect `CharacterController` / `RigidBody` max slope.
+- [ ] Step up: small obstacles handled by capsule collider step offset.
+- [ ] Wall collisions: physics body stops/slides instead of tunneling through.
+
+### Part D — Integration with existing words
+- [ ] `move forward/back/left/right` → velocity in local axes.
+- [ ] `turn left/right degrees` → rotation (instant or smooth).
+- [ ] `look at <thing>` / `face <thing>` → rotation only.
+- [ ] `push <thing>` → `AddImpulse` / `AddForce` (kinematic vs dynamic decision from Task 4 C).
+- [ ] `teleport` → warp position (bypass physics, for spawns/checkpoints).
+
+### Part E — Tests & editor verify
+- [ ] Unit test: physics movement flag toggles code path in `FlaxActions.Step`.
+- [ ] Editor: character mesh with CharacterController walks with `move forward`, rotates with `turn`, patrols with `goto` following waypoints, no wall tunneling.
+- [ ] Document final body settings (CharacterController vs kinematic RigidBody, capsule size, gravity, step offset) in DESIGN.md §5/§9.
+
+---
+
 ## Session Log (append one line after each session)
 
 | Date | Session did | Tasks/Parts touched |
@@ -550,6 +605,7 @@ Goal: per-actor state machines so one `.events` file can encode multiple behavio
 | 2026-10-27 | Editor collider test: PhysX reports `kinematic bodies with CCD enabled are not supported! CCD will be ignored` on the Bullet. Corrected the setup to **UseCCD = false**; CCD is a dynamic-body feature and the transform-driven kinematic bullet doesn't need it (speed/contact offset/`Both` cover misses). | Task 4 B editor setup correction |
 | 2026-10-27 | Editor hurt test: the one-time `Invulnerable was read before it was ever set` warning came from `unless my Invulnerable is true` on the first touch. `Player.events` now initializes it on `when me appears`. Reminder: if touch makes the game appear frozen, `EventsManager` must be on a permanent scene-root actor (a manager parented to the hidden Player stops ticking). | Task 4 B editor note |
 | 2026-10-27 | Scoped Task 4 Part C: physics-native movement via `RigidBody` velocity/forces (opt-in; transform movement stays default), dynamic bullet/CCD experiment, and a decision on whether `push` becomes an impulse/force. | Task 4 C (planned) |
+| 2026-10-31 | Task 7 Part B — sight words: `when me sees <thing> by <dist>` (enter edge) and `when me stops seeing <thing> [by <dist>]` (falling edge, reuses last range), distance + line-of-sight polled triggers in `EventRuntime.PollSight`, `IEventWorld.HasLineOfSight` + `FlaxWorld` raycast (`Physics.LineCastAll`), 19 new unit tests (228/228 green), module build 0/0 | Task 7 Part B |
 | 2026-10-28 | HUD + sound fix (`TASK_FIX_HUD_SOUND.md`): `UIControl`, `AudioSource` and `AnimatedModel` are actors, so every `GetScript<T>()` returned null. HUD lookups now use `as UIControl` + `.Control as Label` (plus a parent-owns-one-label fallback and warnings that list the real labels); anim words use `FindActor<AnimatedModel>()`; the anim-end subscription subscribes the model actor itself (no double-subscribe). `play sound` resolves clips through the asset registry (`GetAllAssetsByType` + `GetAssetInfo` + `Load<AudioClip>(Guid)`) keyed by `Runtime/AssetNames.cs` (folder/`.flax`/extension/case-insensitive), so `"hurt.wav"` reaches `sounds/hurt.wav.flax` with no path probing and no "Missing file" spam; sources spawn at the actor and the miss warning lists the imported clips. `stop sound` stops the actor source plus every tracked `play sound` source. `HealthLabel` removed (duplicated `LivesLabel`) from `Game.events` and `Scene.scene`. DESIGN.md documents the `GameText` convention, sound names and the actors-not-scripts rule. **198/198 tests green**, module build 0 warnings. Editor acceptance pending (HUD visible, hurt sound audible). | Task 4/5 follow-up: HUD + sound code complete, editor verify pending |
 | 2026-10-28 | Task 6 Part A (scene words): wired `load scene "<name>"` to actually load a scene by name in `FlaxActions.LoadScene` (was warn-only); made `when game starts` fire once per session while `when scene starts` refires on every load via a session flag; `when scene starts` classified to `TriggerKind.SceneStart` and covered by unit test; `quit game` already wired (`Engine.RequestExit`). Tests 200/200 green. Editor verify (two scenes, one loads the other, quit closes the game) pending. | Task 6 A code complete |
 | 2026-10-28 | Flax module build fix: `AssetInfo` has no `Name` property in this Flax version; both scene-name lookups in `LoadSceneByName`/`SceneNames` now read `System.IO.Path.GetFileNameWithoutExtension(info.Path)` (same `info.Path` property `SoundIndex()` already uses). Pure test suite stays 200/200 green; module build recompiles clean once the editor rebuilds. | Task 6 A build fix |
@@ -560,3 +616,4 @@ Goal: per-actor state machines so one `.events` file can encode multiple behavio
 | 2026-10-30 | Task 7 Part A verified in editor: cube walks to random Waypoint after baking NavMesh + placing Waypoint actors. Added `goto <thing> speed <n>` qualifier (default 5 units/sec) so patrol speed is configurable; 209/209 tests green; Flax module build 0 warnings / 0 errors. All Task 7 Part A boxes checked. | Task 7 A complete |
 | 2026-10-30 | Task 7 Part D — Arrival bug fix: `PollArrival` iterates all actors matching `<thing>` name (not just `FindActor` which returns one), so `when me arrives at Waypoint` fires reliably even when `goto random Waypoint` picks a different waypoint each lap. Debug logging added to `goto` (path found), `Step` (waypoint reached/final arrival), and `PollArrival` (distance to candidates, arrival fired). 209/209 green; module build 0/0. Editor verify pending. | Task 7 D debug |
 | 2026-10-30 | Task 7 Part A verified in editor: cube walks to random Waypoint after baking NavMesh + placing Waypoint actors. Added `goto <thing> speed <n>` qualifier (default 5 units/sec) so patrol speed is configurable; 209/209 tests green; Flax module build 0/0. All Task 7 Part A boxes checked. | Task 7 A complete |
+| 2026-10-31 | Task 7 Part B/C code: added `near` polled trigger (`TriggerKind.Near`, `WordRegistry`, `Triggers.cs` classification, `EventRuntime.PollNear` distance enter-edge); `IEventWorld.HasLineOfSight` + `FlaxWorld` raycast already wired for sight. Wrote `Enemy.events` exactly per DESIGN.md §5 (patrol→chase→attack via `my mode`, `sees`/`stops seeing`/`arrives`/`near` triggers); paired `Player.events` with `when message "hurt" arrives` hurt/invulnerability handler. 236/236 tests green; Flax module build 0/0. Part B boxes checked; Part C write/pair boxes checked; full-loop verify pending user's editor run. | Task 7 B+C code complete |
