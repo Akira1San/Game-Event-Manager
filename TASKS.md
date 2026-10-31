@@ -300,22 +300,29 @@ Goal: let actors move through their `RigidBody` velocity/forces instead of assig
 on Part B colliders. Keep the current transform movement as the default; this is an explicit
 opt-in so the existing example and `Distance` mode stay unchanged.
 
-- [ ] Decide the opt-in syntax: a qualifier on the existing move words (for example
-  `move forward speed 80 with physics`) or a per-actor `EventSheet` flag. Prefer the
-  smallest addition that reads naturally; record the choice in DESIGN §5/§9.
-- [ ] `FlaxActions`: when physics movement is requested and the actor has a `RigidBody`,
-  drive it with `LinearVelocity` (dynamic) or the kinematic target/`AddMovement`
-  (kinematic) instead of assigning `Position`. Keep the transform path for actors without
-  a physics body.
+- [x] Decided the opt-in: a per-actor **`EventSheet` flag `Use Physics Movement`** (a body
+  property, so one checkbox covers every `move`/`goto`/`push`; no new word). Recorded in
+  DESIGN §5/§9.
+- [x] `FlaxActions`: opted-in actors with a `RigidBody` are driven by `LinearVelocity`
+  (dynamic) or a swept `Actor.AddMovement` (kinematic) instead of assigning `Position`;
+  no body or flag off keeps the transform path. `stop moving` brakes a dynamic body, `goto`
+  brakes on arrival. Pure rules in `Runtime/PhysicsMovement.cs`; the flag rides
+  `SheetInstance.UsePhysicsMovement` → `EventContext.Sheet` (hot-reload safe).
 - [ ] Test a dynamic bullet body (`EnableGravity = false`, `UseCCD = true`) driven by
   velocity: trigger collider, no tunneling at speed 80, and `destroy me` on hit still works.
-- [ ] Evaluate velocity-based Player/Enemy movement: decide whether they stay kinematic or
-  become dynamic, and confirm hurt → `hide me` → `wait 1 second` → `show me` still resumes.
-- [ ] Keep `push` transform-based until this part decides whether it should become a real
-  impulse/force (`AddImpulse` / `AddForce`), and add the matching word/tests if so.
-- [ ] Tests: pure-runtime coverage for the new word/flag; editor acceptance in `Colliders`
-  mode with no PhysX console errors. Document the final body settings (kinematic vs
-  dynamic, CCD, gravity) in DESIGN.
+  **Editor run pending** — settings documented in DESIGN §5. Setup: `Bullet` = a **RigidBody**
+  actor (dynamic, gravity off, CCD on) named `Bullet`, with the mesh + trigger `SphereCollider`
+  as its children, `EventSheet` on the body with `Bullet.events` and *Use Physics Movement* on.
+- [x] Decided Player/Enemy movement: **stay kinematic** (exact arcade speed, not shoved by
+  bullets; `hide me` → `wait` → `show me` resumes because the body follows `IsActive`).
+  Editor confirm of the hurt cycle still pending.
+- [x] Decided `push`: a real `AddForce(..., ForceMode.Impulse)` on a **dynamic** body;
+  kinematic/no-body keeps the old transform nudge (forces do nothing on kinematic bodies).
+- [x] Tests: 13 pure-runtime checks (mode selection, dynamic velocity keeps gravity, brake,
+  push mode, flag default + hot-reload survival, `context.Sheet` reaches actions) —
+  **249/249 green**; module build 0/0. Final body settings documented in DESIGN §5.
+- [ ] Editor acceptance in `Colliders` mode with no PhysX console errors (bullet tunneling +
+  Player/Enemy hurt cycle) — **pending the user's editor run**.
 
 ---
 
@@ -617,3 +624,4 @@ Goal: replace transform-based Position assignment with physics-native movement f
 | 2026-10-30 | Task 7 Part D — Arrival bug fix: `PollArrival` iterates all actors matching `<thing>` name (not just `FindActor` which returns one), so `when me arrives at Waypoint` fires reliably even when `goto random Waypoint` picks a different waypoint each lap. Debug logging added to `goto` (path found), `Step` (waypoint reached/final arrival), and `PollArrival` (distance to candidates, arrival fired). 209/209 green; module build 0/0. Editor verify pending. | Task 7 D debug |
 | 2026-10-30 | Task 7 Part A verified in editor: cube walks to random Waypoint after baking NavMesh + placing Waypoint actors. Added `goto <thing> speed <n>` qualifier (default 5 units/sec) so patrol speed is configurable; 209/209 tests green; Flax module build 0/0. All Task 7 Part A boxes checked. | Task 7 A complete |
 | 2026-10-31 | Task 7 Part B/C code: added `near` polled trigger (`TriggerKind.Near`, `WordRegistry`, `Triggers.cs` classification, `EventRuntime.PollNear` distance enter-edge); `IEventWorld.HasLineOfSight` + `FlaxWorld` raycast already wired for sight. Wrote `Enemy.events` exactly per DESIGN.md §5 (patrol→chase→attack via `my mode`, `sees`/`stops seeing`/`arrives`/`near` triggers); paired `Player.events` with `when message "hurt" arrives` hurt/invulnerability handler. 236/236 tests green; Flax module build 0/0. Part B boxes checked; Part C write/pair boxes checked; full-loop verify pending user's editor run. | Task 7 B+C code complete |
+| 2026-10-31 | Task 4 Part C (physics-native movement, opt-in): chose a per-actor `EventSheet` flag **Use Physics Movement** (no new word; body property covers move/goto/push). New pure `Runtime/PhysicsMovement.cs` (mode selection, dynamic velocity keeps gravity, brake, push mode); `SheetInstance.UsePhysicsMovement` + `EventContext.Sheet` carry the flag (hot-reload safe); `FlaxActions.MoveSubject` drives `LinearVelocity` (dynamic) / swept `AddMovement` (kinematic) / `Position` (default), `stop moving` brakes, `goto` brakes on arrival, `push` becomes a real impulse on dynamic bodies only. DESIGN §5 gets a "Physics-native movement" subsection + body-settings table, §9 records the decision (Bullet dynamic/CCD, Player+Enemy kinematic). 13 new pure checks → **249/249 green**; module build 0/0. Editor acceptance (bullet tunneling, hurt cycle in Colliders mode) still pending. | Task 4 C code complete |

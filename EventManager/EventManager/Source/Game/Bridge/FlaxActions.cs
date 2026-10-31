@@ -15,6 +15,8 @@ namespace Game
         public Vector3[] Path;
         /// <summary>Index of the waypoint the subject is walking toward.</summary>
         public int PathIndex;
+        /// <summary>Move through the subject's RigidBody (the sheet's Use Physics Movement opt-in).</summary>
+        public bool UsePhysics;
     }
 
     public static class FlaxActions
@@ -149,7 +151,7 @@ namespace Game
                 {
                     if (move.Path == null || move.PathIndex >= move.Path.Length)
                     {
-                        move.Subject.Position = move.Target.Position;
+                        ArriveAt(move);
                         Moves.RemoveAt(i);
                         continue;
                     }
@@ -159,11 +161,13 @@ namespace Game
                     float step = (float)move.Speed * DeltaTime;
                     if (length < 0.001f || length <= step)
                     {
-                        move.Subject.Position = waypoint;
+                        // Physics moves are swept by the body; never teleport it onto a waypoint.
+                        if (!move.UsePhysics)
+                            move.Subject.Position = waypoint;
                         move.PathIndex++;
                         if (move.PathIndex >= move.Path.Length)
                         {
-                            move.Subject.Position = move.Target.Position;
+                            ArriveAt(move);
                             Debug.LogWarning($"[NavBridge] {move.Subject.Name} arrived at {move.Target.Name} (final waypoint reached)");
                             Moves.RemoveAt(i);
                         }
@@ -171,7 +175,7 @@ namespace Game
                             Debug.LogWarning($"[NavBridge] {move.Subject.Name} reached waypoint {move.PathIndex}/{move.Path.Length}");
                     }
                     else
-                        move.Subject.Position = move.Subject.Position + delta / length * step;
+                        MoveSubject(move.Subject, delta / length, move.Speed, move.UsePhysics);
                 }
             }
         }
@@ -188,6 +192,7 @@ namespace Game
                         WarnOnce("\u201Cmove me\u201D needs to run on an actor's sheet — the global Game sheet has no body to move.");
                         return;
                     }
+                    bool physics = context.Sheet != null && context.Sheet.UsePhysicsMovement;
                     if (!string.IsNullOrEmpty(spec.Thing))
                     {
                         var target = ResolveThing(context, spec.Thing) as Actor;
@@ -196,11 +201,11 @@ namespace Game
                             Vector3 delta = target.Position - me.Position;
                             float length = delta.Length;
                             if (length > 0.001f)
-                                me.Position = me.Position + delta / length * (float)ResolveNumber(context, spec) * DeltaTime;
+                                MoveSubject(me, delta / length, ResolveNumber(context, spec), physics);
                         }
                         break;
                     }
-                    me.Position = me.Position + DirectionOf(me, spec.Dir) * (float)ResolveNumber(context, spec) * DeltaTime;
+                    MoveSubject(me, DirectionOf(me, spec.Dir), ResolveNumber(context, spec), physics);
                     break;
                 }
                 case ActionVerb.StopMoving:
@@ -209,6 +214,9 @@ namespace Game
                     for (int i = Moves.Count - 1; i >= 0; i--)
                         if (Moves[i].Subject == mover && !Moves[i].FaceTarget)
                             Moves.RemoveAt(i);
+                    // A dynamic body keeps its velocity until something brakes it.
+                    if (mover != null && context.Sheet != null && context.Sheet.UsePhysicsMovement)
+                        BrakeBody(mover);
                     break;
                 }
                 case ActionVerb.Turn:
@@ -249,7 +257,18 @@ namespace Game
                 {
                     var target = ResolveThing(context, spec.Thing) as Actor;
                     if (target != null)
-                        target.Position = target.Position + DirectionOf(target, spec.Dir) * (float)ResolveNumber(context, spec) * DeltaTime;
+                    {
+                        Vector3 direction = DirectionOf(target, spec.Dir);
+                        double strength = ResolveNumber(context, spec);
+                        RigidBody body = FindBody(target);
+                        if (PhysicsMovement.PushModeFor(body != null, body != null && body.IsKinematic) == PhysicsPushMode.Impulse)
+                        {
+                            body.WakeUp();
+                            body.AddForce(direction * (float)strength, ForceMode.Impulse);
+                        }
+                        else
+                            target.Position = target.Position + direction * (float)strength * DeltaTime;
+                    }
                     break;
                 }
                 case ActionVerb.Goto:
@@ -272,7 +291,16 @@ namespace Game
                         break;
                     }
                     Debug.LogWarning($"[NavBridge] {me.Name} goto {target.Name}: path found, {path.Length} waypoints, speed {spec.Number}");
-                    Remember(new OngoingMove { Subject = me, Target = target, Goto = true, Path = path, PathIndex = 0, Speed = spec.Number });
+                    Remember(new OngoingMove
+                    {
+                        Subject = me,
+                        Target = target,
+                        Goto = true,
+                        Path = path,
+                        PathIndex = 0,
+                        Speed = spec.Number,
+                        UsePhysics = context.Sheet != null && context.Sheet.UsePhysicsMovement,
+                    });
                     break;
                 }
                 case ActionVerb.Destroy:
@@ -388,6 +416,81 @@ namespace Game
                 }
             }
             Moves.Add(move);
+        }
+
+        /// <summary>
+        /// Moves an actor for one tick. Transform by default; with the sheet's physics opt-in and
+        /// a RigidBody present, drives the body instead (velocity when dynamic, a swept move when
+        /// kinematic) so collision response and CCD apply.
+        /// </summary>
+        private static void MoveSubject(Actor subject, Vector3 direction, double speed, bool physics)
+        {
+            RigidBody body = physics ? FindBody(subject) : null;
+            PhysicsMoveMode mode = PhysicsMovement.ModeFor(physics, body != null, body != null && body.IsKinematic);
+            float step = (float)speed * DeltaTime;
+            switch (mode)
+            {
+                case PhysicsMoveMode.Dynamic:
+                    if (!IsAncestorOrSelf(body, subject))
+                        WarnOnce($"\"{subject.Name}\" uses physics movement, but its RigidBody is a child — the mesh won't follow. Put the EventSheet on the RigidBody actor with the mesh under it.");
+                    PhysicsMovement.DynamicVelocity(
+                        direction.X, direction.Y, direction.Z, speed, body.LinearVelocity.Y,
+                        out double vx, out double vy, out double vz);
+                    body.LinearVelocity = new Vector3((float)vx, (float)vy, (float)vz);
+                    break;
+                case PhysicsMoveMode.Kinematic:
+                    // A swept move: PhysX carries the body along and reports trigger/collision
+                    // contacts on the way instead of teleporting through them.
+                    if (IsAncestorOrSelf(body, subject))
+                        body.AddMovement(direction * step);
+                    else
+                        subject.AddMovement(direction * step);
+                    break;
+                default:
+                    subject.Position = subject.Position + direction * step;
+                    break;
+            }
+        }
+
+        /// <summary>Stop a physics-driven actor: brake a dynamic body's horizontal velocity
+        /// (vertical speed is kept, so a fall keeps falling).</summary>
+        private static void BrakeBody(Actor subject)
+        {
+            RigidBody body = FindBody(subject);
+            if (body == null || body.IsKinematic)
+                return;
+            PhysicsMovement.BrakeVelocity(body.LinearVelocity.Y, out double vx, out double vy, out double vz);
+            body.LinearVelocity = new Vector3((float)vx, (float)vy, (float)vz);
+        }
+
+        private static void ArriveAt(OngoingMove move)
+        {
+            if (move.UsePhysics)
+                BrakeBody(move.Subject);
+            else
+                move.Subject.Position = move.Target.Position;
+        }
+
+        /// <summary>
+        /// The RigidBody that drives this actor: the actor itself (the recommended setup — the
+        /// EventSheet on the body, mesh and colliders under it), a parent body, or a child body.
+        /// </summary>
+        private static RigidBody FindBody(Actor actor)
+        {
+            if (actor == null)
+                return null;
+            for (Actor node = actor; node != null && !(node is Scene); node = node.Parent)
+                if (node is RigidBody body)
+                    return body;
+            return actor.FindActor<RigidBody>();
+        }
+
+        private static bool IsAncestorOrSelf(Actor candidate, Actor node)
+        {
+            for (Actor parent = node; parent != null && !(parent is Scene); parent = parent.Parent)
+                if (ReferenceEquals(parent, candidate))
+                    return true;
+            return false;
         }
 
         private static Vector3 DirectionOf(Actor actor, string dir)

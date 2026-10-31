@@ -17,6 +17,15 @@ namespace Game
         [Tooltip(".events file name (with or without the extension). Blank = this actor's name.")]
         public string EventFile = "";
 
+        /// <summary>
+        /// Opt-in physics-native movement: drive this actor's RigidBody (LinearVelocity when
+        /// dynamic, a swept move when kinematic) instead of assigning Position every tick.
+        /// Put the EventSheet on the RigidBody actor itself (mesh and colliders under it) so the
+        /// body's motion carries the visuals. Off by default — transform movement stays normal.
+        /// </summary>
+        [Tooltip("Move through this actor's RigidBody instead of setting Position. Needs a RigidBody; put the EventSheet on the RigidBody with the mesh under it. Off = transform movement.")]
+        public bool UsePhysicsMovement = false;
+
         /// <summary>Tracked AnimatedModel animation-end subscriptions, so they can be unsubscribed.</summary>
         private readonly List<(FlaxEngine.AnimatedModel model, Action unsubscribe)> _animEndSubscriptions = new List<(FlaxEngine.AnimatedModel, Action)>();
 

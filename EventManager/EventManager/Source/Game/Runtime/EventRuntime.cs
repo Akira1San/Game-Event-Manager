@@ -19,6 +19,7 @@ namespace Game
         public object Me;
         public object Other;
         public EventRuntime Runtime;
+        public SheetInstance Sheet;
         public bool Stopped;
 
         public ValueBox ReadGlobal(string name)
@@ -65,6 +66,9 @@ namespace Game
         public string ActorName = "";
         /// <summary>Which .events file drives this sheet (e.g. "Enemy"); several actors can share one.</summary>
         public string SourceName = "";
+        /// <summary>Opt-in (EventSheet "Use Physics Movement"): move through the actor's
+        /// RigidBody instead of assigning Position. Off = the normal transform path.</summary>
+        public bool UsePhysicsMovement;
         public ProgramFile Program = new ProgramFile();
         public List<TriggerDescriptor> Triggers = new List<TriggerDescriptor>();
         public Queue<PushSignal> PushQueue = new Queue<PushSignal>();
@@ -416,6 +420,7 @@ namespace Game
                 Me = sheet.Actor,
                 Other = other,
                 Runtime = this,
+                Sheet = sheet,
             };
             sheet.FiredThisTick[eventIndex] = true;
             RunBody(sheet, ev, context, 0, true);

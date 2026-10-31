@@ -237,8 +237,13 @@ namespace Game
             Actor actor = component == null ? null : component.Actor;
             if (actor == null)
                 return;
-            if (Runtime.FindSheetFor(actor) != null)
+            SheetInstance existing = Runtime.FindSheetFor(actor);
+            if (existing != null)
+            {
+                // Keep the opt-in in sync when a component re-registers (clone, scene wake).
+                existing.UsePhysicsMovement = component.UsePhysicsMovement;
                 return;
+            }
             string source = component.SourceName();
             EventFileResult program = ProgramNamed(source);
             if (program == null)
@@ -252,7 +257,8 @@ namespace Game
                 return;
             }
             _missingShown.Remove(source);
-            Runtime.AddSheet(actor, program.File, source);
+            SheetInstance sheet = Runtime.AddSheet(actor, program.File, source);
+            sheet.UsePhysicsMovement = component.UsePhysicsMovement;
         }
 
         /// <summary>Name-based fallback: attach <paramref name="source"/>.events to one actor by

@@ -1226,6 +1226,58 @@ var oddMove = ActionWords.Parse(LooseWords("move", "sideways"), GrabHint);
 Check(oddMove.Verb == ActionVerb.Unknown && actionHint.Contains("\u201Cmove\u201D"),
     "a bent `move` line explains the shape (move looks like this)");
 
+// ---- Task 4 Part C: physics-native movement (opt-in, pure decisions) ----
+
+Check(PhysicsMovement.ModeFor(false, true, false) == PhysicsMoveMode.Transform,
+    "physics movement stays off by default even when the actor has a RigidBody");
+Check(PhysicsMovement.ModeFor(true, false, false) == PhysicsMoveMode.Transform,
+    "opting in without a RigidBody keeps the transform path");
+Check(PhysicsMovement.ModeFor(true, true, false) == PhysicsMoveMode.Dynamic,
+    "an opted-in dynamic body is driven by LinearVelocity");
+Check(PhysicsMovement.ModeFor(true, true, true) == PhysicsMoveMode.Kinematic,
+    "an opted-in kinematic body is driven by a swept AddMovement");
+
+PhysicsMovement.DynamicVelocity(0, 0, -1, 80, 0, out double pvx, out double pvy, out double pvz);
+Check(Math.Abs(pvx) < 1e-9 && Math.Abs(pvy) < 1e-9 && Math.Abs(pvz + 80) < 1e-9,
+    "a forward move at speed 80 becomes velocity (0, 0, -80)");
+
+PhysicsMovement.DynamicVelocity(1, 0, 0, 5, -9.8, out pvx, out pvy, out pvz);
+Check(Math.Abs(pvx - 5) < 1e-9 && Math.Abs(pvy + 9.8) < 1e-9 && Math.Abs(pvz) < 1e-9,
+    "a horizontal move keeps the body's vertical speed (gravity still falls)");
+
+PhysicsMovement.DynamicVelocity(0, 1, 0, 5, -9.8, out pvx, out pvy, out pvz);
+Check(Math.Abs(pvx) < 1e-9 && Math.Abs(pvy - 5) < 1e-9 && Math.Abs(pvz) < 1e-9,
+    "a vertical move overrides the current vertical speed");
+
+PhysicsMovement.BrakeVelocity(4, out pvx, out pvy, out pvz);
+Check(Math.Abs(pvx) < 1e-9 && Math.Abs(pvy - 4) < 1e-9 && Math.Abs(pvz) < 1e-9,
+    "`stop moving` brakes horizontal velocity but keeps a fall");
+
+Check(PhysicsMovement.PushModeFor(false, false) == PhysicsPushMode.Transform &&
+      PhysicsMovement.PushModeFor(true, true) == PhysicsPushMode.Transform,
+    "`push` stays a transform nudge with no body or on a kinematic one");
+Check(PhysicsMovement.PushModeFor(true, false) == PhysicsPushMode.Impulse,
+    "`push` becomes a real impulse on a dynamic body");
+
+var physicsEngine = FreshEngine(new FakeWorld());
+var physicsSheet = physicsEngine.AddSheet(new FakeActor("Mover"),
+    parser.Parse("when me appears\n  move forward speed 5"));
+Check(!physicsSheet.UsePhysicsMovement, "a sheet starts with physics movement off (transform default)");
+physicsSheet.UsePhysicsMovement = true;
+physicsEngine.SwapSheetProgram(physicsSheet, parser.Parse("when me appears\n  move forward speed 9"));
+Check(physicsSheet.UsePhysicsMovement, "the physics opt-in survives a hot-reload swap");
+
+var flagWorld = new FakeWorld();
+var flagEngine = FreshEngine(flagWorld);
+var flagSheet = flagEngine.AddSheet(new FakeActor("Flagged"),
+    parser.Parse("when me appears\n  move forward speed 5"));
+flagSheet.UsePhysicsMovement = true;
+SheetInstance seenSheet = null;
+flagEngine.OnRawAction = (context, words) => seenSheet = context.Sheet;
+flagEngine.Tick(0);
+Check(ReferenceEquals(seenSheet, flagSheet),
+    "actions can read their sheet's physics flag (context.Sheet is set while ticking)");
+
 string tempBase = Path.Combine(Path.GetTempPath(), "evtest-" + Guid.NewGuid().ToString("N"));
 string gameDir = Path.Combine(tempBase, "Source", "Game", "GameFiles");
 Directory.CreateDirectory(gameDir);

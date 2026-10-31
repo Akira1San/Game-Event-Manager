@@ -295,7 +295,7 @@ like GDevelop, so the editor teaches the vocabulary passively.
 
 | Word | Example | Notes |
 |---|---|---|
-| `move <dir> speed <n>` | `move forward speed 5` | dirs: forward/back/left/right/up/down |
+| `move <dir> speed <n>` | `move forward speed 5` | dirs: forward/back/left/right/up/down; physics opt-in per actor (below) |
 | `move toward <thing> speed <n>` | `move toward Player speed 3` | |
 | `turn <dir> degrees <n>` | `turn left degrees 90` | |
 | `goto <thing>` | `goto Player` | navigation: walks there using the baked NavMesh (walls avoided for free); pairs with `arrives at` |
@@ -305,7 +305,7 @@ like GDevelop, so the editor teaches the vocabulary passively.
 | `look at <thing>` | `look at Player` | one-shot snap: turn toward the target, once |
 | `face <thing>` | `face Player` | continuous: keeps turning toward the target while it moves (BGE Track To) â€” the turret/chaser word |
 | `teleport me/other to <thing>` | `teleport me to SpawnPoint` | |
-| `push <target> direction <dir> strength <n>` | `push other up strength 10` | physics impulse |
+| `push <target> direction <dir> strength <n>` | `push other up strength 10` | impulse on a dynamic body; transform nudge otherwise |
 | `make <target> unmovable` | `make me solid` | physics toggle |
 | `destroy <me/other/thing>` | `destroy me` | |
 | `spawn <thing> at <thing>` | `spawn Coin at SpawnPoint` | thing must be a prefab or scene-named object |
@@ -349,6 +349,36 @@ move forward speed random 2 to 4
 
 Runtime knobs are okay as a single **speed/value** word â€” no math expressions, no nesting math.
 `Score + 1` is *only* legal inside `set Score to Score + 1` (one-op form: `+ - * /`).
+
+### Physics-native movement (opt-in)
+
+`move` and `goto` set `Position` every tick by default — no colliders required, and the
+shooter example stays exactly as written. To let an actor move through its **RigidBody**
+instead (collision response, CCD, physics interactions), tick **Use Physics Movement** on its
+`EventSheet`:
+
+- **The opt-in is per actor, not per line.** Movement is a property of the body, so one
+  checkbox covers every `move`, `goto`, `stop moving` and `push` that actor runs. No new word.
+- **Setup contract:** the actor carrying the `EventSheet` should be the `RigidBody` itself,
+  with the mesh and colliders as its children — the body's motion then carries the visuals.
+  If the body is a child of the named actor, the runtime warns once (the mesh would stay behind).
+- **Dynamic bodies** are driven by `LinearVelocity`: move direction × speed, keeping the
+  current vertical speed when the move has no vertical part (gravity still works). `stop
+  moving` brakes the horizontal velocity; `goto` brakes on arrival.
+- **Kinematic bodies** move with a swept `AddMovement` step instead of a teleport, so PhysX
+  reports trigger/collision contacts along the way.
+- **No body, or the flag off** = the old transform path. Existing games are untouched.
+
+`push` is a real impulse (`AddForce` with `ForceMode.Impulse`) on a **dynamic** body — that is
+what the word always meant. Kinematic bodies ignore forces, so they keep the old one-tick
+transform nudge; with the flag off every push stays a transform nudge.
+
+**Body settings that ship with the shooter:**
+
+| Actor | Body | Settings | Why |
+|---|---|---|---|
+| `Bullet` | dynamic | `EnableGravity = false`, `UseCCD = true`, trigger `SphereCollider` | at speed 80 a thin trigger must not tunnel; CCD is a dynamic-body feature |
+| `Player` / `Enemy` | kinematic | `EnableGravity = false` (or the transform path) | exact arcade speed, not shoved by bullets; `hide me` / `wait` / `show me` resumes because the body follows `IsActive` |
 
 ### Armature characters (the BGE way)
 
@@ -814,8 +844,14 @@ window around a broken runtime.
 ## 9. Open Questions (log, not blockers)
 
 - **`or`-chains:** skip in v0.1 (use two `when` blocks) â€” revisit with real usage data.
-- **Physics vs. kinematic movement:** does `move forward` use rigidbody physics or transform move?
-  Proposal: transform move by default; `push` is the physics word. Confirm by feel in M2.
+- **Physics vs. kinematic movement (decided in Task 4 C):** transform move stays the default.
+  Physics-native movement is a per-actor opt-in (`EventSheet` → *Use Physics Movement*):
+  dynamic bodies get `LinearVelocity`, kinematic bodies get swept `AddMovement`, no body/flag
+  off keeps `Position`. The bullet is the dynamic experiment (`EnableGravity = false`,
+  `UseCCD = true`); Player/Enemy stay kinematic so speed is exact and bullets don't shove them.
+  `push` is a real impulse only on dynamic bodies. Still to feel in the editor: whether
+  Player/Enemy should ever go dynamic, and whether `goto` should rotate toward its next
+  waypoint (Task 7 E).
 - **Persistence:** do global variables survive scene *reload* (not just scene *change*)? Proposal for now: yes, and a `wipe game variables` action to explicitly reset.
 - **`me touches` without physics:** supported now via `Contact Mode = Distance` (bounding-sphere
   contact); `overlaps` remains distance-based in every mode. The two words still overlap
