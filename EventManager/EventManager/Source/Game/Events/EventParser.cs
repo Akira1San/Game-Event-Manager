@@ -221,6 +221,25 @@ namespace Game
                 line.IsCondition = true;
                 return;
             }
+            // Action verbs take priority over condition marks, so `print W is held`
+            // isn't misclassified as a condition just because `is` is a condition mark.
+            if (Array.IndexOf(WordRegistry.ActionWords, first.Text) >= 0)
+            {
+                if (first.Text == "set")
+                {
+                    line.Statement = ParseSet(line);
+                    return;
+                }
+                if (first.Text == "add")
+                {
+                    line.Statement = ParseAdd(line);
+                    return;
+                }
+                var action = new RawActionNode { Line = line.Line };
+                action.Words.AddRange(line.Words);
+                line.Statement = action;
+                return;
+            }
             bool hasConditionMark = false;
             foreach (var w in line.Words)
             {
@@ -233,23 +252,6 @@ namespace Game
             if (hasConditionMark)
             {
                 line.IsCondition = true;
-                return;
-            }
-            if (first.Text == "set")
-            {
-                line.Statement = ParseSet(line);
-                return;
-            }
-            if (first.Text == "add")
-            {
-                line.Statement = ParseAdd(line);
-                return;
-            }
-            if (Array.IndexOf(WordRegistry.ActionWords, first.Text) >= 0)
-            {
-                var action = new RawActionNode { Line = line.Line };
-                action.Words.AddRange(line.Words);
-                line.Statement = action;
                 return;
             }
             throw UnknownWord(first);

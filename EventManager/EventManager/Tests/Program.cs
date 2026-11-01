@@ -1217,6 +1217,21 @@ var quitSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   quit game"), null);
 Check(quitSpec.Verb == ActionVerb.QuitGame, "`quit game` parses");
 
+var printSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  print ""W is held"""), null);
+Check(printSpec.Verb == ActionVerb.Print && printSpec.Thing == "W is held",
+    "`print \"...\"` parses with quoted string");
+
+var printPlain = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  print W is held"), null);
+Check(printPlain.Verb == ActionVerb.Print && printPlain.Thing == "W is held",
+    "`print W is held` parses plain text (joins remaining words)");
+
+var debugSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  debug Score changed"), null);
+Check(debugSpec.Verb == ActionVerb.Print && debugSpec.Thing == "Score changed",
+    "`debug` is an alias for `print`");
+
 var bananaAction = ActionWords.Parse(LooseWords("banana", "time"), GrabHint);
 Check(bananaAction.Verb == ActionVerb.Unknown && actionHint.Contains("banana"),
     "an odd action line gets the unknown-word explanation");

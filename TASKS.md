@@ -445,6 +445,14 @@ and have `goto` follow them in numerical order so patrols can be written generic
 - [ ] Test: `goto random Waypoint` replacement that cycles `waypoint1 → waypoint2 → waypoint3 → back to 1`.
 - [ ] Note any vocabulary gap in DESIGN.md §9.
 
+### Part G — Navigation variants (no baked NavMesh)
+Goal: compare movement options that don't require a baked NavMesh, so levels without NavMesh baking still get enemy navigation. Depends on Tasks 1–3.
+
+- [ ] Line-of-sight chase: `when me is near Player by <dist>` + `move toward Player` only when `Physics.LineCast` (HasLineOfSight) is clear; fall back to patrol when blocked. Verify enemy chases in open areas and stops/retreats behind walls.
+- [ ] Manual waypoint graph: enemies hop between explicitly connected waypoints (`goto Waypoint1` → `goto Waypoint2` …) via `when me arrives at <thing>`. Verify patrol follows the designed route, not random jumps.
+- [ ] Compare all three (NavMesh `goto`, line-of-sight chase, waypoint graph) in one scene with walls; note which handles dynamic obstacles, which needs the least setup, and which feels best for an enemy brain.
+- [ ] Record the recommendation in DESIGN.md §9 (which nav variant to default to, and when to switch).
+
 ---
 
 ## Task 8 — Items, Bag & Equipment (RPG batch) `[ ]`
@@ -518,6 +526,7 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 - [ ] **Task 11 — Vocabulary plus (M4):** more words: save/load game, camera extras (pans,
   zooms, cutscene framing), spawn-from-prefab-folder, plus a "Word Book" reference page
   generated from code.
+- [x] **Debug output — `print <message>` / `debug <message>`:** new action word to print text to the editor console for debugging event scripts (e.g. `print W is held` to verify trigger firing). Requires: WordRegistry entry, ActionWords parser support, FlaxActions.Debug.LogWarning implementation, unit tests.
 - [ ] **Task 12 — Decisions parked in DESIGN.md §9:** `or`-chains, physics-vs-kinematic
   `move`, camera-relative movement, persistence rules, same-name actor disambiguation,
   animation cross-blend feel, `pause game` / `resume game`, `when path fails`,

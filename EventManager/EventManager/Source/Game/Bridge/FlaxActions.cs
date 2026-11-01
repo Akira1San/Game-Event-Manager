@@ -385,6 +385,9 @@ namespace Game
                     Debug.LogWarning("QuitGame action triggered — calling Engine.Exit");
                     Engine.Exit(0, FatalErrorType.None);
                     break;
+                case ActionVerb.Print:
+                    Debug.LogWarning($"Event print: {spec.Thing}");
+                    break;
             }
         }
 

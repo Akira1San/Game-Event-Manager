@@ -28,6 +28,7 @@ namespace Game
         RestartScene,
         LoadScene,
         QuitGame,
+        Print,
     }
 
     public class ActionSpec
@@ -238,6 +239,22 @@ namespace Game
             }
             if (words.Count >= 2 && words[0].Text == "quit" && words[1].Text == "game")
                 return Finish(spec, ActionVerb.QuitGame, words, 2);
+            if (words.Count >= 2 && (words[0].Text == "print" || words[0].Text == "debug"))
+            {
+                if (words[1].Type == TokenType.Str)
+                {
+                    spec.Thing = words[1].Text;
+                    return Finish(spec, ActionVerb.Print, words, 2);
+                }
+                var parts = new System.Text.StringBuilder();
+                for (int i = 1; i < words.Count; i++)
+                {
+                    if (parts.Length > 0) parts.Append(' ');
+                    parts.Append(words[i].Text);
+                }
+                spec.Thing = parts.ToString();
+                return Finish(spec, ActionVerb.Print, words, words.Count);
+            }
             return Unknown(spec, words, "", warn);
         }
 
