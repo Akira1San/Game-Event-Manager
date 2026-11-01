@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Event Manager — Keyword Reference (v0.1)</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0; padding: 0; background: #0f172a; color: #e2e8f0;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  header {
+    background: #1e293b; border-bottom: 1px solid #334155; padding: 24px 32px;
+    margin-bottom: 24px;
+  }
+  h1 { margin: 0; font-size: 26px; color: #f8fafc; letter-spacing: -0.5px; }
+  h2 { margin: 32px 0 12px; font-size: 20px; color: #cbd5e1; border-bottom: 1px solid #334155; padding-bottom: 6px; }
+  h3 { margin: 20px 0 8px; font-size: 16px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+  p { color: #94a3b8; font-size: 14px; line-height: 1.5; margin: 0 0 16px; }
+  .subtitle { color: #94a3b8; font-size: 14px; margin-top: 6px; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 24px; background: #1e293b; border: 1px solid #334155; border-radius: 8px; overflow: hidden; }
+  th { background: #334155; color: #f8fafc; font-size: 13px; text-align: left; padding: 10px 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+  td { color: #cbd5e1; font-size: 14px; padding: 9px 14px; border-bottom: 1px solid #334155; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover { background: #243447; }
+  .kw { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; color: #818cf8; font-size: 13px; white-space: nowrap; }
+  .example { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; color: #2dd4bf; font-size: 13px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; margin-right: 6px; }
+  .badge-trigger { background: #1e3a5f; color: #bfdbfe; }
+  .badge-condition { background: #3f4a3c; color: #bbf7d0; }
+  .badge-action { background: #4a3728; color: #fcd34d; }
+  .badge-structural { background: #3e3b5b; color: #e9d5ff; }
+  .placeholder { color: #64748b; font-style: italic; }
+  .syntax-box {
+    background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin: 16px 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; color: #cbd5e1;
+  }
+  .syntax-box .kw { color: #818cf8; }
+  .syntax-box .example { color: #2dd4bf; }
+  .counts { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+  .count-card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 16px 20px; min-width: 140px; }
+  .count-card .big { font-size: 28px; font-weight: 700; color: #f8fafc; }
+  .count-card .label { font-size: 12px; color: #94a3b8; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .footnote { color: #64748b; font-size: 13px; margin-top: 32px; border-top: 1px solid #334155; padding-top: 16px; line-height: 1.6; }
+  .how-it-works { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
+  .how-it-works h3 { color: #f8fafc; text-transform: none; font-size: 16px; margin-top: 0; }
+  .how-it-works ol { color: #cbd5e1; padding-left: 20px; line-height: 1.8; }
+  .how-it-works li { margin-bottom: 6px; }
+  .alt { color: #94a3b8; font-size: 12px; }
+  nav {
+    background: #1e293b; border-bottom: 1px solid #334155; padding: 12px 32px;
+  }
+  nav a { color: #818cf8; text-decoration: none; margin-right: 16px; font-size: 13px; }
+  nav a:hover { text-decoration: underline; color: #a5b4fc; }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="#triggers">Triggers</a>
+  <a href="#conditions">Conditions</a>
+  <a href="#actions">Actions</a>
+  <a href="#structural">Structural</a>
+  <a href="#values">Values</a>
+  <a href="#physics">Physics</a>
+  <a href="#structure">How it works</a>
+</nav>
+
+<div class="container">
+  <header>
+    <h1>Event Manager — Keyword Reference</h1>
+    <div class="subtitle">v0.1 · Plain-text game logic · Flax Engine · All implemented words</div>
+  </header>
+
+  <div class="counts">
+    <div class="count-card">
+      <div class="big">24</div><div class="label">Trigger shapes</div>
+    </div>
+    <div class="count-card">
+      <div class="big">8</div><div class="label">Condition marks</div>
+    </div>
+    <div class="count-card">
+      <div class="big">28</div><div class="label">Action verbs</div>
+    </div>
+    <div class="count-card">
+      <div class="big">8</div><div class="label">Structural words</div>
+    </div>
+  </div>
+
+  <section id="triggers">
+    <h2>Triggers — <code>when …</code></h2>
+    <p>Triggers start an event block. A <code>when</code> line gathers its trigger words, then the indented lines underneath are the body that runs when the trigger fires.</p>
+
+    <table>
+      <thead>
+        <tr><th style="width:34%">Keyword shape</th><th style="width:26%">Kind</th><th>Example</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="kw">when</span> <span class="placeholder">&lt;key&gt;</span> <span class="kw">is pressed</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when W is pressed</span></td></tr>
+        <tr><td><span class="kw">when</span> <span class="placeholder">&lt;key&gt;</span> <span class="kw">is released</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when Space is released</span></td></tr>
+        <tr><td><span class="kw">when</span> <span class="placeholder">&lt;key&gt;</span> <span class="kw">is held</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when Left Shift is held</span></td></tr>
+        <tr><td><span class="kw">when wheel scrolls up</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when wheel scrolls up</span></td></tr>
+        <tr><td><span class="kw">when wheel scrolls down</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when wheel scrolls down</span></td></tr>
+        <tr><td><span class="kw">when other touches me</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when other touches me</span></td></tr>
+        <tr><td><span class="kw">when me touches</span> <span class="placeholder">&lt;thing&gt;</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when me touches Water</span></td></tr>
+        <tr><td><span class="kw">when me overlaps</span> <span class="placeholder">&lt;thing&gt;</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when me overlaps Enemy</span></td></tr>
+        <tr><td><span class="kw">when game starts</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when game starts</span></td></tr>
+        <tr><td><span class="kw">when scene starts</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when scene starts</span></td></tr>
+        <tr><td><span class="kw">when</span> <span class="placeholder">&lt;thing&gt;</span> <span class="kw">is clicked</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when PlayButton is clicked</span></td></tr>
+        <tr><td><span class="kw">when me arrives at</span> <span class="placeholder">&lt;thing&gt;</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when me arrives at Waypoint</span></td></tr>
+        <tr><td><span class="kw">when me sees</span> <span class="placeholder">&lt;thing&gt;</span> <span class="kw">by</span> <span class="placeholder">&lt;dist&gt;</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when me sees Player by 8</span></td></tr>
+        <tr><td><span class="kw">when me stops seeing</span> <span class="placeholder">&lt;thing&gt;</span> [by <span class="placeholder">&lt;dist&gt;</span>]</td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when me stops seeing Player</span><br><span class="alt">alt: when me stops seeing Player by 8</span></td></tr>
+        <tr><td><span class="kw">when me gets equipped</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when me gets equipped</span></td></tr>
+        <tr><td><span class="kw">when me gets unequipped</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when me gets unequipped</span></td></tr>
+        <tr><td><span class="kw">when me gets dropped</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when me gets dropped</span></td></tr>
+        <tr><td><span class="kw">when me is hovered</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when me is hovered</span></td></tr>
+        <tr><td><span class="kw">when me appears</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when me appears</span></td></tr>
+        <tr><td><span class="kw">when every</span> <span class="placeholder">&lt;n&gt;</span> <span class="kw">seconds</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when every 2 seconds</span></td></tr>
+        <tr><td><span class="kw">when</span> <span class="placeholder">&lt;var&gt;</span> <span class="kw">becomes</span> <span class="placeholder">&lt;value&gt;</span> [not <span class="placeholder">&lt;value&gt;</span>]</td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when my health becomes 0</span><br><span class="alt">alt: when my health becomes not 0</span></td></tr>
+        <tr><td><span class="kw">when</span> <span class="placeholder">&lt;var&gt;</span> <span class="kw">changes</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when Score changes</span></td></tr>
+        <tr><td><span class="kw">when message</span> <span class="example">"&lt;name&gt;"</span> <span class="kw">arrives</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when message "die" arrives</span></td></tr>
+        <tr><td><span class="kw">when anim</span> <span class="example">"&lt;name&gt;"</span> <span class="kw">ends</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when anim "Shoot" ends</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="conditions">
+    <h2>Conditions — <code>unless</code> / <code>if</code> lines inside <code>when</code> blocks</h2>
+    <p>Condition marks: <span class="kw">is</span> <span class="kw">has</span> <span class="kw">becomes</span> <span class="kw">changes</span> <span class="kw">exists</span> <span class="kw">does</span> <span class="kw">near</span> <span class="kw">chance</span>. Use <code>unless</code> to gate on a condition (runs only while true). Conditions are re-checked each tick for polled events.</p>
+
+    <table>
+      <thead>
+        <tr><th style="width:34%">Condition shape</th><th style="width:26%">Kind</th><th>Example</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="placeholder">&lt;var&gt;</span> <span class="kw">is</span> <span class="placeholder">&lt;value&gt;</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">Score is 3</span></td></tr>
+        <tr><td><span class="placeholder">&lt;var&gt;</span> <span class="kw">is not</span> <span class="placeholder">&lt;value&gt;</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">my health is lower than 1</span></td></tr>
+        <tr><td><span class="placeholder">&lt;thing&gt;</span> <span class="kw">exists</span> [<span class="kw">does not exist</span>]</td><td><span class="badge badge-condition">condition</span></td><td><span class="example">Key exists</span><br><span class="alt">alt: Key does not exist</span></td></tr>
+        <tr><td><span class="kw">me is near</span> <span class="placeholder">&lt;thing&gt;</span> <span class="kw">by</span> <span class="placeholder">&lt;dist&gt;</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">me is near Player by 2</span></td></tr>
+        <tr><td><span class="placeholder">&lt;key&gt;</span> <span class="kw">is held</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">Shift is held</span></td></tr>
+        <tr><td><span class="kw">chance</span> <span class="placeholder">&lt;n&gt;%</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">chance 20%</span></td></tr>
+        <tr><td><span class="placeholder">&lt;thing&gt;</span> <span class="kw">is/has tag</span> <span class="placeholder">&lt;tag&gt;</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">other has tag Enemy</span></td></tr>
+        <tr><td><span class="kw">my bag has</span> <span class="placeholder">&lt;thing&gt;</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">my bag has Sword</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="actions">
+    <h2>Actions — verbs inside <code>when</code> bodies</h2>
+    <p>Action lines are the indented lines under a <code>when</code> (or after <code>unless</code>). Multiple actions in one block run top-to-bottom, in order.</p>
+
+    <table>
+      <thead>
+        <tr><th style="width:30%">Verb</th><th style="width:30%">Syntax</th><th>Example</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="kw">move</span></td><td><span class="kw">move forward speed 5</span> / <span class="kw">move back speed 5</span> / <span class="kw">move left speed 5</span> / <span class="kw">move right speed 5</span> / <span class="kw">move toward Player speed 2</span></td><td><span class="example">move forward speed 5</span><br><span class="alt">speed defaults to 5 · physics: <a href="#physics">velocity or swept move</a></span></td></tr>
+        <tr><td><span class="kw">turn</span></td><td><span class="kw">turn left degrees 90</span> / <span class="kw">turn right degrees 90</span></td><td><span class="example">turn left degrees 90</span></td></tr>
+        <tr><td><span class="kw">goto</span></td><td><span class="kw">goto Player</span> / <span class="kw">goto there</span></td><td><span class="example">goto Player</span></td></tr>
+        <tr><td><span class="kw">camera</span></td><td><span class="kw">camera looks at Chest</span> / <span class="kw">camera follows Player</span></td><td><span class="example">camera looks at Chest</span></td></tr>
+        <tr><td><span class="kw">look</span></td><td><span class="kw">look at Player</span></td><td><span class="example">look at Player</span></td></tr>
+        <tr><td><span class="kw">face</span></td><td><span class="kw">face Player</span></td><td><span class="example">face Player</span></td></tr>
+        <tr><td><span class="kw">teleport</span></td><td><span class="kw">teleport me to SpawnPoint</span></td><td><span class="example">teleport me to SpawnPoint</span></td></tr>
+        <tr><td><span class="kw">push</span></td><td><span class="kw">push other up strength 10</span></td><td><span class="example">push other up strength 10</span><br><span class="alt">strength defaults to 5 · real impulse on a dynamic body, see <a href="#physics">physics</a></span></td></tr>
+        <tr><td><span class="kw">make</span></td><td><span class="kw">make me solid</span></td><td><span class="example">make me solid</span></td></tr>
+        <tr><td><span class="kw">destroy</span></td><td><span class="kw">destroy me</span></td><td><span class="example">destroy me</span></td></tr>
+        <tr><td><span class="kw">spawn</span></td><td><span class="kw">spawn Coin at SpawnPoint</span></td><td><span class="example">spawn Coin at SpawnPoint</span></td></tr>
+        <tr><td><span class="kw">play</span></td><td><span class="kw">play sound "hit.wav"</span> / <span class="kw">play anim "Walk"</span></td><td><span class="example">play sound "hit.wav"</span><br><span class="example">play anim "Walk"</span></td></tr>
+        <tr><td><span class="kw">loop</span></td><td><span class="kw">loop anim "Walk"</span></td><td><span class="example">loop anim "Walk"</span></td></tr>
+        <tr><td><span class="kw">stop</span></td><td><span class="kw">stop anim</span> / <span class="kw">stop moving</span> / <span class="kw">stop this event</span></td><td><span class="example">stop anim</span><br><span class="example">stop moving</span><br><span class="example">stop this event</span></td></tr>
+        <tr><td><span class="kw">send</span></td><td><span class="kw">send message "die"</span> / <span class="kw">send message "hit" to other</span></td><td><span class="example">send message "die"</span></td></tr>
+        <tr><td><span class="kw">set</span></td><td><span class="kw">set Score to 0</span> / <span class="kw">set my rotating to true</span> / <span class="kw">set text of ScoreLabel to Score</span> / <span class="kw">set A to B + C</span> / <span class="kw">set state chase</span></td><td><span class="example">set Score to 0</span><br><span class="example">set text of ScoreLabel to Score</span></td></tr>
+        <tr><td><span class="kw">add</span></td><td><span class="kw">add 1 to Score</span> / <span class="kw">add Sword to my bag</span></td><td><span class="example">add 1 to Score</span></td></tr>
+        <tr><td><span class="kw">wait</span></td><td><span class="kw">wait 0.5 seconds</span> / <span class="kw">wait random 1 to 3 seconds</span></td><td><span class="example">wait 0.5 seconds</span></td></tr>
+        <tr><td><span class="kw">show</span></td><td><span class="kw">show PausePanel</span> / <span class="kw">show text "Game Over"</span></td><td><span class="example">show PausePanel</span><br><span class="example">show text "Game Over"</span></td></tr>
+        <tr><td><span class="kw">hide</span></td><td><span class="kw">hide me</span> / <span class="kw">hide text</span></td><td><span class="example">hide me</span><br><span class="example">hide text</span></td></tr>
+        <tr><td><span class="kw">remove</span></td><td><span class="kw">remove Potion from my bag</span></td><td><span class="example">remove Potion from my bag</span></td></tr>
+        <tr><td><span class="kw">equip</span></td><td><span class="kw">equip Sword</span></td><td><span class="example">equip Sword</span></td></tr>
+        <tr><td><span class="kw">drop</span></td><td><span class="kw">drop Sword</span></td><td><span class="example">drop Sword</span></td></tr>
+        <tr><td><span class="kw">restart</span></td><td><span class="kw">restart scene</span></td><td><span class="example">restart scene</span></td></tr>
+        <tr><td><span class="kw">load</span></td><td><span class="kw">load scene "Level1"</span></td><td><span class="example">load scene "Level1"</span></td></tr>
+        <tr><td><span class="kw">quit</span></td><td><span class="kw">quit game</span></td><td><span class="example">quit game</span></td></tr>
+        <tr><td><span class="kw">print</span></td><td><span class="kw">print "W is held"</span> / <span class="kw">print W is held</span></td><td><span class="example">print "W is held"</span><br><span class="example">print W is held</span><br><span class="alt">prints text to the editor console via Debug.LogWarning</span></td></tr>
+        <tr><td><span class="kw">debug</span></td><td><span class="kw">debug "health = " + my health</span> / <span class="kw">debug Score changed</span></td><td><span class="example">debug Score changed</span><br><span class="alt">alias for print — prints to the editor console</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="structural">
+    <h2>Structural words</h2>
+    <p>These words appear at the top level of events files, not inside a verb.</p>
+
+    <table>
+      <thead>
+        <tr><th style="width:24%">Word</th><th style="width:34%">Use</th><th>Example</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="badge badge-structural">when</span></td><td>Starts a new event block (trigger line)</td><td><span class="example">when W is held</span></td></tr>
+        <tr><td><span class="badge badge-structural">unless</span></td><td>Gates the following action lines on a condition</td><td><span class="example">unless my health is lower than 1</span></td></tr>
+        <tr><td><span class="badge badge-structural">and</span></td><td>Joins multiple conditions (inline trailing)</td><td><span class="example">when me overlaps Enemy and other is a Player</span></td></tr>
+        <tr><td><span class="badge badge-structural">not</span></td><td>Negates a condition (<code>is not</code>, <code>becomes not</code>, <code>does not exist</code>)</td><td><span class="example">Score is not 0</span></td></tr>
+        <tr><td><span class="badge badge-structural">my</span></td><td>Marks a per-actor variable (<code>my health</code>) vs global (<code>Score</code>)</td><td><span class="example">set my health to 0</span></td></tr>
+        <tr><td><span class="badge badge-structural">me</span></td><td>The actor the events file is attached to</td><td><span class="example">destroy me</span></td></tr>
+        <tr><td><span class="badge badge-structural">other</span></td><td>The other actor in a contact / message</td><td><span class="example">send message "hit" to other</span></td></tr>
+        <tr><td><span class="badge badge-structural">to</span></td><td>Assignment / direction preposition</td><td><span class="example">set Score to 0</span> / <span class="example">teleport me to SpawnPoint</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="values">
+    <h2>Value forms</h2>
+    <p>Values appear on the right side of <code>set</code>/<code>add</code>, after <code>is</code>/<code>becomes</code>, and in math.</p>
+
+    <div class="syntax-box">
+      <span class="kw">number</span> &nbsp;−1 &nbsp;0.5 &nbsp;20<br>
+      <span class="kw">"text"</span> &nbsp;"hit.wav" &nbsp;"die"<br>
+      <span class="kw">true</span> | <span class="kw">false</span> &nbsp;— booleans<br>
+      <span class="kw">random</span> <span class="placeholder">&lt;low&gt;</span> <span class="kw">to</span> <span class="placeholder">&lt;high&gt;</span> &nbsp;— random roll<br>
+      <span class="placeholder">&lt;var&gt;</span> &nbsp;Score &nbsp;my health &nbsp;— variable read<br>
+      <span class="placeholder">&lt;var&gt;</span> <span class="kw">op</span> <span class="placeholder">&lt;var&gt;</span> &nbsp;— one-op math (+ − * /)
+    </div>
+  </section>
+
+  <section id="physics">
+    <h2>Physics — <code>Use Physics Movement</code></h2>
+    <p>Movement is transform-based by default: <code>move</code> writes <code>Position</code> every tick, so nothing needs a collider. Tick <b>Use Physics Movement</b> on an actor's <code>EventSheet</code> and its <code>move</code>, <code>goto</code>, <code>stop moving</code> and <code>push</code> go through the actor's <code>RigidBody</code> instead — the physics engine then supplies collision response, CCD, and real pushing. The opt-in is <b>per actor, not per line</b>: one checkbox covers every movement word that sheet runs.</p>
+
+    <div class="how-it-works">
+      <h3>The one switch</h3>
+      <ol>
+        <li>Select the actor's <code>EventSheet</code> component.</li>
+        <li>Tick <b>Use Physics Movement</b>.</li>
+        <li>The actor needs a <code>RigidBody</code> on itself or above it — without one the flag does nothing and movement stays transform-based.</li>
+      </ol>
+    </div>
+
+    <h3>What each word does</h3>
+    <table>
+      <thead>
+        <tr><th style="width:22%">Word</th><th style="width:20%">Flag off / no body</th><th style="width:26%">Dynamic body</th><th>Kinematic body</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="kw">move</span> <span class="placeholder">&lt;dir&gt;</span> <span class="kw">speed</span> <span class="placeholder">&lt;n&gt;</span><br><span class="kw">move toward</span> <span class="placeholder">&lt;thing&gt;</span> <span class="kw">speed</span> <span class="placeholder">&lt;n&gt;</span></td>
+          <td><code>Position += direction × speed × dt</code></td>
+          <td>sets <code>LinearVelocity</code> = direction × speed. A move with no vertical part keeps the current vertical speed, so gravity and falling still work.</td>
+          <td>swept <code>AddMovement</code> step — PhysX carries the body and reports contacts on the way instead of teleporting through them</td>
+        </tr>
+        <tr>
+          <td><span class="kw">stop moving</span></td>
+          <td>cancels the ongoing move</td>
+          <td>brakes horizontal velocity to 0, <b>keeps</b> vertical speed (a falling body keeps falling)</td>
+          <td>cancels the ongoing move</td>
+        </tr>
+        <tr>
+          <td><span class="kw">push</span> <span class="placeholder">&lt;thing&gt;</span> <span class="placeholder">&lt;dir&gt;</span> <span class="kw">strength</span> <span class="placeholder">&lt;n&gt;</span></td>
+          <td>one-tick transform nudge (<code>strength × dt</code>)</td>
+          <td>real impulse: <code>AddForce(direction × strength, Impulse)</code> — Δv = strength ÷ mass</td>
+          <td>one-tick transform nudge (kinematic bodies ignore forces)</td>
+        </tr>
+        <tr>
+          <td><span class="kw">goto</span> <span class="placeholder">&lt;thing&gt;</span></td>
+          <td>follows the NavMesh path, writes <code>Position</code></td>
+          <td>follows the path via velocity and brakes on arrival</td>
+          <td>follows the path via swept moves</td>
+        </tr>
+        <tr>
+          <td><span class="kw">teleport</span> / <span class="kw">turn</span> / <span class="kw">look</span> / <span class="kw">face</span></td>
+          <td colspan="3">unchanged in every mode — these write <code>Position</code> / <code>Orientation</code> directly, they are not physics moves</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>Setup contract</h3>
+    <div class="how-it-works">
+      <ol>
+        <li>Put the <code>EventSheet</code> on the <b><code>RigidBody</code> actor itself</b>.</li>
+        <li>Make the mesh and the collider(s) <b>children</b> of that body, at local position <code>0, 0, 0</code>. The body's motion then carries the visuals. If the body is a child of the named actor, the mesh stays behind — the runtime warns once.</li>
+        <li>Tick <b>Use Physics Movement</b>.</li>
+        <li>Set the body up for its role (below).</li>
+      </ol>
+    </div>
+
+    <h3>Body recipes</h3>
+    <table>
+      <thead>
+        <tr><th style="width:22%">Role</th><th style="width:20%">Body</th><th>Settings that matter</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Player / enemy you drive</td><td>kinematic</td><td><code>Is Kinematic</code> on, <code>Enable Gravity</code> off — exact arcade speed, not shoved by other bodies</td></tr>
+        <tr><td>Bullet / thrown object</td><td>dynamic</td><td><code>Enable Gravity</code> off, <code>Use CCD</code> on, trigger <code>SphereCollider</code>; low mass so <code>push</code> still bites</td></tr>
+        <tr><td>Pushable crate / ball</td><td>dynamic</td><td><code>Enable Gravity</code> on, <code>Override Mass</code> on (≈1) — otherwise Flax derives ~1000 from a 1 m collider and <code>strength 400</code> looks like nothing</td></tr>
+        <tr><td>Static target / wall</td><td>none (or a collider)</td><td>leave the flag off; it never moves</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Gotchas</h3>
+    <div class="how-it-works">
+      <ol>
+        <li><b>Names are exact.</b> <code>spawn</code>, <code>push</code> and <code>when me touches &lt;thing&gt;</code> look actors up by name, case-sensitive and space-sensitive. A trailing space in the Scene panel (<code>"Bullet "</code>) makes all three fail — <code>spawn</code> logs one warning, the others fail silently.</li>
+        <li><b>Units are centimetres</b> — project gravity is <code>-981</code>, and a default cube is 100 units. Speeds like <code>120</code> are 1.2 m/s.</li>
+        <li><b>Collider world size = <code>Size × world scale</code></b>, parent scale included. A <code>BoxCollider</code> with default <code>Size</code> 100 under a floor scaled <code>(10, 0.5, 10)</code> is 1000 × 50 × 1000 only if the collider's own scale is <code>1, 1, 1</code> — a local scale of <code>(0.1, 2, 0.1)</code> shrinks it to 100³ and everything appears to float.</li>
+        <li><b>Gravity off floats.</b> A dynamic body with <code>Enable Gravity</code> off never settles, and with gravity on but the floor collider too small it rests on invisible geometry.</li>
+        <li><b>Dynamic bodies keep velocity.</b> If a sheet sets <code>move</code> once, the body keeps sliding — pair it with <code>stop moving</code> (held-then-released keys), or drive it every tick with <code>when every 0 seconds</code>.</li>
+        <li><b>Fast + thin tunnels.</b> Any fast dynamic body needs <code>Use CCD</code> on and a trigger collider, or it passes through targets between physics steps.</li>
+        <li><b>Contacts need colliders.</b> Set the manager's <code>Contact Mode</code> to <code>Colliders</code> to use trigger events; the event fires on <b>both</b> sides, so the player's sheet sees the spike even though only the spike is a trigger. <code>Distance</code> mode needs no colliders at all.</li>
+        <li><b>Templates still run.</b> A hidden actor's <code>EventSheet</code> is registered at scene start, so a <code>spawn</code> template runs its <code>when scene starts</code> / <code>when me appears</code> blocks too. Mark it with a <code>my IsTemplate</code> flag and gate the live logic with <code>unless my IsTemplate is true</code>; clones spawned later never get the marker.</li>
+        <li><b>Only one <code>EventsManager</code></b> per scene, on an actor that is never cloned.</li>
+      </ol>
+    </div>
+
+    <h3>Quick example</h3>
+    <div class="syntax-box">
+      <span class="alt"># EventSheet on the RigidBody, Use Physics Movement ON, mesh + collider as children</span><br>
+      <span class="kw">when W is held</span><br>
+      &nbsp;&nbsp;<span class="kw">move forward speed 120</span><br>
+      <br>
+      <span class="kw">when E is pressed</span><br>
+      &nbsp;&nbsp;<span class="kw">push Crate up strength 400</span><br>
+      <br>
+      <span class="kw">when Left Mouse is pressed</span><br>
+      &nbsp;&nbsp;<span class="kw">spawn Bullet at me</span><br>
+      <br>
+      <span class="alt"># Bullet.events — the spawned copy homes and cleans itself up</span><br>
+      <span class="kw">when every 0 seconds</span><br>
+      &nbsp;&nbsp;<span class="kw">move toward nearest Target speed 200</span><br>
+      <br>
+      <span class="kw">when me touches Target</span><br>
+      &nbsp;&nbsp;<span class="kw">send message "hit" to other</span><br>
+      &nbsp;&nbsp;<span class="kw">destroy me</span>
+    </div>
+  </section>
+
+  <section id="structure">
+    <div class="how-it-works">
+      <h3>How a <code>.events</code> file works</h3>
+      <ol>
+        <li>Each <code>when …</code> line starts an event block. Its trigger words are classified into a trigger kind.</li>
+        <li>Indented lines under it (2 spaces) are the body: <code>unless</code> conditions gate the actions; raw verb lines run in order.</li>
+        <li>Actor name matching is exact &amp; case-sensitive — <code>TestPlayer.events</code> attaches to an actor named <code>TestPlayer</code>.</li>
+        <li><code>near</code> is a <b>condition</b>, not a trigger — it must sit inside a <code>when every N seconds</span> block.</li>
+        <li>Polled triggers (<code>every</code>, <code>held</code>, <code>becomes</code>, <code>changes</code>) run each tick; pushed triggers (<code>pressed</code>, <code>clicked</code>, <code>hovered</code>) fire on edges.</li>
+        <li>Each event fires at most once per tick.</li>
+        <li>Variables: <code>Score</code> = global; <code>my health</code> = per-actor.</li>
+        <li>Hot reload: saving the file swaps the live tree without restarting.</li>
+      </ol>
+    </div>
+
+    <h3>Quick example</h3>
+    <div class="syntax-box">
+      <span class="kw">when scene starts</span><br>
+      &nbsp;&nbsp;<span class="kw">set text of GameText to ""</span><br>
+      <br>
+      <span class="kw">when W is held</span><br>
+      &nbsp;&nbsp;<span class="kw">move forward speed 100</span><br>
+      <br>
+      <span class="kw">when every 0.016 seconds</span><br>
+      &nbsp;&nbsp;<span class="kw">me is near TestPlayer by 400</span><br>
+      &nbsp;&nbsp;<span class="kw">show text "we have a message"</span><br>
+      &nbsp;&nbsp;<span class="kw">wait 2 seconds</span><br>
+      &nbsp;&nbsp;<span class="kw">hide text</span><br>
+      <br>
+      <span class="kw">when T is pressed</span><br>
+      &nbsp;&nbsp;<span class="kw">set my rotating to 1 - my rotating</span>
+    </div>
+  </section>
+
+  <div class="footnote">
+    Source of truth: <code>Source/Game/Events/WordRegistry.cs</code> in the project.<br>
+    Physics rules live in <code>Source/Game/Runtime/PhysicsMovement.cs</code> (pure, unit-tested) and are applied by <code>Source/Game/Bridge/FlaxActions.cs</code>. Worked example: <code>Docs/PhysicsTest.md</code> and <code>Content/scenes/PhysicsTest.scene</code>.<br>
+    This list reflects the shipped v0.1 implementation. Planned-but-not-implemented words (e.g. state-machine <code>set state</code> from Task 11) are tracked in TASKS.md, not here.
+  </div>
+</div>
+
+</body>
+</html>
