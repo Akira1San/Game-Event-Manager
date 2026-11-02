@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Event Manager — Examples (v0.1)</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0; padding: 0; background: #0f172a; color: #e2e8f0;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  header {
+    background: #1e293b; border-bottom: 1px solid #334155; padding: 24px 32px;
+    margin-bottom: 24px;
+  }
+  h1 { margin: 0; font-size: 26px; color: #f8fafc; letter-spacing: -0.5px; }
+  h2 { margin: 32px 0 12px; font-size: 20px; color: #cbd5e1; border-bottom: 1px solid #334155; padding-bottom: 6px; }
+  h3 { margin: 20px 0 8px; font-size: 16px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+  p { color: #94a3b8; font-size: 14px; line-height: 1.5; margin: 0 0 16px; }
+  .subtitle { color: #94a3b8; font-size: 14px; margin-top: 6px; }
+  .syntax-box {
+    background: #0f172a; border: 1px solid #334155; border-radius: 8px; padding: 16px; margin: 16px 0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 13px; color: #cbd5e1;
+  }
+  .syntax-box .kw { color: #818cf8; }
+  .syntax-box .example { color: #2dd4bf; }
+  .syntax-box .alt { color: #94a3b8; font-size: 12px; }
+  .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
+  .card h3 { color: #f8fafc; text-transform: none; font-size: 16px; margin-top: 0; }
+  .card p { color: #cbd5e1; margin-bottom: 16px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; margin-right: 6px; }
+  .badge-file { background: #1e3a5f; color: #bfdbfe; }
+  .badge-todo { background: #4a3728; color: #fcd34d; }
+  .kw { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; color: #818cf8; font-size: 13px; white-space: nowrap; }
+  .placeholder { color: #64748b; font-style: italic; }
+  nav {
+    background: #1e293b; border-bottom: 1px solid #334155; padding: 12px 32px;
+  }
+  nav a { color: #818cf8; text-decoration: none; margin-right: 16px; font-size: 13px; }
+  nav a:hover { text-decoration: underline; color: #a5b4fc; }
+  .footnote { color: #64748b; font-size: 13px; margin-top: 32px; border-top: 1px solid #334155; padding-top: 16px; line-height: 1.6; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="#setup">Actor setup</a>
+  <a href="#movement">Movement</a>
+  <a href="#combat">Combat</a>
+  <a href="#collisions">Collisions</a>
+  <a href="#variables">Variables</a>
+  <a href="#items">Items & bag</a>
+  <a href="#ui">UI & menus</a>
+  <a href="#animation">Animation</a>
+</nav>
+
+<div class="container">
+  <header>
+    <h1>Event Manager — Worked Examples</h1>
+    <div class="subtitle">v0.1 · Plain-text game logic · Flax Engine · Copy these into <code>.events</code> files</div>
+  </header>
+
+  <p>Each example is a complete <code>.events</code> file. Attach it to an actor of the matching name (auto-attach by filename), or point an <code>EventSheet</code> component at it. Words are defined in <code>keywords.html</code>; any missing word here is planned, not shipped.</p>
+
+  <section id="setup">
+    <div class="card">
+      <h3>Actor setup (the one-time editor step)</h3>
+      <p>Place actors in the Flax scene and name them exactly what your events file references. Name matching is case- and space-sensitive.</p>
+      <div class="syntax-box">
+        <span class="alt"># In the Flax editor: create these actors and name them exactly:</span><br>
+        Player &nbsp;•&nbsp; Bullet &nbsp;•&nbsp; Enemy &nbsp;•&nbsp; SpawnPoint &nbsp;•&nbsp; Waypoint &nbsp;•&nbsp; Grass &nbsp;•&nbsp; Wall<br>
+        <span class="alt"># Then give each one an EventSheet component → Event File (blank = actor's own name):</span><br>
+        Player → Player.events &nbsp;•&nbsp; Enemy → Enemy.events &nbsp;•&nbsp; Wall → Wall.events
+      </div>
+      <p class="alt">No component? A <code>Hero.events</code> file still auto-attaches to an actor named <code>Hero</code> (zero-click fallback).</p>
+    </div>
+  </section>
+
+  <section id="movement">
+    <div class="card">
+      <h3>8-direction top-down movement (Player)</h3>
+      <p>Transform-based movement by default — no colliders needed. Hold shift to run.</p>
+      <div class="syntax-box">
+        <span class="alt"># Player.events</span><br>
+        <span class="kw">when W is held</span><br>
+        &nbsp;&nbsp;<span class="kw">move forward speed 5</span><br>
+        &nbsp;&nbsp;<span class="kw">loop anim "animation walk"</span><br>
+        <br>
+        <span class="kw">when S is held</span><br>
+        &nbsp;&nbsp;<span class="kw">move back speed 5</span><br>
+        &nbsp;&nbsp;<span class="kw">loop anim "animation walk"</span><br>
+        <br>
+        <span class="kw">when A is held</span><br>
+        &nbsp;&nbsp;<span class="kw">move left speed 5</span><br>
+        &nbsp;&nbsp;<span class="kw">loop anim "animation walk"</span><br>
+        <br>
+        <span class="kw">when D is held</span><br>
+        &nbsp;&nbsp;<span class="kw">move right speed 5</span><br>
+        &nbsp;&nbsp;<span class="kw">loop anim "animation walk"</span><br>
+        <br>
+        <span class="kw">when Left Shift is held</span><br>
+        &nbsp;&nbsp;<span class="kw">move forward speed 10</span><br>
+        <br>
+        <span class="kw">when W is released</span><br>
+        &nbsp;&nbsp;<span class="kw">loop anim "animation idle pose"</span>
+      </div>
+      <p class="alt">Tip: each <code>move</code> writes <code>Position</code> every tick. Tick <b>Use Physics Movement</b> on the <code>EventSheet</code> + put a <code>RigidBody</code> under it to move through physics instead.</p>
+    </div>
+
+    <div class="card">
+      <h3>Point & click: walk to where you clicked (Ground)</h3>
+      <p><code>goto there</code> walks to the last clicked position using a baked NavMesh.</p>
+      <div class="syntax-box">
+        <span class="alt"># Player.events</span><br>
+        <span class="kw">when Ground is clicked</span><br>
+        &nbsp;&nbsp;<span class="kw">goto there</span><br>
+        &nbsp;&nbsp;<span class="kw">loop anim "animation walk"</span><br>
+        <br>
+        <span class="kw">when me arrives at there</span><br>
+        &nbsp;&nbsp;<span class="kw">loop anim "animation idle pose"</span>
+      </div>
+      <p class="alt">Requires a baked NavMesh in the level, and an actor named <code>Ground</code> that receives clicks.</p>
+    </div>
+  </section>
+
+  <section id="combat">
+    <div class="card">
+      <h3>Shooting: spawn a bullet, aim at the nearest enemy (Player)</h3>
+      <p><code>spawn Bullet at me</code> clones the named scene actor and inherits your facing.</p>
+      <div class="syntax-box">
+        <span class="alt"># Player.events</span><br>
+        <span class="kw">when Left Mouse is pressed</span><br>
+        &nbsp;&nbsp;<span class="kw">look at nearest Enemy</span><br>
+        &nbsp;&nbsp;<span class="kw">spawn Bullet at me</span><br>
+        &nbsp;&nbsp;<span class="kw">play sound "shot.wav"</span>
+      </div>
+
+      <div class="syntax-box">
+        <span class="alt"># Bullet.events — travels forward, dies on hit or after 1s</span><br>
+        <span class="kw">when me appears</span><br>
+        &nbsp;&nbsp;<span class="kw">move forward speed 20</span><br>
+        <br>
+        <span class="kw">when me touches Enemy</span><br>
+        &nbsp;&nbsp;<span class="kw">send message "hit"</span><br>
+        &nbsp;&nbsp;<span class="kw">destroy me</span><br>
+        <br>
+        <span class="kw">when every 1 seconds</span><br>
+        &nbsp;&nbsp;<span class="kw">destroy me</span>
+      </div>
+
+      <div class="syntax-box">
+        <span class="alt"># Enemy.events — takes damage, dies at 0</span><br>
+        <span class="kw">when me appears</span><br>
+        &nbsp;&nbsp;<span class="kw">set my health to 3</span><br>
+        <br>
+        <span class="kw">when message "hit" arrives</span><br>
+        &nbsp;&nbsp;<span class="kw">add -1 to my health</span><br>
+        &nbsp;&nbsp;<span class="kw">unless my health is higher than 0</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">play sound "boom.wav"</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;<span class="kw">destroy me</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Hurt with invulnerability blink (Player)</h3>
+      <div class="syntax-box">
+        <span class="alt"># Player.events</span><br>
+        <span class="kw">when me appears</span><br>
+        &nbsp;&nbsp;<span class="kw">set my Invulnerable to false</span><br>
+        <br>
+        <span class="kw">when me overlaps Enemy</span><br>
+        &nbsp;&nbsp;<span class="kw">unless my Invulnerable is true</span><br>
+        &nbsp;&nbsp;<span class="kw">play sound "hurt.wav"</span><br>
+        &nbsp;&nbsp;<span class="kw">add -1 to Lives</span><br>
+        &nbsp;&nbsp;<span class="kw">set my Invulnerable to true</span><br>
+        &nbsp;&nbsp;<span class="kw">hide me</span><br>
+        &nbsp;&nbsp;<span class="kw">wait 1 second</span><br>
+        &nbsp;&nbsp;<span class="kw">show me</span><br>
+        &nbsp;&nbsp;<span class="kw">set my Invulnerable to false</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="collisions">
+    <div class="card">
+      <h3>Fireball hits a wall → wall crumbles + sound</h3>
+      <p>The fireball sends a message; the wall animates and destroys itself. Actions run on <code>me</code>, so the target must run its own logic.</p>
+      <div class="two-col">
+        <div>
+          <div class="syntax-box">
+            <span class="alt"># Fireball.events</span><br>
+            <span class="kw">when me appears</span><br>
+            &nbsp;&nbsp;<span class="kw">move forward speed 30</span><br>
+            <br>
+            <span class="kw">when me touches Wall</span><br>
+            &nbsp;&nbsp;<span class="kw">send message "crash" to Wall</span><br>
+            &nbsp;&nbsp;<span class="kw">destroy me</span><br>
+            <br>
+            <span class="kw">when every 3 seconds</span><br>
+            &nbsp;&nbsp;<span class="kw">destroy me</span>
+          </div>
+        </div>
+        <div>
+          <div class="syntax-box">
+            <span class="alt"># Wall.events</span><br>
+            <span class="kw">when message "crash" arrives</span><br>
+            &nbsp;&nbsp;<span class="kw">play anim "wall_fall"</span><br>
+            &nbsp;&nbsp;<span class="kw">play sound "wall_break.wav"</span><br>
+            &nbsp;&nbsp;<span class="kw">destroy me</span>
+          </div>
+        </div>
+      </div>
+      <p class="alt">For physics <code>touches</code>, give both actors colliders and set the manager's <code>Contact Mode</code> to <code>Colliders</code> or <code>Both</code>. Use <code>overlaps</code> (distance-only) if you don't want colliders at all.</p>
+    </div>
+
+    <div class="card">
+      <h3>Player steps on grass → footstep sound</h3>
+      <p><span class="badge badge-todo">planned</span> <code>touches</code> fires once on contact enter, not every step while walking. There is no "is moving" condition or material detection yet — see <b>Task 13</b> in <code>TASKS.md</b> for the BGE-style footstep feature.</p>
+      <div class="syntax-box">
+        <span class="alt"># Today (one-shot on first touch — not per-step):</span><br>
+        <span class="kw">when me touches Grass</span><br>
+        &nbsp;&nbsp;<span class="kw">play sound "grass_step.wav"</span>
+      </div>
+      <div class="syntax-box">
+        <span class="alt"># Today (workaround — plays every 0.3s while near grass, even standing still):</span><br>
+        <span class="kw">when every 0.3 seconds</span><br>
+        &nbsp;&nbsp;<span class="kw">me is near Grass by 1</span><br>
+        &nbsp;&nbsp;<span class="kw">play sound "grass_step.wav"</span>
+      </div>
+      <div class="syntax-box">
+        <span class="alt"># Planned (Task 13):</span><br>
+        <span class="kw">when me touches Grass and me is moving</span><br>
+        &nbsp;&nbsp;<span class="kw">play sound "grass_step.wav"</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="variables">
+    <div class="card">
+      <h3>Per-actor variables: Hero has health and mana</h3>
+      <p><code>my …</code> belongs to that actor only — each copy keeps its own. Globals (capitalized) are shared.</p>
+      <div class="syntax-box">
+        <span class="alt"># Hero.events — per-actor health / mana</span><br>
+        <span class="kw">when me appears</span><br>
+        &nbsp;&nbsp;<span class="kw">set my health to 100</span><br>
+        &nbsp;&nbsp;<span class="kw">set my mana to 100</span>
+      </div>
+      <div class="syntax-box">
+        <span class="alt"># Global score / lives (shared by everything)</span><br>
+        <span class="kw">when game starts</span><br>
+        &nbsp;&nbsp;<span class="kw">set Score to 0</span><br>
+        &nbsp;&nbsp;<span class="kw">set Lives to 3</span>
+      </div>
+      <p class="alt">Reading anyone's variable: <code>other's damage</code>, <code>Player's gold</code>. Writing: only your own <code>my …</code>.</p>
+    </div>
+  </section>
+
+  <section id="items">
+    <div class="card">
+      <h3>Items & bag: pick up a sword, equip it, +5 damage</h3>
+      <div class="syntax-box">
+        <span class="alt"># Sword.events (item actor)</span><br>
+        <span class="kw">when me gets equipped</span><br>
+        &nbsp;&nbsp;<span class="kw">add 5 to my damage</span>
+      </div>
+
+      <div class="syntax-box">
+        <span class="alt"># Player.events — pickup and equip</span><br>
+        <span class="kw">when me touches Sword</span><br>
+        &nbsp;&nbsp;<span class="kw">add Sword to my bag</span><br>
+        &nbsp;&nbsp;<span class="kw">play sound "pickup.wav"</span><br>
+        <br>
+        <span class="kw">when 1 is pressed</span><br>
+        &nbsp;&nbsp;<span class="kw">unless my bag has Sword</span><br>
+        &nbsp;&nbsp;<span class="kw">equip Sword</span>
+      </div>
+
+      <div class="syntax-box">
+        <span class="alt"># Enemy.events — takes the attacker's damage (possessive read)</span><br>
+        <span class="kw">when message "damage" arrives</span><br>
+        &nbsp;&nbsp;<span class="kw">add -(other's damage) to my health</span><br>
+        &nbsp;&nbsp;<span class="kw">unless my health is higher than 0</span><br>
+        &nbsp;&nbsp;<span class="kw">destroy me</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="ui">
+    <div class="card">
+      <h3>UI & menus: HUD label and main menu</h3>
+      <p>Menus are just another scene. A label actor named <code>ScoreLabel</code> holds a <code>UIControl</code> with a <code>Label</code>.</p>
+      <div class="syntax-box">
+        <span class="alt"># Menu.events (global sheet, title scene)</span><br>
+        <span class="kw">when scene starts</span><br>
+        &nbsp;&nbsp;<span class="kw">set Score to 0</span><br>
+        &nbsp;&nbsp;<span class="kw">show PlayButton</span><br>
+        &nbsp;&nbsp;<span class="kw">show QuitButton</span><br>
+        <br>
+        <span class="kw">when PlayButton is clicked</span><br>
+        &nbsp;&nbsp;<span class="kw">load scene "Level1"</span><br>
+        <br>
+        <span class="kw">when QuitButton is clicked</span><br>
+        &nbsp;&nbsp;<span class="kw">quit game</span>
+      </div>
+
+      <div class="syntax-box">
+        <span class="alt"># Level1 HUD — keep the label in sync</span><br>
+        <span class="kw">when scene starts</span><br>
+        &nbsp;&nbsp;<span class="kw">show ScoreLabel</span><br>
+        &nbsp;&nbsp;<span class="kw">set text of ScoreLabel to Score</span><br>
+        <br>
+        <span class="kw">when Score changes</span><br>
+        &nbsp;&nbsp;<span class="kw">set text of ScoreLabel to Score</span>
+      </div>
+      <p class="alt">Create a <code>GameText</code> actor with a Label for <code>show text "…"</code> center-screen messages.</p>
+    </div>
+  </section>
+
+  <section id="animation">
+    <div class="card">
+      <h3>Armature character: walk, shoot, return to idle</h3>
+      <p>The actor needs an <code>AnimatedModel</code> with a <code>SkinnedModel</code>. Clip names ignore folder, extension and case.</p>
+      <div class="syntax-box">
+        <span class="alt"># Character.events</span><br>
+        <span class="kw">when W is held</span><br>
+        &nbsp;&nbsp;<span class="kw">move forward speed 5</span><br>
+        &nbsp;&nbsp;<span class="kw">loop anim "animation walk"</span><br>
+        <br>
+        <span class="kw">when W is released</span><br>
+        &nbsp;&nbsp;<span class="kw">loop anim "animation idle pose"</span><br>
+        <br>
+        <span class="kw">when Left Mouse is pressed</span><br>
+        &nbsp;&nbsp;<span class="kw">play anim "dragon_fire"</span><br>
+        &nbsp;&nbsp;<span class="kw">spawn Bullet at me</span><br>
+        <br>
+        <span class="kw">when anim "dragon_fire" ends</span><br>
+        &nbsp;&nbsp;<span class="kw">loop anim "animation idle pose"</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="topdown">
+    <div class="card">
+      <h3>Complete mini-game: Top-Down Shooter</h3>
+      <p>~60 lines total — movement, shooting, enemies, scoring, win/lose. This is the v0.1 acceptance test.</p>
+      <div class="syntax-box">
+        <span class="alt"># Game.events (global sheet)</span><br>
+        <span class="kw">when game starts</span><br>
+        &nbsp;&nbsp;<span class="kw">set Score to 0</span><br>
+        &nbsp;&nbsp;<span class="kw">set Lives to 3</span><br>
+        &nbsp;&nbsp;<span class="kw">show text "Shoot the enemies!"</span><br>
+        &nbsp;&nbsp;<span class="kw">wait 2 seconds</span><br>
+        &nbsp;&nbsp;<span class="kw">hide text</span><br>
+        <br>
+        <span class="kw">when every 5 seconds</span><br>
+        &nbsp;&nbsp;<span class="kw">unless Score is 5</span><br>
+        &nbsp;&nbsp;<span class="kw">spawn Enemy at SpawnPoint</span><br>
+        <br>
+        <span class="kw">when Score becomes 5</span><br>
+        &nbsp;&nbsp;<span class="kw">show text "You win!"</span><br>
+        &nbsp;&nbsp;<span class="kw">wait 3 seconds</span><br>
+        &nbsp;&nbsp;<span class="kw">restart scene</span><br>
+        <br>
+        <span class="kw">when Lives becomes 0</span><br>
+        &nbsp;&nbsp;<span class="kw">show text "Game Over"</span><br>
+        &nbsp;&nbsp;<span class="kw">wait 3 seconds</span><br>
+        &nbsp;&nbsp;<span class="kw">restart scene</span>
+      </div>
+      <p class="alt">Player.events, Bullet.events and Enemy.events live in the <b>Combat</b> section above.</p>
+    </div>
+  </section>
+
+  <div class="footnote">
+    Source of truth for the language: <code>DESIGN.md</code> (Sections 3–5) and <code>keywords.html</code>.<br>
+    Implemented words live in <code>EventManager/EventManager/Source/Game/Events/WordRegistry.cs</code>; actions are wired in <code>Bridge/FlaxActions.cs</code>.<br>
+    Examples marked <span class="badge badge-todo">planned</span> need a new word or runtime feature tracked in <code>TASKS.md</code> — they will not run until that task lands.
+  </div>
+</div>
+
+</body>
+</html>

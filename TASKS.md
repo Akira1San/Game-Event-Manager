@@ -591,6 +591,49 @@ Goal: replace transform-based Position assignment with physics-native movement f
 
 ---
 
+## Task 13 — Footstep sounds by material `[ ]`
+
+Goal: BGE-style footstep audio — play a surface-matched sound only while the actor moves,
+gated on actual motion (not every tick of standing still). Depends on Tasks 1–3.
+Design: read the physics material of the surface the actor touches/stands on, map material
+names to sound clips, and trigger once per step with a cooldown.
+
+### Part A — Movement gate word
+- [ ] Word registry + parser: new condition word `me is moving` (true on any tick where
+  `move`, `goto`, or `face`/`turn` is actively changing the actor's transform/velocity).
+- [ ] Runtime: polled condition evaluated each tick; `FlaxActions` exposes whether the actor
+  has an ongoing `OngoingMove` this tick (or the sheet's `move` word ran this tick).
+- [ ] Unit test: `when every 0 seconds and me is moving` fires while moving, not while
+  standing still.
+
+### Part B — Material detection on contact
+- [ ] Word registry + parser: new trigger `when me touches <material>` where `<material>` is
+  a physics-material name (e.g. `Grass`, `Stone`, `Wood`), matched against the other actor's
+  collider material via `IEventWorld.MaterialOf(actor)` / `FlaxWorld`.
+- [ ] `EventSheet` already subscribes to collider `TriggerEnter`/`TriggerExit`; extend
+  `PushContact` / `PollContact` to carry the material name, or add a material polled pass.
+- [ ] Unit test: material name is correctly read from a collider's physics material; unknown
+  material warns once and reads as empty.
+
+### Part C — Material→sound mapping + per-step cooldown
+- [ ] Word registry + action: `play step sound "<name>"` (or reuse `play sound` keyed by a
+  per-project material→clip map). Configurable map (Grass → `grass_step.wav`, Stone →
+  `stone_step.wav`, …).
+- [ ] Runtime: once per contact-enter + moving gate, play the mapped sound with a cooldown
+  so it doesn't spam every tick; hold-movement repeats at a step interval.
+- [ ] Unit test: cooldown prevents double-play; material miss warns once and skips.
+
+### Part D — Example
+- [ ] Write `Grass.events` / `Player.events` snippet:
+  ```
+  when me touches Grass and me is moving
+    play sound "grass_step.wav"
+  ```
+- [ ] Editor verify: walk on grass → footstep per step; stand still → silence; walk on stone
+  → `stone_step.wav`.
+
+---
+
 ## Session Log (append one line after each session)
 
 | Date | Session did | Tasks/Parts touched |

@@ -1,10 +1,10 @@
 # --- Player.events (armature character) ---
 when W is held
-  move forward speed 5
-  loop anim "Walk"
+  move forward speed 200
+  loop anim "walk"
 
 when W is released
-  play anim "Idle"
+  play anim "idle Pose"
 
 when Left Mouse is pressed
   play anim "Shoot"

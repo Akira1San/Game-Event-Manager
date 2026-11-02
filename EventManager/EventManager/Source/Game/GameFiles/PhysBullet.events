@@ -1,0 +1,33 @@
+# ---------------- PhysBullet.events (physics movement test) ----------------
+# Setup: EventSheet on the PhysBullet RigidBody, "Use Physics Movement" ON.
+# Body: dynamic, EnableGravity OFF, UseCCD ON, trigger SphereCollider child.
+# The actor in the scene is the hidden template; `spawn PhysBullet at me` clones it.
+#
+# The manager also registers the sheet on the inactive template (so the opt-in flag
+# survives the clone), so mark the template at scene start and gate the live logic
+# off for it. Clones are spawned after scene start, so they never get the marker.
+
+when me appears
+  set my IsTemplate to false
+
+when scene starts
+  set my IsTemplate to true
+
+# Re-aim every tick: a dynamic body keeps the LinearVelocity we set.
+when every 0 seconds
+  unless my IsTemplate is true
+  move toward nearest PhysTarget speed 200
+
+when me touches PhysTarget
+  unless my IsTemplate is true
+  send message "hit" to other
+  destroy me
+
+when me touches PhysSpike
+  unless my IsTemplate is true
+  destroy me
+
+# Safety net so a missed bullet never lives forever.
+when every 5 seconds
+  unless my IsTemplate is true
+  destroy me

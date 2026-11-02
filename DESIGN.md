@@ -276,7 +276,7 @@ like GDevelop, so the editor teaches the vocabulary passively.
 | `when <var> becomes/becomes not <value>` | `when my health becomes 0` | watch a variable |
 | `when <var> changes` | `when Score changes` | same watcher, fires on *any* value change â€” HUD refreshes |
 | `when message "<name>" arrives` | `when message "die" arrives` | events between objects |
-| `when anim "<name>" ends` | `when anim "Shoot" ends` | armature characters â€” see below |
+| `when anim "<name>" ends` | `when anim "dragon_fire" ends` | armature characters â€” see below |
 
 ### Conditions (inline / `unless` lines)
 
@@ -318,12 +318,12 @@ like GDevelop, so the editor teaches the vocabulary passively.
 | `wait <n> seconds` | `wait 0.5 seconds` | pauses THIS event, not the game |
 | `hide me` / `show me` | `show PausePanel` | show/hide works on **me or any named actor** â€” the core of plain UI logic |
 | `set text of <thing> to <val>` | `set text of ScoreLabel to Score` | live values on the screen; plain text works too |
-| `play anim "<name>"` | `play anim "Walk"` | armature: plays once, then holds the last frame (BGE "Play") |
+| `play anim "<name>"` | `play anim "dragon_fire"` | armature: plays once, then holds the last frame (BGE "Play") |
 | `add <thing> to my bag` | `add Sword to my bag` | picks items up; the bag holds things by name, counted |
 | `remove <thing> from my bag` | `remove Potion from my bag` | used/consumed things |
 | `equip <thing>` | `equip Sword` | takes it from the bag and attaches the item's sheet â€” its `equipped` event fires |
 | `drop <thing>` | `drop Sword` | unequips if worn, takes from bag, spawns the item at my feet |
-| `loop anim "<name>"` | `loop anim "Walk"` | armature: repeats until something new plays (BGE "Loop") |
+| `loop anim "<name>"` | `loop anim "animation walk"` | armature: repeats until something new plays (BGE "Loop") |
 | `stop anim` | `stop anim` | armature: stops and goes back to the previous animation (BGE "Stop") |
 | `show text "<txt>"` | `show text "Game Over"` | HUD text (also below) |
 | `hide text` | `hide text` | removes the HUD text |
@@ -387,9 +387,9 @@ play it by name. You never touch Flax's visual Anim Graph editor by hand and no 
 be authored, assigned or wired: the bridge builds a tiny virtual Anim Graph per clip in code, so
 each clip simply plays. The event words do the rest:
 
-- `play anim "Walk"` finds the `Animation` asset whose name ends in "walk" (folder, extension and
-  case are ignored) and plays it once, holding the last frame -- exactly like BGE playing an
-  Action by name. No nodes, no wires.
+- `loop anim "animation walk"` finds the `Animation` asset whose name ends in "walk" (folder,
+  extension and case are ignored) and repeats it -- exactly like BGE playing an Action by name.
+  `play anim` uses the same lookup but plays once and holds the last frame. No nodes, no wires.
 
 **Setup contract for a character** (same muscle memory as naming Actions for bricks):
 
@@ -407,7 +407,7 @@ each clip simply plays. The event words do the rest:
 - `when anim "<name>" ends` -- fires once, after a one-shot's `Animation.Length`; the name match
   ignores case.
 - Repeating the same word while that clip is still playing is a no-op, so putting
-  `loop anim "Walk"` under `when W is held` does not restart the clip every tick.
+  `loop anim "animation walk"` under `when W is held` does not restart the clip every tick.
 - Assigning a virtual graph overrides any graph authored on the model. That is intentional:
   the event words own the animation.
 
@@ -416,7 +416,7 @@ cross-blending becomes necessary, ship one graph with an Animation Slot node and
 `PlaySlotAnimation(...)` with blend-in/blend-out times.
 
 **Friendly errors in BGE spirit:** playing an unknown name lists the project's clips --
-`I don't know the anim "Walked". This project has: idle pose, run, walk.`
+`I don't know the anim "walked". This project has: bge dragon 2.07 animation idle pose, bge dragon 2.07 animation run, bge dragon 2.07 animation walk.`
 
 Example (a walking, shooting character -- animation only, logic is the usual syntax):
 
@@ -424,17 +424,17 @@ Example (a walking, shooting character -- animation only, logic is the usual syn
 # --- Player.events (armature character) ---
 when W is held
   move forward speed 5
-  loop anim "Walk"
+  loop anim "animation walk"
 
 when W is released
-  play anim "Idle"
+  loop anim "animation idle pose"
 
 when Left Mouse is pressed
-  play anim "Shoot"
+  play anim "dragon_fire"
   spawn Bullet at me
 
-when anim "Shoot" ends
-  play anim "Idle"
+when anim "dragon_fire" ends
+  loop anim "animation idle pose"
 ```
 
 Rules: `play anim` runs once and holds the last frame; `loop anim` repeats until something else
@@ -522,7 +522,7 @@ attack: you stacked ordinary logic bricks on top of each other and used a flag o
 # ---------------- Enemy.events (patrol -> chase -> attack) ----------------
 when me appears
   goto random Waypoint                  # pathfinds around walls automatically
-  loop anim "Walk"
+  loop anim "animation walk"
 
 when me arrives at Waypoint
   wait random 0.5 to 2 seconds
@@ -530,7 +530,7 @@ when me arrives at Waypoint
 
 when me sees Player by 8                   # one-shot the moment the player is spotted
   set my mode to "chase"
-  loop anim "Run"
+  loop anim "animation run"
   goto Player
 
 when every 0.2 seconds                     # chase keeps re-targeting the moving player
@@ -649,7 +649,7 @@ when Ground is clicked
   goto there
 
 when me arrives at there
-  play anim "Idle"
+  loop anim "animation idle pose"
 ```
 
 **Verdict recorded:** dedicated dialogue machinery (portraits, typewriter text, voice lines,
@@ -880,7 +880,7 @@ window around a broken runtime.
   rather than solving namespacing now.
 - **Animation cross-blend:** how long should the blend be when one animation replaces another?
   Proposal: something small (~0.2 s), tuned by feel in M2Â½. Also parked: does holding W restart
-  `loop anim "Walk"` every tick (it should be harmless), and should `move` words auto-play their
+  `loop anim "animation walk"` every tick (it should be harmless), and should `move` words auto-play their
   own animation (v0.1 answer: no â€” animation is always explicit, like BGE).
 - **Pause game:** `pause game` / `resume game` are deliberately parked. They need their own
   rule for *what keeps ticking while paused* (proposal: menu/UI sheets and clicks stay live,

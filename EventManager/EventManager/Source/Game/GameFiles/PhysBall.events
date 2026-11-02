@@ -1,0 +1,10 @@
+# ---------------- PhysBall.events (physics movement test) ----------------
+# Setup: EventSheet on the PhysBall RigidBody, "Use Physics Movement" ON.
+# Body: dynamic, EnableGravity ON, solid SphereCollider child, Override Mass = 1.
+# Hold T to drive the ball toward the crate; release T to brake it.
+
+when T is held
+  move toward PhysCrate speed 200
+
+when T is released
+  stop moving

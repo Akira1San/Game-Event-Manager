@@ -1,0 +1,41 @@
+# ---------------- PhysPlayer.events (physics movement test) ----------------
+# Controls: WASD move, Left Mouse shoot, E push the crate.
+# Setup: EventSheet on the PhysPlayer RigidBody, "Use Physics Movement" ON,
+# with the BoxCollider and the mesh as children of that body.
+
+when me appears
+  set Lives to 3
+  set my Invulnerable to false
+  set text of LivesLabel to Lives
+
+# ---- movement: drives the kinematic body with a swept AddMovement ----
+when W is held
+  move forward speed 120
+
+when S is held
+  move back speed 120
+
+when A is held
+  move left speed 120
+
+when D is held
+  move right speed 120
+
+# ---- shooting: the bullet homes on the nearest target (dynamic + CCD) ----
+when Left Mouse is pressed
+  spawn PhysBullet at me
+
+# ---- push: a real impulse on the dynamic crate ----
+when E is pressed
+  push PhysCrate up strength 400
+
+# ---- hazard: the spike's trigger volume reports a contact ----
+when me touches PhysSpike
+  unless my Invulnerable is true
+  set my Invulnerable to true
+  add -1 to Lives
+  wait 1 second
+  set my Invulnerable to false
+
+when Lives changes
+  set text of LivesLabel to Lives

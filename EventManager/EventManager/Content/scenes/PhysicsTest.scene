@@ -1,0 +1,650 @@
+{
+	"ID": "1f12ddca4de4588a6d84bcb93c7cd9ad",
+	"TypeName": "FlaxEngine.SceneAsset",
+	"EngineBuild": 7012,
+	"Data": [
+		{
+			"ID": "1f12ddca4de4588a6d84bcb93c7cd9ad",
+			"TypeName": "FlaxEngine.Scene",
+			"LightmapSettings": {
+				"IndirectLightingIntensity": 1.0,
+				"GlobalObjectsScale": 1.0,
+				"ChartsPadding": 3,
+				"AtlasSize": 1024,
+				"BounceCount": 1,
+				"CompressLightmaps": true,
+				"UseGeometryWithNoMaterials": true,
+				"Quality": 10
+			}
+		},
+		{
+			"ID": "f3fd53bd4bfcdc590eba5d81dbc02ce1",
+			"TypeName": "FlaxEngine.DirectionalLight",
+			"ParentID": "1f12ddca4de4588a6d84bcb93c7cd9ad",
+			"Name": "Sun",
+			"Transform": {
+				"Translation": {
+					"X": 40.0,
+					"Y": 160.0,
+					"Z": 0.0
+				},
+				"Orientation": {
+					"X": 0.3826834559440613,
+					"Y": 0.0,
+					"Z": 0.0,
+					"W": 0.9238795042037964
+				}
+			}
+		},
+		{
+			"ID": "b1babef147a29f0191d88181ec3364c3",
+			"TypeName": "FlaxEngine.Sky",
+			"ParentID": "1f12ddca4de4588a6d84bcb93c7cd9ad",
+			"Name": "Sky",
+			"Transform": {
+				"Translation": {
+					"X": 40.0,
+					"Y": 150.0,
+					"Z": 0.0
+				}
+			},
+			"Sun": "f3fd53bd4bfcdc590eba5d81dbc02ce1"
+		},
+		{
+			"ID": "05ae75594d410d650003b39b41ad29e7",
+			"TypeName": "FlaxEngine.SkyLight",
+			"ParentID": "1f12ddca4de4588a6d84bcb93c7cd9ad",
+			"Name": "SkyLight",
+			"Brightness": 2.5,
+			"CustomTexture": "c54410104ff39427bc11e5bc761d66b0"
+		},
+		{
+			"ID": "966bcd9a4a3c9be266fa8da98978e59e",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "1f12ddca4de4588a6d84bcb93c7cd9ad",
+			"Name": "Floor",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": -19.30115509033203,
+					"Z": 0.0
+				},
+				"Scale": {
+					"X": 10.0,
+					"Y": 0.5,
+					"Z": 10.0
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "1771b53343d461faacdf2c8581b1fdbb",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "ec4fc0fa426e03da68d5159a4c597651",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "966bcd9a4a3c9be266fa8da98978e59e",
+			"Name": "BoxCollider"
+		},
+		{
+			"ID": "ffb3507345410b323b0193b5234fbe80",
+			"TypeName": "FlaxEngine.Camera",
+			"ParentID": "1f12ddca4de4588a6d84bcb93c7cd9ad",
+			"Name": "Camera",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 516.66796875,
+					"Z": -438.3500671386719
+				},
+				"Orientation": {
+					"X": 0.4625765383243561,
+					"Y": 0.0,
+					"Z": 0.0,
+					"W": 0.8865793943405151
+				}
+			},
+			"FOV": 70.0
+		},
+		{
+			"ID": "7a1963bd40a8250a48283fba921359b5",
+			"TypeName": "FlaxEngine.AudioListener",
+			"ParentID": "ffb3507345410b323b0193b5234fbe80",
+			"Name": "Audio Listener"
+		},
+		{
+			"ID": "d7f1cf614088ed14c02ffab67a5b2217",
+			"TypeName": "FlaxEngine.UICanvas",
+			"ParentID": "ffb3507345410b323b0193b5234fbe80",
+			"Name": "UICanvas",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": -150.0,
+					"Z": 300.0
+				},
+				"Orientation": {
+					"X": 1.0,
+					"Y": 4.371138828673793e-8,
+					"Z": 4.371138828673793e-8,
+					"W": 1.910685465164705e-15
+				}
+			},
+			"V": {}
+		},
+		{
+			"ID": "445b55504a97da62e44cf4971f9bbbdd",
+			"TypeName": "FlaxEngine.UIControl",
+			"ParentID": "d7f1cf614088ed14c02ffab67a5b2217",
+			"Name": "LivesLabel",
+			"Control": "FlaxEngine.GUI.Label",
+			"Data": {
+	"Text": "LivesLabel ",
+	"CaseOption": 0,
+	"Bold": true,
+	"Italic": false,
+	"TextColor": {
+		"R": 0.13227417,
+		"G": 0.23703706,
+		"B": 0.14896588,
+		"A": 1.0
+	},
+	"TextColorHighlighted": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"HorizontalAlignment": 1,
+	"VerticalAlignment": 1,
+	"Wrapping": 0,
+	"BaseLinesGapScale": 1.0,
+	"Font": {
+		"Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+		"Size": 9.0
+	},
+	"Material": null,
+	"Margin": {
+		"Left": 0.0,
+		"Right": 0.0,
+		"Top": 0.0,
+		"Bottom": 0.0
+	},
+	"ClipText": false,
+	"AutoWidth": false,
+	"AutoHeight": false,
+	"AutoFitText": false,
+	"AutoFitTextRange": {
+		"X": 0.1,
+		"Y": 100.0
+	},
+	"ClipChildren": true,
+	"CullChildren": true,
+	"AnchorMin": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"AnchorMax": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Offsets": {
+		"Left": 0.0,
+		"Right": 100.0,
+		"Top": 0.0,
+		"Bottom": 20.0
+	},
+	"Scale": {
+		"X": 1.0,
+		"Y": 1.0
+	},
+	"Pivot": {
+		"X": 0.5,
+		"Y": 0.5
+	},
+	"Shear": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Rotation": 0.0,
+	"BackgroundColor": {
+		"R": 0.0,
+		"G": 0.0,
+		"B": 0.0,
+		"A": 0.0
+	},
+	"BackgroundBrush": null,
+	"Enabled": true,
+	"Visible": true,
+	"AutoFocus": false
+}
+		},
+		{
+			"ID": "9494391240fd3684a59435bfa0f4f928",
+			"TypeName": "FlaxEngine.UIControl",
+			"ParentID": "d7f1cf614088ed14c02ffab67a5b2217",
+			"Name": "HitsLabel",
+			"Transform": {
+				"Translation": {
+					"X": 1075.666748046875,
+					"Y": 4.666664123535156,
+					"Z": 0.0
+				}
+			},
+			"Control": "FlaxEngine.GUI.Label",
+			"Data": {
+	"Text": "",
+	"CaseOption": 0,
+	"Bold": false,
+	"Italic": false,
+	"TextColor": {
+		"R": 0.23333335,
+		"G": 0.23333335,
+		"B": 0.23333335,
+		"A": 1.0
+	},
+	"TextColorHighlighted": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"HorizontalAlignment": 1,
+	"VerticalAlignment": 1,
+	"Wrapping": 0,
+	"BaseLinesGapScale": 1.0,
+	"Font": {
+		"Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+		"Size": 9.0
+	},
+	"Material": null,
+	"Margin": {
+		"Left": 0.0,
+		"Right": 0.0,
+		"Top": 0.0,
+		"Bottom": 0.0
+	},
+	"ClipText": false,
+	"AutoWidth": false,
+	"AutoHeight": false,
+	"AutoFitText": false,
+	"AutoFitTextRange": {
+		"X": 0.1,
+		"Y": 100.0
+	},
+	"ClipChildren": true,
+	"CullChildren": true,
+	"AnchorMin": {
+		"X": 1.0,
+		"Y": 0.0
+	},
+	"AnchorMax": {
+		"X": 1.0,
+		"Y": 0.0
+	},
+	"Offsets": {
+		"Left": -844.33325,
+		"Right": 100.0,
+		"Top": 4.666664,
+		"Bottom": 20.0
+	},
+	"Scale": {
+		"X": 1.0,
+		"Y": 1.0
+	},
+	"Pivot": {
+		"X": 0.5,
+		"Y": 0.5
+	},
+	"Shear": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Rotation": 0.0,
+	"BackgroundColor": {
+		"R": 0.0,
+		"G": 0.0,
+		"B": 0.0,
+		"A": 0.0
+	},
+	"BackgroundBrush": null,
+	"Enabled": true,
+	"Visible": true,
+	"AutoFocus": false
+}
+		},
+		{
+			"ID": "fd98be9449fcc0261341fc9d5f09fcb8",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "1f12ddca4de4588a6d84bcb93c7cd9ad",
+			"Name": "GameManager"
+		},
+		{
+			"ID": "a059ae1847ff7943522f5a955a346b65",
+			"TypeName": "Game.EventsManager",
+			"ParentID": "fd98be9449fcc0261341fc9d5f09fcb8",
+			"V": {
+	"Runtime": {
+		"Variables": {
+			"OnWarning": {}
+		},
+		"World": {
+			"$type": "Game.DefaultEventWorld, Game.CSharp"
+		}
+	},
+	"ContactMode": 1
+}
+		},
+		{
+			"ID": "079c03c94417f329073944a6ed53e426",
+			"TypeName": "FlaxEngine.RigidBody",
+			"ParentID": "1f12ddca4de4588a6d84bcb93c7cd9ad",
+			"Name": "PhysPlayer",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 60.0,
+					"Z": -400.0
+				}
+			},
+			"StaticFlags": 0,
+			"Mass": 1061.2080078125,
+			"IsKinematic": true,
+			"EnableGravity": false
+		},
+		{
+			"ID": "f88c2d4541e72afd826e3987c05fbdba",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "079c03c94417f329073944a6ed53e426",
+			"V": {
+	"EventFile": "PhysPlayer",
+	"UsePhysicsMovement": true
+}
+		},
+		{
+			"ID": "bdce97234fb36cea95a2a9aefdb29112",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "079c03c94417f329073944a6ed53e426",
+			"Name": "Box Collider",
+			"Size": {
+				"X": 102.0,
+				"Y": 102.0,
+				"Z": 102.0
+			}
+		},
+		{
+			"ID": "2be304284d423374f5b385a5a3d31ecc",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "079c03c94417f329073944a6ed53e426",
+			"Name": "Cube",
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "5b9847ae4f17d7727f3cc5acb8f573d8",
+			"TypeName": "FlaxEngine.RigidBody",
+			"ParentID": "1f12ddca4de4588a6d84bcb93c7cd9ad",
+			"IsActive": false,
+			"Name": "PhysBullet",
+			"StaticFlags": 0,
+			"Mass": 0.10000000149011612,
+			"MassScale": 0.10000000149011612,
+			"UseCCD": true,
+			"EnableGravity": false
+		},
+		{
+			"ID": "3de2ccab4184b5a69e183da06d8e9be0",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "5b9847ae4f17d7727f3cc5acb8f573d8",
+			"V": {
+	"EventFile": "PhysBullet",
+	"UsePhysicsMovement": true
+}
+		},
+		{
+			"ID": "42c350974337fa922c3bd5b7869111f1",
+			"TypeName": "FlaxEngine.SphereCollider",
+			"ParentID": "5b9847ae4f17d7727f3cc5acb8f573d8",
+			"Name": "SphereCollider",
+			"StaticFlags": 0,
+			"IsTrigger": true,
+			"Radius": 10.0
+		},
+		{
+			"ID": "0be15c0d4a8ffd807b7eb3bcdfe9bbc1",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "5b9847ae4f17d7727f3cc5acb8f573d8",
+			"Name": "Sphere",
+			"Transform": {
+				"Scale": {
+					"X": 0.20000000298023224,
+					"Y": 0.20000000298023224,
+					"Z": 0.20000000298023224
+				}
+			},
+			"StaticFlags": 0,
+			"Model": "dd86c4724bf734c4959d23b3c74faa05",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "6c36bd0c457513d7f50b3991ac54007b",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "d6d8f8f64dccb388e9b5a18eb52ba5b2",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "1f12ddca4de4588a6d84bcb93c7cd9ad",
+			"Name": "PhysTarget",
+			"Transform": {
+				"Translation": {
+					"X": 200.0,
+					"Y": 60.0,
+					"Z": 0.0
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "a1852a094f0b1724190436a225ab5cc8",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "ac024742433e9a2c05317ab4984016ff",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "d6d8f8f64dccb388e9b5a18eb52ba5b2",
+			"V": {
+	"EventFile": "PhysTarget"
+}
+		},
+		{
+			"ID": "37f72891427343cf6a846180a5c5271f",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "d6d8f8f64dccb388e9b5a18eb52ba5b2",
+			"Name": "BoxCollider"
+		},
+		{
+			"ID": "79ee1d6342fd1ec07997da94b4fcccfa",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "1f12ddca4de4588a6d84bcb93c7cd9ad",
+			"Name": "PhysTarget",
+			"Transform": {
+				"Translation": {
+					"X": -170.0,
+					"Y": 60.0,
+					"Z": 0.0
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "a1852a094f0b1724190436a225ab5cc8",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "14fe2b374978dd7952d7bb8d234f04fc",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "79ee1d6342fd1ec07997da94b4fcccfa",
+			"V": {
+	"EventFile": "PhysTarget"
+}
+		},
+		{
+			"ID": "7a45b9dc4e21077e31c1eb870fa81494",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "79ee1d6342fd1ec07997da94b4fcccfa",
+			"Name": "BoxCollider"
+		},
+		{
+			"ID": "2e82a7ed4d2b20b7a993918cac75512c",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "1f12ddca4de4588a6d84bcb93c7cd9ad",
+			"Name": "PhysSpike",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 50.0,
+					"Z": 410.0
+				}
+			},
+			"IsTrigger": true
+		},
+		{
+			"ID": "ad2e18a6491338942b44829003947f1e",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "2e82a7ed4d2b20b7a993918cac75512c",
+			"Name": "Cube",
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "a9d081ea4f6b9f2013c54c9b3e613f50",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "51a0a1d048285fec7bea52b607b4f05f",
+			"TypeName": "FlaxEngine.RigidBody",
+			"ParentID": "1f12ddca4de4588a6d84bcb93c7cd9ad",
+			"Name": "PhysCrate",
+			"Transform": {
+				"Translation": {
+					"X": -360.0,
+					"Y": 60.0,
+					"Z": 307.0498046875
+				}
+			},
+			"StaticFlags": 0,
+			"OverrideMass": true
+		},
+		{
+			"ID": "e8ad8135472c8a71f04ce59b6198f8e0",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "51a0a1d048285fec7bea52b607b4f05f",
+			"Name": "Cube",
+			"StaticFlags": 0,
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "ea4b98824f51d74380d64fa533ea934a",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "97692a834c7db410ebb4848f5bafc631",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "51a0a1d048285fec7bea52b607b4f05f",
+			"Name": "BoxCollider",
+			"StaticFlags": 0
+		},
+		{
+			"ID": "c009ebf94e94411a6e57f4bddc2b5064",
+			"TypeName": "FlaxEngine.RigidBody",
+			"ParentID": "1f12ddca4de4588a6d84bcb93c7cd9ad",
+			"Name": "PhysBall",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 40.0,
+					"Z": 0.0
+				}
+			},
+			"StaticFlags": 0,
+			"OverrideMass": true
+		},
+		{
+			"ID": "598c55a9477d527d0c170ebd48aaae70",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "c009ebf94e94411a6e57f4bddc2b5064",
+			"V": {
+	"EventFile": "PhysBall",
+	"UsePhysicsMovement": true
+}
+		},
+		{
+			"ID": "ceebb723417d6ab5c50973beba232ab8",
+			"TypeName": "FlaxEngine.SphereCollider",
+			"ParentID": "c009ebf94e94411a6e57f4bddc2b5064",
+			"Name": "Sphere Collider"
+		},
+		{
+			"ID": "366a5f7247d2d1393c0534b648d6a635",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "c009ebf94e94411a6e57f4bddc2b5064",
+			"Name": "Sphere",
+			"StaticFlags": 0,
+			"Model": "dd86c4724bf734c4959d23b3c74faa05",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		}
+	]
+}

@@ -1,0 +1,16 @@
+# ---------------- PhysTarget.events (physics movement test) ----------------
+# Setup: EventSheet on the PhysTarget actor (mesh root), "Use Physics Movement" OFF.
+# It needs a solid BoxCollider child; the bullet's trigger collider reports the hit.
+
+when me appears
+  set my Hits to 0
+  set text of HitsLabel to my Hits
+
+when message "hit" arrives
+  add 1 to my Hits
+  hide me
+  wait 0.15 seconds
+  show me
+
+when my Hits changes
+  set text of HitsLabel to my Hits

@@ -62,6 +62,7 @@
   <a href="#triggers">Triggers</a>
   <a href="#conditions">Conditions</a>
   <a href="#actions">Actions</a>
+  <a href="#animation">Animation</a>
   <a href="#structural">Structural</a>
   <a href="#values">Values</a>
   <a href="#physics">Physics</a>
@@ -121,7 +122,7 @@
         <tr><td><span class="kw">when</span> <span class="placeholder">&lt;var&gt;</span> <span class="kw">becomes</span> <span class="placeholder">&lt;value&gt;</span> [not <span class="placeholder">&lt;value&gt;</span>]</td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when my health becomes 0</span><br><span class="alt">alt: when my health becomes not 0</span></td></tr>
         <tr><td><span class="kw">when</span> <span class="placeholder">&lt;var&gt;</span> <span class="kw">changes</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when Score changes</span></td></tr>
         <tr><td><span class="kw">when message</span> <span class="example">"&lt;name&gt;"</span> <span class="kw">arrives</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when message "die" arrives</span></td></tr>
-        <tr><td><span class="kw">when anim</span> <span class="example">"&lt;name&gt;"</span> <span class="kw">ends</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when anim "Shoot" ends</span></td></tr>
+        <tr><td><span class="kw">when anim</span> <span class="example">"&lt;name&gt;"</span> <span class="kw">ends</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when anim "dragon_fire" ends</span><br><span class="alt">one-shots (<code>play anim</code>) only · name matches case-insensitively</span></td></tr>
       </tbody>
     </table>
   </section>
@@ -159,7 +160,7 @@
         <tr><td><span class="kw">move</span></td><td><span class="kw">move forward speed 5</span> / <span class="kw">move back speed 5</span> / <span class="kw">move left speed 5</span> / <span class="kw">move right speed 5</span> / <span class="kw">move toward Player speed 2</span></td><td><span class="example">move forward speed 5</span><br><span class="alt">speed defaults to 5 · physics: <a href="#physics">velocity or swept move</a></span></td></tr>
         <tr><td><span class="kw">turn</span></td><td><span class="kw">turn left degrees 90</span> / <span class="kw">turn right degrees 90</span></td><td><span class="example">turn left degrees 90</span></td></tr>
         <tr><td><span class="kw">goto</span></td><td><span class="kw">goto Player</span> / <span class="kw">goto there</span></td><td><span class="example">goto Player</span></td></tr>
-        <tr><td><span class="kw">camera</span></td><td><span class="kw">camera looks at Chest</span> / <span class="kw">camera follows Player</span></td><td><span class="example">camera looks at Chest</span></td></tr>
+        <tr><td><span class="kw">camera</span></td><td><span class="kw">camera follows Player</span></td><td><span class="example">camera follows Player</span><br><span class="alt">keeps the camera's current offset and moves with the target · needs an actor named <code>Camera</code></span></td></tr>
         <tr><td><span class="kw">look</span></td><td><span class="kw">look at Player</span></td><td><span class="example">look at Player</span></td></tr>
         <tr><td><span class="kw">face</span></td><td><span class="kw">face Player</span></td><td><span class="example">face Player</span></td></tr>
         <tr><td><span class="kw">teleport</span></td><td><span class="kw">teleport me to SpawnPoint</span></td><td><span class="example">teleport me to SpawnPoint</span></td></tr>
@@ -167,9 +168,9 @@
         <tr><td><span class="kw">make</span></td><td><span class="kw">make me solid</span></td><td><span class="example">make me solid</span></td></tr>
         <tr><td><span class="kw">destroy</span></td><td><span class="kw">destroy me</span></td><td><span class="example">destroy me</span></td></tr>
         <tr><td><span class="kw">spawn</span></td><td><span class="kw">spawn Coin at SpawnPoint</span></td><td><span class="example">spawn Coin at SpawnPoint</span></td></tr>
-        <tr><td><span class="kw">play</span></td><td><span class="kw">play sound "hit.wav"</span> / <span class="kw">play anim "Walk"</span></td><td><span class="example">play sound "hit.wav"</span><br><span class="example">play anim "Walk"</span></td></tr>
-        <tr><td><span class="kw">loop</span></td><td><span class="kw">loop anim "Walk"</span></td><td><span class="example">loop anim "Walk"</span></td></tr>
-        <tr><td><span class="kw">stop</span></td><td><span class="kw">stop anim</span> / <span class="kw">stop moving</span> / <span class="kw">stop this event</span></td><td><span class="example">stop anim</span><br><span class="example">stop moving</span><br><span class="example">stop this event</span></td></tr>
+        <tr><td><span class="kw">play</span></td><td><span class="kw">play sound "hit.wav"</span> / <span class="kw">play anim "dragon_fire"</span></td><td><span class="example">play sound "hit.wav"</span><br><span class="example">play anim "dragon_fire"</span><br><span class="alt">one-shot: plays once and holds the last frame · see <a href="#animation">animation</a></span></td></tr>
+        <tr><td><span class="kw">loop</span></td><td><span class="kw">loop anim "animation walk"</span></td><td><span class="example">loop anim "animation walk"</span><br><span class="alt">repeats forever · use for idle / walk / run · see <a href="#animation">animation</a></span></td></tr>
+        <tr><td><span class="kw">stop</span></td><td><span class="kw">stop anim</span> / <span class="kw">stop moving</span> / <span class="kw">stop this event</span></td><td><span class="example">stop anim</span><br><span class="example">stop moving</span><br><span class="example">stop this event</span><br><span class="alt">stop anim restores the previous clip or the bind pose</span></td></tr>
         <tr><td><span class="kw">send</span></td><td><span class="kw">send message "die"</span> / <span class="kw">send message "hit" to other</span></td><td><span class="example">send message "die"</span></td></tr>
         <tr><td><span class="kw">set</span></td><td><span class="kw">set Score to 0</span> / <span class="kw">set my rotating to true</span> / <span class="kw">set text of ScoreLabel to Score</span> / <span class="kw">set A to B + C</span> / <span class="kw">set state chase</span></td><td><span class="example">set Score to 0</span><br><span class="example">set text of ScoreLabel to Score</span></td></tr>
         <tr><td><span class="kw">add</span></td><td><span class="kw">add 1 to Score</span> / <span class="kw">add Sword to my bag</span></td><td><span class="example">add 1 to Score</span></td></tr>
@@ -186,6 +187,83 @@
         <tr><td><span class="kw">debug</span></td><td><span class="kw">debug "health = " + my health</span> / <span class="kw">debug Score changed</span></td><td><span class="example">debug Score changed</span><br><span class="alt">alias for print — prints to the editor console</span></td></tr>
       </tbody>
     </table>
+  </section>
+
+  <section id="animation">
+    <h2>Animation — <code>play anim</code> / <code>loop anim</code></h2>
+    <p>Animation words drive the skeleton of an <code>AnimatedModel</code>. No Anim Graph authoring is needed: each clip start builds a virtual graph in code, plays the clip, and swaps graphs when the clip changes.</p>
+
+    <h3>Setup</h3>
+    <div class="how-it-works">
+      <ol>
+        <li>The actor needs an <code>AnimatedModel</code> — a skinned mesh with a skeleton, not a <code>StaticModel</code>.</li>
+        <li>Import the animation clips into <code>Content</code>. Each clip is an <code>Animation</code> asset (for example <code>chars/BGE Dragon 2.07/BGE Dragon 2.07 animation walk.flax</code>).</li>
+        <li>Put the <code>EventSheet</code> on the <code>AnimatedModel</code> itself, or on a parent actor above it. Both work.</li>
+        <li>Name the clip in quotes: <code>loop anim "animation walk"</code>.</li>
+      </ol>
+    </div>
+
+    <h3>What each word does</h3>
+    <table>
+      <thead>
+        <tr><th style="width:26%">Word</th><th style="width:44%">What it does</th><th>Example</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="kw">play anim</span> <span class="example">"&lt;clip&gt;"</span></td><td>Plays once, then <b>holds the last frame</b>. Use for attacks, hits, one-off gestures. Fires <code>when anim "&lt;clip&gt;" ends</code> when done.</td><td><span class="example">play anim "dragon_fire"</span></td></tr>
+        <tr><td><span class="kw">loop anim</span> <span class="example">"&lt;clip&gt;"</span></td><td>Repeats forever until another animation word runs. Use for idle, walk and run. Never fires an <code>ends</code> trigger.</td><td><span class="example">loop anim "animation walk"</span></td></tr>
+        <tr><td><span class="kw">stop anim</span></td><td>Stops the current clip and restores the previous clip, or the bind pose if there was none.</td><td><span class="example">stop anim</span></td></tr>
+        <tr><td><span class="kw">when anim</span> <span class="example">"&lt;clip&gt;"</span> <span class="kw">ends</span></td><td>Fires once, after a <code>play anim</code> one-shot reaches the end of its clip. The name is matched case-insensitively.</td><td><span class="example">when anim "dragon_fire" ends</span></td></tr>
+      </tbody>
+    </table>
+
+    <h3>Clip names</h3>
+    <div class="how-it-works">
+      <ol>
+        <li><b>Folder and extension are ignored.</b> <code>"animation walk"</code> finds <code>chars/BGE Dragon 2.07/BGE Dragon 2.07 animation walk.flax</code>.</li>
+        <li><b>Case is ignored.</b> <code>"Walk"</code>, <code>"walk"</code> and <code>"WALK"</code> are the same name.</li>
+        <li><b>A suffix works when it is unambiguous.</b> <code>"walk"</code> also finds <code>BGE Dragon 2.07 animation walk</code>, but if two imports both contain a <code>walk</code> clip, use the longer <code>"animation walk"</code> to pick the right one.</li>
+        <li><b>The name you pass is the name that ends.</b> <code>play anim "dragon_fire"</code> pairs with <code>when anim "dragon_fire" ends</code>, including case differences.</li>
+      </ol>
+    </div>
+
+    <h3>Gotchas</h3>
+    <div class="how-it-works">
+      <ol>
+        <li><b>Held triggers fire every tick.</b> <code>loop anim</code> on a clip that is already playing is a no-op, so <code>when W is held</code> + <code>loop anim "animation walk"</code> is safe. Do <b>not</b> put <code>play anim</code> there — a one-shot would restart every tick and never finish.</li>
+        <li><b>One-shots hold their last frame.</b> When the clip ends the model stays on that pose, so play a loop in the <code>when anim … ends</code> block to return to idle.</li>
+        <li><b>Loops never end.</b> <code>when anim "animation walk" ends</code> never fires — that trigger is only for <code>play anim</code> one-shots.</li>
+        <li><b>No blending in v1.</b> Switching clips is a hard cut; there is no cross-fade between walk and run. Keep the poses similar or accept the pop.</li>
+        <li><b>The clip must match the skeleton.</b> A clip from a different import or rig can play deformed. Use clips imported with the same model.</li>
+        <li><b><code>stop anim</code> is not <code>stop moving</code>.</b> <code>stop anim</code> freezes the skeleton, not the actor's position; <code>stop moving</code> stops movement and leaves the animation running.</li>
+      </ol>
+    </div>
+
+    <h3>Quick example</h3>
+    <div class="syntax-box">
+      <span class="alt"># EventSheet on the AnimatedModel (or a parent above it) · full file: dragon.events</span><br>
+      <span class="kw">when me appears</span><br>
+      &nbsp;&nbsp;<span class="kw">camera follows me</span><br>
+      &nbsp;&nbsp;<span class="kw">loop anim "animation idle pose"</span><br>
+      <br>
+      <span class="kw">when W is held</span><br>
+      &nbsp;&nbsp;<span class="kw">unless Left Shift is held</span><br>
+      &nbsp;&nbsp;<span class="kw">move forward speed 40</span><br>
+      &nbsp;&nbsp;<span class="kw">loop anim "animation walk"</span><br>
+      <br>
+      <span class="kw">when Left Shift is held</span><br>
+      &nbsp;&nbsp;<span class="kw">W is held</span><br>
+      &nbsp;&nbsp;<span class="kw">move forward speed 100</span><br>
+      &nbsp;&nbsp;<span class="kw">loop anim "animation run"</span><br>
+      <br>
+      <span class="kw">when W is released</span><br>
+      &nbsp;&nbsp;<span class="kw">loop anim "animation idle pose"</span><br>
+      <br>
+      <span class="kw">when Left Mouse is pressed</span><br>
+      &nbsp;&nbsp;<span class="kw">play anim "dragon_fire"</span><br>
+      <br>
+      <span class="kw">when anim "dragon_fire" ends</span><br>
+      &nbsp;&nbsp;<span class="kw">loop anim "animation idle pose"</span>
+    </div>
   </section>
 
   <section id="structural">
@@ -369,7 +447,7 @@
 
   <div class="footnote">
     Source of truth: <code>Source/Game/Events/WordRegistry.cs</code> in the project.<br>
-    Physics rules live in <code>Source/Game/Runtime/PhysicsMovement.cs</code> (pure, unit-tested) and are applied by <code>Source/Game/Bridge/FlaxActions.cs</code>. Worked example: <code>Docs/PhysicsTest.md</code> and <code>Content/scenes/PhysicsTest.scene</code>.<br>
+    Physics rules live in <code>Source/Game/Runtime/PhysicsMovement.cs</code> (pure, unit-tested) and are applied by <code>Source/Game/Bridge/FlaxActions.cs</code>. Animation clip lookup, one-shot timing and graph swaps live in that bridge file too. Worked example: <code>Docs/PhysicsTest.md</code> and <code>Content/scenes/PhysicsTest.scene</code>.<br>
     This list reflects the shipped v0.1 implementation. Planned-but-not-implemented words (e.g. state-machine <code>set state</code> from Task 11) are tracked in TASKS.md, not here.
   </div>
 </div>
