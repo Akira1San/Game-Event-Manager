@@ -383,23 +383,42 @@ transform nudge; with the flag off every push stays a transform nudge.
 ### Armature characters (the BGE way)
 
 Animated characters work like the old Blender Game Engine Action Actuator: pick an animation,
-play it by name. You never touch Flax's visual Anim Graph editor by hand â€” a **boring template
-Anim Graph ships with the system**, where each state exists purely to hold *one animation*, and
-each state is **named after a Blender Action**. The event words do the rest:
+play it by name. You never touch Flax's visual Anim Graph editor by hand and no graph asset has to
+be authored, assigned or wired: the bridge builds a tiny virtual Anim Graph per clip in code, so
+each clip simply plays. The event words do the rest:
 
-- `play anim "Walk"` maps to Flax's `AnimatedModel.PlayState("Walk")` â€” play a state by name,
-  exactly like BGE playing an Action by name. No nodes, no wires.
+- `play anim "Walk"` finds the `Animation` asset whose name ends in "walk" (folder, extension and
+  case are ignored) and plays it once, holding the last frame -- exactly like BGE playing an
+  Action by name. No nodes, no wires.
 
 **Setup contract for a character** (same muscle memory as naming Actions for bricks):
 
-1. Name each Action carefully in Blender â†’ export to Flax.
-2. Add the shipped template Anim Graph to the character (one click â€” it's the standard one).
-3. Match names: the state name = the Action name = what you write in the `anim` word.
+1. Name each Action carefully in Blender -> export to Flax (each becomes an `Animation` asset).
+2. Add an `AnimatedModel` to the character and assign the exported `SkinnedModel`. The
+   `EventSheet` may sit on the model itself or on a parent actor.
+3. Match names: what you write in the `anim` word must match the clip name. Verbose imported
+   names still answer to their tail, so `"walk"` finds `BGE Dragon 2.07 animation walk`.
 
-**Friendly errors in BGE spirit:** playing an unknown name is a name check against the rig â€”
-`I don't know the anim "Walked". This character has: Idle, Walk, Shoot.`
+**How the words behave (Flax 1.13):**
 
-Example (a walking, shooting character â€” animation only, logic is the usual syntax):
+- `play anim "<name>"` -- one shot; the last frame is held.
+- `loop anim "<name>"` -- repeats until something else plays.
+- `stop anim` -- restores the previous clip, or the bind pose when there is none.
+- `when anim "<name>" ends` -- fires once, after a one-shot's `Animation.Length`; the name match
+  ignores case.
+- Repeating the same word while that clip is still playing is a no-op, so putting
+  `loop anim "Walk"` under `when W is held` does not restart the clip every tick.
+- Assigning a virtual graph overrides any graph authored on the model. That is intentional:
+  the event words own the animation.
+
+**Known limitation:** v1 swaps graphs instead of blending, so switching clips can pop. If
+cross-blending becomes necessary, ship one graph with an Animation Slot node and use
+`PlaySlotAnimation(...)` with blend-in/blend-out times.
+
+**Friendly errors in BGE spirit:** playing an unknown name lists the project's clips --
+`I don't know the anim "Walked". This project has: idle pose, run, walk.`
+
+Example (a walking, shooting character -- animation only, logic is the usual syntax):
 
 ```
 # --- Player.events (armature character) ---
@@ -419,8 +438,8 @@ when anim "Shoot" ends
 ```
 
 Rules: `play anim` runs once and holds the last frame; `loop anim` repeats until something else
-plays; playing a new animation replaces the current one (with a short cross-blend); `when anim
-"â€¦" ends` fires for one-shots only.
+plays; playing a new animation replaces the current one; `when anim "..." ends` fires for
+one-shots only.
 
 ### Menus & game UI (the scene-switching way)
 

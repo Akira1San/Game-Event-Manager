@@ -342,6 +342,14 @@ var animDesc = TriggerClassifier.Classify(animEnd.Events[0]);
 Check(animDesc.Kind == TriggerKind.AnimEnd && animDesc.RequireName == "Shoot",
     "`when anim \"Shoot\" ends` classifies to AnimEnd with RequireName \"Shoot\"");
 
+var animEndEngine = FreshEngine(new FakeWorld());
+animEndEngine.AddSheet(new FakeActor("Dragon"),
+    parser.Parse("when anim \"shoot\" ends\n  set AnimEnded to 1\n"));
+animEndEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.AnimEnd, Name = "Shoot" });
+animEndEngine.Tick(0);
+Check(animEndEngine.Variables.GetGlobal("AnimEnded").AsNumber() == 1,
+    "`when anim \"shoot\" ends` matches the clip name case-insensitively");
+
 var sceneStart = parser.Parse("when scene starts\n  set Score to 0\n");
 Check(sceneStart.Events.Count == 1, "`when scene starts` parses as an event");
 var sceneDesc = TriggerClassifier.Classify(sceneStart.Events[0]);
@@ -1180,6 +1188,14 @@ Check(AssetNames.Key("shot") == "shot", "sound key leaves a plain name alone");
 Check(AssetNames.Key("boom9") == "boom9", "sound key keeps digits");
 Check(AssetNames.Key("") == "" && AssetNames.Key(null) == "", "sound key handles empty input");
 
+// Verbose imported clip names answer to the action name at their end.
+Check(AssetNames.Suffixes("bge dragon 2.07 animation walk").Contains("walk"),
+    "a verbose clip path answers to its last word");
+Check(AssetNames.Suffixes("bge dragon 2.07 animation idle pose").Contains("idle pose"),
+    "multi-word clip names keep their tail");
+Check(AssetNames.Suffixes("walk").Count() == 1, "a plain name yields only itself");
+Check(AssetNames.Suffixes("").Count() == 0, "empty key yields nothing");
+
 var animSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   play anim ""Attack"""), null);
 Check(animSpec.Verb == ActionVerb.PlayAnim && animSpec.Thing == "Attack", "`play anim \"Attack\"` parses");
@@ -1191,6 +1207,11 @@ Check(stopSound.Verb == ActionVerb.StopSound, "`stop sound` parses");
 var stopAnim = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   stop anim"), null);
 Check(stopAnim.Verb == ActionVerb.StopAnim, "`stop anim` parses");
+
+var cameraSpec = ActionWords.Parse(RawWords(actionParser, @"when game starts
+  camera follows me"), null);
+Check(cameraSpec.Verb == ActionVerb.CameraFollow && cameraSpec.Thing == "me",
+    "`camera follows me` parses to CameraFollow");
 
 var loopAnim = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   loop anim ""Walk"""), null);

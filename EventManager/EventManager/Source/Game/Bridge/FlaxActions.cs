@@ -25,14 +25,35 @@ namespace Game
         public static readonly List<OngoingMove> Moves = new List<OngoingMove>();
         private static readonly HashSet<string> WarnedOnce = new HashSet<string>();
         public static Action<string> Warn = FlaxActions.WarnOnce;
-        /// <summary>Last played animation per actor, so <c>stop anim</c> can restore it.</summary>
-        private static readonly Dictionary<object, string> PreviousAnim = new Dictionary<object, string>();
-        /// <summary>One-shot animations currently playing per actor (play anim, not loop anim).</summary>
-        private static readonly Dictionary<object, HashSet<string>> OneShotAnims = new Dictionary<object, HashSet<string>>();
+        /// <summary>Animation state per actor (current/previous clip + the virtual graphs that play them).</summary>
+        private static readonly Dictionary<object, AnimState> AnimStates = new Dictionary<object, AnimState>();
         /// <summary>Sources spawned by <c>play sound</c>, with the actor whose sheet started them.</summary>
         private static readonly List<(Actor Owner, AudioSource Source)> ActiveSounds = new List<(Actor, AudioSource)>();
         /// <summary>Clip key (see <see cref="AssetNames"/>) to asset id, built once per play session.</summary>
         private static Dictionary<string, Guid> SoundIndexCache;
+        /// <summary>Animation asset key/alias to asset id, built once per play session.</summary>
+        private static Dictionary<string, Guid> AnimIndexCache;
+        /// <summary>Full animation asset keys (no aliases), for the friendly "I don't know the anim" list.</summary>
+        private static List<string> AnimFullNames;
+        /// <summary>Actor the camera keeps centered (<c>camera follows &lt;thing&gt;</c>).</summary>
+        private static Actor CameraFollowTarget;
+        /// <summary>Camera position minus the target position, captured when the follow starts.</summary>
+        private static Vector3 CameraFollowOffset;
+
+        /// <summary>Current and previous clip for one actor, with the virtual graphs that play them.</summary>
+        private sealed class AnimState
+        {
+            public string Clip;          // normalized asset key, used for "is it already playing?"
+            public string Name;          // name as written in the event, pushed to `when anim ... ends`
+            public bool Loop;
+            public bool OneShot;
+            public double EndTime;
+            public AnimationGraph Graph;
+            public AnimationGraph PreviousGraph;
+            public string PreviousClip;
+            public string PreviousName;
+            public bool PreviousLoop;
+        }
 
         public static void WarnOnce(string message)
         {
@@ -45,6 +66,17 @@ namespace Game
             Moves.Clear();
             ActiveSounds.Clear();
             SoundIndexCache = null;
+            AnimIndexCache = null;
+            AnimFullNames = null;
+            CameraFollowTarget = null;
+            foreach (AnimState state in AnimStates.Values)
+            {
+                if (state.Graph != null)
+                    FlaxEngine.Object.Destroy(state.Graph);
+                if (state.PreviousGraph != null)
+                    FlaxEngine.Object.Destroy(state.PreviousGraph);
+            }
+            AnimStates.Clear();
         }
 
         public static object ResolveThing(EventContext context, string thing)
@@ -177,6 +209,35 @@ namespace Game
                     else
                         MoveSubject(move.Subject, delta / length, move.Speed, move.UsePhysics);
                 }
+            }
+
+            // One-shots: fire `when anim "<clip>" ends` once, after the clip's length.
+            // Collect first: the trigger may immediately play another clip (mutating AnimStates).
+            List<(Actor Actor, string Clip)> ended = null;
+            foreach (var pair in AnimStates)
+            {
+                AnimState state = pair.Value;
+                if (!state.OneShot || Time.GameTime < state.EndTime)
+                    continue;
+                state.OneShot = false;
+                if (pair.Key is Actor actor)
+                    (ended ??= new List<(Actor, string)>()).Add((actor, state.Name));
+            }
+            if (ended != null)
+            {
+                foreach (var (actor, clip) in ended)
+                    EventsManager.Instance?.HandleAnimEnd(actor, clip);
+            }
+
+            // `camera follows <thing>`: translate the camera by the target's movement, keeping
+            // the offset captured when the follow started (the authored framing never changes).
+            if (CameraFollowTarget != null && CameraFollowTarget.Scene == null)
+                CameraFollowTarget = null;
+            if (CameraFollowTarget != null)
+            {
+                Actor camera = Level.FindActor("Camera");
+                if (camera != null)
+                    camera.Position = CameraFollowTarget.Position + CameraFollowOffset;
             }
         }
 
@@ -355,6 +416,9 @@ namespace Game
                     break;
                 case ActionVerb.StopAnim:
                     StopAnim(context, spec);
+                    break;
+                case ActionVerb.CameraFollow:
+                    StartCameraFollow(context, spec);
                     break;
                 case ActionVerb.Hide:
                     SetActive(context, spec.Thing, false);
@@ -811,55 +875,83 @@ namespace Game
             return names.Count == 0 ? "(none)" : string.Join(", ", names);
         }
 
-        /// <summary>Play an animation by name on the actor's <see cref="FlaxEngine.AnimatedModel"/>.</summary>
-        private static void PlayAnim(EventContext context, ActionSpec spec)
-        {
-            var me = context.Me as Actor;
-            if (me == null)
-            {
-                WarnOnce($"\u201Cplay anim \u201C{spec.Thing}\u201D\u201D needs to run on an actor's sheet — the global Game sheet has no model to animate.");
-                return;
-            }
-            var model = me.FindActor<FlaxEngine.AnimatedModel>();
-            if (model == null)
-            {
-                WarnOnce($"\u201Cplay anim \u201C{spec.Thing}\u201D\u201D needs an AnimatedModel on \u201C{me.Name}\u201D.");
-                return;
-            }
-            if (!HasAnim(model, spec.Thing))
-            {
-                WarnOnce(UnknownAnimMessage(model, spec.Thing));
-                return;
-            }
-            PreviousAnim[me] = CurrentAnim(model);
-            CallPlayState(model, spec.Thing);
-            MarkOneShot(me, spec.Thing);
-        }
+        /// <summary>Play an animation once by name on the actor's <see cref="FlaxEngine.AnimatedModel"/>.</summary>
+        private static void PlayAnim(EventContext context, ActionSpec spec) => StartAnim(context, spec, false);
 
         /// <summary>Loop an animation by name on the actor's <see cref="FlaxEngine.AnimatedModel"/>.</summary>
-        private static void LoopAnim(EventContext context, ActionSpec spec)
+        private static void LoopAnim(EventContext context, ActionSpec spec) => StartAnim(context, spec, true);
+
+        /// <summary>
+        /// Starts a clip on the actor's model. Flax 1.13 has no PlayState, so a virtual Anim
+        /// Graph holding exactly this clip is created and assigned (the BGE "Action" idea).
+        /// </summary>
+        private static void StartAnim(EventContext context, ActionSpec spec, bool loop)
         {
+            string word = loop ? "loop anim" : "play anim";
             var me = context.Me as Actor;
             if (me == null)
             {
-                WarnOnce($"\u201Cloop anim \u201C{spec.Thing}\u201D\u201D needs to run on an actor's sheet — the global Game sheet has no model to animate.");
+                WarnOnce($"\u201C{word} \u201C{spec.Thing}\u201D\u201D needs to run on an actor's sheet — the global Game sheet has no model to animate.");
                 return;
             }
-            var model = me.FindActor<FlaxEngine.AnimatedModel>();
+            var model = ModelOf(me);
             if (model == null)
             {
-                WarnOnce($"\u201Cloop anim \u201C{spec.Thing}\u201D\u201D needs an AnimatedModel on \u201C{me.Name}\u201D.");
+                WarnOnce($"\u201C{word} \u201C{spec.Thing}\u201D\u201D needs an AnimatedModel on \u201C{me.Name}\u201D.");
                 return;
             }
-            if (!HasAnim(model, spec.Thing))
+            if (model.SkinnedModel == null)
             {
-                WarnOnce(UnknownAnimMessage(model, spec.Thing));
+                WarnOnce($"\u201C{word} \u201C{spec.Thing}\u201D\u201D needs a SkinnedModel assigned on \u201C{me.Name}\u201D.");
                 return;
             }
-            PreviousAnim[me] = CurrentAnim(model);
-            CallPlayState(model, spec.Thing);
-            SetLooping(model, true);
-            ClearOneShot(me, spec.Thing);
+
+            Animation anim = LoadAnimation(spec.Thing);
+            if (anim == null)
+            {
+                WarnOnce($"I don't know the anim \u201C{spec.Thing}\u201D. This project has: {AvailableAnimNames()}.");
+                return;
+            }
+
+            string clip = AssetNames.Key(spec.Thing);
+            AnimStates.TryGetValue(me, out AnimState state);
+
+            bool sameClip = state != null && state.Clip == clip;
+            bool stillPlaying = state != null && (!state.OneShot || Time.GameTime < state.EndTime);
+            if (sameClip && stillPlaying)
+                return; // held triggers call this every tick — never restart mid-clip
+
+            var graph = Content.CreateVirtualAsset<AnimationGraph>();
+            if (graph == null)
+            {
+                WarnOnce($"Could not create an animation graph for \u201C{spec.Thing}\u201D on \u201C{me.Name}\u201D.");
+                return;
+            }
+            if (graph.InitAsAnimation(model.SkinnedModel, anim, loop, false))
+            {
+                // Docs: true means "failed".
+                FlaxEngine.Object.Destroy(graph);
+                WarnOnce($"Could not play \u201C{spec.Thing}\u201D on \u201C{me.Name}\u201D — the clip and the skinned model may use different skeletons.");
+                return;
+            }
+
+            model.AnimationGraph = graph;
+            if (state?.PreviousGraph != null)
+                FlaxEngine.Object.Destroy(state.PreviousGraph); // keep only two graphs alive
+
+            AnimStates[me] = new AnimState
+            {
+                Clip = clip,
+                Name = spec.Thing.Trim(),
+                Loop = loop,
+                OneShot = !loop,
+                EndTime = loop ? double.MaxValue : Time.GameTime + anim.Length,
+                Graph = graph,
+                PreviousGraph = state?.Graph,
+                PreviousClip = state?.Clip,
+                PreviousName = state?.Name,
+                PreviousLoop = state?.Loop ?? true,
+            };
         }
 
         /// <summary>Stop the current animation and restore the previous one.</summary>
@@ -871,162 +963,134 @@ namespace Game
                 WarnOnce("\u201Cstop anim\u201D needs to run on an actor's sheet — the global Game sheet has no model to animate.");
                 return;
             }
-            var model = me.FindActor<FlaxEngine.AnimatedModel>();
+            var model = ModelOf(me);
             if (model == null)
                 return;
-            SetLooping(model, false);
-            ClearOneShot(me, null);
-            if (PreviousAnim.TryGetValue(me, out string previous) && previous.Length > 0)
+
+            AnimStates.TryGetValue(me, out AnimState state);
+            if (state == null)
             {
-                CallPlayState(model, previous);
-                PreviousAnim.Remove(me);
+                model.AnimationGraph = null; // nothing tracked: go to bind pose
+                return;
             }
-        }
 
-        private static void MarkOneShot(object actor, string animName)
-        {
-            if (actor == null) return;
-            if (!OneShotAnims.TryGetValue(actor, out var set))
+            if (state.PreviousGraph != null)
             {
-                set = new HashSet<string>();
-                OneShotAnims[actor] = set;
+                model.AnimationGraph = state.PreviousGraph;
+                if (state.Graph != null)
+                    FlaxEngine.Object.Destroy(state.Graph);
+                AnimStates[me] = new AnimState
+                {
+                    Clip = state.PreviousClip ?? "",
+                    Name = state.PreviousName ?? "",
+                    Loop = state.PreviousLoop,
+                    OneShot = false,
+                    EndTime = double.MaxValue,
+                    Graph = state.PreviousGraph,
+                };
+                return;
             }
-            set.Add(animName);
+
+            model.AnimationGraph = null;
+            if (state.Graph != null)
+                FlaxEngine.Object.Destroy(state.Graph);
+            AnimStates.Remove(me);
         }
 
-        private static void ClearOneShot(object actor, string animName)
+        /// <summary>
+        /// <c>camera follows &lt;thing&gt;</c>: remember the current camera offset and keep it
+        /// while the target moves, so whatever framing the scene author chose is preserved.
+        /// </summary>
+        private static void StartCameraFollow(EventContext context, ActionSpec spec)
         {
-            if (actor == null) return;
-            if (!OneShotAnims.TryGetValue(actor, out var set)) return;
-            if (animName == null)
-                set.Clear();
-            else
-                set.Remove(animName);
+            var target = ResolveThing(context, spec.Thing) as Actor;
+            if (target == null)
+            {
+                WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D for the camera to follow.");
+                return;
+            }
+            Actor camera = Level.FindActor("Camera");
+            if (camera == null)
+            {
+                WarnOnce("\u201Ccamera follows\u201D needs an actor named \u201CCamera\u201D in the scene.");
+                return;
+            }
+
+            CameraFollowTarget = target;
+            CameraFollowOffset = camera.Position - target.Position;
+            // Take over from the legacy Player follow, or the two would fight every tick.
+            context.Runtime.Variables.SetGlobal("cameraFollow", ValueBox.OfNumber(0));
         }
 
-        public static bool IsOneShot(object actor, string animName)
+        /// <summary>
+        /// The model to animate: the sheet may sit on the AnimatedModel itself (FindActor only
+        /// looks at children), or on a parent actor with the model somewhere underneath.
+        /// </summary>
+        private static FlaxEngine.AnimatedModel ModelOf(Actor actor)
         {
-            if (actor == null || animName == null) return false;
-            return OneShotAnims.TryGetValue(actor, out var set) && set.Contains(animName);
+            if (actor == null)
+                return null;
+            return actor as FlaxEngine.AnimatedModel ?? actor.FindActor<FlaxEngine.AnimatedModel>();
         }
 
         public static void ClearActor(object actor)
         {
             if (actor == null) return;
-            OneShotAnims.Remove(actor);
-            PreviousAnim.Remove(actor);
+            if (AnimStates.TryGetValue(actor, out AnimState state))
+            {
+                if (state.Graph != null)
+                    FlaxEngine.Object.Destroy(state.Graph);
+                if (state.PreviousGraph != null)
+                    FlaxEngine.Object.Destroy(state.PreviousGraph);
+                AnimStates.Remove(actor);
+            }
         }
 
-        private static bool HasAnim(FlaxEngine.AnimatedModel model, string name)
+        /// <summary>Animation asset key/alias to asset id, built from the registry once per play session.</summary>
+        private static Dictionary<string, Guid> AnimIndex()
         {
-            try
+            if (AnimIndexCache != null)
+                return AnimIndexCache;
+
+            var index = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+            var full = new List<string>();
+            foreach (Guid id in Content.GetAllAssetsByType(typeof(Animation)))
             {
-                var ctrl = GetAnimationController(model);
-                if (ctrl == null) return true;
-                var statesProp = ctrl.GetType().GetProperty("States");
-                if (statesProp == null) return true;
-                foreach (var state in (System.Collections.IEnumerable)statesProp.GetValue(ctrl))
+                if (!Content.GetAssetInfo(id, out AssetInfo info))
+                    continue;
+                string key = AssetNames.Key(info.Path);
+                if (key.Length == 0)
+                    continue;
+                if (!full.Contains(key))
+                    full.Add(key);
+                foreach (string alias in AssetNames.Suffixes(key))
                 {
-                    var nameProp = state.GetType().GetProperty("Name");
-                    if (nameProp != null && (string)nameProp.GetValue(state) == name)
-                        return true;
+                    if (alias.Length == 0 || index.ContainsKey(alias))
+                        continue; // first asset wins
+                    index[alias] = id;
                 }
             }
-            catch
-            {
-                // If the API surface differs, fall back to attempting the play —
-                // Flax will surface its own error if the name is invalid.
-            }
-            return true;
+
+            AnimIndexCache = index;
+            AnimFullNames = full;
+            return index;
         }
 
-        private static string CurrentAnim(FlaxEngine.AnimatedModel model)
+        /// <summary>Resolves a clip by name, ignoring folder, extension and the character prefix.</summary>
+        private static Animation LoadAnimation(string name)
         {
-            try
-            {
-                var ctrl = GetAnimationController(model);
-                if (ctrl == null) return "";
-                var currentStateProp = ctrl.GetType().GetProperty("CurrentState");
-                var currentState = currentStateProp?.GetValue(ctrl);
-                if (currentState == null) return "";
-                var nameProp = currentState.GetType().GetProperty("Name");
-                return nameProp?.GetValue(currentState) as string ?? "";
-            }
-            catch
-            {
-                return "";
-            }
+            return AnimIndex().TryGetValue(AssetNames.Key(name), out Guid id)
+                ? Content.Load<Animation>(id)
+                : null;
         }
 
-        private static void SetLooping(FlaxEngine.AnimatedModel model, bool looping)
+        private static string AvailableAnimNames()
         {
-            try
-            {
-                var ctrl = GetAnimationController(model);
-                if (ctrl == null) return;
-                var loopProp = ctrl.GetType().GetProperty("Loop");
-                loopProp?.SetValue(ctrl, looping);
-            }
-            catch
-            {
-                // Looping property may not exist on this Flax version; ignore.
-            }
+            AnimIndex();
+            var names = new List<string>(AnimFullNames);
+            names.Sort(StringComparer.OrdinalIgnoreCase);
+            return names.Count == 0 ? "(none)" : string.Join(", ", names);
         }
 
-        private static object GetAnimationController(FlaxEngine.AnimatedModel model)
-        {
-            try
-            {
-                var ctrlProp = model.GetType().GetProperty("AnimationController");
-                return ctrlProp?.GetValue(model);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static void CallPlayState(FlaxEngine.AnimatedModel model, string stateName)
-        {
-            try
-            {
-                var playState = model.GetType().GetMethod("PlayState");
-                playState?.Invoke(model, new object[] { stateName });
-            }
-            catch
-            {
-                // PlayState may not exist on this Flax version; ignore.
-            }
-        }
-
-        private static string UnknownAnimMessage(FlaxEngine.AnimatedModel model, string name)
-        {
-            var available = new List<string>();
-            try
-            {
-                var ctrl = GetAnimationController(model);
-                if (ctrl != null)
-                {
-                    var statesProp = ctrl.GetType().GetProperty("States");
-                    if (statesProp != null)
-                    {
-                        foreach (var state in (System.Collections.IEnumerable)statesProp.GetValue(ctrl))
-                        {
-                            var nameProp = state.GetType().GetProperty("Name");
-                            if (nameProp != null)
-                                available.Add((string)nameProp.GetValue(state));
-                        }
-                    }
-                }
-            }
-            catch
-            {
-                // ignore
-            }
-            if (available.Count == 0)
-                return $"I don't know the anim \u201C{name}\u201D — this character's AnimatedModel has no states exposed.";
-            var list = string.Join(", ", available);
-            return $"I don't know the anim \u201C{name}\u201D. This character has: {list}.";
-        }
     }
 }

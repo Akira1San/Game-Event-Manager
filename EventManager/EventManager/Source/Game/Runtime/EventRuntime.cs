@@ -407,6 +407,9 @@ namespace Game
             // `when other touches me` / `when other overlaps me` means "any toucher".
             if (descriptor.RequireName == "me" && IsContactKind(descriptor.Kind))
                 return true;
+            // Clip names are matched loosely: `play anim "Walk"` answers `when anim "walk" ends`.
+            if (descriptor.Kind == TriggerKind.AnimEnd)
+                return string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase);
             return signal.Name == descriptor.RequireName;
         }
 

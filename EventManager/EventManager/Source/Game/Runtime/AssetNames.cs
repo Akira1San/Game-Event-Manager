@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Game
 {
@@ -40,6 +41,25 @@ namespace Game
             }
 
             return name.Trim().ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Yields the key plus every space-boundary suffix, so a verbose imported name still
+        /// answers to the action name at its end: "bge dragon 2.07 animation walk" → "walk",
+        /// "animation walk", …; "bge dragon 2.07 animation idle pose" → "idle pose", ….
+        /// </summary>
+        public static IEnumerable<string> Suffixes(string key)
+        {
+            if (string.IsNullOrEmpty(key))
+                yield break;
+
+            yield return key;
+            int space = key.IndexOf(' ');
+            while (space >= 0 && space + 1 < key.Length)
+            {
+                yield return key.Substring(space + 1);
+                space = key.IndexOf(' ', space + 1);
+            }
         }
     }
 }

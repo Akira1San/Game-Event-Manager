@@ -1,0 +1,210 @@
+{
+	"ID": "34b824cb4c8437e7acf00c9e92ddb2ab",
+	"TypeName": "FlaxEngine.SceneAsset",
+	"EngineBuild": 7012,
+	"Data": [
+		{
+			"ID": "34b824cb4c8437e7acf00c9e92ddb2ab",
+			"TypeName": "FlaxEngine.Scene",
+			"LightmapSettings": {
+				"IndirectLightingIntensity": 1.0,
+				"GlobalObjectsScale": 1.0,
+				"ChartsPadding": 3,
+				"AtlasSize": 1024,
+				"BounceCount": 1,
+				"CompressLightmaps": true,
+				"UseGeometryWithNoMaterials": true,
+				"Quality": 10
+			}
+		},
+		{
+			"ID": "f6d2a330471a2be94ce83d943384350b",
+			"TypeName": "FlaxEngine.DirectionalLight",
+			"ParentID": "34b824cb4c8437e7acf00c9e92ddb2ab",
+			"Name": "Sun",
+			"Transform": {
+				"Translation": {
+					"X": 40.0,
+					"Y": 160.0,
+					"Z": 0.0
+				},
+				"Orientation": {
+					"X": 0.3826834559440613,
+					"Y": 0.0,
+					"Z": 0.0,
+					"W": 0.9238795042037964
+				}
+			}
+		},
+		{
+			"ID": "2a106b0d424c54ff8456a8a5fd305f1f",
+			"TypeName": "FlaxEngine.Sky",
+			"ParentID": "34b824cb4c8437e7acf00c9e92ddb2ab",
+			"Name": "Sky",
+			"Transform": {
+				"Translation": {
+					"X": 40.0,
+					"Y": 150.0,
+					"Z": 0.0
+				}
+			},
+			"Sun": "f6d2a330471a2be94ce83d943384350b"
+		},
+		{
+			"ID": "837186f84820c3b53efb42bcc26c6f59",
+			"TypeName": "FlaxEngine.SkyLight",
+			"ParentID": "34b824cb4c8437e7acf00c9e92ddb2ab",
+			"Name": "SkyLight",
+			"Brightness": 2.5,
+			"CustomTexture": "c54410104ff39427bc11e5bc761d66b0"
+		},
+		{
+			"ID": "54d7d96b430a43a67320d883d424f7aa",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "34b824cb4c8437e7acf00c9e92ddb2ab",
+			"Name": "Floor",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": -20.0,
+					"Z": 0.0
+				},
+				"Scale": {
+					"X": 4.0,
+					"Y": 0.5,
+					"Z": 4.0
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "1771b53343d461faacdf2c8581b1fdbb",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "c872fb1b4326eb2bd3027cbf9a7ccb77",
+			"TypeName": "FlaxEngine.Camera",
+			"ParentID": "34b824cb4c8437e7acf00c9e92ddb2ab",
+			"Name": "Camera",
+			"Transform": {
+				"Translation": {
+					"X": 272.7989501953125,
+					"Y": 150.0,
+					"Z": -408.6126403808594
+				},
+				"Orientation": {
+					"X": 0.0,
+					"Y": -0.3826834559440613,
+					"Z": 0.0,
+					"W": 0.9238795042037964
+				}
+			}
+		},
+		{
+			"ID": "fa00e4e441ff6440f4463d92ec323558",
+			"TypeName": "FlaxEngine.AudioListener",
+			"ParentID": "c872fb1b4326eb2bd3027cbf9a7ccb77",
+			"Name": "Audio Listener"
+		},
+		{
+			"ID": "090c8ef347cafb4196a68999ec2d1873",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "34b824cb4c8437e7acf00c9e92ddb2ab",
+			"Name": "Cube",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 70.0,
+					"Z": 278.0450134277344
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "726a10b24fa3e155c559e694a012ace3",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "34b824cb4c8437e7acf00c9e92ddb2ab",
+			"Name": "EmptyActor"
+		},
+		{
+			"ID": "373e2f0c44a95c074751238196883279",
+			"TypeName": "Game.EventsManager",
+			"ParentID": "726a10b24fa3e155c559e694a012ace3",
+			"V": {
+	"Runtime": {
+		"Variables": {
+			"OnWarning": {}
+		},
+		"World": {
+			"$type": "Game.DefaultEventWorld, Game.CSharp"
+		}
+	}
+}
+		},
+		{
+			"ID": "6c8afbf942809307de137590c549c52a",
+			"TypeName": "FlaxEngine.AnimatedModel",
+			"ParentID": "34b824cb4c8437e7acf00c9e92ddb2ab",
+			"Name": "BGE Dragon 2.07",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": -6.280059814453125,
+					"Z": 0.0
+				},
+				"Scale": {
+					"X": 0.20000000298023224,
+					"Y": 0.20000000298023224,
+					"Z": 0.20000000298023224
+				}
+			},
+			"SkinnedModel": "e8d3c77043c605ef45357397f332e52b",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					},
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					},
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "a89c2d264e7cd644beb140b06e3a5660",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "6c8afbf942809307de137590c549c52a",
+			"V": {
+	"EventFile": "dragon"
+}
+		}
+	]
+}
