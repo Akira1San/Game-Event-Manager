@@ -14,6 +14,9 @@ namespace Game
         Teleport,
         Push,
         Goto,
+        Parent,
+        Unparent,
+        Scale,
         Destroy,
         Spawn,
         PlaySound,
@@ -186,6 +189,41 @@ namespace Game
                         return Finish(spec, ActionVerb.Push, words, 3);
                     }
                     return Unknown(spec, words, "\u201Cpush\u201D looks like this: \u201Cpush other up strength 10\u201D", warn);
+
+                case "parent":
+                    if (words.Count >= 4 && IsThing(words[1]) && words[2].Text == "to" && IsThing(words[3]))
+                    {
+                        spec.Thing = words[1].Text;
+                        spec.To = words[3].Text;
+                        return Finish(spec, ActionVerb.Parent, words, 4);
+                    }
+                    return Unknown(spec, words, "\u201Cparent\u201D looks like this: \u201Cparent Box to me\u201D", warn);
+
+                case "unparent":
+                    if (words.Count >= 2 && IsThing(words[1]))
+                    {
+                        spec.Thing = words[1].Text;
+                        return Finish(spec, ActionVerb.Unparent, words, 2);
+                    }
+                    return Unknown(spec, words, "\u201Cunparent\u201D needs a thing, like \u201Cunparent Box\u201D", warn);
+
+                case "scale":
+                    if (words.Count >= 3 && IsThing(words[1]))
+                    {
+                        spec.Thing = words[1].Text;
+                        int numIndex = 2;
+                        if (words.Count >= 4 && words[2].Text == "to")
+                            numIndex = 3;
+                        if (numIndex < words.Count)
+                        {
+                            spec.AmountNode = ValueNodeAt(words, numIndex);
+                            spec.HasNumber = words[numIndex].Type == TokenType.Number;
+                            if (spec.HasNumber)
+                                spec.Number = words[numIndex].Number;
+                            return Finish(spec, ActionVerb.Scale, words, numIndex + 1);
+                        }
+                    }
+                    return Unknown(spec, words, "\u201Cscale\u201D looks like this: \u201Cscale Box 2\u201D or \u201Cscale Box to 2\u201D", warn);
 
                 case "destroy":
                     if (words.Count >= 2 && IsThing(words[1]))

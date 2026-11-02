@@ -158,23 +158,18 @@
 }
 		},
 		{
-			"ID": "6c8afbf942809307de137590c549c52a",
+			"ID": "200e3d044602c99f3c94749f8819328a",
 			"TypeName": "FlaxEngine.AnimatedModel",
 			"ParentID": "34b824cb4c8437e7acf00c9e92ddb2ab",
-			"Name": "BGE Dragon 2.07",
+			"Name": "Dragon",
 			"Transform": {
-				"Translation": {
-					"X": 0.0,
-					"Y": -6.280059814453125,
-					"Z": 0.0
-				},
 				"Scale": {
 					"X": 0.20000000298023224,
 					"Y": 0.20000000298023224,
 					"Z": 0.20000000298023224
 				}
 			},
-			"SkinnedModel": "e8d3c77043c605ef45357397f332e52b",
+			"SkinnedModel": "8184041b431858f4c831559ea5885fc0",
 			"Buffer": {
 				"Entries": [
 					{
@@ -199,11 +194,84 @@
 			}
 		},
 		{
-			"ID": "a89c2d264e7cd644beb140b06e3a5660",
+			"ID": "326c28624c1bb56571374c8e756f629d",
 			"TypeName": "Game.EventSheet",
-			"ParentID": "6c8afbf942809307de137590c549c52a",
+			"ParentID": "200e3d044602c99f3c94749f8819328a",
 			"V": {
 	"EventFile": "dragon"
+}
+		},
+		{
+			"ID": "aec0feea41c2e0f430789ea0370bf2a1",
+			"TypeName": "FlaxEngine.AnimatedModel",
+			"ParentID": "34b824cb4c8437e7acf00c9e92ddb2ab",
+			"Name": "sintel_rig_2",
+			"Transform": {
+				"Translation": {
+					"X": 140.3293914794922,
+					"Y": 0.0,
+					"Z": 0.0
+				},
+				"Scale": {
+					"X": 0.20000000298023224,
+					"Y": 0.20000000298023224,
+					"Z": 0.20000000298023224
+				}
+			},
+			"SkinnedModel": "0f95017b4d409a486f00aabd449fc2c0",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					},
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					},
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					},
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					},
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					},
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					},
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "7e5762674de763825bd60a9a54e727c6",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "aec0feea41c2e0f430789ea0370bf2a1",
+			"V": {
+	"EventFile": "sintel"
 }
 		}
 	]

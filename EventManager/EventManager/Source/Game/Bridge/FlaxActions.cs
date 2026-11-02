@@ -332,6 +332,39 @@ namespace Game
                     }
                     break;
                 }
+                case ActionVerb.Parent:
+                {
+                    var child = ResolveThing(context, spec.Thing) as Actor;
+                    var newParent = ResolveThing(context, spec.To) as Actor;
+                    if (child != null && newParent != null)
+                        child.Parent = newParent;
+                    else if (child == null)
+                        WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D to parent.");
+                    else
+                        WarnOnce($"I couldn't find \u201C{spec.To}\u201D to parent \u201C{spec.Thing}\u201D to.");
+                    break;
+                }
+                case ActionVerb.Unparent:
+                {
+                    var child = ResolveThing(context, spec.Thing) as Actor;
+                    if (child != null)
+                        child.Parent = null;
+                    else
+                        WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D to unparent.");
+                    break;
+                }
+                case ActionVerb.Scale:
+                {
+                    var target = ResolveThing(context, spec.Thing) as Actor;
+                    if (target != null)
+                    {
+                        float s = (float)ResolveNumber(context, spec);
+                        target.Scale = new Vector3(s, s, s);
+                    }
+                    else
+                        WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D to scale.");
+                    break;
+                }
                 case ActionVerb.Goto:
                 {
                     var me = context.Me as Actor;

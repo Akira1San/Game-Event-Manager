@@ -83,7 +83,7 @@
       <div class="big">8</div><div class="label">Condition marks</div>
     </div>
     <div class="count-card">
-      <div class="big">28</div><div class="label">Action verbs</div>
+      <div class="big">31</div><div class="label">Action verbs</div>
     </div>
     <div class="count-card">
       <div class="big">8</div><div class="label">Structural words</div>
@@ -165,6 +165,8 @@
         <tr><td><span class="kw">face</span></td><td><span class="kw">face Player</span></td><td><span class="example">face Player</span></td></tr>
         <tr><td><span class="kw">teleport</span></td><td><span class="kw">teleport me to SpawnPoint</span></td><td><span class="example">teleport me to SpawnPoint</span></td></tr>
         <tr><td><span class="kw">push</span></td><td><span class="kw">push other up strength 10</span></td><td><span class="example">push other up strength 10</span><br><span class="alt">strength defaults to 5 · real impulse on a dynamic body, see <a href="#physics">physics</a></span></td></tr>
+        <tr><td><span class="kw">parent</span></td><td><span class="kw">parent Box to me</span></td><td><span class="example">parent Box to me</span><br><span class="alt">reparents <code>Box</code> under <code>me</code> — it now moves with you (like a grab)</span></td></tr>
+        <tr><td><span class="kw">unparent</span></td><td><span class="kw">unparent Box</span></td><td><span class="example">unparent Box</span><br><span class="alt">detaches <code>Box</code> from its parent — it falls back to the scene root</span></td></tr>
         <tr><td><span class="kw">make</span></td><td><span class="kw">make me solid</span></td><td><span class="example">make me solid</span></td></tr>
         <tr><td><span class="kw">destroy</span></td><td><span class="kw">destroy me</span></td><td><span class="example">destroy me</span></td></tr>
         <tr><td><span class="kw">spawn</span></td><td><span class="kw">spawn Coin at SpawnPoint</span></td><td><span class="example">spawn Coin at SpawnPoint</span></td></tr>
@@ -173,6 +175,7 @@
         <tr><td><span class="kw">stop</span></td><td><span class="kw">stop anim</span> / <span class="kw">stop moving</span> / <span class="kw">stop this event</span></td><td><span class="example">stop anim</span><br><span class="example">stop moving</span><br><span class="example">stop this event</span><br><span class="alt">stop anim restores the previous clip or the bind pose</span></td></tr>
         <tr><td><span class="kw">send</span></td><td><span class="kw">send message "die"</span> / <span class="kw">send message "hit" to other</span></td><td><span class="example">send message "die"</span></td></tr>
         <tr><td><span class="kw">set</span></td><td><span class="kw">set Score to 0</span> / <span class="kw">set my rotating to true</span> / <span class="kw">set text of ScoreLabel to Score</span> / <span class="kw">set A to B + C</span> / <span class="kw">set state chase</span></td><td><span class="example">set Score to 0</span><br><span class="example">set text of ScoreLabel to Score</span></td></tr>
+        <tr><td><span class="kw">scale</span></td><td><span class="kw">scale Box 2</span> / <span class="kw">scale Box to 2</span></td><td><span class="example">scale Box 2</span><br><span class="example">scale Box to mySize</span><br><span class="alt">uniform scale — applies equally on X, Y, Z · number can be a literal or a variable</span></td></tr>
         <tr><td><span class="kw">add</span></td><td><span class="kw">add 1 to Score</span> / <span class="kw">add Sword to my bag</span></td><td><span class="example">add 1 to Score</span></td></tr>
         <tr><td><span class="kw">wait</span></td><td><span class="kw">wait 0.5 seconds</span> / <span class="kw">wait random 1 to 3 seconds</span></td><td><span class="example">wait 0.5 seconds</span></td></tr>
         <tr><td><span class="kw">show</span></td><td><span class="kw">show PausePanel</span> / <span class="kw">show text "Game Over"</span></td><td><span class="example">show PausePanel</span><br><span class="example">show text "Game Over"</span></td></tr>
