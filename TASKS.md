@@ -519,15 +519,15 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 
 ---
 
-## Task 10 — Later (do not start until 1–9 done) `[ ]`
+## Task 14 — Editor window (M3) `[ ]`
 
-- [ ] **Task 10 — Editor window (M3):** plugin window with syntax coloring, red line markers,
+- [ ] **Task 14 — Editor window (M3):** plugin window with syntax coloring, red line markers,
   autocomplete from the word registry, docs-on-hover per word.
-- [ ] **Task 11 — Vocabulary plus (M4):** more words: save/load game, camera extras (pans,
+- [ ] **Task 15 — Vocabulary plus (M4):** more words: save/load game, camera extras (pans,
   zooms, cutscene framing), spawn-from-prefab-folder, plus a "Word Book" reference page
   generated from code.
 - [x] **Debug output — `print <message>` / `debug <message>`:** new action word to print text to the editor console for debugging event scripts (e.g. `print W is held` to verify trigger firing). Requires: WordRegistry entry, ActionWords parser support, FlaxActions.Debug.LogWarning implementation, unit tests.
-- [ ] **Task 12 — Decisions parked in DESIGN.md §9:** `or`-chains, physics-vs-kinematic
+- [ ] **Task 16 — Decisions parked in DESIGN.md §9:** `or`-chains, physics-vs-kinematic
   `move`, camera-relative movement, persistence rules, same-name actor disambiguation,
   animation cross-blend feel, `pause game` / `resume game`, `when path fails`,
   `next <thing>` patrol qualifier, grid inventory UI, bag-count comparisons,
@@ -536,7 +536,7 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 
 ---
 
-## Task 11 — State Machines (BGE logic bricks) `[ ]`
+## Task 17 — State Machines (BGE logic bricks) `[ ]`
 
 Goal: per-actor state machines so one `.events` file can encode multiple behavior modes (patrol/chase/attack, menu/playing/paused/gameover). Depends on Tasks 1–3.
 
