@@ -38,7 +38,23 @@ namespace Game
             => Other == null ? new ValueBox() : Variables.GetLocal(Other, name);
 
         public VariableResolver Resolver()
-            => variable => variable.Owner == "my" ? ReadMy(variable.Name) : ReadGlobal(variable.Name);
+            => variable =>
+            {
+                // `my bag` reads back the bag contents as text: "Sword x2, Potion"
+                if (variable.Owner == "my" && variable.Name == "bag")
+                    return ValueBox.OfText(Runtime.BagText(Me));
+                if (variable.Owner == "my" || variable.Owner == "me")
+                    return ReadMy(variable.Name);
+                if (variable.Owner == "other")
+                    return ReadOther(variable.Name);
+                // `Player's gold` — a named actor's `my` variable (read-only)
+                if (variable.Owner.Length > 0)
+                {
+                    var actor = Runtime.FindNamedActor(variable.Owner);
+                    return actor == null ? new ValueBox() : Variables.GetLocal(actor, variable.Name);
+                }
+                return ReadGlobal(variable.Name);
+            };
 
         public ValueBox Evaluate(ValueNode node)
             => ValueEvaluator.Evaluate(node, Resolver());
@@ -456,6 +472,10 @@ namespace Game
                 {
                     ExecuteAdd(context, add);
                 }
+                else if (statement is BagRemoveNode bagRemove)
+                {
+                    ExecuteBagRemove(context, bagRemove);
+                }
                 else if (statement is SetTextNode setText)
                 {
                     OnSetText(context, setText.Target, context.Evaluate(setText.Value));
@@ -525,6 +545,20 @@ namespace Game
 
         private void ExecuteAdd(EventContext context, AddNode add)
         {
+            // `add Sword to my bag` puts a named item in the bag (counted). The amount names
+            // the item — it is not read as a numeric value. Anything else is a normal variable add.
+            if (add.Target.Owner == "my" && add.Target.Name == "bag")
+            {
+                string thing = add.Amount switch
+                {
+                    VariableValue vv => vv.Name,
+                    TextValue tv => tv.Text,
+                    _ => null,
+                };
+                if (thing != null && thing.Length > 0)
+                    context.Runtime.BagAdd(context.Me, thing);
+                return;
+            }
             double amount = context.Evaluate(add.Amount).AsNumber();
             ValueBox current = add.Target.Owner == "my"
                 ? context.ReadMy(add.Target.Name)
@@ -534,6 +568,22 @@ namespace Game
                 context.WriteMy(add.Target.Name, updated);
             else
                 context.WriteGlobal(add.Target.Name, updated);
+        }
+
+        private void ExecuteBagRemove(EventContext context, BagRemoveNode node)
+        {
+            context.Runtime.BagRemove(context.Me, node.Thing);
+        }
+
+        /// <summary>Renders a bag's contents as text: "Sword x2, Potion" (count 1 shows bare).</summary>
+        public string BagText(object owner)
+        {
+            if (!bags.TryGetValue(owner, out var bag) || bag.Count == 0)
+                return "";
+            var parts = new List<string>();
+            foreach (var pair in bag)
+                parts.Add(pair.Value == 1 ? pair.Key : pair.Key + " x" + pair.Value);
+            return string.Join(", ", parts);
         }
 
         private void ExecuteSend(EventContext context, List<Token> words)

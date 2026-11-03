@@ -225,16 +225,21 @@ namespace Game
             // isn't misclassified as a condition just because `is` is a condition mark.
             if (Array.IndexOf(WordRegistry.ActionWords, first.Text) >= 0)
             {
-                if (first.Text == "set")
-                {
-                    line.Statement = ParseSet(line);
-                    return;
-                }
-                if (first.Text == "add")
-                {
-                    line.Statement = ParseAdd(line);
-                    return;
-                }
+            if (first.Text == "set")
+            {
+                line.Statement = ParseSet(line);
+                return;
+            }
+            if (first.Text == "add")
+            {
+                line.Statement = ParseAdd(line);
+                return;
+            }
+            if (first.Text == "remove")
+            {
+                line.Statement = ParseRemove(line);
+                return;
+            }
                 var action = new RawActionNode { Line = line.Line };
                 action.Words.AddRange(line.Words);
                 line.Statement = action;
@@ -296,7 +301,18 @@ namespace Game
                 return new RandomRangeValue { Line = t.Line, Min = min, Max = max };
             }
             if (t.Type == TokenType.Word)
+            {
+                // `other's damage`, `Player's gold` — read another actor's `my` variable
+                if (t.Text.EndsWith("'s", StringComparison.Ordinal) && t.Text.Length > 2 &&
+                    index + 1 < words.Count && words[index + 1].Type == TokenType.Word)
+                {
+                    var owner = t.Text.Substring(0, t.Text.Length - 2);
+                    var nameToken = words[index + 1];
+                    index += 2;
+                    return new VariableValue { Line = t.Line, Owner = owner, Name = nameToken.Text };
+                }
                 return ReadVariable(words, ref index, flagLine, "`set`");
+            }
             throw new ParseException("a value was expected here — a number, quoted text, or a variable", t.Line);
         }
 
@@ -400,6 +416,21 @@ namespace Game
                 ? $"add 1 to {node.Target.Name}"
                 : $"add 1 to my {node.Target.Name}");
             return node;
+        }
+
+        private StatementNode ParseRemove(BodyLineNode line)
+        {
+            var words = line.Words;
+            int index = 1;
+            // `remove Potion from my bag` — takes one named item out of the bag
+            if (words.Count >= 5 && words[index].Type == TokenType.Word &&
+                words[index + 1].Text == "from" && words[index + 2].Text == "my" && words[index + 3].Text == "bag")
+            {
+                var node = new BagRemoveNode { Line = line.Line, Thing = words[index].Text };
+                CheckEndOfLine(words, index + 4, line.Line, "remove Potion from my bag");
+                return node;
+            }
+            throw new ParseException("`remove` looks like this: `remove Potion from my bag`", line.Line);
         }
 
         private ParseException UnknownWord(Token word)

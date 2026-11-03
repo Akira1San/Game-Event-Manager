@@ -41,6 +41,11 @@ namespace Game
         public VariableValue Target = new VariableValue();
     }
 
+    public class BagRemoveNode : StatementNode
+    {
+        public string Thing = "";
+    }
+
     public class SetTextNode : StatementNode
     {
         public string Target = "";

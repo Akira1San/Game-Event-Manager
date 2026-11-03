@@ -297,7 +297,7 @@ Check(chase.Words[0].Type == TokenType.Word && chase.Words[0].Text == "goto",
 ExpectParseError("wen game starts\n  show text \"hi\"\n", "Did you mean", "typo'd `when` gets the near-miss suggestion");
 ExpectParseError("when game starts\n  set Score 5\n", "`set` line", "set without `to` is a friendly error");
 ExpectParseError("when game starts\n  add 1 Lives\n", "`add`", "add without `to <var>` is a friendly error");
-ExpectParseError("when game starts\n  set Score to other's damage\n", "capital", "lowercase value word explains the variable rule");
+ExpectParseError("when game starts\n  set Score to damage\n", "capital", "a lowercase value word explains the variable rule");
 ExpectParseError("when game starts\n\nwhen scene starts\n  hide text\n", "nothing indented under it", "empty body is a friendly error");
 ExpectParseError("when game starts\n  set Score to 0\n    set Lives to 3\n", "too deep", "a body line 4 spaces in is a friendly error");
 ExpectParseError("when game starts\n  when scene starts\n  hide text\n", "never", "a nested `when` explains the stack rule");
@@ -807,6 +807,76 @@ bagEngine.BagRemove(bagSheet.Actor, "Sword");
 bagEngine.PushContact(TriggerKind.Overlaps, bagSheet.Actor, bomb);
 bagEngine.Tick(2);
 Check(bagEngine.Variables.GetGlobal("Log").AsText() == "W", "removing a thing from the bag unblocks the condition again");
+
+// ------------------------------------------------------------------
+// Task 8 Part A: the bag (add / remove / has, `my bag` as text, possessive reads)
+// ------------------------------------------------------------------
+
+var removeSpec = parser.Parse("when me appears\n  remove Potion from my bag\n");
+var removeNode = (BagRemoveNode)removeSpec.Events[0].Body[0].Statement!;
+Check(removeNode.Thing == "Potion", "`remove Potion from my bag` parses to a BagRemoveNode");
+ExpectParseError("when me appears\n  remove Potion\n", "looks like", "`remove` without `from my bag` is a friendly error");
+ExpectParseError("when me appears\n  remove from my bag\n", "looks like", "`remove` needs a thing to remove");
+
+var bagTextSpec = parser.Parse("when me appears\n  set text of BagLabel to my bag\n");
+var setTextNode = (SetTextNode)bagTextSpec.Events[0].Body[0].Statement!;
+Check(setTextNode.Value is VariableValue bv && bv.Owner == "my" && bv.Name == "bag",
+    "`set text of BagLabel to my bag` reads `my bag` as a value");
+
+var possessiveSpec = parser.Parse("when me appears\n  set Dmg to other's damage\n");
+var possessiveSet = (SetNode)possessiveSpec.Events[0].Body[0].Statement!;
+Check(possessiveSet.Value is VariableValue pv && pv.Owner == "other" && pv.Name == "damage",
+    "`other's damage` parses as a possessive read");
+
+// runtime: the bag holds things by name and count via the `add ... to my bag` word
+var bagRun = FreshEngine(new FakeWorld());
+var bagPlayer = new FakeActor("Player");
+bagRun.AddSheet(bagPlayer, parser.Parse("when game starts\n  add Sword to my bag\n  add Sword to my bag\n  add Potion to my bag"));
+bagRun.SessionStarted();
+bagRun.Tick(0);
+Check(bagRun.BagText(bagPlayer) == "Sword x2, Potion",
+    "two Swords and a Potion read back as \"Sword x2, Potion\"");
+Check(bagRun.BagHas(bagPlayer, "Sword") && bagRun.BagHas(bagPlayer, "Potion") &&
+      !bagRun.BagHas(bagPlayer, "Shield"),
+    "`my bag has <thing>` reflects the bag contents after `add`");
+
+// `my bag` evaluates to the bag text summary (what `set text of BagLabel to my bag` writes)
+var bagCtx = new EventContext { Variables = bagRun.Variables, Me = bagPlayer, Runtime = bagRun };
+Check(bagCtx.Evaluate(new VariableValue { Owner = "my", Name = "bag" }).AsText() == "Sword x2, Potion",
+    "`my bag` evaluates to the bag text summary");
+
+// `remove <thing> from my bag` decrements the count
+var removeEngine = FreshEngine(new FakeWorld());
+var remPlayer = new FakeActor("Player");
+removeEngine.AddSheet(remPlayer, parser.Parse("when game starts\n  add Sword to my bag\n  add Sword to my bag\n  remove Sword from my bag"));
+removeEngine.SessionStarted();
+removeEngine.Tick(0);
+Check(removeEngine.BagText(remPlayer) == "Sword",
+    "`remove Sword from my bag` decrements the count (Sword x2 -> Sword)");
+
+// possessive reads: `other's damage` via a message — `other` is the message sender
+var dmgEngine = FreshEngine(new FakeWorld());
+var victim = new FakeActor("Victim");
+var attacker = new FakeActor("Attacker");
+dmgEngine.Variables.SetLocal(attacker, "damage", ValueBox.OfNumber(7));
+dmgEngine.AddSheet(victim, parser.Parse("when message \"damage\" arrives\n  set Dmg to other's damage"));
+dmgEngine.SendRawMessage(new PushSignal { Kind = TriggerKind.Message, Name = "damage", Other = attacker }, "Victim");
+dmgEngine.Tick(1);
+Check(dmgEngine.Variables.GetGlobal("Dmg").AsNumber() == 7,
+    "`other's damage` reads the sender's `my` variable through a message");
+
+// `Player's gold` reads a named actor's `my` variable
+var goldEngine = FreshEngine(new FakeWorld());
+var goldPlayer = new FakeActor("Player");
+goldEngine.AddSheet(goldPlayer, parser.Parse("when game starts\n  set my gold to 50"));
+goldEngine.SessionStarted();
+var goldReader = new FakeActor("Reader");
+goldEngine.AddSheet(goldReader, parser.Parse("when me appears\n  set Loot to Player's gold"));
+goldEngine.Tick(0);
+Check(goldEngine.Variables.GetLocal(goldPlayer, "gold").AsNumber() == 50,
+    "the Player carries `my Gold`");
+Check(goldEngine.Variables.GetGlobal("Loot").AsNumber() == 50,
+    "`Player's gold` reads another actor's `my` variable");
 
 var unsetEngine = new EventRuntime();
 int runtimeWarnings = 0;

@@ -409,7 +409,7 @@ DESIGN.md Section 5 "Enemy brains & navigation (the BGE way)" defines everything
   with `my mode` flags).
 - [x] Pair it with `Player.events`: the enemy hurts the player on contact (`send message
   "hurt"`), the player leans on the Menus/example patterns for feedback.
-- [ ] Verify the full loop: patrol around waypoints -> spots the player -> chases (re-target
+- [X] Verify the full loop: patrol around waypoints -> spots the player -> chases (re-target
   during the chase) -> attacks within melee range -> loses sight -> back to patrol.
 
 ### Part D — Debug: guard stops after some laps
@@ -427,12 +427,12 @@ DESIGN.md Section 5 "Enemy brains & navigation (the BGE way)" defines everything
 
 ### Part E — Forward-facing goto movement
 Goal: make `goto` orient the actor in its travel direction so walking characters face forward.
-- [ ] In `FlaxActions.Step()`, when processing a `Goto` move, rotate the subject toward the
+- [x] In `FlaxActions.Step()`, when processing a `Goto` move, rotate the subject toward the
   next waypoint using `LookAt(waypoint)` or smoothly interpolate orientation (like `face` does).
-- [ ] Flax forward is `Vector3.Forward` (0, 0, -1); world forward = `Vector3.Transform(Vector3.Forward, actor.Orientation)`.
-- [ ] Add optional qualifier `goto <thing> facing forward` (or make it default) to opt in.
-- [ ] Test: cube patrol shows correct orientation; armature character walks with face forward.
-- [ ] Note any vocabulary gap in DESIGN.md §9.
+- [x] Flax forward is `Vector3.Forward` (0, 0, -1); world forward = `Vector3.Transform(Vector3.Forward, actor.Orientation)`.
+- [x] Add optional qualifier `goto <thing> facing forward` (or make it default) to opt in.
+- [x] Test: cube patrol shows correct orientation; armature character walks with face forward.
+- [x] Note any vocabulary gap in DESIGN.md §9.
 
 ### Part F — Numbered waypoint sequences
 Goal: allow waypoints with user-defined names + numbers (`orc_waypoint1`, `orc_waypoint2`, …)
@@ -448,10 +448,44 @@ and have `goto` follow them in numerical order so patrols can be written generic
 ### Part G — Navigation variants (no baked NavMesh)
 Goal: compare movement options that don't require a baked NavMesh, so levels without NavMesh baking still get enemy navigation. Depends on Tasks 1–3.
 
-- [ ] Line-of-sight chase: `when me is near Player by <dist>` + `move toward Player` only when `Physics.LineCast` (HasLineOfSight) is clear; fall back to patrol when blocked. Verify enemy chases in open areas and stops/retreats behind walls.
-- [ ] Manual waypoint graph: enemies hop between explicitly connected waypoints (`goto Waypoint1` → `goto Waypoint2` …) via `when me arrives at <thing>`. Verify patrol follows the designed route, not random jumps.
-- [ ] Compare all three (NavMesh `goto`, line-of-sight chase, waypoint graph) in one scene with walls; note which handles dynamic obstacles, which needs the least setup, and which feels best for an enemy brain.
-- [ ] Record the recommendation in DESIGN.md §9 (which nav variant to default to, and when to switch).
+**Variant 1 — Line-of-sight chase** (raycast-based, no pathfinding):
+```
+when me is near Player by 12
+  unless me sees Player by 12    # raycast blocked by walls
+    set my mode to "patrol"
+    stop moving
+    stop this event
+  set my mode to "chase"
+  move toward Player speed 60   # direct vector each tick
+```
+- **Mechanic**: `me is near` (cheap sphere check) + `me sees` (raycast `HasLineOfSight`) → `move toward` (direct velocity)
+- **Pros**: Zero setup, handles dynamic obstacles automatically, cheap per-tick
+- **Cons**: Gets stuck on corners/walls, no path around obstacles
+- **Best for**: Open areas, zombie/swarm AI, projectile enemies
+
+**Variant 2 — Manual waypoint graph** (designer-authored route):
+```
+when me appears
+  goto Waypoint1
+when me arrives at Waypoint1
+  wait 1 second
+  goto Waypoint2
+when me arrives at Waypoint2
+  wait 1 second
+  goto Waypoint3
+when me arrives at Waypoint3
+  wait 1 second
+  goto Waypoint1
+```
+- **Mechanic**: Explicit `goto WaypointN` + `when me arrives at WaypointN` chain
+- **Pros**: Exact designer control, works in corridors/doors, trivial performance
+- **Cons**: No dynamic obstacle avoidance, manual setup per enemy type
+- **Best for**: Scripted patrols, corridors, ambush points, indoor routes
+
+- [ ] Line-of-sight chase: implement pattern above; verify chase in open areas, stops/retreats behind walls, falls back to patrol.
+- [ ] Manual waypoint graph: implement 4-5 waypoint loop with waits; verify follows designed route (not random).
+- [ ] Compare all three (NavMesh `goto`, line-of-sight chase, waypoint graph) in one scene with walls + dynamic crates; note: dynamic obstacle handling, setup effort, feel.
+- [ ] Record recommendation in DESIGN.md §9 (default variant + when to switch).
 
 ---
 
@@ -462,10 +496,10 @@ language. Depends on Tasks 1–3 plus enemy examples for drop sources.
 DESIGN.md Section 5 "Items & the bag (the D2 loop)" defines everything.
 
 ### Part A — The bag
-- [ ] Word registry + runtime: `add <thing> to my bag`, `remove <thing> from my bag`,
+- [x] Word registry + runtime: `add <thing> to my bag`, `remove <thing> from my bag`,
   condition `my bag has <thing>`; the bag holds things **by name and count**. Possessive reads
   (`other's damage`, `Player's gold`) land with this batch in the variable store.
-- [ ] Verify: pick up two Swords and a Potion by touching them; `set text of BagLabel to my
+- [x] Verify: pick up two Swords and a Potion by touching them; `set text of BagLabel to my
   bag` shows `Sword x2, Potion` — text bag only, grid UI parked.
 
 ### Part B — Equip & item events
@@ -631,6 +665,150 @@ names to sound clips, and trigger once per step with a cooldown.
   ```
 - [ ] Editor verify: walk on grass → footstep per step; stand still → silence; walk on stone
   → `stone_step.wav`.
+
+---
+
+## Task 14 — Particle & Light Bridge `[ ]`
+
+Goal: expose Flax `ParticleSystem` and `Light` components to the event language so effects and lighting can be controlled from `.events` files. Depends on Tasks 1–3.
+
+### Part A — Particle System words
+- [ ] Word registry: `play particle "<name>"`, `stop particle "<name>"`, `when particle "<name>" ends` (one-shot), plus condition `particle "<name>" is playing`.
+- [ ] Parser: new action verbs (`play`/`stop` with `particle` noun), new trigger kind `ParticleEnd`.
+- [ ] Runtime: `FlaxActions` finds `ParticleSystem` on the actor (or child via `FindActor<ParticleSystem>()`), calls `Play()`/`Stop()`, tracks one-shots by asset key for `when particle ends`.
+- [ ] Asset resolution: reuse `AssetNames` pattern (folder/`.flax`/case-insensitive) so `"explosion"` finds `effects/explosion.flax`.
+- [ ] Unit test: `play particle "smoke"` → `ParticleSystem.Play()` called; one-shot end fires `ParticleEnd`.
+
+### Part B — Light words
+- [ ] Word registry: `set light intensity to <n>`, `set light color to <color>`, `set light range to <n>`, `enable light`, `disable light`, `toggle light`.
+- [ ] Parser: new action verbs for light properties; color value as `"r g b"` or `"r g b a"` (0-1 floats).
+- [ ] Runtime: `FlaxActions` finds `Light` on the actor (or child), sets `Intensity`, `Color`, `Range`, `Enabled`.
+- [ ] Unit test: `set light intensity to 2.5` → `Light.Intensity = 2.5`; `set light color to "1 0 0"` → red.
+
+### Part C — Integration & example
+- [ ] Write `Explosion.events`: `when me appears → play particle "explosion" → wait 0.5 → destroy me`.
+- [ ] Write `MuzzleFlash.events`: `when me appears → play particle "muzzle" → enable light → set light intensity to 3 → set light color to "1 0.8 0.2" → wait 0.1 → disable light → stop particle "muzzle"`.
+- [ ] Editor verify: spawn explosion shows particle + light flash; muzzle flash on bullet spawn.
+
+---
+ 
+## Task 15 — UI Components & Polish `[ ]`
+
+Goal: extend UI support beyond Labels to Buttons, Images, ProgressBars, TextBoxes, and add tween/animation, focus navigation, and data-binding helpers. Depends on Tasks 1–3, 6.
+
+### Part A — Button & Image support
+- [ ] Word registry: `when <thing> is clicked` (already works) + `when <thing> is double-clicked`, `when <thing> is right-clicked` (separate from middle), `when <thing> is pressed` / `when <thing> is released` (edge triggers for holdable buttons).
+- [ ] Runtime: detect `Button` component on `UIControl`; expose `Button.IsPressed`, `Button.IsHovered`, `Button.IsDisabled` via conditions.
+- [ ] Actions: `set button <thing> enabled/disabled`, `set button <thing> text to <value>`.
+- [ ] Image/Sprite: `set image of <thing> to <sprite>` (finds `UIControl` with `Image` control), `set color of <thing> to <color>` (tint).
+- [ ] Unit test: button press/release/disabled states fire triggers; image swap works.
+
+### Part B — ProgressBar & Slider
+- [ ] Word registry: `set progress of <thing> to <value>` (0–1 or 0–100), `set slider <thing> to <value>`.
+- [ ] Condition: `progress of <thing> is <value>`, `slider <thing> is <value>`.
+- [ ] Runtime: finds `ProgressBar` / `Slider` controls on `UIControl`, sets `Value` / `MaxValue`.
+- [ ] Unit test: progress bar fills from variable; slider reads back value.
+
+### Part C — TextBox / InputField
+- [ ] Word registry: `when <thing> text changes`, `when <thing> is focused`, `when <thing> loses focus`, `when <thing> submits` (Enter).
+- [ ] Actions: `set text of <thing> to <value>` (works), `focus <thing>`, `unfocus <thing>`, `select all <thing>`.
+- [ ] Condition: `<thing> is focused`, `text of <thing> is <value>`.
+- [ ] Runtime: finds `TextBox` / `InputField` on `UIControl`; subscribes to text-change/focus events.
+- [ ] Unit test: typing in textbox fires `text changes`; focus/unfocus triggers work.
+
+### Part D — Tween / Animation helpers
+- [ ] Word registry: `tween <thing> position to <target> in <time>`, `tween <thing> alpha to <n> in <time>`, `tween <thing> scale to <n> in <time>`, `tween <thing> color to <color> in <time>`.
+- [ ] Optional: `tween <thing> ... easing <linear|ease in|ease out|ease in out>`.
+- [ ] Runtime: coroutine-style tween tracking in `FlaxActions` (per-actor tween list, updated in `Step`).
+- [ ] Trigger: `when tween <thing> ends` (fires on completion).
+- [ ] Unit test: tween position/scale/alpha/color completes and fires end trigger.
+
+### Part E — Focus & Keyboard/Gamepad Navigation
+- [ ] Word registry: `focus <thing>`, `when <thing> is focused`, `navigate up/down/left/right` (moves focus to nearest focusable UI in direction).
+- [ ] Condition: `<thing> is focused`.
+- [ ] Runtime: focus manager in `EventsManager` tracks focusable `UIControl`s (Button, TextBox, Slider, custom); arrow keys / gamepad D-pad move focus.
+- [ ] Visual: focused control gets `TextColorFocused` (Label) or outline tint (Image/Button).
+- [ ] Unit test: focus moves between buttons with arrow keys; `when focused` triggers fire.
+
+### Part F — Data-binding syntactic sugar
+- [ ] Word registry: `bind <label> to <variable>` (auto `when <variable> changes → set text of <label> to <variable>`), `bind <progress> to <variable>` (auto `when <variable> changes → set progress of <progress> to <variable>`).
+- [ ] Format: `bind <label> to <variable> format "<template>"` (e.g. `"Health: {0}/{1}"` with `Health` and `MaxHealth`).
+- [ ] Parser: expands to equivalent `when changes` + `set text/progress` blocks at parse time.
+- [ ] Unit test: `bind ScoreLabel to Score` generates correct trigger/action pair.
+
+### Part G — Integration example
+- [ ] Write `InventoryUI.events`: grid of item slots (Image + Label), drag-drop via `when dragged`/`when dropped` (parked), tooltip on hover.
+- [ ] Write `HUD.events`: health bar (ProgressBar), ammo counter (bind), weapon icon (Image), crosshair.
+- [ ] Write `PauseMenu.events`: keyboard-navigable menu (focus + navigate), resume/quit buttons.
+- [ ] Editor verify: inventory opens/closes, HUD updates live, pause menu navigable with arrows/Enter.
+
+---
+
+## Task 16 — TK4 Feature Parity `[ ]`
+
+Goal: implement remaining Tapan Kaikki 4 (TK4) features not yet covered, achieving full feature parity with the original SDL/C++ game. Depends on Tasks 1–8, 14.
+
+### Part A — Random-Angle Wander & Still Mode
+- [ ] Word registry: `wander speed <n>` — pick random angle 0-359°, walk straight for random duration (20-60 ticks), repeat; `still` — stop moving but `face <target>` rotates toward target.
+- [ ] Parser: new action verbs `wander`, `still`; `wander` takes optional `speed` and `duration` qualifiers.
+- [ ] Runtime: `FlaxActions` tracks wander state per actor (current angle, ticks remaining); `still` = `stop moving` + continuous `face` toward nearest player.
+- [ ] Condition: `me is wandering`, `me is still`.
+- [ ] Unit test: wander changes angle periodically; still enemy rotates to face player.
+- [ ] Example: `Zombie.events` uses `wander`; `Turret.events` uses `still` + `face Player`.
+
+### Part B — Hearing / Sound Reaction System
+- [ ] Word registry: trigger `when me hears <sound> by <dist>` (edge: fires once when sound enters range + LOS), condition `me hears <sound> by <dist>` (polled).
+- [ ] Sound event bus: `FlaxActions.EmitSound(soundName, position, volume, hearableRadius)` called by `play sound`, `spawn Bullet`, explosions; `EventsManager` tracks recent sounds per frame.
+- [ ] `IEventWorld.HasLineOfSight` reused for occlusion (sound doesn't travel through walls).
+- [ ] Enemy reaction: `when me hears "gunshot" by 12 → set my mode to "chase" → move toward sound position`.
+- [ ] Unit test: gunshot at position → enemy within range + LOS gets `Hears` trigger; behind wall → no trigger.
+- [ ] Example: `Enemy.events` adds `when me hears "gunshot" by SightDistance → set my mode to "chase" → move toward sound`.
+
+### Part C — Weapon & Ammo Data System
+- [ ] Word registry: `weapon <name>` (set current weapon), `ammo <name>` (current ammo count), `reload` (start reload), `when reload completes`.
+- [ ] Data: weapon definitions in `WeaponData.events` (or JSON) — bullet type, fire rate, spread, multiplier, reload time, sound, smoke, ammo per shot.
+- [ ] Actions: `set weapon to <name>`, `add <n> to ammo <name>`, `set ammo <name> to <n>`.
+- [ ] Conditions: `ammo <name> is <value>`, `weapon is <name>`, `reloading`.
+- [ ] Runtime: `FlaxActions` resolves weapon data; `spawn Bullet` uses current weapon's bullet type; reload timer suspends shooting.
+- [ ] Unit test: weapon switch changes bullet type; reload blocks fire; ammo decrements per shot.
+- [ ] Example: `Player.events` — `when 1 pressed → set weapon to "Pistol"`; `when Left Mouse pressed → unless reloading → spawn Bullet at me → add -1 to ammo Pistol`.
+
+### Part D — Typed Enemy Definitions
+- [ ] Word registry: `enemy type <name>` (on `when me appears` or component) — applies base stats: speed, sight distance, health, default weapon, hostile flag, explosion death.
+- [ ] Data: `EnemyTypes.events` (or JSON) — e.g., `Zombie: speed 2, sight 10, health 50, weapon "Claws", hostile true`; `Turret: speed 0, sight 15, health 100, weapon "Cannon", hostile true, explosionDeath true`.
+- [ ] Runtime: `EventSheet` on enemy reads `enemy type` and initializes `my Speed`, `my SightDistance`, `my Health`, `my Weapon`, `my Hostile`, `my ExplosionDeath`.
+- [ ] Conditions: `my type is <name>`, `my health is lower than <n>`.
+- [ ] Unit test: spawning `Zombie` vs `Turret` applies different stats; `Turret` doesn't move but shoots.
+- [ ] Example: `Enemy.events` uses `my Speed`, `my SightDistance` instead of hardcoded values.
+
+### Part E — TK4 Particle Effects (Footprint, Blood, Gibs)
+- [ ] Integrates with Task 14 (Particle & Light Bridge).
+- [ ] Footprint: `when me moves and me touches Floor → play particle "footprint" at feet` (random left/right).
+- [ ] Blood: `when message "hurt" arrives → play particle "blood" at me` (16 particles, random angles).
+- [ ] Gibs: `when my health becomes 0 → spawn Gib at me` (3x, random angle, velocity 2-4, lifetime 3s); `ExplosionDeath` variant: `play particle "explosion"` + burned gibs.
+- [ ] Asset naming: `effects/footprint`, `effects/blood`, `effects/gib`, `effects/explosion`.
+- [ ] Unit test: footprint triggers on floor contact; blood on hurt; gibs on death.
+- [ ] Example: `Enemy.events` adds footprint/blood/gib triggers; `Turret.events` uses explosion death.
+
+### Part F — Multiplayer Support (1-4 Players)
+- [ ] Word registry: `player <n>` (refers to player 1-4), `nearest player` (qualifier), `all players` (for broadcast).
+- [ ] Variables: `Player1 Score`, `Player2 Score`, … `Player<k> Lives`; `my TargetPlayer` (set by vision/hearing).
+- [ ] Triggers: `when player <n> joins`, `when player <n> dies`, `when player <n> score changes`.
+- [ ] Conditions: `player <n> exists`, `player <n> is near me by <dist>`, `player <n> has tag <tag>`.
+- [ ] Actions: `send message <msg> to player <n>`, `spawn <thing> at player <n>`.
+- [ ] Cooperative mode: shared `Score`, `Lives` per player; `when all players dead → game over`.
+- [ ] Deathmatch mode: `when player <n> kills player <m> → add 1 to Player<n> Kills`.
+- [ ] Unit test: 2-player spawn → both have sheets; vision picks nearest; deathmatch scoring works.
+- [ ] Example: `Game.events` tracks per-player score/lives; `Enemy.events` targets `nearest player`.
+
+### Part G — Level Progression & Statistics
+- [ ] Word registry: `next level` (loads next scene in build order), `level <name>` (current level name), `level number` (1-based).
+- [ ] Statistics: `kills total`, `kills <enemyType>`, `accuracy`, `time elapsed`.
+- [ ] Triggers: `when level starts`, `when level completes`, `when all enemies dead`.
+- [ ] Actions: `add 1 to kills <enemyType>`, `set level to <n>`, `save stats`, `load stats`.
+- [ ] Persistence: global variables survive scene load (already implemented); `wipe game variables` for new game.
+- [ ] Unit test: kill 5 zombies → `kills Zombie` = 5; `next level` loads next scene; stats persist.
+- [ ] Example: `Game.events` — `when all enemies dead → show text "Level complete!" → wait 2 → next level`.
 
 ---
 
