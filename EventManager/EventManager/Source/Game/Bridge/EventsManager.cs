@@ -523,12 +523,14 @@ namespace Game
             }
         }
 
-        /// <summary>Runs the hit test against all UIControls for one mouse button and raises
-        /// the matching trigger kind on any actor under the cursor.</summary>
+        /// <summary>Raises <paramref name="kind"/> on the actor under the cursor. UIControls
+        /// are hit-tested in screen space; everything else (the ground, a chest, ...) is
+        /// hit-tested with a camera-through-mouse physics raycast — "the ground is just
+        /// another actor", so <c>when Ground is clicked</c> works on any actor.</summary>
         private void HandleMouseClick(Float2 mousePos, Float2 screenCenter, TriggerKind kind)
         {
             var actors = SceneActors();
-            int uiCount = 0;
+            bool uiHit = false;
             foreach (Actor actor in actors)
             {
                 if (actor == null || !actor.IsActive)
@@ -536,19 +538,67 @@ namespace Game
                 var ui = actor as UIControl;
                 if (ui == null)
                     continue;
-                uiCount++;
                 if (MouseOverUIControl(ui, mousePos))
                 {
+                    uiHit = true;
                     Runtime.RaisePush(actor, new PushSignal { Kind = kind, Name = actor.Name });
                 }
-                else
+            }
+            if (uiHit)
+                return;
+
+            // 3D actors under the cursor: raycast from the scene camera through the mouse.
+            var camera = Level.FindActor("Camera") as Actor;
+            if (camera == null)
+                return;
+            Float2 screenSize = Screen.Size;
+            if (screenSize.LengthSquared <= 0)
+                return;
+            float nx = (mousePos.X - screenSize.X * 0.5f) / (screenSize.X * 0.5f);
+            float ny = (screenSize.Y * 0.5f - mousePos.Y) / (screenSize.Y * 0.5f);
+            Vector3 camRight = Vector3.Transform(Vector3.Right, camera.Orientation);
+            Vector3 camForward = Vector3.Transform(Vector3.Forward, camera.Orientation);
+            camRight.Y = 0;
+            camForward.Y = 0;
+            if (camRight.LengthSquared > 0)
+                camRight.Normalize();
+            if (camForward.LengthSquared > 0)
+                camForward.Normalize();
+            Vector3 dir = camRight * nx + camForward * ny;
+            if (dir.LengthSquared <= 0.0001f)
+                dir = camForward;
+            dir.Normalize();
+            if (!Physics.LineCastAll(camera.Position, camera.Position + dir * 1000f, out var hits, ~0u, true))
+                return;
+            Actor bestActor = null;
+            float best = float.MaxValue;
+            foreach (var hit in hits)
+            {
+                if (hit.Distance < best)
                 {
-                    // Debug: show computed screen-space center vs mouse so coordinate
-                    // conversion can be verified in-editor.
-                    string text = ui.Control != null ? ((FlaxEngine.GUI.Label)ui.Control).Text ?? "" : "";
-                    Float2 center = MouseControlCenter(ui);
+                    best = hit.Distance;
+                    bestActor = ActorOfHit(hit.Collider);
                 }
             }
+            if (bestActor != null)
+                Runtime.RaisePush(bestActor, new PushSignal { Kind = kind, Name = bestActor.Name });
+        }
+
+        /// <summary>Walks up from a hit collider to the actor that carries an EventSheet, so
+        /// <c>when <name> is clicked</c> is delivered to the sheet on the actor (not merely to
+        /// a collider child). Falls back to the collider actor itself.</summary>
+        private static Actor ActorOfHit(PhysicsColliderActor collider)
+        {
+            if (collider == null)
+                return null;
+            Actor node = collider;
+            while (node != null && !(node is Scene))
+            {
+                if (node.GetScript<EventSheet>() != null)
+                    return node;
+                node = node.Parent;
+            }
+            return collider;
         }
 
         /// <summary>Casts a ray from the scene camera through the mouse position and returns the
