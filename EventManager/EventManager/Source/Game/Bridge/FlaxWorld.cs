@@ -88,10 +88,13 @@ namespace Game
                 return true; // nothing between the two actors — sight is clear
             foreach (var hit in hits)
             {
-                // hit is a PhysicsColliderActor (: Actor). Only me or the target itself may
-                // be hit; anything else (a wall, ...) blocks sight.
-                if (!ReferenceEquals(hit, first) && !ReferenceEquals(hit, second))
-                    return false;
+                // RayCastHit.Collider is the collider that was hit; its Actor is the scene actor.
+                // Only me or the target itself may be hit; anything else (a wall, ...) blocks sight.
+                var hitActor = hit.Collider as Actor;
+                if (hitActor == null)
+                    return false; // hit something without an actor — blocks sight
+                if (!ReferenceEquals(hitActor, first) && !ReferenceEquals(hitActor, second))
+                    return false; // hit something else (wall, ...) — blocks sight
             }
             return true;
         }

@@ -26,7 +26,7 @@
 				"Translation": {
 					"X": 40.0,
 					"Y": 160.0,
-					"Z": 0.0
+					"Z": -15.033416748046875
 				},
 				"Orientation": {
 					"X": 0.3826834559440613,
@@ -64,17 +64,22 @@
 			"ParentID": "b3f1dcf74feec966ef68a98ebf9caef0",
 			"Name": "Floor",
 			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": -22.57009506225586,
+					"Z": 0.0
+				},
 				"Scale": {
-					"X": 4.0,
-					"Y": 0.5,
-					"Z": 4.0
+					"X": 8.0,
+					"Y": 0.800000011920929,
+					"Z": 6.400000095367432
 				}
 			},
 			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
 			"Buffer": {
 				"Entries": [
 					{
-						"Material": "1771b53343d461faacdf2c8581b1fdbb",
+						"Material": "ea4b98824f51d74380d64fa533ea934a",
 						"ShadowsMode": 3,
 						"Visible": true,
 						"ReceiveDecals": true
@@ -83,23 +88,220 @@
 			}
 		},
 		{
-			"ID": "bd43baea4d78f519e84997aac4f17940",
-			"TypeName": "FlaxEngine.Camera",
+			"ID": "6ffe54314a89cb9b8e8928be539d0bf6",
+			"TypeName": "FlaxEngine.MeshCollider",
+			"ParentID": "e1a676444410e1b4d6787281be9eaad7",
+			"Name": "MeshCollider",
+			"CollisionData": "8684de1f4dd59eef8fdb8584788e2ad5"
+		},
+		{
+			"ID": "d6f37403420a3b77b57798a1e4880679",
+			"TypeName": "FlaxEngine.StaticModel",
 			"ParentID": "b3f1dcf74feec966ef68a98ebf9caef0",
-			"Name": "Camera",
+			"Name": "Player",
 			"Transform": {
 				"Translation": {
 					"X": 0.0,
-					"Y": 150.0,
-					"Z": -300.0
+					"Y": 25.636878967285156,
+					"Z": 156.33091735839844
+				},
+				"Orientation": {
+					"X": 0.0,
+					"Y": 1.0,
+					"Z": -0.0,
+					"W": -4.371138828673793e-8
+				},
+				"Scale": {
+					"X": 0.20000000298023224,
+					"Y": 0.20000000298023224,
+					"Z": 0.20000000298023224
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "0926e4574f683176248b83baf9ab40c5",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "d6f37403420a3b77b57798a1e4880679",
+			"V": {}
+		},
+		{
+			"ID": "31ba5a474ea15b9902d990bffcdf6252",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "b3f1dcf74feec966ef68a98ebf9caef0",
+			"IsActive": false,
+			"Name": "Enemy",
+			"Transform": {
+				"Translation": {
+					"X": -79.18748474121094,
+					"Y": 4.04949951171875,
+					"Z": -105.65788269042969
+				}
+			},
+			"Model": "efb6d881436796e7b8fb8496dcfe8808",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "e448085a4958f904fe3a6db6cd353d42",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "4b93956e44af6e59ec175c842515db0c",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "31ba5a474ea15b9902d990bffcdf6252",
+			"V": {}
+		},
+		{
+			"ID": "c24bb0ea415170f4d2b487ba84dc635f",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "b3f1dcf74feec966ef68a98ebf9caef0",
+			"Name": "Waypoint",
+			"Transform": {
+				"Translation": {
+					"X": 229.990478515625,
+					"Y": 0.0,
+					"Z": -59.97074890136719
 				}
 			}
 		},
 		{
-			"ID": "048953f741a4d2c3bbc795af06626a39",
-			"TypeName": "FlaxEngine.AudioListener",
-			"ParentID": "bd43baea4d78f519e84997aac4f17940",
-			"Name": "Audio Listener"
+			"ID": "a816d43d4d7bf9b24e8308ad0148fa5c",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "b3f1dcf74feec966ef68a98ebf9caef0",
+			"Name": "Waypoint",
+			"Transform": {
+				"Translation": {
+					"X": -285.22222900390625,
+					"Y": 0.0,
+					"Z": -95.4861831665039
+				}
+			}
+		},
+		{
+			"ID": "86eed9ae4e4d517bba16fb9a3f4ee548",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "b3f1dcf74feec966ef68a98ebf9caef0",
+			"Name": "Waypoint",
+			"Transform": {
+				"Translation": {
+					"X": -138.27560424804688,
+					"Y": 0.0,
+					"Z": 175.4409942626953
+				}
+			}
+		},
+		{
+			"ID": "8a5cca0c44d7eff24c107fb7934d7ece",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "b3f1dcf74feec966ef68a98ebf9caef0",
+			"Name": "Waypoint",
+			"Transform": {
+				"Translation": {
+					"X": 166.33177185058594,
+					"Y": 0.0,
+					"Z": 159.97471618652344
+				}
+			}
+		},
+		{
+			"ID": "fd81c79442fa5afbbdc91cbae804177a",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "b3f1dcf74feec966ef68a98ebf9caef0",
+			"Name": "SpawnPoint",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 14.04949951171875,
+					"Z": -124.76602935791016
+				},
+				"Scale": {
+					"X": 0.17414012551307678,
+					"Y": 1.0,
+					"Z": 0.17414012551307678
+				}
+			},
+			"Model": "223aa9894e90973780ab508621517526",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "e682a79d420ccd4aa52e28a487e53f0d",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "b3f1dcf74feec966ef68a98ebf9caef0",
+			"Name": "Game"
+		},
+		{
+			"ID": "b5ef8882460d0ebe82fee3a82abf894f",
+			"TypeName": "Game.EventsManager",
+			"ParentID": "e682a79d420ccd4aa52e28a487e53f0d",
+			"V": {
+	"Runtime": {
+		"Variables": {
+			"OnWarning": {}
+		},
+		"World": {
+			"$type": "Game.DefaultEventWorld, Game.CSharp"
+		}
+	}
+}
+		},
+		{
+			"ID": "25bdcb354c00aa3960b74280da1dc127",
+			"TypeName": "FlaxEngine.NavMeshBoundsVolume",
+			"ParentID": "b3f1dcf74feec966ef68a98ebf9caef0",
+			"Name": "NavMeshBoundsVolume"
+		},
+		{
+			"ID": "f6c9dcf84b19625433d1e59b41d18636",
+			"TypeName": "FlaxEngine.NavMesh",
+			"ParentID": "b3f1dcf74feec966ef68a98ebf9caef0",
+			"Name": "NavMesh.Default",
+			"DataAsset": "e392f61d4f066d2293da9fbbc8375f20",
+			"Properties": {
+				"Name": "Default"
+			}
+		},
+		{
+			"ID": "60154fcb4572c6c6f481c7bdd17f27a3",
+			"TypeName": "FlaxEngine.Camera",
+			"ParentID": "b3f1dcf74feec966ef68a98ebf9caef0",
+			"Name": "camera",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 216.930419921875,
+					"Z": 277.0111083984375
+				},
+				"Orientation": {
+					"X": -5.7024269750627354e-9,
+					"Y": -0.9238795042037964,
+					"Z": 0.3826834559440613,
+					"W": 1.3766874751297564e-8
+				}
+			}
 		}
 	]
 }

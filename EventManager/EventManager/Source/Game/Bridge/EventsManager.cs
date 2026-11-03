@@ -514,7 +514,6 @@ namespace Game
                     _hoveredBaseColor = label.TextColor;
                     label.TextColor = label.TextColorHighlighted;
                     Runtime.RaisePush(_hoveredUI, new PushSignal { Kind = TriggerKind.Hovered, Name = _hoveredUI.Name });
-                    Debug.LogWarning($"Hovered UI actor: {_hoveredUI.Name}");
                 }
             }
         }
@@ -536,7 +535,6 @@ namespace Game
                 if (MouseOverUIControl(ui, mousePos))
                 {
                     Runtime.RaisePush(actor, new PushSignal { Kind = kind, Name = actor.Name });
-                    Debug.LogWarning($"{kind} UI actor: {actor.Name}");
                 }
                 else
                 {
@@ -544,10 +542,8 @@ namespace Game
                     // conversion can be verified in-editor.
                     string text = ui.Control != null ? ((FlaxEngine.GUI.Label)ui.Control).Text ?? "" : "";
                     Float2 center = MouseControlCenter(ui);
-                    Debug.LogWarning($"  No hit: actor={actor.Name}, text=\"{text}\", center=({center.X:0},{center.Y:0}), uiPos=({ui.Position.X:0},{ui.Position.Y:0},{ui.Position.Z:0}), mouse=({mousePos.X:0},{mousePos.Y:0}), screenCenter=({screenCenter.X:0},{screenCenter.Y:0})");
                 }
             }
-            Debug.LogWarning($"Mouse {kind} down: actors={actors.Count}, uiControls={uiCount}, mouse=({mousePos.X:0},{mousePos.Y:0}), screenCenter=({screenCenter.X:0},{screenCenter.Y:0})");
         }
 
         /// <summary>Screen-space center of a UIControl (top-left origin, Y down), matching

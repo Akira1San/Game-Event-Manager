@@ -1,26 +1,30 @@
 # ---------------- Enemy.events (patrol -> chase -> attack) ----------------
 when me appears
   set my mode to "patrol"
-  goto random Waypoint                  # pathfinds around walls automatically
-  loop anim "Walk"
+  print "Enemy: patrol start"
+  goto random Waypoint speed 100             # pathfinds around walls automatically
+  # loop anim "Walk"   # simple mesh — no animation
 
 when me arrives at Waypoint
   wait random 0.5 to 2 seconds
-  goto random Waypoint
+  goto random Waypoint speed 100
 
-when me sees Player by 8                   # one-shot the moment the player is spotted
+when me sees Player by 200                   # one-shot the moment the player is spotted
   set my mode to "chase"
-  loop anim "Run"
-  goto Player
+  print "Enemy: chase start"
+  # loop anim "Run"   # simple mesh — no animation
+  goto Player speed 100
 
 when every 0.2 seconds                     # chase keeps re-targeting the moving player
   my mode is "chase"
-  goto Player
+  goto Player speed 100
 
 when me stops seeing Player                # went out of sight — resume patrol
   set my mode to "patrol"
+  print "Enemy: lost sight, back to patrol"
 
 when me is near Player by 1.5
   my mode is "chase"
+  print "Enemy: attack — sending hurt to Player"
   play anim "Attack"
   send message "hurt" to Player

@@ -8,9 +8,14 @@ when game starts
   set text of ScoreLabel to Score
   set text of LivesLabel to Lives
 
+when game starts
+  set Spawned to 0
+
 when every 5 seconds
   unless Score is 5
+  unless Spawned is 3
   spawn Enemy at SpawnPoint
+  add 1 to Spawned
 
 when Score changes
   set text of ScoreLabel to Score

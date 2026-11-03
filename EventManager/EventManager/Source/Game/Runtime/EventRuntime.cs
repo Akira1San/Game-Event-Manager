@@ -704,8 +704,7 @@ namespace Game
                     continue;
                 if (!NameMatches(descriptor, other))
                     continue;
-                if (World.IsTouching(sheet.Actor, other))
-                    touching.Add(other);
+                touching.Add(other);
             }
             contacts.RemoveWhere(other => !touching.Contains(other));
             polled.RemoveWhere(other => !touching.Contains(other));
@@ -775,9 +774,6 @@ namespace Game
                 if (!NameMatches(descriptor, other))
                     continue;
                 double dist = World.Distance(sheet.Actor, other);
-                string meName = World.NameOf(sheet.Actor);
-                string otherName = World.NameOf(other);
-                OnRuntimeWarning($"[NavBridge] {meName} dist to {descriptor.RequireName}({otherName}) = {dist:F2} (slack {ArrivalSlack:F2})");
                 if (dist <= ArrivalSlack)
                     arriving.Add(other);
             }
@@ -789,8 +785,7 @@ namespace Game
                 if (sheet.FiredThisTick[eventIndex])
                     continue;
                 contacts.Add(other);
-                string meName = World.NameOf(sheet.Actor);
-                OnRuntimeWarning($"[NavBridge] {meName} ARRIVED at {World.NameOf(other)} — firing event");
+                OnRuntimeWarning($"[NavBridge] {World.NameOf(sheet.Actor)} ARRIVED at {World.NameOf(other)} — firing event");
                 RunEvent(sheet, eventIndex, other);
             }
         }
