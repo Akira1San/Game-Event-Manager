@@ -10,6 +10,7 @@ namespace Game
         public Actor Target;
         public double Speed = 5;
         public bool FaceTarget;
+        public bool FaceForward;
         public bool Goto;
         /// <summary>NavMesh waypoints from the last <c>FindPath</c> (null = plain target move).</summary>
         public Vector3[] Path;
@@ -204,7 +205,11 @@ namespace Game
                         }
                     }
                     else
+                    {
                         MoveSubject(move.Subject, delta / length, move.Speed, move.UsePhysics);
+                        if (move.FaceForward)
+                            move.Subject.LookAt(move.Path[move.PathIndex]);
+                    }
                 }
             }
 
@@ -386,6 +391,7 @@ namespace Game
                         Subject = me,
                         Target = target,
                         Goto = true,
+                        FaceForward = spec.FaceForward,
                         Path = path,
                         PathIndex = 0,
                         Speed = spec.Number,
@@ -507,7 +513,7 @@ namespace Game
                 foreach (OngoingMove existing in Moves)
                 {
                     if (existing.Subject == move.Subject && existing.Target == move.Target &&
-                        existing.FaceTarget == move.FaceTarget && existing.Goto == move.Goto)
+                        existing.FaceTarget == move.FaceTarget && existing.FaceForward == move.FaceForward && existing.Goto == move.Goto)
                         return;
                 }
             }

@@ -889,6 +889,9 @@ window around a broken runtime.
 - **Pathfinding edge cases:** what happens when `goto` can't reach the target (player on a
   pillar, waypoint inside a wall)? Proposal: `goto` gives up after a few seconds and â€” for now â€”
   quietly stops walking; a `when path fails` trigger is parked for when a game actually needs it.
+- **Forward-facing goto vocabulary:** `goto <thing> facing forward` is opt-in (Task 7 E). There is
+  no `facing backward` or per-speed turn smoothing yet â€” rotation is an instant `LookAt` toward
+  the next waypoint each tick, matching `face`. Park a turn-speed qualifier if a game needs easing.
 - **Patrol precision:** `random <thing>` is enough for wandering, but true *routes* (visit A then
   B then C in order) are clunky in v0.1. A `next <thing>` qualifier (cycle through same-name
   waypoints) is parked until a project asks for it.

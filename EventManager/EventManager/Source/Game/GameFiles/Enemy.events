@@ -2,7 +2,7 @@
 when me appears
   set my mode to "patrol"
   print "Enemy: patrol start"
-  goto random Waypoint speed 100             # pathfinds around walls automatically
+  goto random Waypoint speed 100 facing forward             # pathfinds around walls automatically
   # loop anim "Walk"   # simple mesh — no animation
 
 when me arrives at Waypoint
@@ -13,11 +13,11 @@ when me sees Player by 200                   # one-shot the moment the player is
   set my mode to "chase"
   print "Enemy: chase start"
   # loop anim "Run"   # simple mesh — no animation
-  goto Player speed 100
+  goto Player speed 100 facing forward
 
 when every 0.2 seconds                     # chase keeps re-targeting the moving player
   my mode is "chase"
-  goto Player speed 100
+  goto Player speed 100 facing forward
 
 when me stops seeing Player                # went out of sight — resume patrol
   set my mode to "patrol"

@@ -1161,6 +1161,18 @@ Check(gotoDefaultSpeedSpec.Verb == ActionVerb.Goto && gotoDefaultSpeedSpec.HasNu
       gotoDefaultSpeedSpec.Number == 5,
     "`goto SpawnPoint` defaults to speed 5");
 
+var gotoFacingSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  goto Player facing forward"), null);
+Check(gotoFacingSpec.Verb == ActionVerb.Goto && gotoFacingSpec.Thing == "Player" &&
+      gotoFacingSpec.FaceForward && gotoFacingSpec.Number == 5,
+    "`goto Player facing forward` sets FaceForward and defaults speed");
+
+var gotoFacingSpeedSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  goto random Waypoint speed 40 facing forward"), null);
+Check(gotoFacingSpeedSpec.Verb == ActionVerb.Goto && gotoFacingSpeedSpec.Thing == "random Waypoint" &&
+      gotoFacingSpeedSpec.HasNumber && gotoFacingSpeedSpec.Number == 40 && gotoFacingSpeedSpec.FaceForward,
+    "`goto random Waypoint speed 40 facing forward` carries qualifier, speed, and FaceForward");
+
 var destroyMe = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   destroy me"), null);
 Check(destroyMe.Verb == ActionVerb.Destroy && destroyMe.Thing == "me", "`destroy me` parses");

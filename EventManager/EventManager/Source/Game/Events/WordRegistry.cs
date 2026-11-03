@@ -54,6 +54,7 @@ namespace Game
             new WordEntry { Kind = "action", Word = "turn", Example = "turn left degrees 90" },
             new WordEntry { Kind = "action", Word = "goto", Example = "goto Player" },
             new WordEntry { Kind = "action", Word = "goto", Example = "goto there" },
+            new WordEntry { Kind = "action", Word = "goto", Example = "goto Player facing forward" },
             new WordEntry { Kind = "action", Word = "camera", Example = "camera looks at Chest" },
             new WordEntry { Kind = "action", Word = "camera", Example = "camera follows Player" },
             new WordEntry { Kind = "action", Word = "look", Example = "look at Player" },

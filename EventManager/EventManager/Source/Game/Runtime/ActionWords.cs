@@ -43,6 +43,7 @@ namespace Game
         public string Dir = "";
         public double Number;
         public bool HasNumber;
+        public bool FaceForward;
         public ValueNode AmountNode;
         public List<Token> Leftover = new List<Token>();
     }
@@ -96,17 +97,23 @@ namespace Game
                         int afterThing = 1 + gotoUsed;
                         if (words.Count >= afterThing + 2 && words[afterThing].Text == "speed")
                         {
-                            spec.AmountNode = ValueNodeAt(words, words.Count - 1);
-                            spec.HasNumber = words[words.Count - 1].Type == TokenType.Number;
+                            spec.AmountNode = ValueNodeAt(words, afterThing + 1);
+                            spec.HasNumber = words[afterThing + 1].Type == TokenType.Number;
                             if (spec.HasNumber)
-                                spec.Number = words[words.Count - 1].Number;
+                                spec.Number = words[afterThing + 1].Number;
+                            afterThing += 2;
                         }
                         else
                         {
                             spec.Number = 5;
                             spec.HasNumber = true;
                         }
-                        return Finish(spec, ActionVerb.Goto, words, words.Count);
+                        if (words.Count >= afterThing + 2 && words[afterThing].Text == "facing" && words[afterThing + 1].Text == "forward")
+                        {
+                            spec.FaceForward = true;
+                            afterThing += 2;
+                        }
+                        return Finish(spec, ActionVerb.Goto, words, afterThing);
                     }
                     return Unknown(spec, words, "\u201Cgoto\u201D needs a thing, like \u201Cgoto SpawnPoint\u201D", warn);
                 }
