@@ -916,6 +916,14 @@ window around a broken runtime.
 - **Saving:** do global variables persist to disk across game restarts? Later; a `save`/`load game`
   word pair is the natural shape when it matters.
 - **Project name:** "Event Manager" is a placeholder. Candidates for a real name welcome.
+- **`unless my bag has Sword` gate:** DESIGN §5's Player.equip line reads `unless my bag has Sword /
+  equip Sword`, which only equips when the sword is NOT already in the bag — the opposite of the
+  intended "press 1 to equip" flow. Once equipped the sword leaves the bag, so the gate never lets
+  you re-equip after a drop. Either drop the `unless` (plain `equip Sword` on `1`) or gate on an
+  equipped flag instead. Noted here so a later era can fix the wording without changing the runtime.
+- **Negated possessive reads:** `add -(other's damage)` does not parse — the lexer gloms `-` onto
+  `other's` as one token. Work around it with `set my LastDmg to other's damage` then
+  `set my health to my health - my LastDmg` (note the `my` prefix on the right-hand read).
 
 ---
 

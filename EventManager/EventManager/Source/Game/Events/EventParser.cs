@@ -99,14 +99,15 @@ namespace Game
                     return ti < trigger.Count && trigger[ti].Type == TokenType.Str &&
                            TryMatchShape(shape, si + 1, trigger, ti + 1);
                 }
-                for (int take = 1; ti + take - 1 < trigger.Count; take++)
-                {
-                    if (trigger[ti + take - 1].Type != TokenType.Word)
-                        break;
-                    if (TryMatchShape(shape, si + 1, trigger, ti + take))
-                        return true;
-                }
-                return false;
+            for (int take = 1; ti + take - 1 < trigger.Count; take++)
+            {
+                var tt = trigger[ti + take - 1];
+                if (tt.Type != TokenType.Word && tt.Type != TokenType.Number)
+                    break;
+                if (TryMatchShape(shape, si + 1, trigger, ti + take))
+                    return true;
+            }
+            return false;
             }
             return ti < trigger.Count && trigger[ti].Type == TokenType.Word && trigger[ti].Text == part &&
                    TryMatchShape(shape, si + 1, trigger, ti + 1);

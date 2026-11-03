@@ -957,6 +957,102 @@ noBagEngine.Tick(0);
 Check(noBagEngine.Variables.GetLocal(nbSword, "Equipped").Kind == ValueKind.None,
     "`equip Sword` with Sword not in the bag does nothing");
 
+// ------------------------------------------------------------------
+// Task 8 Part C — Acceptance: the D2 loop (pickup -> equip -> stats change -> damage flows)
+// ------------------------------------------------------------------
+
+// All three DESIGN.md §5 listings must parse as real .events files.
+var swordEvents = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Sword.events"));
+Check(swordEvents.Events.Count == 2, "Sword.events parses (gets-equipped + gets-unequipped)");
+var playerEvents = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Player.events"));
+Check(playerEvents.Events.Count > 0, "Player.events parses (movement + hurt + loot/equip/attack)");
+var enemyEvents = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Enemy.events"));
+Check(enemyEvents.Events.Count > 0, "Enemy.events parses (patrol/chase/attack + damage + death loot)");
+
+// Pure end-to-end loop (spawn/touches/send-to-nearest need the Flax bridge; the
+// stat-and-message parts of the loop are pure runtime and fully testable here).
+var loopWorld = new FakeWorld();
+var loopEngine = FreshEngine(loopWorld);
+var lpPlayer = new FakeActor("Player");
+var lpEnemy = new FakeActor("Enemy");
+var lpSword = new FakeActor("Sword");
+loopWorld.AddActor(lpPlayer);
+loopWorld.AddActor(lpEnemy);
+loopWorld.AddActor(lpSword);
+
+// Player: pickup (bag), equip on `1`, attack on mouse (sends "damage" to Enemy),
+// drop on `Q`. ("to nearest Enemy" needs the bridge's nearest-actor resolution;
+// pure runtime matches exact ActorName, so the test uses "to Enemy".)
+loopEngine.AddSheet(lpPlayer, parser.Parse(@"when game starts
+  add Sword to my bag
+when 1 is pressed
+  equip Sword
+when Q is pressed
+  drop Sword
+when Left Mouse is pressed
+  send message " + "\"damage\"" + @" to Enemy"));
+// Sword: equip gives wearer +5 damage
+loopEngine.AddSheet(lpSword, parser.Parse(@"when me gets equipped
+  add 5 to my damage
+when me gets unequipped
+  add -5 to my damage"));
+// Enemy: takes other's damage; dies below 1 health
+loopEngine.AddSheet(lpEnemy, parser.Parse(@"when game starts
+  set my health to 10
+when message " + "\"damage\"" + @" arrives
+  set my LastDmg to other's damage
+  set my health to my health - my LastDmg"));
+
+loopEngine.SessionStarted();
+loopEngine.Tick(0);
+
+// Before equip: Player has Sword in bag, damage is 0
+Check(loopEngine.BagHas(lpPlayer, "Sword"), "after pickup, Sword is in the bag");
+Check(loopEngine.Variables.GetLocal(lpPlayer, "damage").Kind == ValueKind.None,
+    "before equip, Player has no damage stat");
+Check(loopEngine.Variables.GetLocal(lpEnemy, "health").AsNumber() == 10,
+    "Enemy starts at full health (10)");
+
+// Press 1 → equip Sword → wearer's damage becomes +5
+loopEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "1" });
+loopEngine.Tick(1);
+Check(loopEngine.Variables.GetLocal(lpPlayer, "damage").AsNumber() == 5,
+    "after `equip Sword`, wearer's damage = +5");
+Check(!loopEngine.BagHas(lpPlayer, "Sword"), "equipping removes Sword from the bag");
+Check(loopEngine.IsEquipped(lpPlayer, "Sword"), "Sword is equipped on Player");
+
+// Mouse swing → send "damage" to Enemy → Enemy takes other's damage (+5)
+loopEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "Left Mouse" });
+loopEngine.Tick(1);
+Check(loopEngine.Variables.GetLocal(lpEnemy, "health").AsNumber() == 5,
+    "after equipped swing, Enemy health = 10 - 5 = 5 (other's damage flows)");
+
+// Swing again without equip change: still +5 damage
+loopEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "Left Mouse" });
+loopEngine.Tick(2);
+Check(loopEngine.Variables.GetLocal(lpEnemy, "health").AsNumber() == 0,
+    "second equipped swing brings Enemy health to 0");
+
+// Drop Sword → unequip → wearer's damage back to 0
+loopEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "Q" });
+loopEngine.Tick(3);
+Check(loopEngine.Variables.GetLocal(lpPlayer, "damage").AsNumber() == 0,
+    "after `drop Sword`, wearer's damage returns to baseline (0)");
+Check(!loopEngine.IsEquipped(lpPlayer, "Sword"), "after `drop`, Sword is no longer equipped");
+
+// `my bag has Sword` condition reflects the bag (used as a gate, not a trigger)
+var bagCondEngine = FreshEngine(new FakeWorld());
+var bcPlayer = new FakeActor("Player");
+var bcSword = new FakeActor("Sword");
+bagCondEngine.AddSheet(bcPlayer, parser.Parse(@"when game starts
+  add Sword to my bag
+  my bag has Sword
+  set my BagFlag to 1"));
+bagCondEngine.SessionStarted();
+bagCondEngine.Tick(0);
+Check(bagCondEngine.Variables.GetLocal(bcPlayer, "BagFlag").AsNumber() == 1,
+    "`my bag has Sword` condition fires when Sword is in the bag");
+
 var unsetEngine = new EventRuntime();
 int runtimeWarnings = 0;
 unsetEngine.OnRuntimeWarning = message => runtimeWarnings++;

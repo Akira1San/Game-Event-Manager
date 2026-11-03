@@ -28,3 +28,14 @@ when me is near Player by 1.5
   print "Enemy: attack — sending hurt to Player"
   play anim "Attack"
   send message "hurt" to Player
+
+# ---- taking damage (D2 loop) ----
+when message "damage" arrives
+  set my LastDmg to other's damage      # possessive read: the attacker's stat
+  set my health to my health - my LastDmg
+
+# ---- death drops loot ----
+when my health becomes 0
+  chance 30%
+  spawn Sword at me
+  destroy me

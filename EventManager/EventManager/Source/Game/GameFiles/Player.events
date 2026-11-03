@@ -38,16 +38,17 @@ when Left Shift is held
   move right speed 90
 
 # ---- mouse rotation: user opts in here; C# faces the player toward the mouse ----
-when game starts
-  set LookAtMouse to 1
+#when game starts
+#  set LookAtMouse to 1
 
 # ---- shooting: fire in the direction the player faces ----
 when Left Mouse is pressed
   spawn Bullet at me
   play sound "shot"
+  send message "damage" to nearest Enemy
 
-when Space is pressed
-  play sound "shot"
+#when Space is pressed
+#  play sound "shot"
 
 # ---- getting hurt: the enemy sends "hurt" on contact; brief invulnerability by hiding ----
 when message "hurt" arrives
@@ -59,3 +60,12 @@ when message "hurt" arrives
   wait 1 second
   show me
   set my Invulnerable to false
+
+# ---- loot & equip (D2 loop) ----
+when me touches Sword
+  add Sword to my bag
+  play sound "pickup.wav"
+
+when 1 is pressed
+  unless my bag has Sword
+  equip Sword

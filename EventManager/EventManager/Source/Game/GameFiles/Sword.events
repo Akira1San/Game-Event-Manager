@@ -1,0 +1,8 @@
+# ---------------- Sword.events (item actor) ----------------
+# D2 loop item: equipping pushes +5 damage onto the wearer;
+# dropping/unequipping takes it back.
+when me gets equipped
+  add 5 to my damage
+
+when me gets unequipped
+  add -5 to my damage

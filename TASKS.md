@@ -512,13 +512,13 @@ DESIGN.md Section 5 "Items & the bag (the D2 loop)" defines everything.
   two equips works; unequip drops stats exactly once.
 
 ### Part C — Acceptance: the D2 loop
-- [ ] Write the DESIGN.md "Items & the bag" listing as real files (Sword.events, Player pickup/
+- [x] Write the DESIGN.md "Items & the bag" listing as real files (Sword.events, Player pickup/
   equip/attack events, Enemy pressing on `other's damage`).
-- [ ] Chain it with the loot words that already exist: enemy death → `chance 30%` →
+- [x] Chain it with the loot words that already exist: enemy death → `chance 30%` →
   `spawn Sword at me`.
-- [ ] Verify the full loop: kill an enemy → sword drops → walk over it → bag grows → press 1
+- [x] Verify the full loop: kill an enemy → sword drops → walk over it → bag grows → press 1
   to equip → next mouse swing costs the enemy visibly more health (damage text or health read).
-- [ ] Note any vocabulary friction in a DESIGN.md §9 line.
+- [x] Note any vocabulary friction in a DESIGN.md §9 line.
 
 ---
 
