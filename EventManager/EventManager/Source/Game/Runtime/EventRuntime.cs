@@ -756,6 +756,9 @@ namespace Game
                 case TriggerKind.Near:
                     PollNear(sheet, eventIndex, descriptor);
                     break;
+                case TriggerKind.Hovered:
+                    PollHover(sheet, eventIndex, descriptor);
+                    break;
             }
         }
 
@@ -871,6 +874,17 @@ namespace Game
                 contacts.Add(other);
                 RunEvent(sheet, eventIndex, other);
             }
+        }
+
+        /// <summary>Steady hover: fires once per tick while the cursor is over <c>me</c>.
+        /// A hotspot shows its hint text for as long as the cursor pauses on it.</summary>
+        private void PollHover(SheetInstance sheet, int eventIndex, TriggerDescriptor descriptor)
+        {
+            if (sheet.Actor == null)
+                return;
+            if (!World.IsHovered(sheet.Actor))
+                return;
+            RunEvent(sheet, eventIndex, null);
         }
 
         private bool NameMatches(TriggerDescriptor descriptor, object other)

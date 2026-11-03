@@ -16,6 +16,11 @@ namespace Game
         public Vector3[] Path;
         /// <summary>Index of the waypoint the subject is walking toward.</summary>
         public int PathIndex;
+        /// <summary>World target for <c>goto there</c> (used when Target is null).</summary>
+        public Vector3 PositionTarget;
+        /// <summary>True when this move walks to a world position (<c>goto there</c>) rather
+        /// than to a named actor.</summary>
+        public bool HasPositionTarget;
         /// <summary>Move through the subject's RigidBody (the sheet's Use Physics Movement opt-in).</summary>
         public bool UsePhysics;
     }
@@ -40,6 +45,8 @@ namespace Game
         private static Actor CameraFollowTarget;
         /// <summary>Camera position minus the target position, captured when the follow starts.</summary>
         private static Vector3 CameraFollowOffset;
+        /// <summary>World position of the last mouse click on bare ground — the <c>goto there</c> target.</summary>
+        public static Vector3? LastClickPosition;
 
         /// <summary>Current and previous clip for one actor, with the virtual graphs that play them.</summary>
         private sealed class AnimState
@@ -184,6 +191,8 @@ namespace Game
                 {
                     if (move.Path == null || move.PathIndex >= move.Path.Length)
                     {
+                        if (move.HasPositionTarget)
+                            RaiseArriveAt(move.Subject, "there");
                         ArriveAt(move);
                         Moves.RemoveAt(i);
                         continue;
@@ -370,12 +379,38 @@ namespace Game
                 case ActionVerb.Goto:
                 {
                     var me = context.Me as Actor;
-                    var target = ResolveThing(context, spec.Thing) as Actor;
                     if (me == null)
                     {
                         WarnOnce("\u201Cgoto\u201D needs to run on an actor's sheet — the global Game sheet has no body to move.");
                         break;
                     }
+                    if (spec.Thing == "there")
+                    {
+                        var clickPos = LastClickPosition;
+                        if (!clickPos.HasValue)
+                        {
+                            WarnOnce("\u201Cgoto there\u201D needs a clicked position first — click somewhere in the scene to set it.");
+                            break;
+                        }
+                        if (!Navigation.FindPath(me.Position, clickPos.Value, out Vector3[] clickPath) || clickPath == null || clickPath.Length == 0)
+                        {
+                            WarnOnce($"No NavMesh path from \u201C{me.Name}\u201D to the clicked spot — bake a NavMesh for this level first.");
+                            break;
+                        }
+                        Remember(new OngoingMove
+                        {
+                            Subject = me,
+                            Goto = true,
+                            HasPositionTarget = true,
+                            PositionTarget = clickPos.Value,
+                            Path = clickPath,
+                            PathIndex = 0,
+                            Speed = spec.Number,
+                            UsePhysics = context.Sheet != null && context.Sheet.UsePhysicsMovement,
+                        });
+                        break;
+                    }
+                    var target = ResolveThing(context, spec.Thing) as Actor;
                     if (target == null)
                     {
                         WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D to goto it.");
@@ -569,8 +604,17 @@ namespace Game
         {
             if (move.UsePhysics)
                 BrakeBody(move.Subject);
-            else
+            else if (move.Target != null)
                 move.Subject.Position = move.Target.Position;
+            else if (move.HasPositionTarget)
+                move.Subject.Position = move.PositionTarget;
+        }
+
+        /// <summary>Push an arrives-at-something signal to the subject's sheet(s), used by
+        /// goto there to raise `when me arrives at there`.</summary>
+        private static void RaiseArriveAt(Actor subject, string name)
+        {
+            EventsManager.Instance?.Runtime.RaisePush(subject, new PushSignal { Kind = TriggerKind.Arrives, Name = name });
         }
 
         /// <summary>

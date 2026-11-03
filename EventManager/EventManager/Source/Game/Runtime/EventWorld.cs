@@ -17,6 +17,8 @@ namespace Game
         object FindActor(string name);
         /// <summary>Every live actor a contact poll may consider (active only, no templates).</summary>
         IReadOnlyList<object> Actors();
+        /// <summary>True when the cursor is currently over the actor (point &amp; click hover).</summary>
+        bool IsHovered(object actor);
     }
 
     public class DefaultEventWorld : IEventWorld
@@ -59,6 +61,11 @@ namespace Game
         public IReadOnlyList<object> Actors()
         {
             return new object[0];
+        }
+
+        public bool IsHovered(object actor)
+        {
+            return false;
         }
     }
 }

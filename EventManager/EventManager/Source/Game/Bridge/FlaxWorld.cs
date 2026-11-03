@@ -118,6 +118,53 @@ namespace Game
             return found;
         }
 
+        /// <summary>True when the cursor is over <paramref name="actor"/>. Casts a ray from the
+        /// scene camera through the mouse position and walks up from the first hit collider to
+        /// its actor, so a hotspot's collider (or a child collider) counts as hovered.</summary>
+        public bool IsHovered(object targetActor)
+        {
+            var target = targetActor as Actor;
+            if (target == null || !target.IsActive)
+                return false;
+            var camera = Level.FindActor("Camera") as Actor;
+            if (camera == null)
+                return false;
+            Float2 mousePos = Input.MousePosition;
+            Float2 screenSize = Screen.Size;
+            if (screenSize.LengthSquared <= 0)
+                return false;
+            float nx = (mousePos.X - screenSize.X * 0.5f) / (screenSize.X * 0.5f);
+            float ny = (screenSize.Y * 0.5f - mousePos.Y) / (screenSize.Y * 0.5f);
+            Vector3 camRight = Vector3.Transform(Vector3.Right, camera.Orientation);
+            Vector3 camForward = Vector3.Transform(Vector3.Forward, camera.Orientation);
+            camRight.Y = 0;
+            camForward.Y = 0;
+            if (camRight.LengthSquared > 0)
+                camRight.Normalize();
+            if (camForward.LengthSquared > 0)
+                camForward.Normalize();
+            Vector3 dir = camRight * nx + camForward * ny;
+            if (dir.LengthSquared <= 0.0001f)
+                dir = camForward;
+            dir.Normalize();
+            if (!Physics.LineCastAll(camera.Position, camera.Position + dir * 1000f, out var hits, ~0u, true))
+                return false;
+            foreach (var hit in hits)
+            {
+                var hitActor = hit.Collider as Actor;
+                if (hitActor == null)
+                    continue;
+                Actor node = hitActor;
+                while (node != null && !(node is Scene))
+                {
+                    if (ReferenceEquals(node, target))
+                        return true;
+                    node = node.Parent;
+                }
+            }
+            return false;
+        }
+
         private static void Collect(Actor node, List<object> found)
         {
             foreach (Actor child in node.Children)

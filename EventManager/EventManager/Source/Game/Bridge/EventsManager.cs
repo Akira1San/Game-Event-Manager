@@ -459,7 +459,12 @@ namespace Game
             // Mouse click detection for `when <thing> is clicked` / right / middle
             bool leftMouseDown = Input.GetMouseButtonDown(MouseButton.Left);
             if (leftMouseDown && !_leftMouseDownLastFrame)
+            {
                 HandleMouseClick(mousePos, screenCenter, TriggerKind.Clicked);
+                var clickWorld = RaycastToWorld(mousePos);
+                if (clickWorld.HasValue)
+                    FlaxActions.LastClickPosition = clickWorld.Value;
+            }
             _leftMouseDownLastFrame = leftMouseDown;
 
             bool rightMouseDown = Input.GetMouseButtonDown(MouseButton.Right);
@@ -544,6 +549,46 @@ namespace Game
                     Float2 center = MouseControlCenter(ui);
                 }
             }
+        }
+
+        /// <summary>Casts a ray from the scene camera through the mouse position and returns the
+        /// first world hit point, or null when there is no camera or no hit. Used to turn a
+        /// click on bare ground into the <c>goto there</c> target.</summary>
+        private static Vector3? RaycastToWorld(Float2 mousePos)
+        {
+            var camera = Level.FindActor("Camera") as Actor;
+            if (camera == null)
+                return null;
+            Float2 screenSize = Screen.Size;
+            if (screenSize.LengthSquared <= 0)
+                return null;
+            float nx = (mousePos.X - screenSize.X * 0.5f) / (screenSize.X * 0.5f);
+            float ny = (screenSize.Y * 0.5f - mousePos.Y) / (screenSize.Y * 0.5f);
+            Vector3 camRight = Vector3.Transform(Vector3.Right, camera.Orientation);
+            Vector3 camForward = Vector3.Transform(Vector3.Forward, camera.Orientation);
+            camRight.Y = 0;
+            camForward.Y = 0;
+            if (camRight.LengthSquared > 0)
+                camRight.Normalize();
+            if (camForward.LengthSquared > 0)
+                camForward.Normalize();
+            Vector3 dir = camRight * nx + camForward * ny;
+            if (dir.LengthSquared <= 0.0001f)
+                dir = camForward;
+            dir.Normalize();
+            if (!Physics.LineCastAll(camera.Position, camera.Position + dir * 1000f, out var hits, ~0u, true))
+                return null;
+            float best = float.MaxValue;
+            Vector3? bestPoint = null;
+            foreach (var hit in hits)
+            {
+                if (hit.Distance < best)
+                {
+                    best = hit.Distance;
+                    bestPoint = hit.Point;
+                }
+            }
+            return bestPoint;
         }
 
         /// <summary>Screen-space center of a UIControl (top-left origin, Y down), matching

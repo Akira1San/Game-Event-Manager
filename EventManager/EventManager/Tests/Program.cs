@@ -1155,6 +1155,39 @@ tagWorld.SetTag(bomb, "Enemy");
 
 
     // ------------------------------------------------------------------
+    // Task 9 Part A: `when me is hovered` / `goto there` (point & click)
+    // ------------------------------------------------------------------
+
+    var hoveredProg = parser.Parse("when me is hovered\n  set Hint to 1\n");
+    Check(hoveredProg.Events.Count == 1, "`when me is hovered` parses as an event");
+    var hoverDesc = TriggerClassifier.Classify(hoveredProg.Events[0]);
+    Check(hoverDesc.Kind == TriggerKind.Hovered && hoverDesc.RequireName.Length == 0,
+        "`when me is hovered` classifies to Hovered with no require name");
+
+    var hoverWorld = new FakeWorld();
+    var hoverActor = new FakeActor("Hotspot");
+    hoverWorld.AddActor(hoverActor);
+    var hoverEngine = FreshEngine(hoverWorld);
+    hoverEngine.AddSheet(hoverActor, parser.Parse("when me is hovered\n  add 1 to Hint\n"));
+    hoverWorld.SetHovered(hoverActor, true);
+    hoverEngine.Tick(0);
+    Check(hoverEngine.Variables.GetGlobal("Hint").AsNumber() == 1, "`when me is hovered` fires while hovered");
+    hoverEngine.Tick(1);
+    Check(hoverEngine.Variables.GetGlobal("Hint").AsNumber() == 2, "`when me is hovered` is steady (fires each tick)");
+    hoverWorld.SetHovered(hoverActor, false);
+    hoverEngine.Tick(2);
+    Check(hoverEngine.Variables.GetGlobal("Hint").AsNumber() == 2, "`when me is hovered` stops when unhovered");
+
+    var thereProg = parser.Parse("when Ground is clicked\n  goto there\n\nwhen me arrives at there\n  set Arrived to 1\n");
+    Check(thereProg.Events.Count == 2, "`goto there` / `when me arrives at there` parses as two events");
+    var gotoStmt = thereProg.Events[0].Body[0].Statement as RawActionNode;
+    Check(gotoStmt != null && gotoStmt.Words.Count >= 2 && gotoStmt.Words[1].Text == "there",
+        "`goto there` parses with thing \"there\"");
+    var arriveThereDesc = TriggerClassifier.Classify(thereProg.Events[1]);
+    Check(arriveThereDesc.Kind == TriggerKind.Arrives && arriveThereDesc.RequireName == "there",
+        "`when me arrives at there` classifies to Arrives with RequireName \"there\"");
+
+    // ------------------------------------------------------------------
     // Task 7 Part B: `when me sees <thing> by <dist>` / `when me stops seeing <thing>`
     // ------------------------------------------------------------------
 
@@ -1752,17 +1785,17 @@ enterWorld.AddActor(enterB);
 var enterEngine = FreshEngine(enterWorld);
 enterEngine.AddSheet(enterA, parser.Parse("when me touches Target\n  set TouchCount to TouchCount + 1"));
 enterEngine.PollTouches = true;
-enterWorld.SetTouching(enterA, enterB, true);
-enterEngine.Tick(0);
-enterEngine.Tick(1);
-Check(enterEngine.Variables.GetGlobal("TouchCount").AsNumber() == 1,
-    "a distance touch fires once on enter, not every tick");
-enterWorld.SetTouching(enterA, enterB, false);
-enterEngine.Tick(2);
-enterWorld.SetTouching(enterA, enterB, true);
-enterEngine.Tick(3);
-Check(enterEngine.Variables.GetGlobal("TouchCount").AsNumber() == 2,
-    "a distance touch re-fires after separation and re-entry");
+    enterWorld.SetTouching(enterA, enterB, true);
+    enterEngine.Tick(0);
+    enterEngine.Tick(1);
+    Check(enterEngine.Variables.GetGlobal("TouchCount").AsNumber() == 1,
+        "a distance touch fires once on enter, not every tick");
+    enterWorld.SetTouching(enterA, enterB, false);
+    enterEngine.Tick(2);
+    enterWorld.SetTouching(enterA, enterB, true);
+    enterEngine.Tick(3);
+    Check(enterEngine.Variables.GetGlobal("TouchCount").AsNumber() == 2,
+        "a distance touch re-fires after separation and re-entry");
 
 var pollOverlapWorld = new FakeWorld();
 var pollOverlapA = new FakeActor("Prober");
@@ -1916,6 +1949,7 @@ class FakeWorld : IEventWorld
     private readonly HashSet<(object, string)> tags = new HashSet<(object, string)>();
     private readonly List<object> actors = new List<object>();
     private readonly HashSet<(object, object)> touching = new HashSet<(object, object)>();
+    private readonly HashSet<object> hovered = new HashSet<object>();
 
     public void SetHeld(string key, bool on)
     {
@@ -1949,6 +1983,14 @@ class FakeWorld : IEventWorld
             touching.Remove((a, b));
     }
 
+    public void SetHovered(object actor, bool on)
+    {
+        if (on)
+            hovered.Add(actor);
+        else
+            hovered.Remove(actor);
+    }
+
     public bool IsKeyHeld(string key)
     {
         return held.Contains(key);
@@ -1980,6 +2022,11 @@ class FakeWorld : IEventWorld
     public bool IsTouching(object a, object b)
     {
         return touching.Contains((a, b)) || touching.Contains((b, a));
+    }
+
+    public bool IsHovered(object actor)
+    {
+        return hovered.Contains(actor);
     }
 
     public object FindActor(string name)

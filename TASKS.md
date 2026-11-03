@@ -529,12 +529,12 @@ dialogue. Depends on Tasks 1–3 (plus 6 for the menu words used by dialogue).
 DESIGN.md Section 5 "Point & click adventures (the composition showcase)" defines everything.
 
 ### Part A — Hover & walk-to-click
-- [ ] Trigger `when me is hovered` — fires while the cursor is over the actor (edge or steady,
+- [x] Trigger `when me is hovered` — fires while the cursor is over the actor (edge or steady,
   generation-ready: verify hover hint text shows when the cursor pauses on a hotspot).
-- [ ] Action `goto there` — walks to the **last clicked position** using the NavMesh; pairs
+- [x] Action `goto there` — walks to the **last clicked position** using the NavMesh; pairs
   with `when Ground is clicked` and `when me arrives at there`.
 - [ ] Verify: click on bare ground → the character pathfinds to that exact spot, no waypoints
-  or named targets involved.
+  or named targets involved. (editor-side)
 
 ### Part B — Minimal camera pair
 - [ ] Actions `camera looks at <thing>` (aim view at any actor) and `camera follows <thing>`
