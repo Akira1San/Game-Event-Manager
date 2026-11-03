@@ -125,6 +125,8 @@ namespace Game
         private readonly List<SheetInstance> sheets = new List<SheetInstance>();
         private readonly HashSet<string> warnedLines = new HashSet<string>();
         private readonly Dictionary<object, Dictionary<string, int>> bags = new Dictionary<object, Dictionary<string, int>>();
+        /// <summary>wearer -> set of item names currently equipped on that wearer.</summary>
+        private readonly Dictionary<object, HashSet<string>> equipped = new Dictionary<object, HashSet<string>>();
 
         public EventRuntime()
         {
@@ -210,6 +212,8 @@ namespace Game
                 if (ReferenceEquals(sheets[i].Actor, actor))
                     sheets.RemoveAt(i);
             }
+            if (equipped.TryGetValue(actor, out var _))
+                equipped.Remove(actor);
         }
 
         public void SessionStarted()
@@ -335,6 +339,33 @@ namespace Game
             return bags.TryGetValue(owner, out var bag) && bag.TryGetValue(thing, out int count) ? count : 0;
         }
 
+        /// <summary>Record that <paramref name="wearer"/> is now wearing <paramref name="thing"/>.</summary>
+        public void EquipItem(object wearer, string thing)
+        {
+            if (!equipped.TryGetValue(wearer, out var set))
+            {
+                set = new HashSet<string>();
+                equipped[wearer] = set;
+            }
+            set.Add(thing);
+        }
+
+        /// <summary>Record that <paramref name="wearer"/> is no longer wearing <paramref name="thing"/>.</summary>
+        public void UnequipItem(object wearer, string thing)
+        {
+            if (equipped.TryGetValue(wearer, out var set))
+            {
+                set.Remove(thing);
+                if (set.Count == 0)
+                    equipped.Remove(wearer);
+            }
+        }
+
+        public bool IsEquipped(object wearer, string thing)
+        {
+            return equipped.TryGetValue(wearer, out var set) && set.Contains(thing);
+        }
+
         public void Tick(double time)
         {
             Time = time;
@@ -378,7 +409,7 @@ namespace Game
                                 continue;
                             sheet.Contacts[eventIndex].Add(signal.Other); // and don't let a later poll refire it
                         }
-                        RunEvent(sheet, eventIndex, signal.Other);
+                        RunEvent(sheet, eventIndex, signal.Other, signal.MeOverride);
                     }
                 }
             }
@@ -429,14 +460,14 @@ namespace Game
             return signal.Name == descriptor.RequireName;
         }
 
-        private void RunEvent(SheetInstance sheet, int eventIndex, object other)
+        private void RunEvent(SheetInstance sheet, int eventIndex, object other, object meOverride = null)
         {
             var ev = sheet.Program.Events[eventIndex];
             var context = new EventContext
             {
                 Variables = Variables,
                 World = World,
-                Me = sheet.Actor,
+                Me = meOverride ?? sheet.Actor,
                 Other = other,
                 Runtime = this,
                 Sheet = sheet,
@@ -475,6 +506,14 @@ namespace Game
                 else if (statement is BagRemoveNode bagRemove)
                 {
                     ExecuteBagRemove(context, bagRemove);
+                }
+                else if (statement is EquipNode equip)
+                {
+                    ExecuteEquip(context, equip);
+                }
+                else if (statement is DropNode drop)
+                {
+                    ExecuteDrop(context, drop);
                 }
                 else if (statement is SetTextNode setText)
                 {
@@ -573,6 +612,41 @@ namespace Game
         private void ExecuteBagRemove(EventContext context, BagRemoveNode node)
         {
             context.Runtime.BagRemove(context.Me, node.Thing);
+        }
+
+        private void ExecuteEquip(EventContext context, EquipNode node)
+        {
+            string thing = node.Thing;
+            // `equip <thing>` takes the item from the bag and links the item's sheet to me.
+            if (!context.Runtime.BagHas(context.Me, thing))
+                return;
+            context.Runtime.BagRemove(context.Me, thing);
+            context.Runtime.EquipItem(context.Me, thing);
+            // the item's `gets equipped` event runs with the wearer as `me`
+            foreach (var sheet in context.Runtime.SheetsUsingSource(thing))
+                sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.Equipped, MeOverride = context.Me });
+        }
+
+        private void ExecuteDrop(EventContext context, DropNode node)
+        {
+            string thing = node.Thing;
+            bool hadIt = context.Runtime.IsEquipped(context.Me, thing) || context.Runtime.BagHas(context.Me, thing);
+            if (!hadIt)
+                return;
+            // unequip if worn: `gets unequipped` runs with the wearer as `me`
+            if (context.Runtime.IsEquipped(context.Me, thing))
+            {
+                context.Runtime.UnequipItem(context.Me, thing);
+                foreach (var sheet in context.Runtime.SheetsUsingSource(thing))
+                    sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.Unequipped, MeOverride = context.Me });
+            }
+            // take it from the bag if it's still there
+            if (context.Runtime.BagHas(context.Me, thing))
+                context.Runtime.BagRemove(context.Me, thing);
+            // spawn the item at my feet happens on the engine side; here we raise the item's
+            // `gets dropped` event so its sheet runs with `me` = the item itself again
+            foreach (var sheet in context.Runtime.SheetsUsingSource(thing))
+                sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.Dropped });
         }
 
         /// <summary>Renders a bag's contents as text: "Sword x2, Potion" (count 1 shows bare).</summary>

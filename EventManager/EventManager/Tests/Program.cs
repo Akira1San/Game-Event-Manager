@@ -878,6 +878,85 @@ Check(goldEngine.Variables.GetLocal(goldPlayer, "gold").AsNumber() == 50,
 Check(goldEngine.Variables.GetGlobal("Loot").AsNumber() == 50,
     "`Player's gold` reads another actor's `my` variable");
 
+// ------------------------------------------------------------------
+// Task 8 Part B: equip & item events
+// ------------------------------------------------------------------
+
+var equipSpec = parser.Parse("when me appears\n  equip Sword\n");
+var equipNode = (EquipNode)equipSpec.Events[0].Body[0].Statement!;
+Check(equipNode.Thing == "Sword", "`equip Sword` parses to an EquipNode");
+var dropSpec = parser.Parse("when me appears\n  drop Potion\n");
+var dropNode = (DropNode)dropSpec.Events[0].Body[0].Statement!;
+Check(dropNode.Thing == "Potion", "`drop Potion` parses to a DropNode");
+ExpectParseError("when me appears\n  equip\n", "looks like", "`equip` without a thing is a friendly error");
+ExpectParseError("when me appears\n  drop\n", "looks like", "`drop` without a thing is a friendly error");
+
+// runtime: equipping takes the item from the bag, and the item's `gets equipped` event
+// runs with `me` = the wearer, so `add 5 to my damage` raises the wearer's stat
+var equipWorld = new FakeWorld();
+var equipEngine = FreshEngine(equipWorld);
+var eqPlayer = new FakeActor("Player");
+var eqSword = new FakeActor("Sword");
+equipWorld.AddActor(eqPlayer);
+equipWorld.AddActor(eqSword);
+equipEngine.AddSheet(eqPlayer, parser.Parse("when game starts\n  add Sword to my bag\n  equip Sword"));
+equipEngine.AddSheet(eqSword, parser.Parse("when me gets equipped\n  add 5 to my damage"));
+equipEngine.SessionStarted();
+equipEngine.Tick(0);
+Check(!equipEngine.BagHas(eqPlayer, "Sword"), "equipping takes the item out of the bag");
+Check(equipEngine.Variables.GetLocal(eqPlayer, "damage").AsNumber() == 5,
+    "`when me gets equipped` runs with `me` = the wearer (Player's damage = 5)");
+Check(equipEngine.Variables.GetLocal(eqSword, "damage").Kind == ValueKind.None,
+    "the wearer's stat changed, not the item's own stat");
+Check(equipEngine.IsEquipped(eqPlayer, "Sword"), "Sword is equipped on Player after `equip Sword`");
+
+// `drop Sword` unequips: `gets unequipped` runs with `me` = the wearer, taking the stat back
+var dropWorld = new FakeWorld();
+var dropEngine = FreshEngine(dropWorld);
+var dPlayer = new FakeActor("Player");
+var dSword = new FakeActor("Sword");
+dropWorld.AddActor(dPlayer);
+dropWorld.AddActor(dSword);
+dropEngine.AddSheet(dPlayer, parser.Parse("when game starts\n  add Sword to my bag\n  equip Sword\nwhen Q is pressed\n  drop Sword"));
+dropEngine.AddSheet(dSword, parser.Parse("when me gets equipped\n  add 5 to my damage\nwhen me gets unequipped\n  add -5 to my damage"));
+dropEngine.SessionStarted();
+dropEngine.Tick(0);
+Check(dropEngine.Variables.GetLocal(dPlayer, "damage").AsNumber() == 5, "equipped: damage = 5");
+dropEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "Q" });
+dropEngine.Tick(1);
+Check(dropEngine.Variables.GetLocal(dPlayer, "damage").AsNumber() == 0,
+    "`drop Sword` runs `gets unequipped` with `me` = the wearer (damage back to 0)");
+Check(!dropEngine.IsEquipped(dPlayer, "Sword"), "after `drop`, the item is no longer equipped");
+
+// `gets dropped` fires on the item's sheet with `me` = the item itself
+var dropWorld2 = new FakeWorld();
+var dropEngine2 = FreshEngine(dropWorld2);
+var drPlayer = new FakeActor("Player");
+var drSword = new FakeActor("Sword");
+dropWorld2.AddActor(drPlayer);
+dropWorld2.AddActor(drSword);
+dropEngine2.AddSheet(drPlayer, parser.Parse("when game starts\n  add Sword to my bag\n  equip Sword\nwhen Q is pressed\n  drop Sword"));
+dropEngine2.AddSheet(drSword, parser.Parse("when me gets dropped\n  set my WasDropped to true"));
+dropEngine2.SessionStarted();
+dropEngine2.Tick(0);
+Check(dropEngine2.IsEquipped(drPlayer, "Sword"), "Sword equipped before drop");
+dropEngine2.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "Q" });
+dropEngine2.Tick(1);
+Check(dropEngine2.Variables.GetLocal(drSword, "WasDropped").AsBoolean() == true,
+    "`when me gets dropped` fires on the item's sheet with `me` = the item itself");
+Check(!dropEngine2.IsEquipped(drPlayer, "Sword"), "after `drop`, nothing is equipped");
+
+// equipping an item not in the bag does nothing
+var noBagEngine = FreshEngine(new FakeWorld());
+var nbPlayer = new FakeActor("Player");
+var nbSword = new FakeActor("Sword");
+noBagEngine.AddSheet(nbPlayer, parser.Parse("when me appears\n  equip Sword"));
+noBagEngine.AddSheet(nbSword, parser.Parse("when me gets equipped\n  set my Equipped to true"));
+noBagEngine.SessionStarted();
+noBagEngine.Tick(0);
+Check(noBagEngine.Variables.GetLocal(nbSword, "Equipped").Kind == ValueKind.None,
+    "`equip Sword` with Sword not in the bag does nothing");
+
 var unsetEngine = new EventRuntime();
 int runtimeWarnings = 0;
 unsetEngine.OnRuntimeWarning = message => runtimeWarnings++;

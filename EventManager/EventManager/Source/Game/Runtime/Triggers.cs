@@ -281,6 +281,9 @@ namespace Game
     {
         public TriggerKind Kind;
         public object Other;
+        /// <summary>If set, the pushed event runs with this actor as `me` (used by `equip`:
+        /// an item's `gets equipped`/`gets unequipped` event runs with the wearer as `me`).</summary>
+        public object MeOverride;
         public string Name = "";
     }
 }

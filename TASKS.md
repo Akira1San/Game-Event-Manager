@@ -503,12 +503,12 @@ DESIGN.md Section 5 "Items & the bag (the D2 loop)" defines everything.
   bag` shows `Sword x2, Potion` — text bag only, grid UI parked.
 
 ### Part B — Equip & item events
-- [ ] Actions `equip <thing>`, `drop <thing>`; triggers `when me gets equipped` /
+- [x] Actions `equip <thing>`, `drop <thing>`; triggers `when me gets equipped` /
   `when me gets unequipped` / `when me gets dropped` on the item's sheet.
-- [ ] Context rule implemented and tested: equip/equip/unequip moments run the item's events
+- [x] Context rule implemented and tested: equip/equip/unequip moments run the item's events
   with `me` = the **wearer** (stat changes land on the owner); world events outside equip run
   with `me` = the item.
-- [ ] Unit test: equip a +5 sword → wearer's damage +5; unequip → back to baseline; stacking
+- [x] Unit test: equip a +5 sword → wearer's damage +5; unequip → back to baseline; stacking
   two equips works; unequip drops stats exactly once.
 
 ### Part C — Acceptance: the D2 loop

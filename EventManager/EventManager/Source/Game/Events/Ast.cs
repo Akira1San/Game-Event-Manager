@@ -46,6 +46,16 @@ namespace Game
         public string Thing = "";
     }
 
+    public class EquipNode : StatementNode
+    {
+        public string Thing = "";
+    }
+
+    public class DropNode : StatementNode
+    {
+        public string Thing = "";
+    }
+
     public class SetTextNode : StatementNode
     {
         public string Target = "";

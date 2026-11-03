@@ -240,6 +240,16 @@ namespace Game
                 line.Statement = ParseRemove(line);
                 return;
             }
+            if (first.Text == "equip")
+            {
+                line.Statement = ParseEquip(line);
+                return;
+            }
+            if (first.Text == "drop")
+            {
+                line.Statement = ParseDrop(line);
+                return;
+            }
                 var action = new RawActionNode { Line = line.Line };
                 action.Words.AddRange(line.Words);
                 line.Statement = action;
@@ -431,6 +441,32 @@ namespace Game
                 return node;
             }
             throw new ParseException("`remove` looks like this: `remove Potion from my bag`", line.Line);
+        }
+
+        private StatementNode ParseEquip(BodyLineNode line)
+        {
+            var words = line.Words;
+            // `equip Sword` — takes Sword from the bag and equips it on me
+            if (words.Count >= 2 && words[1].Type == TokenType.Word)
+            {
+                var node = new EquipNode { Line = line.Line, Thing = words[1].Text };
+                CheckEndOfLine(words, 2, line.Line, "equip Sword");
+                return node;
+            }
+            throw new ParseException("`equip` looks like this: `equip Sword`", line.Line);
+        }
+
+        private StatementNode ParseDrop(BodyLineNode line)
+        {
+            var words = line.Words;
+            // `drop Sword` — unequips if worn, takes from the bag, drops the item at my feet
+            if (words.Count >= 2 && words[1].Type == TokenType.Word)
+            {
+                var node = new DropNode { Line = line.Line, Thing = words[1].Text };
+                CheckEndOfLine(words, 2, line.Line, "drop Sword");
+                return node;
+            }
+            throw new ParseException("`drop` looks like this: `drop Sword`", line.Line);
         }
 
         private ParseException UnknownWord(Token word)
