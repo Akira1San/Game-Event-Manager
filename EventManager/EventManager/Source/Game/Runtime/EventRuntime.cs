@@ -888,7 +888,10 @@ namespace Game
                 if (!NameMatches(descriptor, other))
                     continue;
                 if (World.Distance(sheet.Actor, other) <= descriptor.Distance)
+                {
                     inRange.Add(other);
+                    System.Console.WriteLine($"[NEAR DEBUG] {sheet.ActorName} near {World.NameOf(other)} dist={World.Distance(sheet.Actor, other):F2} threshold={descriptor.Distance:F2}");
+                }
             }
             contacts.RemoveWhere(other => !inRange.Contains(other));
             foreach (object other in inRange)

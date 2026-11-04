@@ -270,7 +270,10 @@ namespace Game
             {
                 Actor camera = FlaxWorld.FindCamera();
                 if (camera != null)
+                {
                     camera.LookAt(CameraLookAtTarget.Position);
+                    Debug.LogWarning($"[CAM DEBUG] camera looks at {CameraLookAtTarget.Name} each-tick cam orient={camera.Orientation}");
+                }
             }
 
             // `camera at <thing>`: snap the camera to the target's position each tick
@@ -283,7 +286,10 @@ namespace Game
             {
                 Actor camera = FlaxWorld.FindCamera();
                 if (camera != null)
+                {
                     camera.Position = CameraAtTarget.Position;
+                    Debug.LogWarning($"[CAM DEBUG] camera at {CameraAtTarget.Name} each-tick cam pos={camera.Position} target pos={CameraAtTarget.Position}");
+                }
             }
         }
 
@@ -1149,9 +1155,15 @@ namespace Game
             }
 
             CameraFollowTarget = target;
-            CameraFollowOffset = camera.Position - target.Position;
+            // Use the default top-down framing (cameraHeight/cameraDepth globals) so
+            // "camera follows Player" always returns to the normal player camera framing,
+            // regardless of where the camera was snapped to before (e.g. by camera at).
+            float camHeight = (float)context.Runtime.Variables.GetGlobal("cameraHeight").AsNumber();
+            float camDepth = (float)context.Runtime.Variables.GetGlobal("cameraDepth").AsNumber();
+            CameraFollowOffset = new Vector3(0f, camHeight, camDepth);
             CameraLookAtTarget = null; // following and aiming don't fight each tick
             CameraAtTarget = null; // following and snapping don't fight each tick
+            Debug.LogWarning($"[CAM DEBUG] camera follows {target.Name} offset={CameraFollowOffset} cam pos={camera.Position} target pos={target.Position}");
             context.Runtime.Variables.SetGlobal("cameraFollow", ValueBox.OfNumber(0));
         }
 
@@ -1178,7 +1190,12 @@ namespace Game
             CameraLookAtTarget = target;
             // Aiming elsewhere releases the follow — the two must not fight each tick.
             CameraFollowTarget = null;
-        }
+            Actor lookCamera = FlaxWorld.FindCamera();
+            if (lookCamera != null)
+                Debug.LogWarning($"[CAM DEBUG] camera looks at {target.Name} cam orient before={lookCamera.Orientation}");
+            lookCamera?.LookAt(target.Position);
+            if (lookCamera != null)
+                Debug.LogWarning($"[CAM DEBUG] camera looks at {target.Name} cam orient after={lookCamera.Orientation}");
 
         /// <summary>
         /// <c>camera at &lt;thing&gt;</c>: snap the camera to the target's position each tick
@@ -1202,6 +1219,9 @@ namespace Game
             CameraAtTarget = target;
             // Snapping elsewhere releases the follow — position sources must not fight.
             CameraFollowTarget = null;
+            Actor atCamera = FlaxWorld.FindCamera();
+            if (atCamera != null)
+                Debug.LogWarning($"[CAM DEBUG] camera at {target.Name} snapped cam pos={atCamera.Position} orient={atCamera.Orientation}");
         }
 
         /// <summary>

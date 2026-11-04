@@ -412,6 +412,50 @@
 			"Properties": {
 				"Name": "Default"
 			}
+		},
+		{
+			"ID": "300fba0346e1f689bca1ad84981f5691",
+			"TypeName": "FlaxEngine.Camera",
+			"ParentID": "f18ae1b44189bbf8d4fa0e9081de59fc",
+			"Name": "CameraDoor",
+			"Transform": {
+				"Translation": {
+					"X": 143.6387939453125,
+					"Y": 170.19923400878906,
+					"Z": 56.07181930541992
+				},
+				"Orientation": {
+					"X": 0.04938250035047531,
+					"Y": -0.94150710105896,
+					"Z": 0.2932335138320923,
+					"W": 0.15855611860752106
+				}
+			},
+			"StaticFlags": 0,
+			"Near": 8.0,
+			"Far": 20000.0
+		},
+		{
+			"ID": "ca1ea24e40f86120a0972a88f32ae837",
+			"TypeName": "FlaxEngine.Camera",
+			"ParentID": "f18ae1b44189bbf8d4fa0e9081de59fc",
+			"Name": "CameraChest",
+			"Transform": {
+				"Translation": {
+					"X": -33.338741302490234,
+					"Y": 97.0595703125,
+					"Z": 0.5516818761825562
+				},
+				"Orientation": {
+					"X": 0.12941303849220276,
+					"Y": -0.22992846369743347,
+					"Z": 0.03086468204855919,
+					"W": 0.9640708565711975
+				}
+			},
+			"StaticFlags": 0,
+			"Near": 8.0,
+			"Far": 20000.0
 		}
 	]
 }
