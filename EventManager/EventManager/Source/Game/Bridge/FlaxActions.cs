@@ -1215,9 +1215,71 @@ namespace Game
             CameraAtTarget = target;
             // Snapping elsewhere releases the follow — position sources must not fight.
             CameraFollowTarget = null;
-            Actor atCamera = FlaxWorld.FindCamera();
-            if (atCamera != null)
-                Debug.LogWarning($"[CAM DEBUG] camera at {target.Name} snapped cam pos={atCamera.Position} orient={atCamera.Orientation}");
+        }
+
+        /// <summary>
+        /// Aim the camera at a world position without introducing roll (top-down friendly).
+        /// Builds an orthonormal basis from the view direction and world up, then converts
+        /// to a quaternion — this keeps the camera level (zero roll) while yawing towards
+        /// the target, unlike <c>camera.LookAt</c> which can tilt the camera sideways.
+        /// </summary>
+        private static void LookAtNoRoll(Actor camera, Vector3 targetPosition)
+        {
+            Vector3 forward = targetPosition - camera.Position;
+            forward.Y = 0;
+            if (forward.LengthSquared <= 0.0001f)
+                return;
+            forward.Normalize();
+
+            Vector3 worldUp = Vector3.Up;
+            Vector3 right = Vector3.Cross(forward, worldUp);
+            if (right.LengthSquared <= 0.0001f)
+                return;
+            right.Normalize();
+            Vector3 up = Vector3.Cross(right, forward);
+
+            // Rotation matrix columns: right, up, forward
+            float m00 = right.X, m01 = up.X, m02 = forward.X;
+            float m10 = right.Y, m11 = up.Y, m12 = forward.Y;
+            float m20 = right.Z, m21 = up.Z, m22 = forward.Z;
+
+            float trace = m00 + m11 + m22;
+            float x, y, z, w;
+
+            if (trace > 0.0f)
+            {
+                float s = (float)System.Math.Sqrt(trace + 1.0f) * 2.0f;
+                w = 0.25f * s;
+                x = (m21 - m12) / s;
+                y = (m02 - m20) / s;
+                z = (m10 - m01) / s;
+            }
+            else if ((m00 > m11) && (m00 > m22))
+            {
+                float s = (float)System.Math.Sqrt(1.0f + m00 - m11 - m22) * 2.0f;
+                w = (m21 - m12) / s;
+                x = 0.25f * s;
+                y = (m01 + m10) / s;
+                z = (m02 + m20) / s;
+            }
+            else if (m11 > m22)
+            {
+                float s = (float)System.Math.Sqrt(1.0f + m11 - m00 - m22) * 2.0f;
+                w = (m02 - m20) / s;
+                x = (m01 + m10) / s;
+                y = 0.25f * s;
+                z = (m12 + m21) / s;
+            }
+            else
+            {
+                float s = (float)System.Math.Sqrt(1.0f + m22 - m00 - m11) * 2.0f;
+                w = (m10 - m01) / s;
+                x = (m02 + m20) / s;
+                y = (m12 + m21) / s;
+                z = 0.25f * s;
+            }
+
+            camera.Orientation = new Quaternion(x, y, z, w);
         }
 
         /// <summary>
