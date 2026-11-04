@@ -49,6 +49,9 @@ namespace Game
         internal static Actor CameraLookAtTarget;
         /// <summary>Actor the camera snaps to each tick (<c>camera at &lt;thing&gt;</c>).</summary>
         internal static Actor CameraAtTarget;
+        /// <summary>Default top-down offset applied when snapping via <c>camera at</c>, so
+        /// framing/zoom stays consistent with the player camera.</summary>
+        internal static Vector3 CameraAtOffset;
         /// <summary>World position of the last mouse click on bare ground — the <c>goto there</c> target.</summary>
         public static Vector3? LastClickPosition;
 
@@ -83,6 +86,7 @@ namespace Game
             CameraFollowTarget = null;
             CameraLookAtTarget = null;
             CameraAtTarget = null;
+            CameraAtOffset = Vector3.Zero;
             foreach (AnimState state in AnimStates.Values)
             {
                 if (state.Graph != null)
@@ -274,7 +278,7 @@ namespace Game
             }
 
             // `camera at <thing>`: snap the camera to the target's position each tick
-            // (offset 0), giving authored framings from dedicated camera actors.
+            // (with the default top-down offset so zoom stays consistent).
             if (CameraAtTarget != null && CameraAtTarget.Scene == null)
             {
                 CameraAtTarget = null;
@@ -283,7 +287,7 @@ namespace Game
             {
                 Actor camera = FlaxWorld.FindCamera();
                 if (camera != null)
-                    camera.Position = CameraAtTarget.Position;
+                    camera.Position = CameraAtTarget.Position + CameraAtOffset;
             }
         }
 
@@ -1171,6 +1175,7 @@ namespace Game
             CameraFollowTarget = null;
             CameraLookAtTarget = null; // free the camera entirely
             CameraAtTarget = null; // free the camera entirely
+            CameraAtOffset = Vector3.Zero;
         }
 
         /// <summary>
@@ -1215,6 +1220,11 @@ namespace Game
             CameraAtTarget = target;
             // Snapping elsewhere releases the follow — position sources must not fight.
             CameraFollowTarget = null;
+            // Capture the default top-down framing so "camera at" keeps consistent zoom
+            // with "camera follows Player" instead of snapping to exact target position.
+            float camHeight = (float)context.Runtime.Variables.GetGlobal("cameraHeight").AsNumber();
+            float camDepth = (float)context.Runtime.Variables.GetGlobal("cameraDepth").AsNumber();
+            CameraAtOffset = new Vector3(0f, camHeight, camDepth);
         }
 
         /// <summary>
