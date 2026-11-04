@@ -25,6 +25,7 @@ namespace Game
         LoopAnim,
         StopAnim,
         CameraFollow,
+        CameraFree,
         Hide,
         Show,
         ShowText,
@@ -155,7 +156,11 @@ namespace Game
                             return Finish(spec, ActionVerb.CameraFollow, words, 2 + followUsed);
                         }
                     }
-                    return Unknown(spec, words, "\u201Ccamera\u201D looks like this: \u201Ccamera follows Player\u201D", warn);
+                    if (words.Count >= 2 && words[1].Text == "free")
+                    {
+                        return Finish(spec, ActionVerb.CameraFree, words, 2);
+                    }
+                    return Unknown(spec, words, "\u201Ccamera\u201D looks like this: \u201Ccamera follows Player\u201D (or \u201Ccamera free\u201D)", warn);
                 }
 
                 case "face":

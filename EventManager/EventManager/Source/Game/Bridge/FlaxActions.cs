@@ -42,9 +42,9 @@ namespace Game
         /// <summary>Full animation asset keys (no aliases), for the friendly "I don't know the anim" list.</summary>
         private static List<string> AnimFullNames;
         /// <summary>Actor the camera keeps centered (<c>camera follows &lt;thing&gt;</c>).</summary>
-        private static Actor CameraFollowTarget;
+        internal static Actor CameraFollowTarget;
         /// <summary>Camera position minus the target position, captured when the follow starts.</summary>
-        private static Vector3 CameraFollowOffset;
+        internal static Vector3 CameraFollowOffset;
         /// <summary>World position of the last mouse click on bare ground — the <c>goto there</c> target.</summary>
         public static Vector3? LastClickPosition;
 
@@ -489,6 +489,9 @@ namespace Game
                     break;
                 case ActionVerb.CameraFollow:
                     StartCameraFollow(context, spec);
+                    break;
+                case ActionVerb.CameraFree:
+                    StopCameraFollow();
                     break;
                 case ActionVerb.Hide:
                     SetActive(context, spec.Thing, false);
@@ -1108,6 +1111,12 @@ namespace Game
             CameraFollowOffset = camera.Position - target.Position;
             // Take over from the legacy Player follow, or the two would fight every tick.
             context.Runtime.Variables.SetGlobal("cameraFollow", ValueBox.OfNumber(0));
+        }
+
+        /// <summary>Release the camera from any explicit follow target (camera free).</summary>
+        private static void StopCameraFollow()
+        {
+            CameraFollowTarget = null;
         }
 
         /// <summary>

@@ -105,7 +105,7 @@ namespace Game
             }
             Runtime.SceneStarted();
 
-            Runtime.Variables.SetGlobal("cameraFollow", ValueBox.OfNumber(1));
+            Runtime.Variables.SetGlobal("cameraFollow", ValueBox.OfNumber(0));
             Runtime.Variables.SetGlobal("cameraHeight", ValueBox.OfNumber(260));
             Runtime.Variables.SetGlobal("cameraDepth", ValueBox.OfNumber(-170));
             Runtime.Variables.SetGlobal("LookAtMouse", ValueBox.OfNumber(0));
@@ -379,11 +379,23 @@ namespace Game
 
         private void UpdateCameraFollow()
         {
-            var player = Level.FindActor("Player") as Actor;
             var camera = FlaxWorld.FindCamera();
-            if (player == null || camera == null)
+            if (camera == null)
                 return;
+
+            // Explicit follow: camera follows <thing> (set by StartCameraFollow).
+            var target = FlaxActions.CameraFollowTarget;
+            if (target != null && target.Scene != null)
+            {
+                camera.Position = target.Position + FlaxActions.CameraFollowOffset;
+                return;
+            }
+
+            // Legacy auto-follow: only if explicitly enabled via events.
             if (Runtime.Variables.GetGlobal("cameraFollow").AsNumber() <= 0)
+                return;
+            var player = Level.FindActor("Player") as Actor;
+            if (player == null)
                 return;
             float height = (float)Runtime.Variables.GetGlobal("cameraHeight").AsNumber();
             float depth = (float)Runtime.Variables.GetGlobal("cameraDepth").AsNumber();
