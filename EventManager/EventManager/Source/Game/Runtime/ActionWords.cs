@@ -25,6 +25,7 @@ namespace Game
         LoopAnim,
         StopAnim,
         CameraFollow,
+        CameraLooksAt,
         CameraFree,
         Hide,
         Show,
@@ -156,11 +157,20 @@ namespace Game
                             return Finish(spec, ActionVerb.CameraFollow, words, 2 + followUsed);
                         }
                     }
+                    if (words.Count >= 3 && words[1].Text == "looks" && words[2].Text == "at")
+                    {
+                        string lookThing = ThingAt(words, 3, out int lookUsed);
+                        if (lookThing != null)
+                        {
+                            spec.Thing = lookThing;
+                            return Finish(spec, ActionVerb.CameraLooksAt, words, 3 + lookUsed);
+                        }
+                    }
                     if (words.Count >= 2 && words[1].Text == "free")
                     {
                         return Finish(spec, ActionVerb.CameraFree, words, 2);
                     }
-                    return Unknown(spec, words, "\u201Ccamera\u201D looks like this: \u201Ccamera follows Player\u201D (or \u201Ccamera free\u201D)", warn);
+                    return Unknown(spec, words, "\u201Ccamera\u201D looks like this: \u201Ccamera follows Player\u201D, \u201Ccamera looks at Chest\u201D, or \u201Ccamera free\u201D", warn);
                 }
 
                 case "face":

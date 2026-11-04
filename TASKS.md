@@ -533,13 +533,13 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
   generation-ready: verify hover hint text shows when the cursor pauses on a hotspot).
 - [x] Action `goto there` — walks to the **last clicked position** using the NavMesh; pairs
   with `when Ground is clicked` and `when me arrives at there`.
-- [ ] Verify: click on bare ground → the character pathfinds to that exact spot, no waypoints
+- [X] Verify: click on bare ground → the character pathfinds to that exact spot, no waypoints
   or named targets involved. (editor-side)
 
 ### Part B — Minimal camera pair
-- [ ] Actions `camera looks at <thing>` (aim view at any actor) and `camera follows <thing>`
+- [x] Actions `camera looks at <thing>` (aim view at any actor) and `camera follows <thing>`
   (centers while it moves; aiming elsewhere releases the follow).
-- [ ] Verify: smooth changes between targets, follow survives actor movement, re-aim frees
+- [x] Verify: smooth changes between targets, follow survives actor movement, re-aim frees
   the camera — proper top-down adventure feel.
 
 ### Part C — Acceptance: the locked-door puzzle

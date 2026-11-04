@@ -45,6 +45,8 @@ namespace Game
         internal static Actor CameraFollowTarget;
         /// <summary>Camera position minus the target position, captured when the follow starts.</summary>
         internal static Vector3 CameraFollowOffset;
+        /// <summary>Actor the camera aims at (<c>camera looks at &lt;thing&gt;</c>).</summary>
+        internal static Actor CameraLookAtTarget;
         /// <summary>World position of the last mouse click on bare ground — the <c>goto there</c> target.</summary>
         public static Vector3? LastClickPosition;
 
@@ -243,7 +245,8 @@ namespace Game
             // `camera follows <thing>`: translate the camera by the target's movement, keeping
             // the offset captured when the follow started (the authored framing never changes).
             if (CameraFollowTarget != null && CameraFollowTarget.Scene == null)
-                CameraFollowTarget = null;
+            CameraFollowTarget = null;
+            CameraLookAtTarget = null;
             if (CameraFollowTarget != null)
             {
                 Actor camera = FlaxWorld.FindCamera();
@@ -489,6 +492,9 @@ namespace Game
                     break;
                 case ActionVerb.CameraFollow:
                     StartCameraFollow(context, spec);
+                    break;
+                case ActionVerb.CameraLooksAt:
+                    StartCameraLookAt(context, spec);
                     break;
                 case ActionVerb.CameraFree:
                     StopCameraFollow();
@@ -1109,13 +1115,31 @@ namespace Game
 
             CameraFollowTarget = target;
             CameraFollowOffset = camera.Position - target.Position;
-            // Take over from the legacy Player follow, or the two would fight every tick.
+            CameraLookAtTarget = null; // following and aiming don't fight each tick
             context.Runtime.Variables.SetGlobal("cameraFollow", ValueBox.OfNumber(0));
         }
 
         /// <summary>Release the camera from any explicit follow target (camera free).</summary>
         private static void StopCameraFollow()
         {
+            CameraFollowTarget = null;
+            CameraLookAtTarget = null; // free the camera entirely
+        }
+
+        /// <summary>
+        /// <c>camera looks at &lt;thing&gt;</c>: aim the scene camera at the target each tick,
+        /// and release any explicit follow so the aim isn't overwritten.
+        /// </summary>
+        private static void StartCameraLookAt(EventContext context, ActionSpec spec)
+        {
+            var target = ResolveThing(context, spec.Thing) as Actor;
+            if (target == null)
+            {
+                WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D for the camera to look at.");
+                return;
+            }
+            CameraLookAtTarget = target;
+            // Aiming elsewhere releases the follow — the two must not fight each tick.
             CameraFollowTarget = null;
         }
 

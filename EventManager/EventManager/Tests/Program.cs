@@ -1535,6 +1535,11 @@ var cameraSpec = ActionWords.Parse(RawWords(actionParser, @"when game starts
 Check(cameraSpec.Verb == ActionVerb.CameraFollow && cameraSpec.Thing == "me",
     "`camera follows me` parses to CameraFollow");
 
+var cameraLooks = ActionWords.Parse(RawWords(actionParser, @"when game starts
+  camera looks at Chest"), null);
+Check(cameraLooks.Verb == ActionVerb.CameraLooksAt && cameraLooks.Thing == "Chest",
+    "`camera looks at Chest` parses to CameraLooksAt");
+
 var loopAnim = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   loop anim ""Walk"""), null);
 Check(loopAnim.Verb == ActionVerb.LoopAnim && loopAnim.Thing == "Walk", "`loop anim \"Walk\"` parses");
