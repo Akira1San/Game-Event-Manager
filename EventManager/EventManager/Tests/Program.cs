@@ -1540,6 +1540,11 @@ var cameraLooks = ActionWords.Parse(RawWords(actionParser, @"when game starts
 Check(cameraLooks.Verb == ActionVerb.CameraLooksAt && cameraLooks.Thing == "Chest",
     "`camera looks at Chest` parses to CameraLooksAt");
 
+var cameraAt = ActionWords.Parse(RawWords(actionParser, @"when game starts
+  camera at CameraDoor"), null);
+Check(cameraAt.Verb == ActionVerb.CameraAt && cameraAt.Thing == "CameraDoor",
+    "`camera at CameraDoor` parses to CameraAt");
+
 var loopAnim = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   loop anim ""Walk"""), null);
 Check(loopAnim.Verb == ActionVerb.LoopAnim && loopAnim.Thing == "Walk", "`loop anim \"Walk\"` parses");

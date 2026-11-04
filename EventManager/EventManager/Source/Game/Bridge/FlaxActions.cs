@@ -47,6 +47,8 @@ namespace Game
         internal static Vector3 CameraFollowOffset;
         /// <summary>Actor the camera aims at (<c>camera looks at &lt;thing&gt;</c>).</summary>
         internal static Actor CameraLookAtTarget;
+        /// <summary>Actor the camera snaps to each tick (<c>camera at &lt;thing&gt;</c>).</summary>
+        internal static Actor CameraAtTarget;
         /// <summary>World position of the last mouse click on bare ground — the <c>goto there</c> target.</summary>
         public static Vector3? LastClickPosition;
 
@@ -79,6 +81,8 @@ namespace Game
             AnimIndexCache = null;
             AnimFullNames = null;
             CameraFollowTarget = null;
+            CameraLookAtTarget = null;
+            CameraAtTarget = null;
             foreach (AnimState state in AnimStates.Values)
             {
                 if (state.Graph != null)
@@ -246,7 +250,8 @@ namespace Game
             // the offset captured when the follow started (the authored framing never changes).
             if (CameraFollowTarget != null && CameraFollowTarget.Scene == null)
             {
-                CameraFollowTarget = null;
+            CameraFollowTarget = null;
+            CameraLookAtTarget = null;
             }
             if (CameraFollowTarget != null)
             {
@@ -266,6 +271,19 @@ namespace Game
                 Actor camera = FlaxWorld.FindCamera();
                 if (camera != null)
                     camera.LookAt(CameraLookAtTarget.Position);
+            }
+
+            // `camera at <thing>`: snap the camera to the target's position each tick
+            // (offset 0), giving authored framings from dedicated camera actors.
+            if (CameraAtTarget != null && CameraAtTarget.Scene == null)
+            {
+                CameraAtTarget = null;
+            }
+            if (CameraAtTarget != null)
+            {
+                Actor camera = FlaxWorld.FindCamera();
+                if (camera != null)
+                    camera.Position = CameraAtTarget.Position;
             }
         }
 
@@ -509,6 +527,9 @@ namespace Game
                     break;
                 case ActionVerb.CameraLooksAt:
                     StartCameraLookAt(context, spec);
+                    break;
+                case ActionVerb.CameraAt:
+                    StartCameraAt(context, spec);
                     break;
                 case ActionVerb.CameraFree:
                     StopCameraFollow();
@@ -1130,6 +1151,7 @@ namespace Game
             CameraFollowTarget = target;
             CameraFollowOffset = camera.Position - target.Position;
             CameraLookAtTarget = null; // following and aiming don't fight each tick
+            CameraAtTarget = null; // following and snapping don't fight each tick
             context.Runtime.Variables.SetGlobal("cameraFollow", ValueBox.OfNumber(0));
         }
 
@@ -1138,6 +1160,7 @@ namespace Game
         {
             CameraFollowTarget = null;
             CameraLookAtTarget = null; // free the camera entirely
+            CameraAtTarget = null; // free the camera entirely
         }
 
         /// <summary>
@@ -1154,6 +1177,30 @@ namespace Game
             }
             CameraLookAtTarget = target;
             // Aiming elsewhere releases the follow — the two must not fight each tick.
+            CameraFollowTarget = null;
+        }
+
+        /// <summary>
+        /// <c>camera at &lt;thing&gt;</c>: snap the camera to the target's position each tick
+        /// (offset 0), giving authored framings from dedicated camera actors like CameraDoor.
+        /// Combines with <c>camera looks at</c> — position and aim are separate.
+        /// </summary>
+        private static void StartCameraAt(EventContext context, ActionSpec spec)
+        {
+            var target = ResolveThing(context, spec.Thing) as Actor;
+            if (target == null)
+            {
+                WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D for the camera to snap to.");
+                return;
+            }
+            Actor camera = FlaxWorld.FindCamera();
+            if (camera == null)
+            {
+                WarnOnce("\u201Ccamera at\u201D needs a Camera actor in the scene.");
+                return;
+            }
+            CameraAtTarget = target;
+            // Snapping elsewhere releases the follow — position sources must not fight.
             CameraFollowTarget = null;
         }
 
