@@ -1,0 +1,8 @@
+# --- ChoiceA.events ---
+# A dialogue button picks the "fix my flask" branch and sets a story flag.
+
+when me is clicked
+  set text of DialogPanel to "Can you fix my flask?"
+  hide ChoiceA
+  hide ChoiceB
+  set NpcAsked to true

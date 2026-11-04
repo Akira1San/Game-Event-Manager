@@ -108,8 +108,21 @@
 			"TypeName": "Game.EventSheet",
 			"ParentID": "28c817ba48f0d5cad7f0ae932fdfa049",
 			"V": {
-	"EventFile": "Adventure_player"
+	"EventFile": "Player"
 }
+		},
+		{
+			"ID": "9f1e2d3c4b5a6978876543210fedcba0",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "f18ae1b44189bbf8d4fa0e9081de59fc",
+			"Name": "Key",
+			"Transform": {
+				"Translation": {
+					"X": 318.0,
+					"Y": 10.5,
+					"Z": 48.0
+				}
+			}
 		},
 		{
 			"ID": "ed3b3b3c4117ad6eb4915f860d48ba97",
@@ -145,7 +158,7 @@
 			"TypeName": "Game.EventSheet",
 			"ParentID": "ed3b3b3c4117ad6eb4915f860d48ba97",
 			"V": {
-	"EventFile": "Hotspot_door"
+	"EventFile": "Door"
 }
 		},
 		{

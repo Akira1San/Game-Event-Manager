@@ -1,0 +1,17 @@
+# --- Player.events ---
+# Walk to a clicked spot on the ground, and pick up the Key by touching it.
+
+when Ground is clicked
+  goto there
+
+when me touches Key
+  add Key to my bag
+  set HasKey to true
+  play sound "pickup.wav"
+  hide Key
+  show text "You picked up the Key."
+  wait 1 second
+  hide text
+
+when me arrives at there
+  loop anim "animation idle pose"

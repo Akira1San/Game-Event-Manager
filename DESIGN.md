@@ -924,6 +924,11 @@ window around a broken runtime.
 - **Negated possessive reads:** `add -(other's damage)` does not parse — the lexer gloms `-` onto
   `other's` as one token. Work around it with `set my LastDmg to other's damage` then
   `set my health to my health - my LastDmg` (note the `my` prefix on the right-hand read).
+- **Possessive bag checks across actors:** `my bag has <thing>` and `remove <thing> from my bag`
+  only ever address the sheet's own actor (`me`). Another actor (a door, an NPC) cannot read or
+  change Player's bag directly, so the locked-door puzzle (Task 9 C) tracks key possession with a
+  global flag (`HasKey`) set on pickup instead of checking `Player's bag`. A cross-actor bag
+  condition and `remove ... from <actor>'s bag` are parked for a later era.
 
 ---
 

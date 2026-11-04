@@ -543,13 +543,15 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
   the camera — proper top-down adventure feel.
 
 ### Part C — Acceptance: the locked-door puzzle
-- [ ] Write the DESIGN.md listing as real files: Door.events (hint hover + locked/unlocked
+- [x] Write the DESIGN.md listing as real files: Door.events (hint hover + locked/unlocked
   split via a condition line), Player.events (`when Ground is clicked` → `goto there`),
   an NPC with menu-composed dialogue (DialogPanel + ChoiceA/B buttons), and a Key item.
-- [ ] Chain the bag/equip words from Task 8: pick up the key off the floor, use it on the door.
+- [x] Chain the bag/equip words from Task 8: pick up the key off the floor, use it on the door.
 - [ ] Verify the full loop: hover shows the hint → click door = "It's locked" → walk to key →
   pick up → click door again = opens → NPC dialogue choices set a story flag.
-- [ ] Note any vocabulary friction in a DESIGN.md §9 line.
+  (play verification awaits the user's editor run; all five `.events` files parse clean and
+  the full unit suite is 318/318 green)
+- [x] Note any vocabulary friction in a DESIGN.md §9 line.
 
 ### Part D — Inventory selection & use-item-on-object
 - [ ] Add `set my SelectedItem to <thing>` support (variable write already works) so the

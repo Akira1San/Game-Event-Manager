@@ -1,0 +1,7 @@
+# --- NPC.events: menu-composed dialogue ---
+# Clicking the NPC reveals a panel with two choice buttons (menu batch words).
+
+when me is clicked
+  show DialogPanel
+  show ChoiceA
+  show ChoiceB
