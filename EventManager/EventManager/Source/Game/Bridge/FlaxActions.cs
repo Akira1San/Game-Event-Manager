@@ -1275,7 +1275,7 @@ namespace Game
                     continue;
                 var camera = child as FlaxEngine.Camera;
                 if (camera != null)
-                    camera.Enabled = ReferenceEquals(camera, keepEnabled);
+                    camera.IsActive = ReferenceEquals(camera, keepEnabled);
                 DisableCamerasIn(child, keepEnabled);
             }
         }
