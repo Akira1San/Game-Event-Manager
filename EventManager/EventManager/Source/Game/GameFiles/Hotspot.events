@@ -3,3 +3,4 @@ when me is hovered
 
 when me is clicked
   show text "You open the chest."
+  camera looks at chest

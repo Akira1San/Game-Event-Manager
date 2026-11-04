@@ -245,13 +245,27 @@ namespace Game
             // `camera follows <thing>`: translate the camera by the target's movement, keeping
             // the offset captured when the follow started (the authored framing never changes).
             if (CameraFollowTarget != null && CameraFollowTarget.Scene == null)
-            CameraFollowTarget = null;
-            CameraLookAtTarget = null;
+            {
+                CameraFollowTarget = null;
+            }
             if (CameraFollowTarget != null)
             {
                 Actor camera = FlaxWorld.FindCamera();
                 if (camera != null)
                     camera.Position = CameraFollowTarget.Position + CameraFollowOffset;
+            }
+
+            // `camera looks at <thing>`: keep the scene camera aimed at the target each tick,
+            // so the aim tracks a moving target and switching targets is smooth.
+            if (CameraLookAtTarget != null && CameraLookAtTarget.Scene == null)
+            {
+                CameraLookAtTarget = null;
+            }
+            if (CameraLookAtTarget != null)
+            {
+                Actor camera = FlaxWorld.FindCamera();
+                if (camera != null)
+                    camera.LookAt(CameraLookAtTarget.Position);
             }
         }
 
