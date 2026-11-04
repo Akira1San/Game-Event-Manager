@@ -4,3 +4,7 @@ when me is hovered
 when me is clicked
   show text "You open the door."
   camera looks at door
+
+when me is near Player by 3
+  camera at CameraDoor
+  camera looks at door
