@@ -6,5 +6,5 @@ when me is clicked
   camera looks at chest
 
 when me is near Player by 3
-  camera at CameraChest
+  camera switch CameraChest
   camera looks at chest

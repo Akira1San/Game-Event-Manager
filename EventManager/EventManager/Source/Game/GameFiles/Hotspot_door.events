@@ -6,5 +6,5 @@ when me is clicked
   camera looks at door
 
 when me is near Player by 3
-  camera at CameraDoor
+  camera switch CameraDoor
   camera looks at door
