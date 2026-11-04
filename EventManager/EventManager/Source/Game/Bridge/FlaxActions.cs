@@ -535,6 +535,9 @@ namespace Game
                 case ActionVerb.CameraAt:
                     StartCameraAt(context, spec);
                     break;
+                case ActionVerb.CameraSwitch:
+                    StartCameraSwitch(context, spec);
+                    break;
                 case ActionVerb.CameraFree:
                     StopCameraFollow();
                     break;
@@ -1225,6 +1228,56 @@ namespace Game
             float camHeight = (float)context.Runtime.Variables.GetGlobal("cameraHeight").AsNumber();
             float camDepth = (float)context.Runtime.Variables.GetGlobal("cameraDepth").AsNumber();
             CameraAtOffset = new Vector3(0f, camHeight, camDepth);
+        }
+
+        /// <summary>
+        /// <c>camera switch &lt;thing&gt;</c>: replace the active camera — enable the named
+        /// camera actor and disable every other camera in all scenes. Use authored Camera
+        /// actors (e.g. CameraDoor, CameraChest, PlayerCamera) for per-shot framing.
+        /// Releases any explicit follow/at/look so the switched camera is fully in control.
+        /// </summary>
+        private static void StartCameraSwitch(EventContext context, ActionSpec spec)
+        {
+            // Find the camera actor by name. Try sheet-bound resolution first, then fall
+            // back to a plain Level.FindActor so cameras without EventSheets still work.
+            var target = ResolveThing(context, spec.Thing) as FlaxEngine.Camera;
+            if (target == null)
+            {
+                target = Level.FindActor(spec.Thing) as FlaxEngine.Camera;
+            }
+            if (target == null)
+            {
+                WarnOnce($"I couldn't find a Camera actor named \u201C{spec.Thing}\u201D.");
+                return;
+            }
+            // Walk every actor in every scene, enabling only the chosen camera.
+            foreach (var scene in Level.Scenes)
+            {
+                if (scene == null)
+                    continue;
+                DisableCamerasIn(scene, target);
+            }
+            // The switched camera is now in control — release all explicit camera targets.
+            CameraFollowTarget = null;
+            CameraLookAtTarget = null;
+            CameraAtTarget = null;
+            CameraAtOffset = Vector3.Zero;
+        }
+
+        /// <summary>
+        /// Recursively walks the scene tree, enabling only <paramref name="keepEnabled"/>
+        /// among all <see cref="FlaxEngine.Camera"/> actors and disabling the rest.</summary>
+        private static void DisableCamerasIn(Actor node, FlaxEngine.Camera keepEnabled)
+        {
+            foreach (Actor child in node.Children)
+            {
+                if (child == null)
+                    continue;
+                var camera = child as FlaxEngine.Camera;
+                if (camera != null)
+                    camera.Enabled = ReferenceEquals(camera, keepEnabled);
+                DisableCamerasIn(child, keepEnabled);
+            }
         }
 
         /// <summary>

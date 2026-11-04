@@ -27,6 +27,7 @@ namespace Game
         CameraFollow,
         CameraLooksAt,
         CameraAt,
+        CameraSwitch,
         CameraFree,
         Hide,
         Show,
@@ -176,11 +177,20 @@ namespace Game
                             return Finish(spec, ActionVerb.CameraAt, words, 2 + atUsed);
                         }
                     }
+                    if (words.Count >= 3 && words[1].Text == "switch")
+                    {
+                        string switchThing = ThingAt(words, 2, out int switchUsed);
+                        if (switchThing != null)
+                        {
+                            spec.Thing = switchThing;
+                            return Finish(spec, ActionVerb.CameraSwitch, words, 2 + switchUsed);
+                        }
+                    }
                     if (words.Count >= 2 && words[1].Text == "free")
                     {
                         return Finish(spec, ActionVerb.CameraFree, words, 2);
                     }
-                    return Unknown(spec, words, "\u201Ccamera\u201D looks like this: \u201Ccamera follows Player\u201D, \u201Ccamera looks at Chest\u201D, \u201Ccamera at CameraDoor\u201D, or \u201Ccamera free\u201D", warn);
+                    return Unknown(spec, words, "\u201Ccamera\u201D looks like this: \u201Ccamera follows Player\u201D, \u201Ccamera looks at Chest\u201D, \u201Ccamera at CameraDoor\u201D, \u201Ccamera switch CameraDoor\u201D, or \u201Ccamera free\u201D", warn);
                 }
 
                 case "face":
