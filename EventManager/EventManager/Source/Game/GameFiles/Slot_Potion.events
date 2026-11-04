@@ -1,0 +1,9 @@
+# --- Slot_Potion.events ---
+# Inventory slot: click to select the Potion. Sets the global `SelectedItem`
+# so the door's use-item-on-object flow can check it.
+
+when me is clicked
+  set SelectedItem to "Potion"
+  show text "Selected: Potion"
+  wait 1 second
+  hide text

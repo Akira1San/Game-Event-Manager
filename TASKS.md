@@ -554,16 +554,16 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 - [x] Note any vocabulary friction in a DESIGN.md §9 line.
 
 ### Part D — Inventory selection & use-item-on-object
-- [ ] Add `set my SelectedItem to <thing>` support (variable write already works) so the
+- [x] Add `set my SelectedItem to <thing>` support (variable write already works) so the
   player can select an item from the bag (e.g. `set my SelectedItem to "Key"`).
 - [ ] Add clickable inventory slot actors: each slot button sets `my SelectedItem` to its
   item name on click, and highlights the selected slot.
-- [ ] Add condition `my SelectedItem is <thing>` (variable read already works) so you can
+- [x] Add condition `my SelectedItem is <thing>` (variable read already works) so you can
   write: `when me touches Door and my SelectedItem is "Key"`.
-- [ ] Add use-on-object flow: click a bag slot to select an item, then click the door —
+- [x] Add use-on-object flow: click a bag slot to select an item, then click the door —
   if `my SelectedItem is "Key"`, unlock the door and clear `my SelectedItem`.
 - [ ] Add visual feedback: selected slot gets a tint/outline; unselected slots are dim.
-- [ ] Chain with Task 8 bag words: `add <thing> to my bag` / `remove <thing> from my bag`
+- [x] Chain with Task 8 bag words: `add <thing> to my bag` / `remove <thing> from my bag`
   / `my bag has <thing>` for the full inventory loop.
 - [ ] Verify: open bag → select Key → click Door → door unlocks → SelectedItem cleared.
 

@@ -1,5 +1,6 @@
-# --- Door.events (locked-door puzzle) ---
-# `my Locked` = door state (true while locked). `HasKey` = global flag set on key pickup.
+# --- Door.events (locked-door puzzle with inventory selection) ---
+# `my Locked` = door state (true while locked). `SelectedItem` = the item the
+# player has selected in inventory (a global variable set by clicking a slot).
 # Hover hint is gated on `my Locked` so it stops overwriting the unlock message once opened.
 
 when me appears
@@ -11,13 +12,14 @@ when me is hovered
 
 when me is clicked
   my Locked is true
-  unless HasKey is true
+  unless SelectedItem is "Key"
   play sound "locked.wav"
   show text "It's locked."
 
 when me is clicked
   my Locked is true
-  HasKey is true
+  SelectedItem is "Key"
   play sound "unlock.wav"
   set my Locked to false
+  set SelectedItem to ""
   show text "The door creaks open."
