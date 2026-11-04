@@ -2,7 +2,7 @@
 # Walk to a clicked spot on the ground, and pick up the Key by touching it.
 
 when Ground is clicked
-  goto there
+  goto there speed 100
 
 when me touches Key
   add Key to my bag

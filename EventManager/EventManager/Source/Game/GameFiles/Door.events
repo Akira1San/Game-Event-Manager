@@ -1,17 +1,22 @@
 # --- Door.events (locked-door puzzle) ---
-# Hover shows the hint. Clicking checks whether the player holds the Key.
-# `HasKey` is a global story flag the key pickup sets (the door's sheet cannot
-# read Player's bag directly — see DESIGN.md §9 note on possessive bag checks).
+# `my Locked` = door state (true while locked). `HasKey` = global flag set on key pickup.
+# Hover hint is gated on `my Locked` so it stops overwriting the unlock message once opened.
+
+when me appears
+  set my Locked to true
 
 when me is hovered
+  my Locked is true
   show text "A locked door."
 
 when me is clicked
+  my Locked is true
   unless HasKey is true
   play sound "locked.wav"
   show text "It's locked."
 
 when me is clicked
+  my Locked is true
   HasKey is true
   play sound "unlock.wav"
   set my Locked to false
