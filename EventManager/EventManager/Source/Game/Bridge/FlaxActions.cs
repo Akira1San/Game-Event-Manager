@@ -270,10 +270,7 @@ namespace Game
             {
                 Actor camera = FlaxWorld.FindCamera();
                 if (camera != null)
-                {
-                    camera.LookAt(CameraLookAtTarget.Position);
-                    Debug.LogWarning($"[CAM DEBUG] camera looks at {CameraLookAtTarget.Name} each-tick cam orient={camera.Orientation}");
-                }
+                    LookAtNoRoll(camera, CameraLookAtTarget.Position);
             }
 
             // `camera at <thing>`: snap the camera to the target's position each tick
@@ -286,10 +283,7 @@ namespace Game
             {
                 Actor camera = FlaxWorld.FindCamera();
                 if (camera != null)
-                {
                     camera.Position = CameraAtTarget.Position;
-                    Debug.LogWarning($"[CAM DEBUG] camera at {CameraAtTarget.Name} each-tick cam pos={camera.Position} target pos={CameraAtTarget.Position}");
-                }
             }
         }
 
@@ -1163,7 +1157,11 @@ namespace Game
             CameraFollowOffset = new Vector3(0f, camHeight, camDepth);
             CameraLookAtTarget = null; // following and aiming don't fight each tick
             CameraAtTarget = null; // following and snapping don't fight each tick
-            Debug.LogWarning($"[CAM DEBUG] camera follows {target.Name} offset={CameraFollowOffset} cam pos={camera.Position} target pos={target.Position}");
+            // Reset orientation to default top-down so the camera isn't left rotated
+            // from a previous "camera looks at".
+            Actor followCamera = FlaxWorld.FindCamera();
+            if (followCamera != null)
+                followCamera.Orientation = Quaternion.Euler(45.0f, 0.0f, 0.0f);
             context.Runtime.Variables.SetGlobal("cameraFollow", ValueBox.OfNumber(0));
         }
 
@@ -1192,10 +1190,8 @@ namespace Game
             CameraFollowTarget = null;
             Actor lookCamera = FlaxWorld.FindCamera();
             if (lookCamera != null)
-                Debug.LogWarning($"[CAM DEBUG] camera looks at {target.Name} cam orient before={lookCamera.Orientation}");
-            lookCamera?.LookAt(target.Position);
-            if (lookCamera != null)
-                Debug.LogWarning($"[CAM DEBUG] camera looks at {target.Name} cam orient after={lookCamera.Orientation}");
+                LookAtNoRoll(lookCamera, target.Position);
+        }
 
         /// <summary>
         /// <c>camera at &lt;thing&gt;</c>: snap the camera to the target's position each tick
