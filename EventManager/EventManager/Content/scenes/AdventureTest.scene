@@ -324,7 +324,7 @@
 			"ID": "18bacf39467df8a40f4e8eb5a3341add",
 			"TypeName": "FlaxEngine.Camera",
 			"ParentID": "f18ae1b44189bbf8d4fa0e9081de59fc",
-			"Name": "camera",
+			"Name": "PlayerCamera",
 			"Transform": {
 				"Translation": {
 					"X": 95.81269836425781,

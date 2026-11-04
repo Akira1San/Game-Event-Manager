@@ -176,7 +176,7 @@ namespace Game
                     object anchor = node.Name == "other" && context.Other != null ? context.Other : context.Me;
                     if (thing == null)
                         return false;
-                    return context.World.Distance(anchor, thing) <= node.Distance;
+                    return context.World.Distance2D(anchor, thing) <= node.Distance;
                 }
                 case ConditionKind.HasTag:
                 {

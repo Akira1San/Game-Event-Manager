@@ -6,6 +6,10 @@ namespace Game
     {
         bool IsKeyHeld(string key);
         double Distance(object from, object to);
+        /// <summary>Horizontal (XZ) distance ignoring height. Ground-plane triggers
+        /// (<c>near</c>, <c>arrives</c>) use this so a tall prop's pivot can't keep it
+        /// perpetually "far" from a short actor like the Player.</summary>
+        double Distance2D(object from, object to);
         bool HasTag(object target, string tag);
         /// <summary>The actor's real name. Never use ToString() for logic — Flax adds type/id noise.</summary>
         string NameOf(object actor);
@@ -29,6 +33,11 @@ namespace Game
         }
 
         public double Distance(object from, object to)
+        {
+            return double.MaxValue;
+        }
+
+        public double Distance2D(object from, object to)
         {
             return double.MaxValue;
         }

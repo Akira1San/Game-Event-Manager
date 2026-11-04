@@ -2052,6 +2052,13 @@ class FakeWorld : IEventWorld
         return 100000;
     }
 
+    // The fake stores one scalar per pair, so 2D and 3D distances are the same here.
+    // Ground-plane triggers (near/arrives) call Distance2D; tests still drive it via SetDistance.
+    public double Distance2D(object from, object to)
+    {
+        return Distance(from, to);
+    }
+
     public bool HasTag(object target, string tag)
     {
         return tags.Contains((target, tag));

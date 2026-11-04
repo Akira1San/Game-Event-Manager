@@ -51,6 +51,20 @@ namespace Game
             return Vector3.Distance(first.Position, second.Position);
         }
 
+        /// <summary>Horizontal (XZ) distance, ignoring height. Ground-plane triggers
+        /// (<c>near</c>, <c>arrives</c>) use this so a tall prop's pivot doesn't keep it
+        /// perpetually "far" from a short actor like the Player.</summary>
+        public double Distance2D(object from, object to)
+        {
+            Actor first = from as Actor;
+            Actor second = to as Actor;
+            if (first == null || second == null)
+                return 100000;
+            double dx = first.Position.X - second.Position.X;
+            double dz = first.Position.Z - second.Position.Z;
+            return System.Math.Sqrt(dx * dx + dz * dz);
+        }
+
         public bool HasTag(object target, string tag)
         {
             Actor actor = target as Actor;

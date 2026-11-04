@@ -589,7 +589,11 @@ namespace Game
                 // so PollArrival can re-arm when the same waypoint is chosen again.
                 if (move.Subject != null && move.Target != null)
                 {
-                    double distance = Vector3.Distance(move.Subject.Position, move.Target.Position);
+                    // Horizontal (XZ) distance keeps arrival re-arming consistent with the
+                    // 2D PollArrival check, so a height gap can't hold the contact open.
+                    double sx = move.Subject.Position.X - move.Target.Position.X;
+                    double sz = move.Subject.Position.Z - move.Target.Position.Z;
+                    double distance = System.Math.Sqrt(sx * sx + sz * sz);
                     if (distance <= EventRuntime.ArrivalSlack)
                         EventRuntime.ClearArrivalContact(move.Subject, move.Target);
                 }

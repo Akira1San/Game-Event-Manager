@@ -887,7 +887,7 @@ namespace Game
                     continue;
                 if (!NameMatches(descriptor, other))
                     continue;
-                if (World.Distance(sheet.Actor, other) <= descriptor.Distance)
+                if (World.Distance2D(sheet.Actor, other) <= descriptor.Distance)
                 {
                     inRange.Add(other);
                 }
@@ -939,7 +939,7 @@ namespace Game
                     continue;
                 if (!NameMatches(descriptor, other))
                     continue;
-                double dist = World.Distance(sheet.Actor, other);
+                double dist = World.Distance2D(sheet.Actor, other);
                 if (dist <= ArrivalSlack)
                     arriving.Add(other);
             }
