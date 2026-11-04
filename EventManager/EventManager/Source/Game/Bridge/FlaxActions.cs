@@ -180,7 +180,9 @@ namespace Game
                     Moves.RemoveAt(i);
                     continue;
                 }
-                if (move.Target == null || move.Target.Scene == null)
+                // `goto there` deliberately has no actor Target — only a clicked PositionTarget.
+                // Keep it alive; named-target and face moves still need their actor.
+                if (!move.HasPositionTarget && (move.Target == null || move.Target.Scene == null))
                 {
                     Moves.RemoveAt(i);
                     continue;
@@ -191,9 +193,7 @@ namespace Game
                 {
                     if (move.Path == null || move.PathIndex >= move.Path.Length)
                     {
-                        if (move.HasPositionTarget)
-                            RaiseArriveAt(move.Subject, "there");
-                        ArriveAt(move);
+                        FinishGoto(move);
                         Moves.RemoveAt(i);
                         continue;
                     }
@@ -209,7 +209,7 @@ namespace Game
                         move.PathIndex++;
                         if (move.PathIndex >= move.Path.Length)
                         {
-                            ArriveAt(move);
+                            FinishGoto(move);
                             Moves.RemoveAt(i);
                         }
                     }
@@ -246,7 +246,7 @@ namespace Game
                 CameraFollowTarget = null;
             if (CameraFollowTarget != null)
             {
-                Actor camera = Level.FindActor("Camera");
+                Actor camera = FlaxWorld.FindCamera();
                 if (camera != null)
                     camera.Position = CameraFollowTarget.Position + CameraFollowOffset;
             }
@@ -598,6 +598,15 @@ namespace Game
                 return;
             PhysicsMovement.BrakeVelocity(body.LinearVelocity.Y, out double vx, out double vy, out double vz);
             body.LinearVelocity = new Vector3((float)vx, (float)vy, (float)vz);
+        }
+
+        /// <summary>Finish a path: raise <c>when me arrives at there</c> for click-walks, then
+        /// snap/brake the subject. Used by both the empty-path and last-waypoint exits.</summary>
+        private static void FinishGoto(OngoingMove move)
+        {
+            if (move.HasPositionTarget)
+                RaiseArriveAt(move.Subject, "there");
+            ArriveAt(move);
         }
 
         private static void ArriveAt(OngoingMove move)
@@ -1088,10 +1097,10 @@ namespace Game
                 WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D for the camera to follow.");
                 return;
             }
-            Actor camera = Level.FindActor("Camera");
+            Actor camera = FlaxWorld.FindCamera();
             if (camera == null)
             {
-                WarnOnce("\u201Ccamera follows\u201D needs an actor named \u201CCamera\u201D in the scene.");
+                WarnOnce("\u201Ccamera follows\u201D needs a Camera actor in the scene.");
                 return;
             }
 

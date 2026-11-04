@@ -1,0 +1,5 @@
+when me is hovered
+  show text "A mysterious Door."
+
+when me is clicked
+  show text "You open the door."

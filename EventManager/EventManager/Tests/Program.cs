@@ -962,9 +962,9 @@ Check(noBagEngine.Variables.GetLocal(nbSword, "Equipped").Kind == ValueKind.None
 // ------------------------------------------------------------------
 
 // All three DESIGN.md §5 listings must parse as real .events files.
-var swordEvents = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Sword.events"));
+var swordEvents = parser.Parse(File.ReadAllText("Source/Game/GameFiles/test/Sword.events"));
 Check(swordEvents.Events.Count == 2, "Sword.events parses (gets-equipped + gets-unequipped)");
-var playerEvents = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Player.events"));
+var playerEvents = parser.Parse(File.ReadAllText("Source/Game/GameFiles/test/Player.events"));
 Check(playerEvents.Events.Count > 0, "Player.events parses (movement + hurt + loot/equip/attack)");
 var enemyEvents = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Enemy.events"));
 Check(enemyEvents.Events.Count > 0, "Enemy.events parses (patrol/chase/attack + damage + death loot)");
@@ -1186,6 +1186,38 @@ tagWorld.SetTag(bomb, "Enemy");
     var arriveThereDesc = TriggerClassifier.Classify(thereProg.Events[1]);
     Check(arriveThereDesc.Kind == TriggerKind.Arrives && arriveThereDesc.RequireName == "there",
         "`when me arrives at there` classifies to Arrives with RequireName \"there\"");
+
+    // Click routing: `when Ground is clicked` can live on the Player's sheet, while
+    // `when me is clicked` fires only on the sheet attached to the clicked actor.
+    var clickWorld = new FakeWorld();
+    var clickPlayer = new FakeActor("Player");
+    var clickGround = new FakeActor("Ground");
+    var clickChest = new FakeActor("Chest");
+    clickWorld.AddActor(clickPlayer);
+    clickWorld.AddActor(clickGround);
+    clickWorld.AddActor(clickChest);
+    var clickEngine = FreshEngine(clickWorld);
+    clickEngine.AddSheet(clickPlayer, parser.Parse("when Ground is clicked\n  add 1 to Walks\n"));
+    clickEngine.AddSheet(clickGround, parser.Parse("when me is clicked\n  add 1 to GroundClicks\n"));
+    clickEngine.AddSheet(clickChest, parser.Parse("when me is clicked\n  add 1 to ChestClicks\n"));
+    clickEngine.RaiseClick(clickGround, TriggerKind.Clicked);
+    clickEngine.Tick(0);
+    Check(clickEngine.Variables.GetGlobal("Walks").AsNumber() == 1,
+        "clicking Ground reaches `when Ground is clicked` on another sheet");
+    Check(clickEngine.Variables.GetGlobal("GroundClicks").AsNumber() == 1,
+        "`when me is clicked` fires on the clicked actor's own sheet");
+    Check(clickEngine.Variables.GetGlobal("ChestClicks").IsNone(),
+        "a click on Ground does not fire `when me is clicked` on an unrelated sheet");
+    clickEngine.Tick(1);
+    Check(clickEngine.Variables.GetGlobal("Walks").AsNumber() == 1,
+        "a click is a one-shot push, not a steady trigger");
+
+    clickEngine.RaiseClick(clickChest, TriggerKind.Clicked);
+    clickEngine.Tick(2);
+    Check(clickEngine.Variables.GetGlobal("ChestClicks").AsNumber() == 1,
+        "clicking Chest fires its own `when me is clicked`");
+    Check(clickEngine.Variables.GetGlobal("Walks").AsNumber() == 1,
+        "clicking Chest does not fire `when Ground is clicked`");
 
     // ------------------------------------------------------------------
     // Task 7 Part B: `when me sees <thing> by <dist>` / `when me stops seeing <thing>`

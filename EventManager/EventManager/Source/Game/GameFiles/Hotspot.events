@@ -1,0 +1,5 @@
+when me is hovered
+  show text "A mysterious chest."
+
+when me is clicked
+  show text "You open the chest."

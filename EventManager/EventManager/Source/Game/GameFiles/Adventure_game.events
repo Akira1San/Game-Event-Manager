@@ -1,0 +1,4 @@
+when game starts
+  show text "Click the ground to walk. Hover over things."
+  wait 3 seconds
+  hide text

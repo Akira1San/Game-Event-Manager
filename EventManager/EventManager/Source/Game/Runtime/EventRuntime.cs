@@ -241,6 +241,18 @@ namespace Game
                 sheet.PushQueue.Enqueue(signal);
         }
 
+        /// <summary>A click on an actor is a world event: the clicked actor's own sheet gets
+        /// `when me is clicked`, and any other sheet can listen by name with
+        /// `when Ground is clicked`. Broadcast it and let <see cref="Matches"/> filter by name.</summary>
+        public void RaiseClick(object actor, TriggerKind kind)
+        {
+            if (actor == null)
+                return;
+            var signal = new PushSignal { Kind = kind, Name = NameOf(actor), Other = actor };
+            foreach (var sheet in sheets)
+                sheet.PushQueue.Enqueue(signal);
+        }
+
         public void PushContact(TriggerKind kind, object a, object b)
         {
             foreach (var sheet in sheets)
@@ -400,7 +412,7 @@ namespace Game
                     {
                         if (sheet.FiredThisTick[eventIndex])
                             continue;
-                        if (!Matches(sheet.Triggers[eventIndex], signal))
+                        if (!Matches(sheet, sheet.Triggers[eventIndex], signal))
                             continue;
                         if (IsContactKind(signal.Kind) && signal.Other != null)
                         {
@@ -445,7 +457,7 @@ namespace Game
             return bag;
         }
 
-        private bool Matches(TriggerDescriptor descriptor, PushSignal signal)
+        private bool Matches(SheetInstance sheet, TriggerDescriptor descriptor, PushSignal signal)
         {
             if (descriptor.Kind != signal.Kind)
                 return false;
@@ -454,10 +466,22 @@ namespace Game
             // `when other touches me` / `when other overlaps me` means "any toucher".
             if (descriptor.RequireName == "me" && IsContactKind(descriptor.Kind))
                 return true;
+            // `when me is clicked` means "the actor this sheet is attached to was clicked".
+            // Clicks are broadcast (so `when Ground is clicked` can live on the Player sheet),
+            // which is why the name alone is not enough for the `me` form.
+            if (descriptor.RequireName == "me" && IsClickKind(descriptor.Kind))
+                return ReferenceEquals(signal.Other, sheet.Actor);
             // Clip names are matched loosely: `play anim "Walk"` answers `when anim "walk" ends`.
             if (descriptor.Kind == TriggerKind.AnimEnd)
                 return string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase);
             return signal.Name == descriptor.RequireName;
+        }
+
+        private static bool IsClickKind(TriggerKind kind)
+        {
+            return kind == TriggerKind.Clicked ||
+                   kind == TriggerKind.RightClicked ||
+                   kind == TriggerKind.MiddleClicked;
         }
 
         private void RunEvent(SheetInstance sheet, int eventIndex, object other, object meOverride = null)
@@ -830,6 +854,8 @@ namespace Game
                 if (other == null || ReferenceEquals(other, sheet.Actor))
                     continue;
                 if (!NameMatches(descriptor, other))
+                    continue;
+                if (!World.IsTouching(sheet.Actor, other))
                     continue;
                 touching.Add(other);
             }

@@ -380,7 +380,7 @@ namespace Game
         private void UpdateCameraFollow()
         {
             var player = Level.FindActor("Player") as Actor;
-            var camera = Level.FindActor("Camera") as Actor;
+            var camera = FlaxWorld.FindCamera();
             if (player == null || camera == null)
                 return;
             if (Runtime.Variables.GetGlobal("cameraFollow").AsNumber() <= 0)
@@ -393,7 +393,7 @@ namespace Game
         private void UpdatePlayerLookAtMouse()
         {
             var player = Level.FindActor("Player") as Actor;
-            var camera = Level.FindActor("Camera") as Actor;
+            var camera = FlaxWorld.FindCamera();
             if (player == null || camera == null)
                 return;
             if (Runtime.Variables.GetGlobal("LookAtMouse").AsNumber() <= 0)
@@ -541,34 +541,18 @@ namespace Game
                 if (MouseOverUIControl(ui, mousePos))
                 {
                     uiHit = true;
-                    Runtime.RaisePush(actor, new PushSignal { Kind = kind, Name = actor.Name });
+                    // Clicks are broadcast by name: the clicked actor's own `when me is clicked`
+                    // fires, and other sheets can listen with `when Ground is clicked`.
+                    Runtime.RaiseClick(actor, kind);
                 }
             }
             if (uiHit)
                 return;
 
             // 3D actors under the cursor: raycast from the scene camera through the mouse.
-            var camera = Level.FindActor("Camera") as Actor;
-            if (camera == null)
+            if (!FlaxWorld.TryGetMouseRay(mousePos, out Ray ray))
                 return;
-            Float2 screenSize = Screen.Size;
-            if (screenSize.LengthSquared <= 0)
-                return;
-            float nx = (mousePos.X - screenSize.X * 0.5f) / (screenSize.X * 0.5f);
-            float ny = (screenSize.Y * 0.5f - mousePos.Y) / (screenSize.Y * 0.5f);
-            Vector3 camRight = Vector3.Transform(Vector3.Right, camera.Orientation);
-            Vector3 camForward = Vector3.Transform(Vector3.Forward, camera.Orientation);
-            camRight.Y = 0;
-            camForward.Y = 0;
-            if (camRight.LengthSquared > 0)
-                camRight.Normalize();
-            if (camForward.LengthSquared > 0)
-                camForward.Normalize();
-            Vector3 dir = camRight * nx + camForward * ny;
-            if (dir.LengthSquared <= 0.0001f)
-                dir = camForward;
-            dir.Normalize();
-            if (!Physics.LineCastAll(camera.Position, camera.Position + dir * 1000f, out var hits, ~0u, true))
+            if (!Physics.LineCastAll(ray.Position, ray.Position + ray.Direction * 10000f, out var hits, ~0u, true))
                 return;
             Actor bestActor = null;
             float best = float.MaxValue;
@@ -581,12 +565,12 @@ namespace Game
                 }
             }
             if (bestActor != null)
-                Runtime.RaisePush(bestActor, new PushSignal { Kind = kind, Name = bestActor.Name });
+                Runtime.RaiseClick(bestActor, kind);
         }
 
         /// <summary>Walks up from a hit collider to the actor that carries an EventSheet, so
-        /// <c>when <name> is clicked</c> is delivered to the sheet on the actor (not merely to
-        /// a collider child). Falls back to the collider actor itself.</summary>
+        /// 'when <name> is clicked' is delivered to the sheet on the actor (not merely to a
+        /// collider child). Falls back to the collider actor itself.</summary>
         private static Actor ActorOfHit(PhysicsColliderActor collider)
         {
             if (collider == null)
@@ -606,27 +590,9 @@ namespace Game
         /// click on bare ground into the <c>goto there</c> target.</summary>
         private static Vector3? RaycastToWorld(Float2 mousePos)
         {
-            var camera = Level.FindActor("Camera") as Actor;
-            if (camera == null)
+            if (!FlaxWorld.TryGetMouseRay(mousePos, out Ray ray))
                 return null;
-            Float2 screenSize = Screen.Size;
-            if (screenSize.LengthSquared <= 0)
-                return null;
-            float nx = (mousePos.X - screenSize.X * 0.5f) / (screenSize.X * 0.5f);
-            float ny = (screenSize.Y * 0.5f - mousePos.Y) / (screenSize.Y * 0.5f);
-            Vector3 camRight = Vector3.Transform(Vector3.Right, camera.Orientation);
-            Vector3 camForward = Vector3.Transform(Vector3.Forward, camera.Orientation);
-            camRight.Y = 0;
-            camForward.Y = 0;
-            if (camRight.LengthSquared > 0)
-                camRight.Normalize();
-            if (camForward.LengthSquared > 0)
-                camForward.Normalize();
-            Vector3 dir = camRight * nx + camForward * ny;
-            if (dir.LengthSquared <= 0.0001f)
-                dir = camForward;
-            dir.Normalize();
-            if (!Physics.LineCastAll(camera.Position, camera.Position + dir * 1000f, out var hits, ~0u, true))
+            if (!Physics.LineCastAll(ray.Position, ray.Position + ray.Direction * 10000f, out var hits, ~0u, true))
                 return null;
             float best = float.MaxValue;
             Vector3? bestPoint = null;

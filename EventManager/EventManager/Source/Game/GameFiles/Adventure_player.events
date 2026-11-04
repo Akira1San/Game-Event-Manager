@@ -1,0 +1,5 @@
+when Ground is clicked
+  goto there
+
+when me arrives at there
+  loop anim "animation idle pose"

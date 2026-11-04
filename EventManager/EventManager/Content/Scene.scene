@@ -613,6 +613,38 @@
 		}
 	}
 }
+		},
+		{
+			"ID": "c09017b2426db93fe6f4ed8ceb21df67",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "c12b45cc40f447e8a2722b9715a79dc0",
+			"Name": "Suzane",
+			"Transform": {
+				"Translation": {
+					"X": 30.638877868652344,
+					"Y": 70.0,
+					"Z": -139.39437866210938
+				}
+			},
+			"Model": "efb6d881436796e7b8fb8496dcfe8808",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "814ec7ff459b8cb987bac993617b8629",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "c09017b2426db93fe6f4ed8ceb21df67",
+			"V": {
+	"EventFile": "Player"
+}
 		}
 	]
 }
