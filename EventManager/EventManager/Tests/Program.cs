@@ -1969,6 +1969,60 @@ enterEngine.PollTouches = true;
     Check(enterEngine.Variables.GetGlobal("TouchCount").AsNumber() == 2,
         "a distance touch re-fires after separation and re-entry");
 
+    // ------------------------------------------------------------------
+    // Task 13 Part B: `when me touches <material>` (material detection)
+    // ------------------------------------------------------------------
+
+    var matProg = parser.Parse("when me touches Grass\n  set TouchedGrass to TouchedGrass + 1");
+    Check(matProg.Events.Count == 1, "`when me touches Grass` parses as an event");
+    var matDesc = TriggerClassifier.Classify(matProg.Events[0]);
+    Check(matDesc.Kind == TriggerKind.Touches && matDesc.RequireMaterial == "Grass",
+        "`when me touches Grass` classifies to Touches with RequireMaterial \"Grass\"");
+
+    var matWorld = new FakeWorld();
+    var matActor = new FakeActor("Feet");
+    var grass = new FakeActor("GrassPatch");
+    var stone = new FakeActor("StonePatch");
+    matWorld.AddActor(matActor);
+    matWorld.AddActor(grass);
+    matWorld.AddActor(stone);
+    matWorld.SetMaterial(grass, "Grass");
+    matWorld.SetMaterial(stone, "Stone");
+    matWorld.SetTouching(matActor, grass, true);
+    matWorld.SetTouching(matActor, stone, true);
+    var matEngine = FreshEngine(matWorld);
+    matEngine.PollTouches = true;
+    matEngine.AddSheet(matActor, matProg);
+    matEngine.Tick(0);
+    Check(matEngine.Variables.GetGlobal("TouchedGrass").AsNumber() == 1,
+        "`when me touches Grass` fires on the grass material contact");
+    matEngine.Tick(1);
+    Check(matEngine.Variables.GetGlobal("TouchedGrass").AsNumber() == 1,
+        "still touching grass does not refire (enter edge)");
+    matWorld.SetTouching(matActor, grass, false);
+    matWorld.SetTouching(matActor, stone, true);
+    matEngine.Tick(2);
+    Check(matEngine.Variables.GetGlobal("TouchedGrass").AsNumber() == 1,
+        "switching to a different material does not fire the grass touch");
+    matWorld.SetTouching(matActor, grass, true);
+    matEngine.Tick(3);
+    Check(matEngine.Variables.GetGlobal("TouchedGrass").AsNumber() == 2,
+        "re-entering grass refires the material touch");
+
+    // Unknown material reads as empty and never matches.
+    var unkWorld = new FakeWorld();
+    var unkActor = new FakeActor("Feet");
+    var unk = new FakeActor("Thing");
+    unkWorld.AddActor(unkActor);
+    unkWorld.AddActor(unk);
+    unkWorld.SetTouching(unkActor, unk, true);
+    var unkEngine = FreshEngine(unkWorld);
+    unkEngine.PollTouches = true;
+    unkEngine.AddSheet(unkActor, parser.Parse("when me touches Grass\n  set TouchedGrass to TouchedGrass + 1"));
+    unkEngine.Tick(0);
+    Check(unkEngine.Variables.GetGlobal("TouchedGrass").IsNone(),
+        "an actor with no material never matches `touches Grass`");
+
 var pollOverlapWorld = new FakeWorld();
 var pollOverlapA = new FakeActor("Prober");
 var pollOverlapB = new FakeActor("Enemy");
@@ -2233,6 +2287,7 @@ class FakeWorld : IEventWorld
     private readonly List<object> actors = new List<object>();
     private readonly HashSet<(object, object)> touching = new HashSet<(object, object)>();
     private readonly HashSet<object> hovered = new HashSet<object>();
+    private readonly Dictionary<object, string> materials = new Dictionary<object, string>();
 
     public void SetHeld(string key, bool on)
     {
@@ -2264,6 +2319,11 @@ class FakeWorld : IEventWorld
             touching.Add((a, b));
         else
             touching.Remove((a, b));
+    }
+
+    public void SetMaterial(object actor, string material)
+    {
+        materials[actor] = material;
     }
 
     public void SetHovered(object actor, bool on)
@@ -2320,6 +2380,11 @@ class FakeWorld : IEventWorld
     public bool IsTouching(object a, object b)
     {
         return touching.Contains((a, b)) || touching.Contains((b, a));
+    }
+
+    public string MaterialOf(object actor)
+    {
+        return materials.TryGetValue(actor, out string m) ? m : "";
     }
 
     public bool IsHovered(object actor)

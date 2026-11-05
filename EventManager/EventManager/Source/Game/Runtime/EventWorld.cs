@@ -18,6 +18,9 @@ namespace Game
         /// <summary>True when <paramref name="actor"/> is actively moving this tick (an ongoing
         /// <c>goto</c>/<c>face</c> move, or a <c>move</c> word that ran this tick).</summary>
         bool IsMoving(object actor);
+        /// <summary>The physics-material name of <paramref name="actor"/>'s collider (e.g.
+        /// "Grass", "Stone"), or empty when it has no collider or no material assigned.</summary>
+        string MaterialOf(object actor);
         /// <summary>True when nothing (walls included) blocks the straight line from <paramref name="from"/> to <paramref name="to"/>.</summary>
         bool HasLineOfSight(object from, object to);
         /// <summary>Finds a live scene actor by name (waypoints, goto targets, ...), or null.</summary>
@@ -63,6 +66,11 @@ namespace Game
         public bool IsMoving(object actor)
         {
             return false;
+        }
+
+        public string MaterialOf(object actor)
+        {
+            return "";
         }
 
         public bool HasLineOfSight(object from, object to)

@@ -41,6 +41,9 @@ namespace Game
         public TriggerKind Kind = TriggerKind.Unknown;
         public string Key = "";
         public string RequireName = "";
+        /// <summary>For <c>when me touches &lt;material&gt;</c>: the physics-material name the
+        /// touched actor's collider must carry (matched in addition to, or instead of, a name).</summary>
+        public string RequireMaterial = "";
         public double Distance;
         public double Seconds;
         public string WatchOwner = "";
@@ -138,6 +141,7 @@ namespace Game
             {
                 descriptor.Kind = TriggerKind.Touches;
                 descriptor.RequireName = Join(trigger, 2, words.Length);
+                descriptor.RequireMaterial = descriptor.RequireName;
                 return descriptor;
             }
             if (words.Length >= 3 && words[1] == "overlaps")
@@ -288,5 +292,7 @@ namespace Game
         /// an item's `gets equipped`/`gets unequipped` event runs with the wearer as `me`).</summary>
         public object MeOverride;
         public string Name = "";
+        /// <summary>Physics-material name of the touched/colliding actor (contact triggers only).</summary>
+        public string Material = "";
     }
 }

@@ -687,12 +687,12 @@ names to sound clips, and trigger once per step with a cooldown.
   standing still.
 
 ### Part B — Material detection on contact
-- [ ] Word registry + parser: new trigger `when me touches <material>` where `<material>` is
+- [x] Word registry + parser: new trigger `when me touches <material>` where `<material>` is
   a physics-material name (e.g. `Grass`, `Stone`, `Wood`), matched against the other actor's
   collider material via `IEventWorld.MaterialOf(actor)` / `FlaxWorld`.
-- [ ] `EventSheet` already subscribes to collider `TriggerEnter`/`TriggerExit`; extend
+- [x] `EventSheet` already subscribes to collider `TriggerEnter`/`TriggerExit`; extend
   `PushContact` / `PollContact` to carry the material name, or add a material polled pass.
-- [ ] Unit test: material name is correctly read from a collider's physics material; unknown
+- [x] Unit test: material name is correctly read from a collider's physics material; unknown
   material warns once and reads as empty.
 
 ### Part C — Material→sound mapping + per-step cooldown

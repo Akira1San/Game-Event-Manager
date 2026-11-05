@@ -274,9 +274,9 @@ namespace Game
             foreach (var sheet in sheets)
             {
                 if (ReferenceEquals(sheet.Actor, a))
-                    sheet.PushQueue.Enqueue(new PushSignal { Kind = kind, Other = b, Name = NameOf(b) });
+                    sheet.PushQueue.Enqueue(new PushSignal { Kind = kind, Other = b, Name = NameOf(b), Material = World.MaterialOf(b) });
                 if (ReferenceEquals(sheet.Actor, b))
-                    sheet.PushQueue.Enqueue(new PushSignal { Kind = kind, Other = a, Name = NameOf(a) });
+                    sheet.PushQueue.Enqueue(new PushSignal { Kind = kind, Other = a, Name = NameOf(a), Material = World.MaterialOf(a) });
             }
         }
 
@@ -496,7 +496,12 @@ namespace Game
             // Clip names are matched loosely: `play anim "Walk"` answers `when anim "walk" ends`.
             if (descriptor.Kind == TriggerKind.AnimEnd)
                 return string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase);
-            return signal.Name == descriptor.RequireName;
+            // Name match, or material match for `when me touches <material>`.
+            if (signal.Name == descriptor.RequireName)
+                return true;
+            if (descriptor.RequireMaterial.Length > 0 && signal.Material == descriptor.RequireMaterial)
+                return true;
+            return false;
         }
 
         private static bool IsClickKind(TriggerKind kind)
@@ -902,7 +907,7 @@ namespace Game
             {
                 if (other == null || ReferenceEquals(other, sheet.Actor))
                     continue;
-                if (!NameMatches(descriptor, other))
+                if (!NameMatches(descriptor, other) && !MaterialMatches(descriptor, other))
                     continue;
                 if (!World.IsTouching(sheet.Actor, other))
                     continue;
@@ -971,6 +976,13 @@ namespace Game
             if (descriptor.RequireName == "me")
                 return true; // `other touches me` = any toucher
             return World.NameOf(other) == descriptor.RequireName;
+        }
+
+        private bool MaterialMatches(TriggerDescriptor descriptor, object other)
+        {
+            if (descriptor.RequireMaterial.Length == 0)
+                return false;
+            return World.MaterialOf(other) == descriptor.RequireMaterial;
         }
 
         /// <summary>Enter-edge arrival: fires once when <c>me</c> reaches any actor matching

@@ -8,6 +8,8 @@ namespace Game
     {
         /// <summary>Slack added to the two bounding-sphere radii so grazing hits count.</summary>
         private const float ContactMargin = 2f;
+        /// <summary>Actor names already warned about a missing physics material (warn once each).</summary>
+        private readonly HashSet<string> _missingMaterialWarned = new HashSet<string>();
 
         public bool IsKeyHeld(string key)
         {
@@ -88,6 +90,29 @@ namespace Game
                 return false;
             float radius = first.BoundingSphere.Radius + second.BoundingSphere.Radius + ContactMargin;
             return Vector3.Distance(first.Position, second.Position) <= radius;
+        }
+
+        public string MaterialOf(object actor)
+        {
+            // The physical material lives on Collider (a PhysicsColliderActor subclass), not on
+            // PhysicsColliderActor itself.
+            Collider collider = null;
+            var act = actor as Actor;
+            if (act != null)
+                collider = act.FindActor<Collider>() ?? (act as Collider);
+            else
+                collider = actor as Collider;
+            if (collider == null)
+                return "";
+            PhysicalMaterial material = collider.Material.Instance as PhysicalMaterial;
+            if (material == null)
+            {
+                if (act != null && _missingMaterialWarned.Add(act.Name))
+                    Debug.LogWarning($"Event sheet: \"{act.Name}\" has no physics material — `when me touches <material>` will not match it.");
+                return "";
+            }
+            // PhysicalMaterial.Tag is the gameplay surface identifier (e.g. "Grass", "Stone").
+            return material.Tag.ToString();
         }
 
         public bool IsMoving(object actor)
