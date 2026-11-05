@@ -451,7 +451,12 @@ namespace Game
                             // A distance poll already fired this pair: ignore the collider's echo.
                             if (sheet.PolledContacts[eventIndex].Contains(signal.Other))
                                 continue;
-                            sheet.Contacts[eventIndex].Add(signal.Other); // and don't let a later poll refire it
+                            // A name match locks to enter-edge; a material-only match fires
+                            // continuously, so don't let Contacts suppress a later poll.
+                            var desc = sheet.Triggers[eventIndex];
+                            bool pushMatchedByName = desc.RequireName.Length == 0 || desc.RequireName == "me" || signal.Name == desc.RequireName;
+                            if (pushMatchedByName)
+                                sheet.Contacts[eventIndex].Add(signal.Other); // and don't let a later poll refire it
                         }
                         RunEvent(sheet, eventIndex, signal.Other, signal.MeOverride);
                     }
@@ -948,7 +953,7 @@ namespace Game
             var touching = new List<object>();
             foreach (object other in World.Actors())
             {
-                if (other == null || ReferenceEquals(other, sheet.Actor))
+                if (other == null || World.IsDescendantOf(other, sheet.Actor))
                     continue;
                 if (!NameMatches(descriptor, other) && !MaterialMatches(descriptor, other))
                     continue;
@@ -960,12 +965,21 @@ namespace Game
             polled.RemoveWhere(other => !touching.Contains(other));
             foreach (object other in touching)
             {
-                if (contacts.Contains(other))
-                    continue; // still touching the same pair — enter edge only
                 if (sheet.FiredThisTick[eventIndex])
                     continue; // this event already ran this tick; try the pair next tick
-                contacts.Add(other);
-                polled.Add(other);
+                // A name match (bumping an actor, `when other touches me`) is an event:
+                // enter-edge — fire once per pair, re-arm after separation. A material-only
+                // match (standing on a surface, `when me touches Grass`) is a continuous
+                // state: fire every tick so `play step sound` can repeat with its cooldown
+                // and the `me is moving` condition (re-checked each tick) gates silence.
+                bool matchedByName = NameMatches(descriptor, other);
+                if (matchedByName)
+                {
+                    if (contacts.Contains(other))
+                        continue; // still touching the same pair — enter edge only
+                    contacts.Add(other);
+                    polled.Add(other);
+                }
                 RunEvent(sheet, eventIndex, other);
             }
         }

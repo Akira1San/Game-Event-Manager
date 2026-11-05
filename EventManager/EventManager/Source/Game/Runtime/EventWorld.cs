@@ -29,6 +29,10 @@ namespace Game
         IReadOnlyList<object> Actors();
         /// <summary>True when the cursor is currently over the actor (point &amp; click hover).</summary>
         bool IsHovered(object actor);
+        /// <summary>True when <paramref name="child"/> is <paramref name="root"/> itself or a
+        /// descendant in the scene hierarchy — so a contact poll skips the actor's own child
+        /// colliders instead of testing them as foreign contact targets.</summary>
+        bool IsDescendantOf(object child, object root);
     }
 
     public class DefaultEventWorld : IEventWorld
@@ -91,6 +95,11 @@ namespace Game
         public bool IsHovered(object actor)
         {
             return false;
+        }
+
+        public bool IsDescendantOf(object child, object root)
+        {
+            return ReferenceEquals(child, root);
         }
     }
 }

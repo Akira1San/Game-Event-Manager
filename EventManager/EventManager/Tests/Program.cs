@@ -1997,16 +1997,16 @@ enterEngine.PollTouches = true;
     Check(matEngine.Variables.GetGlobal("TouchedGrass").AsNumber() == 1,
         "`when me touches Grass` fires on the grass material contact");
     matEngine.Tick(1);
-    Check(matEngine.Variables.GetGlobal("TouchedGrass").AsNumber() == 1,
-        "still touching grass does not refire (enter edge)");
+    Check(matEngine.Variables.GetGlobal("TouchedGrass").AsNumber() == 2,
+        "still touching grass refires every tick (material is a continuous state)");
     matWorld.SetTouching(matActor, grass, false);
     matWorld.SetTouching(matActor, stone, true);
     matEngine.Tick(2);
-    Check(matEngine.Variables.GetGlobal("TouchedGrass").AsNumber() == 1,
-        "switching to a different material does not fire the grass touch");
+    Check(matEngine.Variables.GetGlobal("TouchedGrass").AsNumber() == 2,
+        "leaving grass stops the continuous fire");
     matWorld.SetTouching(matActor, grass, true);
     matEngine.Tick(3);
-    Check(matEngine.Variables.GetGlobal("TouchedGrass").AsNumber() == 2,
+    Check(matEngine.Variables.GetGlobal("TouchedGrass").AsNumber() == 3,
         "re-entering grass refires the material touch");
 
     // Unknown material reads as empty and never matches.
@@ -2455,6 +2455,11 @@ class FakeWorld : IEventWorld
     public IReadOnlyList<object> Actors()
     {
         return actors;
+    }
+
+    public bool IsDescendantOf(object child, object root)
+    {
+        return ReferenceEquals(child, root);
     }
 
     /// <summary>Blocks (walls) or unblocks the straight line between two actors, both directions.</summary>

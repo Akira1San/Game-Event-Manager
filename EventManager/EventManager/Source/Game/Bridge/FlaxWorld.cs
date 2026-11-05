@@ -266,6 +266,26 @@ namespace Game
             return false;
         }
 
+        /// <summary>True when <paramref name="child"/> is <paramref name="root"/> or a
+        /// descendant in the scene hierarchy. A contact poll uses this to skip the actor's
+        /// own child colliders so they are never tested as foreign contact targets (which
+        /// would spuriously warn about a missing physics material on a body collider).</summary>
+        public bool IsDescendantOf(object child, object root)
+        {
+            var c = child as Actor;
+            var r = root as Actor;
+            if (c == null || r == null)
+                return ReferenceEquals(child, root);
+            for (Actor node = c; node != null; node = node.Parent)
+            {
+                if (ReferenceEquals(node, r))
+                    return true;
+                if (node is Scene)
+                    break;
+            }
+            return false;
+        }
+
         private static void Collect(Actor node, List<object> found)
         {
             foreach (Actor child in node.Children)
