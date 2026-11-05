@@ -372,7 +372,8 @@ namespace Game
                         Vector3 direction = DirectionOf(target, spec.Dir);
                         double strength = ResolveNumber(context, spec);
                         RigidBody body = FindBody(target);
-                        if (PhysicsMovement.PushModeFor(body != null, body != null && body.IsKinematic) == PhysicsPushMode.Impulse)
+                        bool character = EventSheet.FindCharacterController(target) != null;
+                        if (!character && PhysicsMovement.PushModeFor(body != null, body != null && body.IsKinematic) == PhysicsPushMode.Impulse)
                         {
                             body.WakeUp();
                             body.AddForce(direction * (float)strength, ForceMode.Impulse);
@@ -612,16 +613,35 @@ namespace Game
 
         /// <summary>
         /// Moves an actor for one tick. Transform by default; with the sheet's physics opt-in and
-        /// a RigidBody present, drives the body instead (velocity when dynamic, a swept move when
-        /// kinematic) so collision response and CCD apply.
+        /// a body present, drives that body instead: a CharacterController walks with
+        /// collide-and-slide <c>Move</c>, a dynamic RigidBody uses velocity, and a kinematic
+        /// RigidBody gets a swept move, so collisions and CCD apply.
         /// </summary>
         private static void MoveSubject(Actor subject, Vector3 direction, double speed, bool physics)
         {
+            CharacterController character = physics ? EventSheet.FindCharacterController(subject) : null;
             RigidBody body = physics ? FindBody(subject) : null;
-            PhysicsMoveMode mode = PhysicsMovement.ModeFor(physics, body != null, body != null && body.IsKinematic);
+            PhysicsMoveMode mode = PhysicsMovement.ModeFor(
+                physics, character != null, body != null, body != null && body.IsKinematic);
+
+            // The controller must carry (or be above) the sheet actor. A controller tucked under
+            // a plain parent would move the visual while `me` stays put — pathfinding and
+            // `arrives at` read `me.Position`, so fall back to the transform path and say why.
+            if (mode == PhysicsMoveMode.Character && !IsAncestorOrSelf(character, subject))
+            {
+                WarnOnce($"\"{subject.Name}\" uses physics movement, but its CharacterController is a child — the events can't follow it. Put the EventSheet on the CharacterController actor with the mesh under it.");
+                mode = PhysicsMoveMode.Transform;
+            }
+
             float step = (float)speed * DeltaTime;
             switch (mode)
             {
+                case PhysicsMoveMode.Character:
+                    PhysicsMovement.CharacterDisplacement(
+                        direction.X, direction.Y, direction.Z, speed, DeltaTime,
+                        out double cx, out double cy, out double cz);
+                    character.Move(new Vector3((float)cx, (float)cy, (float)cz));
+                    break;
                 case PhysicsMoveMode.Dynamic:
                     if (!IsAncestorOrSelf(body, subject))
                         WarnOnce($"\"{subject.Name}\" uses physics movement, but its RigidBody is a child — the mesh won't follow. Put the EventSheet on the RigidBody actor with the mesh under it.");
@@ -645,9 +665,12 @@ namespace Game
         }
 
         /// <summary>Stop a physics-driven actor: brake a dynamic body's horizontal velocity
-        /// (vertical speed is kept, so a fall keeps falling).</summary>
+        /// (vertical speed is kept, so a fall keeps falling). A CharacterController has no
+        /// settable velocity — its per-tick <c>Move</c> simply stops, so there is nothing to do.</summary>
         private static void BrakeBody(Actor subject)
         {
+            if (EventSheet.FindCharacterController(subject) != null)
+                return;
             RigidBody body = FindBody(subject);
             if (body == null || body.IsKinematic)
                 return;

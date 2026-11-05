@@ -606,14 +606,29 @@ Goal: per-actor state machines so one `.events` file can encode multiple behavio
 
 ---
 
-## Task 12 — Character Physics Movement `[ ]`
+## Task 12 — Character Physics Movement `[~]`
 
-Goal: replace transform-based Position assignment with physics-native movement for character meshes using Character Controller / RigidBody + LinearVelocity, so collisions, slopes, and ground detection work properly. Depends on Tasks 4 C (physics-native movement) and 5 (Armature Character).
+Goal: **add** a physics-native movement option on top of the existing transform path — not
+replace it. Each actor chooses how it moves: transform `Position` assignment stays the default,
+or opt in to a Flax `CharacterController` (collide-and-slide walking with slopes/steps) or a
+`RigidBody` + `LinearVelocity` (dynamic/kinematic physics). Collisions, slopes, and ground
+detection work only for actors that opt in. Depends on Tasks 4 C (physics-native movement) and
+5 (Armature Character).
 
 ### Part A — Character Controller component
-- [ ] Add `CharacterController` component (Flax) or kinematic `RigidBody` with `LinearVelocity` drive to character mesh actors.
-- [ ] Configure capsule collider, step offset, slope limit, ground check distance.
-- [ ] Per-actor flag (e.g. `EventSheet` field `Use Physics Movement`) to opt in instead of transform `Position` writes.
+- [x] Movement type is chosen by the body on the actor: `PhysicsMoveMode.Character` /
+  `Dynamic` / `Kinematic` / `Transform`, picked in `PhysicsMovement.ModeFor` (a
+  `CharacterController` wins over a `RigidBody`; no body or flag off = transform). Bridge:
+  `EventSheet.FindCharacterController` (self/parent/child) and `FlaxActions.MoveSubject`
+  drives it with collide-and-slide `Move`; misplacing the controller warns once and falls
+  back to transform so `me.Position` still tracks.
+- [x] Capsule configuration on `EventSheet`: optional **Configure Character Body** with
+  `Character Radius` / `Height` / `Step Offset` / `Slope Limit` / `Ground Check Distance`
+  (defaults: 50 / 150 / 30 / 45 / 10, Flax units), clamped by
+  `CharacterBodySettings.Sanitized`. Ground-check distance rides `SheetInstance` for Part C
+  and survives hot reload. Unticked = engine inspector values untouched.
+- [x] Per-actor flag: `EventSheet.Use Physics Movement` (existing from Task 4 C) selects
+  physics over transform `Position` writes; `stop moving`/`push`/`goto` respect it too.
 
 ### Part B — Physics-native move/goto
 - [ ] `FlaxActions`: when physics movement is enabled and actor has `CharacterController` / `RigidBody`, drive movement via `LinearVelocity` (or `AddMovement` for kinematic) instead of `Position +=`.

@@ -89,10 +89,13 @@ namespace Game
         /// <summary>Which .events file drives this sheet (e.g. "Enemy"); several actors can share one.</summary>
         public string SourceName = "";
         /// <summary>Opt-in (EventSheet "Use Physics Movement"): move through the actor's
-        /// RigidBody instead of assigning Position. Off = the normal transform path.</summary>
+        /// body instead of assigning Position. Off = the normal transform path.</summary>
         public bool UsePhysicsMovement;
+        /// <summary>How far below the feet still counts as ground for a CharacterController
+        /// (EventSheet "Character Ground Check Distance").</summary>
+        public float GroundCheckDistance = 10f;
         /// <summary>The sheet's current state (default "default"). `set state` writes it;
-        /// `when state is` fires on entry edge; `state <name>` gates triggers by it.</summary>
+        /// `when state is` fires on entry edge; `state &lt;name&gt;` gates triggers by it.</summary>
         public string CurrentState = "default";
         /// <summary>The state at the end of the previous tick, used for StateIs edge detection.</summary>
         public string LastState = "default";

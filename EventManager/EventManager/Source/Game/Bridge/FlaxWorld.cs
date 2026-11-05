@@ -187,7 +187,7 @@ namespace Game
             return true;
         }
 
-        /// <summary>True when the cursor is over <paramref name="actor"/>. Casts a ray from the
+        /// <summary>True when the cursor is over <paramref name="targetActor"/>. Casts a ray from the
         /// scene camera through the mouse position and walks up from the first hit collider to
         /// its actor, so a hotspot's collider (or a child collider) counts as hovered.</summary>
         public bool IsHovered(object targetActor)

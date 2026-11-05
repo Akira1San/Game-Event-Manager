@@ -242,6 +242,7 @@ namespace Game
             {
                 // Keep the opt-in in sync when a component re-registers (clone, scene wake).
                 existing.UsePhysicsMovement = component.UsePhysicsMovement;
+                existing.GroundCheckDistance = component.ReadCharacterBodySettings().GroundCheckDistance;
                 return;
             }
             string source = component.SourceName();
@@ -259,6 +260,7 @@ namespace Game
             _missingShown.Remove(source);
             SheetInstance sheet = Runtime.AddSheet(actor, program.File, source);
             sheet.UsePhysicsMovement = component.UsePhysicsMovement;
+            sheet.GroundCheckDistance = component.ReadCharacterBodySettings().GroundCheckDistance;
         }
 
         /// <summary>Name-based fallback: attach <paramref name="source"/>.events to one actor by
@@ -581,7 +583,7 @@ namespace Game
         }
 
         /// <summary>Walks up from a hit collider to the actor that carries an EventSheet, so
-        /// 'when <name> is clicked' is delivered to the sheet on the actor (not merely to a
+        /// 'when &lt;name&gt; is clicked' is delivered to the sheet on the actor (not merely to a
         /// collider child). Falls back to the collider actor itself.</summary>
         private static Actor ActorOfHit(PhysicsColliderActor collider)
         {

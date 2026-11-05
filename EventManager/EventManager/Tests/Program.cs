@@ -1632,13 +1632,48 @@ Check(PhysicsMovement.PushModeFor(false, false) == PhysicsPushMode.Transform &&
 Check(PhysicsMovement.PushModeFor(true, false) == PhysicsPushMode.Impulse,
     "`push` becomes a real impulse on a dynamic body");
 
+// ---- Task 12 Part A: CharacterController as a third, opt-in movement type ----
+
+Check(PhysicsMovement.ModeFor(true, true, false, false) == PhysicsMoveMode.Character,
+    "an opted-in CharacterController walks with collide-and-slide Move");
+Check(PhysicsMovement.ModeFor(true, true, true, true) == PhysicsMoveMode.Character,
+    "a CharacterController wins over a RigidBody (it is the purpose-built walking body)");
+Check(PhysicsMovement.ModeFor(false, true, true, false) == PhysicsMoveMode.Transform,
+    "the CharacterController path is still opt-in (flag off = transform)");
+Check(PhysicsMovement.ModeFor(true, false, true, false) == PhysicsMoveMode.Dynamic &&
+      PhysicsMovement.ModeFor(true, false, true, true) == PhysicsMoveMode.Kinematic,
+    "without a CharacterController the RigidBody modes are unchanged");
+
+var characterDefaults = new CharacterBodySettings().Sanitized();
+Check(characterDefaults.Radius == 50f && characterDefaults.Height == 150f &&
+      characterDefaults.StepOffset == 30f && characterDefaults.SlopeLimit == 45f &&
+      characterDefaults.GroundCheckDistance == 10f,
+    "character body defaults match the Flax CharacterController defaults (radius 50, height 150, step 30, slope 45)");
+
+var cleanedCharacter = new CharacterBodySettings
+{
+    Radius = -5f, Height = 20f, StepOffset = 80f, SlopeLimit = 140f, GroundCheckDistance = -1f,
+}.Sanitized();
+Check(cleanedCharacter.Radius >= 1f && cleanedCharacter.Height == 20f &&
+      cleanedCharacter.StepOffset <= cleanedCharacter.Height &&
+      cleanedCharacter.SlopeLimit == 100f && cleanedCharacter.GroundCheckDistance == 0f,
+    "character settings are clamped (step offset never taller than the capsule, real angles/distances)");
+
+PhysicsMovement.CharacterDisplacement(0, 0, -1, 120, 0.5, out double chx, out double chy, out double chz);
+Check(Math.Abs(chx) < 1e-9 && Math.Abs(chy) < 1e-9 && Math.Abs(chz + 60) < 1e-9,
+    "character displacement is direction × speed × tick (120/s for half a second = 60)");
+
 var physicsEngine = FreshEngine(new FakeWorld());
 var physicsSheet = physicsEngine.AddSheet(new FakeActor("Mover"),
     parser.Parse("when me appears\n  move forward speed 5"));
 Check(!physicsSheet.UsePhysicsMovement, "a sheet starts with physics movement off (transform default)");
+Check(physicsSheet.GroundCheckDistance > 0f, "a sheet starts with a sane character ground-check distance");
 physicsSheet.UsePhysicsMovement = true;
+physicsSheet.GroundCheckDistance = 25f;
 physicsEngine.SwapSheetProgram(physicsSheet, parser.Parse("when me appears\n  move forward speed 9"));
 Check(physicsSheet.UsePhysicsMovement, "the physics opt-in survives a hot-reload swap");
+Check(physicsSheet.GroundCheckDistance == 25f,
+    "the character ground-check distance survives a hot-reload swap");
 
 var flagWorld = new FakeWorld();
 var flagEngine = FreshEngine(flagWorld);
