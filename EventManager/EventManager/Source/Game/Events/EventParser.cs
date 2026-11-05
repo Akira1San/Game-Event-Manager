@@ -153,6 +153,25 @@ namespace Game
                 ev.Trigger.Add(tokens[pos++]);
             if (ev.Trigger.Count == 0)
                 throw new ParseException("a `when` needs something after it — like `when game starts`", whenToken.Line);
+            // `state <name>` is a trigger modifier: gates this event on the sheet's current state.
+            // `when state is <name>` is the StateIs trigger itself — don't extract a modifier from it.
+            bool isStateIsTrigger = ev.Trigger.Count >= 2 &&
+                ev.Trigger[0].Type == TokenType.Word && ev.Trigger[0].Text == "state" &&
+                ev.Trigger[1].Type == TokenType.Word && ev.Trigger[1].Text == "is";
+            if (!isStateIsTrigger)
+            {
+                for (int i = 0; i < ev.Trigger.Count - 1; i++)
+                {
+                    if (ev.Trigger[i].Type == TokenType.Word && ev.Trigger[i].Text == "state" &&
+                        ev.Trigger[i + 1].Type == TokenType.Word)
+                    {
+                        ev.RequiredState = ev.Trigger[i + 1].Text;
+                        ev.Trigger.RemoveAt(i);
+                        ev.Trigger.RemoveAt(i);
+                        break;
+                    }
+                }
+            }
             ValidateTrigger(whenToken, ev.Trigger);
             if (pos < tokens.Count && tokens[pos].Type == TokenType.NewLine)
                 pos++;
@@ -228,6 +247,11 @@ namespace Game
             {
             if (first.Text == "set")
             {
+                if (line.Words.Count >= 2 && line.Words[1].Type == TokenType.Word && line.Words[1].Text == "state")
+                {
+                    line.Statement = ParseSetState(line);
+                    return;
+                }
                 line.Statement = ParseSet(line);
                 return;
             }
@@ -408,6 +432,17 @@ namespace Game
             index++;
             node.Value = ReadValue(words, ref index, line.Line);
             CheckEndOfLine(words, index, line.Line, $"set text of {node.Target} to <value>");
+            return node;
+        }
+
+        private StatementNode ParseSetState(BodyLineNode line)
+        {
+            var words = line.Words;
+            // `set state chase` — changes the sheet's current state
+            if (words.Count < 3 || words[2].Type != TokenType.Word)
+                throw new ParseException("`set state` needs a state name, like `set state patrol`", line.Line);
+            var node = new SetStateNode { Line = line.Line, State = words[2].Text };
+            CheckEndOfLine(words, 3, line.Line, "set state <name>");
             return node;
         }
 

@@ -590,10 +590,10 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 
 Goal: per-actor state machines so one `.events` file can encode multiple behavior modes (patrol/chase/attack, menu/playing/paused/gameover). Depends on Tasks 1–3.
 
-### Part A — Core state words
-- [ ] Word registry: `state <name>` trigger modifier, `set state <name>`, `when state is <name>`, `my state` value.
-- [ ] Parser: `state` list on `when` line; `set state` as an action statement; `when state is` classified to a new edge trigger kind.
-- [ ] Runtime: per-sheet `CurrentState` (default `"default"`); `set state` writes it; `when state is` fires once on entry edge; gated polled events skip when actor not in listed state.
+### Part A — Core state words `[x]`
+- [x] Word registry: `state <name>` trigger modifier, `set state <name>`, `when state is <name>`, `my state` value.
+- [x] Parser: `state` list on `when` line; `set state` as an action statement; `when state is` classified to a new edge trigger kind.
+- [x] Runtime: per-sheet `CurrentState` (default `"default"`); `set state` writes it; `when state is` fires once on entry edge; gated polled events skip when actor not in listed state.
 
 ### Part B — The state example
 - [ ] Write `Guard.events`: patrol → chase on sight → attack in melee → back to patrol when sight lost, using `set state` and `state patrol/chase/attack` gates.

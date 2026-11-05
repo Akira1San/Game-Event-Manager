@@ -12,6 +12,8 @@ namespace Game
         public int Line;
         public List<Token> Trigger = new List<Token>();
         public List<BodyLineNode> Body = new List<BodyLineNode>();
+        /// <summary>When set, this event only fires while the sheet's CurrentState matches.</summary>
+        public string RequiredState = "";
     }
 
     public class BodyLineNode
@@ -65,5 +67,10 @@ namespace Game
     public class RawActionNode : StatementNode
     {
         public List<Token> Words = new List<Token>();
+    }
+
+    public class SetStateNode : StatementNode
+    {
+        public string State = "";
     }
 }

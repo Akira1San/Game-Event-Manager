@@ -43,6 +43,12 @@ namespace Game
                 // `my bag` reads back the bag contents as text: "Sword x2, Potion"
                 if (variable.Owner == "my" && variable.Name == "bag")
                     return ValueBox.OfText(Runtime.BagText(Me));
+                // `my state` reads the sheet's current state (default "default").
+                if (variable.Owner == "my" && variable.Name == "state")
+                {
+                    var sheet = Runtime.FindSheetFor(Me);
+                    return ValueBox.OfText(sheet == null ? "default" : sheet.CurrentState);
+                }
                 if (variable.Owner == "my" || variable.Owner == "me")
                     return ReadMy(variable.Name);
                 if (variable.Owner == "other")
@@ -85,6 +91,11 @@ namespace Game
         /// <summary>Opt-in (EventSheet "Use Physics Movement"): move through the actor's
         /// RigidBody instead of assigning Position. Off = the normal transform path.</summary>
         public bool UsePhysicsMovement;
+        /// <summary>The sheet's current state (default "default"). `set state` writes it;
+        /// `when state is` fires on entry edge; `state <name>` gates triggers by it.</summary>
+        public string CurrentState = "default";
+        /// <summary>The state at the end of the previous tick, used for StateIs edge detection.</summary>
+        public string LastState = "default";
         public ProgramFile Program = new ProgramFile();
         public List<TriggerDescriptor> Triggers = new List<TriggerDescriptor>();
         public Queue<PushSignal> PushQueue = new Queue<PushSignal>();
@@ -189,6 +200,8 @@ namespace Game
             sheet.PolledContacts = new HashSet<object>[count];
             sheet.InSight = new HashSet<object>[count];
             sheet.Triggers.Clear();
+            sheet.CurrentState = "default";
+            sheet.LastState = "default";
             for (int i = 0; i < count; i++)
             {
                 sheet.LastFire[i] = Time;
@@ -414,6 +427,9 @@ namespace Game
                             continue;
                         if (!Matches(sheet, sheet.Triggers[eventIndex], signal))
                             continue;
+                        var pushEv = sheet.Program.Events[eventIndex];
+                        if (pushEv.RequiredState.Length > 0 && sheet.CurrentState != pushEv.RequiredState)
+                            continue;
                         if (IsContactKind(signal.Kind) && signal.Other != null)
                         {
                             // A distance poll already fired this pair: ignore the collider's echo.
@@ -435,6 +451,9 @@ namespace Game
                     TryPolled(sheet, eventIndex);
                 }
             }
+
+            foreach (var sheet in snapshot)
+                sheet.LastState = sheet.CurrentState;
         }
 
         private string NameOf(object actor)
@@ -543,6 +562,10 @@ namespace Game
                 {
                     OnSetText(context, setText.Target, context.Evaluate(setText.Value));
                 }
+                else if (statement is SetStateNode setState)
+                {
+                    ExecuteSetState(context, setState);
+                }
                 else if (statement is RawActionNode raw)
                 {
                     if (IsStopThisEvent(raw))
@@ -604,6 +627,22 @@ namespace Game
                 context.WriteMy(set.Target.Name, value);
             else
                 context.WriteGlobal(set.Target.Name, value);
+        }
+
+        private void ExecuteSetState(EventContext context, SetStateNode setState)
+        {
+            var sheet = context.Sheet;
+            sheet.LastState = sheet.CurrentState;
+            sheet.CurrentState = setState.State;
+            // Entry edge: fire every StateIs trigger on this sheet that matches the new state.
+            for (int eventIndex = 0; eventIndex < sheet.Program.Events.Count; eventIndex++)
+            {
+                if (sheet.FiredThisTick[eventIndex])
+                    continue;
+                var desc = sheet.Triggers[eventIndex];
+                if (desc.Kind == TriggerKind.StateIs && desc.RequireName == setState.State)
+                    RunEvent(sheet, eventIndex, context.Me);
+            }
         }
 
         private void ExecuteAdd(EventContext context, AddNode add)
@@ -742,6 +781,9 @@ namespace Game
         private void TryPolled(SheetInstance sheet, int eventIndex)
         {
             var descriptor = sheet.Triggers[eventIndex];
+            var ev = sheet.Program.Events[eventIndex];
+            if (ev.RequiredState.Length > 0 && sheet.CurrentState != ev.RequiredState)
+                return;
             switch (descriptor.Kind)
             {
                 case TriggerKind.KeyHeld:
@@ -782,6 +824,10 @@ namespace Game
                     break;
                 case TriggerKind.Hovered:
                     PollHover(sheet, eventIndex, descriptor);
+                    break;
+                case TriggerKind.StateIs:
+                    if (sheet.CurrentState == descriptor.RequireName && sheet.LastState != descriptor.RequireName)
+                        RunEvent(sheet, eventIndex, null);
                     break;
             }
         }

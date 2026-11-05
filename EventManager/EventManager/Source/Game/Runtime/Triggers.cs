@@ -33,6 +33,7 @@ namespace Game
         WatchChanges,
         Message,
         AnimEnd,
+        StateIs,
     }
 
     public class TriggerDescriptor
@@ -67,6 +68,8 @@ namespace Game
                 return new TriggerDescriptor { Kind = TriggerKind.GameStart };
             if (words.Length >= 2 && words[0] == "scene" && words[words.Length - 1] == "starts")
                 return new TriggerDescriptor { Kind = TriggerKind.SceneStart };
+            if (words.Length >= 3 && words[0] == "state" && words[1] == "is")
+                return new TriggerDescriptor { Kind = TriggerKind.StateIs, RequireName = Join(trigger, 2, words.Length) };
             if (words.Length >= 3 && words[words.Length - 2] == "is" && words[words.Length - 1] != "clicked" && words[0] != "me" && words[0] != "other")
                 return KeyDescriptor(words, trigger);
             if (words.Length >= 4 && words[words.Length - 3] == "is" && words[words.Length - 2] == "right" && words[words.Length - 1] == "clicked")

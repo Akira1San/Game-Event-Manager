@@ -40,6 +40,7 @@ namespace Game
             new WordEntry { Kind = "trigger", Word = "when <var> changes", Example = "when Score changes" },
             new WordEntry { Kind = "trigger", Word = "when message \"<name>\" arrives", Example = "when message \"die\" arrives" },
             new WordEntry { Kind = "trigger", Word = "when anim \"<name>\" ends", Example = "when anim \"dragon_fire\" ends" },
+            new WordEntry { Kind = "trigger", Word = "when state is <thing>", Example = "when state is chase" },
 
             new WordEntry { Kind = "condition", Word = "<var> is <value>", Example = "Score is 3" },
             new WordEntry { Kind = "condition", Word = "<var> is not <value>", Example = "my health is lower than 1" },
@@ -75,6 +76,7 @@ namespace Game
             new WordEntry { Kind = "action", Word = "send", Example = "send message \"die\"" },
             new WordEntry { Kind = "action", Word = "set", Example = "set Score to 0" },
             new WordEntry { Kind = "action", Word = "set", Example = "set text of ScoreLabel to Score" },
+            new WordEntry { Kind = "action", Word = "set state", Example = "set state patrol" },
             new WordEntry { Kind = "action", Word = "add", Example = "add 1 to Score" },
             new WordEntry { Kind = "action", Word = "add", Example = "add Sword to my bag" },
             new WordEntry { Kind = "action", Word = "wait", Example = "wait 0.5 seconds" },
@@ -114,7 +116,7 @@ namespace Game
         {
             var words = new List<string>
             {
-                "when", "unless", "and", "not", "my", "me", "other", "to",
+                "when", "unless", "and", "not", "my", "me", "other", "to", "state",
             };
             foreach (var word in ActionWords)
                 words.Add(word);

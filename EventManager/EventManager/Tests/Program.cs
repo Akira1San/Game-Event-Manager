@@ -1953,6 +1953,116 @@ wildcardEngine.Tick(0);
 Check(wildcardEngine.Variables.GetGlobal("Wildcard").AsNumber() == 1,
     "`when other touches me` matches any toucher by distance");
 
+    // ------------------------------------------------------------------
+    // Task 17 Part A: State Machines (BGE logic bricks) - core state words
+    // ------------------------------------------------------------------
+
+    // Registry examples for the new state words parse clean.
+    var stateReg = WordRegistry.All.FirstOrDefault(e => e.Word == "when state is <thing>");
+    Check(stateReg != null && stateReg.Example == "when state is chase", "registry has `when state is <thing>` with example");
+    var setStateReg = WordRegistry.All.FirstOrDefault(e => e.Word == "set state");
+    Check(setStateReg != null && setStateReg.Example == "set state patrol", "registry has `set state` with example");
+
+    // `when state is chase` parses as an event.
+    var stateIs = parser.Parse("when state is chase\n  set MyState to 1\n");
+    Check(stateIs.Events.Count == 1, "`when state is chase` parses as an event");
+    var stateIsDesc = TriggerClassifier.Classify(stateIs.Events[0]);
+    Check(stateIsDesc.Kind == TriggerKind.StateIs && stateIsDesc.RequireName == "chase",
+        "`when state is chase` classifies to StateIs with RequireName \"chase\"");
+
+    // `set state chase` parses to a SetStateNode.
+    var setState = parser.Parse("when me appears\n  set state chase\n");
+    Check(setState.Events.Count == 1, "`set state chase` parses as an event");
+    Check(setState.Events[0].Body[0].Statement is SetStateNode ss && ss.State == "chase",
+        "`set state chase` builds a SetStateNode with State \"chase\"");
+
+    // `my state` reads as a value.
+    var myState = parser.Parse("when me appears\n  set X to my state\n");
+    Check(myState.Events.Count == 1, "`my state` parses as a value");
+    var myStateSet = (SetNode)myState.Events[0].Body[0].Statement!;
+    Check(myStateSet.Value is VariableValue mv && mv.Owner == "my" && mv.Name == "state",
+        "`my state` parses as a `my` variable read of `state`");
+
+    // `state <name>` trigger modifier: `when W is pressed state chase` gates on state.
+    var gated = parser.Parse("when W is pressed state chase\n  set Ordered to 1\n");
+    Check(gated.Events.Count == 1, "`when W is pressed state chase` parses as an event");
+    Check(gated.Events[0].RequiredState == "chase",
+        "`when W is pressed state chase` sets RequiredState to \"chase\"");
+    var gatedDesc = TriggerClassifier.Classify(gated.Events[0]);
+    Check(gatedDesc.Kind == TriggerKind.KeyPressed,
+        "the gated trigger still classifies as KeyPressed underneath");
+
+    // `set state` without a name is a friendly error.
+    ExpectParseError("when me appears\n  set state\n", "needs a state name", "`set state` without a name is a friendly error");
+
+    // Runtime: `when state is chase` fires once on entry edge when `set state chase` runs.
+    var stWorld = new FakeWorld();
+    var stActor = new FakeActor("Guard");
+    stWorld.AddActor(stActor);
+    var stEngine = FreshEngine(stWorld);
+    stEngine.AddSheet(stActor, parser.Parse(@"when state is chase
+  set EnteredChase to EnteredChase + 1
+when state is patrol
+  set EnteredPatrol to EnteredPatrol + 1
+when me appears
+  set state patrol
+when 1 is pressed
+  set state chase
+when 2 is pressed
+  set state patrol"));
+    stEngine.Tick(0);
+    Check(stEngine.Variables.GetGlobal("EnteredPatrol").AsNumber() == 1 && stEngine.Variables.GetGlobal("EnteredChase").IsNone(),
+        "appears sets state to patrol, `when state is patrol` fires once on entry");
+    stEngine.Tick(1);
+    Check(stEngine.Variables.GetGlobal("EnteredPatrol").AsNumber() == 1 && stEngine.Variables.GetGlobal("EnteredChase").IsNone(),
+        "still in patrol does not refire `when state is patrol`");
+    stEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "1" });
+    stEngine.Tick(2);
+    Check(stEngine.Variables.GetGlobal("EnteredChase").AsNumber() == 1, "`set state chase` fires `when state is chase` once");
+    stEngine.Tick(3);
+    Check(stEngine.Variables.GetGlobal("EnteredChase").AsNumber() == 1, "still in chase does not refire `when state is chase`");
+    stEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "2" });
+    stEngine.Tick(4);
+    Check(stEngine.Variables.GetGlobal("EnteredPatrol").AsNumber() == 2, "`set state patrol` fires `when state is patrol` again");
+    Check(stEngine.Variables.GetGlobal("EnteredChase").AsNumber() == 1, "leaving chase does not refire `when state is chase`");
+
+    // Runtime: `state <name>` modifier gates an event — only fires when in that state.
+    var gtWorld = new FakeWorld();
+    var gtActor = new FakeActor("Guard");
+    gtWorld.AddActor(gtActor);
+    var gtEngine = FreshEngine(gtWorld);
+    gtEngine.AddSheet(gtActor, parser.Parse(@"when W is pressed state chase
+  set PressedInChase to 1
+when W is pressed state patrol
+  set PressedInPatrol to 1
+when me appears
+  set state patrol
+when 1 is pressed
+  set state chase"));
+    gtEngine.Tick(0);
+    Check(gtEngine.Variables.GetGlobal("PressedInPatrol").IsNone(), "appears sets state to patrol, no W pressed yet");
+    gtEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "W" });
+    gtEngine.Tick(1);
+    Check(gtEngine.Variables.GetGlobal("PressedInPatrol").AsNumber() == 1, "in patrol state, `when W is pressed state patrol` fires");
+    Check(gtEngine.Variables.GetGlobal("PressedInChase").IsNone(), "not in chase state, `when W is pressed state chase` does not fire");
+    gtEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "1" });
+    gtEngine.Tick(2);
+    gtEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "W" });
+    gtEngine.Tick(3);
+    Check(gtEngine.Variables.GetGlobal("PressedInChase").AsNumber() == 1, "now in chase state, `when W is pressed state chase` fires");
+    Check(gtEngine.Variables.GetGlobal("PressedInPatrol").AsNumber() == 1, "left patrol state, patrol event does not refire");
+
+    // Runtime: `my state` reads the current state.
+    var rsWorld = new FakeWorld();
+    var rsActor = new FakeActor("Guard");
+    rsWorld.AddActor(rsActor);
+    var rsEngine = FreshEngine(rsWorld);
+    rsEngine.AddSheet(rsActor, parser.Parse(@"when me appears
+  set state chase
+  set MyState to my state"));
+    rsEngine.Tick(0);
+    Check(rsEngine.Variables.GetGlobal("MyState").AsText() == "chase", "`my state` reads \"chase\" after `set state chase`");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
