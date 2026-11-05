@@ -110,10 +110,9 @@ namespace Game
             if (materialRef != null)
                 material = materialRef.Instance as PhysicalMaterial;
 
-            // The asset reference may not be loaded into memory yet — try loading it by asset id.
-            if (material == null && materialRef != null && materialRef.Id != Guid.Empty)
-                material = Content.Load<PhysicalMaterial>(materialRef.Id);
-
+            // The asset reference may not be loaded into memory yet. We cannot load it by id
+            // here because JsonAssetReference<PhysicalMaterial> does not expose its id/path in
+            // this Flax version, so if Instance is null we warn and skip.
             if (material == null)
             {
                 if (act != null && _missingMaterialWarned.Add(act.Name))
@@ -124,7 +123,7 @@ namespace Game
             // PhysicalMaterial.Tag is the gameplay surface identifier (e.g. "Grass", "Stone").
             string name = material.Tag.ToString();
             if (string.IsNullOrEmpty(name))
-                name = materialRef.Path;
+                name = act?.Name ?? "";
             return name;
         }
 
