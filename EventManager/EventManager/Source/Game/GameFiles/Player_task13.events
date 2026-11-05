@@ -1,0 +1,26 @@
+# --- Player_task13.events ---
+# Task 13: Footstep sounds by material
+#
+# Part A: `me is moving`          — true only while a move/goto/face is active
+# Part B: `when me touches <mat>` — fires on enter-edge contact with a material
+# Part C: `play step sound "<mat>"` — plays the mapped clip, cooldown-gated (0.3s)
+#
+# Setup (do once):
+#  1. Create a Physical Material in Content and set its Tag (e.g. "Grass").
+#  2. Assign that material to your floor actor's Collider component.
+#  3. Import your step-sound clip (e.g. "footstep.wav").
+#  4. Map the material to the clip — add this somewhere once (e.g. in Game.events
+#     when game starts, or in your player's setup script):
+#        var sheet = Runtime.FindActorSheet("Player");
+#        sheet.StepSoundMap["Grass"] = "footstep";
+#
+#    Without StepSoundMap, `play step sound` warns once and skips.
+
+# Walk on Grass → play the grass step sound (only while moving).
+when me touches Grass and me is moving
+  play step sound "Grass"
+
+# Stand still on Grass → silence (`me is moving` is false).
+# Walk from Grass onto Stone → sound switches to Stone on re-entry.
+#   when me touches Stone and me is moving
+#     play step sound "Stone"

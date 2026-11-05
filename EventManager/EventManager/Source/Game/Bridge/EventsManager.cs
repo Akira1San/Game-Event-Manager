@@ -242,9 +242,11 @@ namespace Game
             SheetInstance existing = Runtime.FindSheetFor(actor);
             if (existing != null)
             {
-                // Keep the opt-in in sync when a component re-registers (clone, scene wake).
+                // Keep the opt-in and step-sound map in sync when a component re-registers
+                // (clone, scene wake).
                 existing.UsePhysicsMovement = component.UsePhysicsMovement;
                 existing.GroundCheckDistance = component.ReadCharacterBodySettings().GroundCheckDistance;
+                SyncStepSoundMap(existing, component.StepSoundMap);
                 return;
             }
             string source = component.SourceName();
@@ -263,6 +265,24 @@ namespace Game
             SheetInstance sheet = Runtime.AddSheet(actor, program.File, source);
             sheet.UsePhysicsMovement = component.UsePhysicsMovement;
             sheet.GroundCheckDistance = component.ReadCharacterBodySettings().GroundCheckDistance;
+            SyncStepSoundMap(sheet, component.StepSoundMap);
+        }
+
+        /// <summary>Copies the component's inspector-authored material→clip list onto the
+        /// runtime sheet so <c>play step sound "&lt;material&gt;"</c> can resolve clips.</summary>
+        private void SyncStepSoundMap(SheetInstance sheet, List<EventSheet.StepSoundEntry> entries)
+        {
+            sheet.StepSoundMap.Clear();
+            if (entries == null)
+                return;
+            foreach (var entry in entries)
+            {
+                string material = entry.Material == null ? "" : entry.Material.Trim();
+                string clip = entry.Clip == null ? "" : entry.Clip.Trim();
+                if (material.Length == 0 || clip.Length == 0)
+                    continue;
+                sheet.StepSoundMap[material] = clip;
+            }
         }
 
         /// <summary>Name-based fallback: attach <paramref name="source"/>.events to one actor by

@@ -1,4 +1,6 @@
 using FlaxEngine;
+using System;
+using System.Collections.Generic;
 
 namespace Game
 {
@@ -13,6 +15,18 @@ namespace Game
         /// <summary>.events file to run (without extension or with it — both work). Blank = actor name.</summary>
         [Tooltip(".events file name (with or without the extension). Blank = this actor's name.")]
         public string EventFile = "";
+
+        /// <summary>Material → clip-name pairs for <c>play step sound "&lt;material&gt;"</c>
+        /// (Task 13 C). E.g. Grass → footstep. The sheet reads these when it starts; changing
+        /// them at runtime has no effect until the sheet is re-attached.</summary>
+        [Serializable]
+        public struct StepSoundEntry
+        {
+            public string Material;   // physics-material Tag, e.g. "Grass"
+            public string Clip;       // audio-clip name, e.g. "footstep"
+        }
+        [Tooltip("Material → clip-name pairs for `play step sound \"<material>\"` (Task 13 C). E.g. Grass → footstep.")]
+        public List<StepSoundEntry> StepSoundMap = new List<StepSoundEntry>();
 
         /// <summary>
         /// Opt-in physics-native movement: drive this actor's body instead of assigning Position
