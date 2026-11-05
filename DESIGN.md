@@ -388,6 +388,18 @@ offset can never exceed the capsule height.
 current vertical speed when the move has no vertical part (gravity still works). `stop
 moving` brakes the horizontal velocity; `goto` brakes on arrival.
 
+**How `move` / `goto` / `face` use the body (Task 12 B):**
+
+- `move forward/back/left/right speed <n>` resolves the direction from the actor's facing and
+  hands it to the chosen body — `LinearVelocity` (dynamic), a swept `AddMovement` (kinematic),
+  collide-and-slide `Move` (character), or `Position` (transform).
+- `goto <thing>` bakes the same NavMesh path in every mode. Transform moves snap to each
+  waypoint; physics bodies are **never teleported** — they move at the authored speed and use a
+  landing speed on the tick that reaches a waypoint, so they stop exactly on it instead of
+  overshooting (dynamic) or stalling a frame (character). Arrival still brakes/teleports as
+  before. `goto <thing> facing forward` turns the nose toward the next waypoint (Task 7 E).
+- `face <thing>` stays rotation-only (`LookAt`) and never fights the body's translation.
+
 `push` is a real impulse (`AddForce` with `ForceMode.Impulse`) on a **dynamic** body — that is
 what the word always meant. Kinematic bodies ignore forces, so they keep the old one-tick
 transform nudge; with the flag off every push stays a transform nudge.

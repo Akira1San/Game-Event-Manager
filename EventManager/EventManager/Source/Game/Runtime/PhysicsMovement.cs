@@ -148,5 +148,28 @@ namespace Game
             y = directionY * step;
             z = directionZ * step;
         }
+
+        /// <summary>
+        /// Whether this tick's movement reaches (or overshoots) the current path waypoint.
+        /// Transform moves snap on this; physics bodies land exactly instead of being teleported.
+        /// </summary>
+        public static bool ReachesWaypoint(double distance, double speed, double deltaTime)
+        {
+            double step = Math.Abs(speed) * Math.Max(0.0, deltaTime);
+            return distance <= step;
+        }
+
+        /// <summary>
+        /// The speed to apply for one <c>goto</c> tick. Full speed while the waypoint is still
+        /// ahead; on the tick that reaches it, a speed that lands exactly on the waypoint (never
+        /// faster than the authored speed). This removes the one-frame stall and the velocity
+        /// overshoot both body types used to have at each waypoint.
+        /// </summary>
+        public static double PathSpeed(double distance, double speed, double deltaTime)
+        {
+            if (deltaTime <= 0.0 || !ReachesWaypoint(distance, speed, deltaTime))
+                return speed;
+            return distance / deltaTime;
+        }
     }
 }

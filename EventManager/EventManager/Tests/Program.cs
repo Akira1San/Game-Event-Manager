@@ -1663,6 +1663,22 @@ PhysicsMovement.CharacterDisplacement(0, 0, -1, 120, 0.5, out double chx, out do
 Check(Math.Abs(chx) < 1e-9 && Math.Abs(chy) < 1e-9 && Math.Abs(chz + 60) < 1e-9,
     "character displacement is direction × speed × tick (120/s for half a second = 60)");
 
+// ---- Task 12 Part B: body-aware goto path following ----
+
+Check(!PhysicsMovement.ReachesWaypoint(10, 120, 0.05) &&
+      PhysicsMovement.ReachesWaypoint(6, 120, 0.05) &&
+      PhysicsMovement.ReachesWaypoint(3, 120, 0.05),
+    "a goto tick reaches the waypoint only when the remaining distance fits in one step");
+
+Check(Math.Abs(PhysicsMovement.PathSpeed(10, 120, 0.05) - 120) < 1e-9,
+    "goto keeps full speed while the waypoint is still ahead");
+Check(Math.Abs(PhysicsMovement.PathSpeed(3, 120, 0.05) - 60) < 1e-9,
+    "on the reaching tick goto slows just enough to land exactly on the waypoint");
+Check(Math.Abs(PhysicsMovement.PathSpeed(4.9, 120, 0.05) - 98) < 1e-9,
+    "the landing speed never exceeds the authored speed");
+Check(Math.Abs(PhysicsMovement.PathSpeed(3, 120, 0) - 120) < 1e-9,
+    "a zero-length tick cannot divide by zero (speed unchanged)");
+
 var physicsEngine = FreshEngine(new FakeWorld());
 var physicsSheet = physicsEngine.AddSheet(new FakeActor("Mover"),
     parser.Parse("when me appears\n  move forward speed 5"));

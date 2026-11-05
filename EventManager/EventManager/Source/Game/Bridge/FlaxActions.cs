@@ -21,8 +21,11 @@ namespace Game
         /// <summary>True when this move walks to a world position (<c>goto there</c>) rather
         /// than to a named actor.</summary>
         public bool HasPositionTarget;
-        /// <summary>Move through the subject's RigidBody (the sheet's Use Physics Movement opt-in).</summary>
-        public bool UsePhysics;
+        /// <summary>How this subject moves (transform/character/dynamic/kinematic), resolved
+        /// once when the move starts so every tick follows the same body rule.</summary>
+        public PhysicsMoveMode Mode = PhysicsMoveMode.Transform;
+        /// <summary>True when the body carries the move instead of the transform.</summary>
+        public bool UsesPhysics => Mode != PhysicsMoveMode.Transform;
     }
 
     public static class FlaxActions
@@ -210,11 +213,21 @@ namespace Game
                     Vector3 waypoint = move.Path[move.PathIndex];
                     Vector3 delta = waypoint - move.Subject.Position;
                     float length = delta.Length;
-                    float step = (float)move.Speed * DeltaTime;
-                    if (length < 0.001f || length <= step)
+                    bool reached = length < 0.001f ||
+                                   PhysicsMovement.ReachesWaypoint(length, move.Speed, DeltaTime);
+                    if (length >= 0.001f)
                     {
-                        // Physics moves are swept by the body; never teleport it onto a waypoint.
-                        if (!move.UsePhysics)
+                        // Full speed on the approach; a landing speed on the tick that reaches
+                        // the waypoint, so a body neither overshoots nor stalls for a frame.
+                        double speed = PhysicsMovement.PathSpeed(length, move.Speed, DeltaTime);
+                        MoveSubject(move.Subject, delta / length, speed, move.Mode);
+                        if (move.FaceForward)
+                            move.Subject.LookAt(waypoint);
+                    }
+                    if (reached)
+                    {
+                        // Only the transform path teleports; bodies are swept/moved into place.
+                        if (move.Mode == PhysicsMoveMode.Transform)
                             move.Subject.Position = waypoint;
                         move.PathIndex++;
                         if (move.PathIndex >= move.Path.Length)
@@ -222,12 +235,6 @@ namespace Game
                             FinishGoto(move);
                             Moves.RemoveAt(i);
                         }
-                    }
-                    else
-                    {
-                        MoveSubject(move.Subject, delta / length, move.Speed, move.UsePhysics);
-                        if (move.FaceForward)
-                            move.Subject.LookAt(move.Path[move.PathIndex]);
                     }
                 }
             }
@@ -304,6 +311,7 @@ namespace Game
                         return;
                     }
                     bool physics = context.Sheet != null && context.Sheet.UsePhysicsMovement;
+                    PhysicsMoveMode mode = ResolveMoveMode(me, physics);
                     if (!string.IsNullOrEmpty(spec.Thing))
                     {
                         var target = ResolveThing(context, spec.Thing) as Actor;
@@ -312,11 +320,11 @@ namespace Game
                             Vector3 delta = target.Position - me.Position;
                             float length = delta.Length;
                             if (length > 0.001f)
-                                MoveSubject(me, delta / length, ResolveNumber(context, spec), physics);
+                                MoveSubject(me, delta / length, ResolveNumber(context, spec), mode);
                         }
                         break;
                     }
-                    MoveSubject(me, DirectionOf(me, spec.Dir), ResolveNumber(context, spec), physics);
+                    MoveSubject(me, DirectionOf(me, spec.Dir), ResolveNumber(context, spec), mode);
                     break;
                 }
                 case ActionVerb.StopMoving:
@@ -446,7 +454,7 @@ namespace Game
                             Path = clickPath,
                             PathIndex = 0,
                             Speed = spec.Number,
-                            UsePhysics = context.Sheet != null && context.Sheet.UsePhysicsMovement,
+                            Mode = ResolveMoveMode(me, context.Sheet != null && context.Sheet.UsePhysicsMovement),
                         });
                         break;
                     }
@@ -470,7 +478,7 @@ namespace Game
                         Path = path,
                         PathIndex = 0,
                         Speed = spec.Number,
-                        UsePhysics = context.Sheet != null && context.Sheet.UsePhysicsMovement,
+                        Mode = ResolveMoveMode(me, context.Sheet != null && context.Sheet.UsePhysicsMovement),
                     });
                     break;
                 }
@@ -612,12 +620,11 @@ namespace Game
         }
 
         /// <summary>
-        /// Moves an actor for one tick. Transform by default; with the sheet's physics opt-in and
-        /// a body present, drives that body instead: a CharacterController walks with
-        /// collide-and-slide <c>Move</c>, a dynamic RigidBody uses velocity, and a kinematic
-        /// RigidBody gets a swept move, so collisions and CCD apply.
+        /// Picks how this subject moves this tick: transform (default), character controller,
+        /// dynamic body or kinematic body. Resolved once per move so every tick follows the same
+        /// rule and a destroyed/removed body simply falls back to transform.
         /// </summary>
-        private static void MoveSubject(Actor subject, Vector3 direction, double speed, bool physics)
+        private static PhysicsMoveMode ResolveMoveMode(Actor subject, bool physics)
         {
             CharacterController character = physics ? EventSheet.FindCharacterController(subject) : null;
             RigidBody body = physics ? FindBody(subject) : null;
@@ -630,19 +637,40 @@ namespace Game
             if (mode == PhysicsMoveMode.Character && !IsAncestorOrSelf(character, subject))
             {
                 WarnOnce($"\"{subject.Name}\" uses physics movement, but its CharacterController is a child — the events can't follow it. Put the EventSheet on the CharacterController actor with the mesh under it.");
-                mode = PhysicsMoveMode.Transform;
+                return PhysicsMoveMode.Transform;
             }
+            return mode;
+        }
 
+        /// <summary>
+        /// Moves an actor for one tick in the chosen mode. Transform assigns Position;
+        /// a CharacterController walks with collide-and-slide <c>Move</c>; a dynamic RigidBody
+        /// uses velocity; a kinematic RigidBody gets a swept move, so collisions and CCD apply.
+        /// </summary>
+        private static void MoveSubject(Actor subject, Vector3 direction, double speed, PhysicsMoveMode mode)
+        {
             float step = (float)speed * DeltaTime;
             switch (mode)
             {
                 case PhysicsMoveMode.Character:
+                {
+                    CharacterController character = EventSheet.FindCharacterController(subject);
+                    if (character == null)
+                        break; // body vanished mid-move: leave the actor where it is
                     PhysicsMovement.CharacterDisplacement(
                         direction.X, direction.Y, direction.Z, speed, DeltaTime,
                         out double cx, out double cy, out double cz);
                     character.Move(new Vector3((float)cx, (float)cy, (float)cz));
                     break;
+                }
                 case PhysicsMoveMode.Dynamic:
+                {
+                    RigidBody body = FindBody(subject);
+                    if (body == null)
+                    {
+                        subject.Position = subject.Position + direction * step;
+                        break;
+                    }
                     if (!IsAncestorOrSelf(body, subject))
                         WarnOnce($"\"{subject.Name}\" uses physics movement, but its RigidBody is a child — the mesh won't follow. Put the EventSheet on the RigidBody actor with the mesh under it.");
                     PhysicsMovement.DynamicVelocity(
@@ -650,14 +678,18 @@ namespace Game
                         out double vx, out double vy, out double vz);
                     body.LinearVelocity = new Vector3((float)vx, (float)vy, (float)vz);
                     break;
+                }
                 case PhysicsMoveMode.Kinematic:
+                {
                     // A swept move: PhysX carries the body along and reports trigger/collision
                     // contacts on the way instead of teleporting through them.
-                    if (IsAncestorOrSelf(body, subject))
+                    RigidBody body = FindBody(subject);
+                    if (body != null && IsAncestorOrSelf(body, subject))
                         body.AddMovement(direction * step);
                     else
                         subject.AddMovement(direction * step);
                     break;
+                }
                 default:
                     subject.Position = subject.Position + direction * step;
                     break;
@@ -689,7 +721,7 @@ namespace Game
 
         private static void ArriveAt(OngoingMove move)
         {
-            if (move.UsePhysics)
+            if (move.UsesPhysics)
                 BrakeBody(move.Subject);
             else if (move.Target != null)
                 move.Subject.Position = move.Target.Position;
