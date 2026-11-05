@@ -69,6 +69,13 @@ namespace Game
         public List<Token> Words = new List<Token>();
     }
 
+    /// <summary><c>play step sound "&lt;material&gt;"</c>: looks up the sheet's material→clip map,
+    /// plays the mapped clip once per cooldown interval.</summary>
+    public class PlayStepSoundNode : StatementNode
+    {
+        public string Material = "";
+    }
+
     public class SetStateNode : StatementNode
     {
         public string State = "";

@@ -82,6 +82,8 @@ namespace Game
             {
                 FlaxActions.SetText(thing, value.AsText());
             };
+            Runtime.OnPlayStepSound = (context, material, clipName) =>
+                FlaxActions.PlayStepSound(context, material, clipName);
 
             _gameFilesFolder = EventFiles.LocateGameFiles(System.IO.Directory.GetCurrentDirectory())
                 ?? EventFiles.LocateGameFiles(AppContext.BaseDirectory);

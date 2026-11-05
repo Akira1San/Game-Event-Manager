@@ -112,6 +112,15 @@ namespace Game
         /// <summary>Last distance at which <c>sees name</c> established sight; reused by a
         /// distance-less <c>stops seeing name</c>.</summary>
         public Dictionary<string, double> LastSeenRange = new Dictionary<string, double>();
+        /// <summary>Material → clip name map for <c>play step sound "&lt;material&gt;"</c>.
+        /// Populated per-project (e.g. Grass → "grass_step.wav").</summary>
+        public Dictionary<string, string> StepSoundMap = new Dictionary<string, string>();
+        /// <summary>Minimum seconds between two step sounds on the same material, per actor.</summary>
+        public double StepCooldown = 0.3;
+        /// <summary>Last play time per material, used to enforce StepCooldown.</summary>
+        public Dictionary<string, double> StepLastPlay = new Dictionary<string, double>();
+        /// <summary>Materials already warned about a missing clip mapping (warn once each).</summary>
+        public HashSet<string> StepWarned = new HashSet<string>();
         public bool[] FiredThisTick = new bool[0];
         public double[] LastFire = new double[0];
         public WatchState[] Watches = new WatchState[0];
@@ -135,6 +144,10 @@ namespace Game
         public Action<string> OnRuntimeWarning = message => { };
         public Action<EventContext, List<Token>> OnRawAction = (context, words) => { };
         public Action<EventContext, string, ValueBox> OnSetText = (context, thing, value) => { };
+        /// <summary>Play a step sound: <paramref name="material"/> is the surface name (e.g.
+        /// "Grass"), <paramref name="clipName"/> is the resolved clip to play. The bridge
+        /// wires this to actual audio playback.</summary>
+        public Action<EventContext, string, string> OnPlayStepSound = (context, material, clipName) => { };
 
         private readonly List<SheetInstance> sheets = new List<SheetInstance>();
         private readonly HashSet<string> warnedLines = new HashSet<string>();
@@ -574,6 +587,10 @@ namespace Game
                 {
                     ExecuteSetState(context, setState);
                 }
+                else if (statement is PlayStepSoundNode step)
+                {
+                    ExecutePlayStepSound(context, step);
+                }
                 else if (statement is RawActionNode raw)
                 {
                     if (IsStopThisEvent(raw))
@@ -718,6 +735,32 @@ namespace Game
             // `gets dropped` event so its sheet runs with `me` = the item itself again
             foreach (var sheet in context.Runtime.SheetsUsingSource(thing))
                 sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.Dropped });
+        }
+
+        private void ExecutePlayStepSound(EventContext context, PlayStepSoundNode step)
+        {
+            var sheet = context.Sheet;
+            if (sheet == null)
+                return;
+            string material = step.Material;
+            if (!sheet.StepSoundMap.TryGetValue(material, out string clipName) || string.IsNullOrEmpty(clipName))
+            {
+                // Warn once per missing material, then skip.
+                string key = sheet.ActorName + ": step sound " + material;
+                if (!sheet.StepWarned.Contains(key))
+                {
+                    sheet.StepWarned.Add(key);
+                    OnRuntimeWarning($"\"{sheet.ActorName}\": no clip mapped for material \"{material}\" — `play step sound \"{material}\"` skipped.");
+                }
+                return;
+            }
+            // Cooldown: at most one step sound per material per StepCooldown seconds.
+            double now = Time;
+            double last = sheet.StepLastPlay.TryGetValue(material, out double v) ? v : double.MinValue;
+            if (now - last < sheet.StepCooldown)
+                return;
+            sheet.StepLastPlay[material] = now;
+            OnPlayStepSound(context, material, clipName);
         }
 
         /// <summary>Renders a bag's contents as text: "Sword x2, Potion" (count 1 shows bare).</summary>

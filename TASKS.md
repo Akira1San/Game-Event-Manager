@@ -696,12 +696,12 @@ names to sound clips, and trigger once per step with a cooldown.
   material warns once and reads as empty.
 
 ### Part C — Material→sound mapping + per-step cooldown
-- [ ] Word registry + action: `play step sound "<name>"` (or reuse `play sound` keyed by a
+- [x] Word registry + action: `play step sound "<name>"` (or reuse `play sound` keyed by a
   per-project material→clip map). Configurable map (Grass → `grass_step.wav`, Stone →
   `stone_step.wav`, …).
-- [ ] Runtime: once per contact-enter + moving gate, play the mapped sound with a cooldown
+- [x] Runtime: once per contact-enter + moving gate, play the mapped sound with a cooldown
   so it doesn't spam every tick; hold-movement repeats at a step interval.
-- [ ] Unit test: cooldown prevents double-play; material miss warns once and skips.
+- [x] Unit test: cooldown prevents double-play; material miss warns once and skips.
 
 ### Part D — Example
 - [ ] Write `Grass.events` / `Player.events` snippet:

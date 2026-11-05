@@ -1020,6 +1020,29 @@ namespace Game
             FlaxEngine.Object.Destroy(audio, clip.Length);
         }
 
+        public static void PlayStepSound(EventContext context, string material, string clipName)
+        {
+            var clip = LoadAudioClip(clipName);
+            if (clip == null)
+            {
+                WarnOnce($"Could not load step sound clip \"{clipName}\" for material \"{material}\". Imported clips: {AvailableSoundNames()}.");
+                return;
+            }
+
+            var me = context.Me as Actor;
+            var audio = new AudioSource
+            {
+                HideFlags = HideFlags.DontSave,
+                Volume = 1,
+                Clip = clip,
+                Position = me != null ? me.Position : Vector3.Zero,
+            };
+            Level.SpawnActor(audio);
+            audio.Play();
+            ActiveSounds.Add((me, audio));
+            FlaxEngine.Object.Destroy(audio, clip.Length);
+        }
+
         /// <summary>
         /// Resolves a clip by name, ignoring folder and extension: "shot", "shot.wav" and
         /// "sounds/shot.flax" all find the same imported <see cref="AudioClip"/>.

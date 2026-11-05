@@ -2023,6 +2023,53 @@ enterEngine.PollTouches = true;
     Check(unkEngine.Variables.GetGlobal("TouchedGrass").IsNone(),
         "an actor with no material never matches `touches Grass`");
 
+    // ------------------------------------------------------------------
+    // Task 13 Part C: `play step sound "<material>"` + per-step cooldown
+    // ------------------------------------------------------------------
+
+    var stepProg = parser.Parse(@"when me appears
+  play step sound ""Grass""");
+    Check(stepProg.Events.Count == 1, "`play step sound \"Grass\"` parses as one event");
+    var stepStmt = stepProg.Events[0].Body[0].Statement as PlayStepSoundNode;
+    Check(stepStmt != null && stepStmt.Material == "Grass",
+        "`play step sound \"Grass\"` parses to PlayStepSoundNode with Material \"Grass\"");
+
+    var stepWorld = new FakeWorld();
+    var stepper = new FakeActor("Feet");
+    stepWorld.AddActor(stepper);
+    var stepEngine = FreshEngine(stepWorld);
+    var stepSheet = stepEngine.AddSheet(stepper, parser.Parse(@"when every 0 seconds
+  play step sound ""Grass"""));
+    stepSheet.StepSoundMap["Grass"] = "grass_step.wav";
+    int stepPlays = 0;
+    stepEngine.OnPlayStepSound = (ctx, material, clip) => stepPlays++;
+    Check(stepSheet.StepCooldown == 0.3, "default step cooldown is 0.3 seconds");
+
+    stepEngine.Tick(0);
+    Check(stepPlays == 1, "first tick plays the mapped step sound");
+    stepEngine.Tick(0.1);
+    Check(stepPlays == 1, "within cooldown the step sound is not replayed");
+    stepEngine.Tick(0.4);
+    Check(stepPlays == 2, "after cooldown the step sound plays again");
+
+    // Material miss: unknown material warns once and never plays.
+    var missWorld = new FakeWorld();
+    var misser = new FakeActor("Feet");
+    missWorld.AddActor(misser);
+    var missEngine = FreshEngine(missWorld);
+    var missSheet = missEngine.AddSheet(misser, parser.Parse(@"when every 0 seconds
+  play step sound ""Ice"""));
+    int missPlays = 0;
+    int missWarnings = 0;
+    missEngine.OnPlayStepSound = (ctx, material, clip) => missPlays++;
+    missEngine.OnRuntimeWarning = msg => { if (msg.Contains("step sound")) missWarnings++; };
+
+    missEngine.Tick(0);
+    missEngine.Tick(0.5);
+    missEngine.Tick(1.0);
+    Check(missPlays == 0, "an unmapped material never plays a step sound");
+    Check(missWarnings == 1, "a missing material mapping warns exactly once");
+
 var pollOverlapWorld = new FakeWorld();
 var pollOverlapA = new FakeActor("Prober");
 var pollOverlapB = new FakeActor("Enemy");

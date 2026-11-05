@@ -71,6 +71,7 @@ namespace Game
             new WordEntry { Kind = "action", Word = "spawn", Example = "spawn Coin at SpawnPoint" },
             new WordEntry { Kind = "action", Word = "play", Example = "play sound \"hit.wav\"" },
             new WordEntry { Kind = "action", Word = "play", Example = "play anim \"dragon_fire\"" },
+            new WordEntry { Kind = "action", Word = "play step sound", Example = "play step sound \"Grass\"" },
             new WordEntry { Kind = "action", Word = "loop", Example = "loop anim \"animation walk\"" },
             new WordEntry { Kind = "action", Word = "stop", Example = "stop anim" },
             new WordEntry { Kind = "action", Word = "stop", Example = "stop this event" },

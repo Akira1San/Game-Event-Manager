@@ -275,6 +275,14 @@ namespace Game
                 line.Statement = ParseDrop(line);
                 return;
             }
+            if (first.Text == "play")
+            {
+                if (line.Words.Count >= 4 && line.Words[1].Text == "step" && line.Words[2].Text == "sound" && line.Words[3].Type == TokenType.Str)
+                {
+                    line.Statement = new PlayStepSoundNode { Line = line.Line, Material = line.Words[3].Text };
+                    return;
+                }
+            }
                 var action = new RawActionNode { Line = line.Line };
                 action.Words.AddRange(line.Words);
                 line.Statement = action;
