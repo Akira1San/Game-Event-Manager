@@ -36,6 +36,9 @@ namespace Game
         public static Action<string> Warn = FlaxActions.WarnOnce;
         /// <summary>Animation state per actor (current/previous clip + the virtual graphs that play them).</summary>
         private static readonly Dictionary<object, AnimState> AnimStates = new Dictionary<object, AnimState>();
+        /// <summary>Vertical speed per character actor. <c>CharacterController.Move</c> carries no
+        /// velocity state, so the event runtime keeps the falling speed between ticks.</summary>
+        private static readonly Dictionary<Actor, float> CharacterFallSpeeds = new Dictionary<Actor, float>();
         /// <summary>Sources spawned by <c>play sound</c>, with the actor whose sheet started them.</summary>
         private static readonly List<(Actor Owner, AudioSource Source)> ActiveSounds = new List<(Actor, AudioSource)>();
         /// <summary>Clip key (see <see cref="AssetNames"/>) to asset id, built once per play session.</summary>
@@ -83,6 +86,7 @@ namespace Game
         {
             Moves.Clear();
             ActiveSounds.Clear();
+            CharacterFallSpeeds.Clear();
             SoundIndexCache = null;
             AnimIndexCache = null;
             AnimFullNames = null;
@@ -639,6 +643,21 @@ namespace Game
                 WarnOnce($"\"{subject.Name}\" uses physics movement, but its CharacterController is a child — the events can't follow it. Put the EventSheet on the CharacterController actor with the mesh under it.");
                 return PhysicsMoveMode.Transform;
             }
+
+            // The event runtime feeds gravity itself (Task 12 C) so a grounded character is
+            // deterministic and `goto` can land exactly. Turn the controller's own gravity off
+            // rather than applying it twice.
+            if (mode == PhysicsMoveMode.Character && character.AutoGravity)
+            {
+                character.AutoGravity = false;
+                WarnOnce($"\"{subject.Name}\": physics movement feeds CharacterController gravity, so its AutoGravity was turned off (otherwise it would fall twice as fast).");
+            }
+
+            // A fast dynamic body must not tunnel through a wall between ticks. The body stays
+            // under the event runtime's control, so enabling CCD is always the right default.
+            if (mode == PhysicsMoveMode.Dynamic && body != null && !body.UseCCD)
+                body.UseCCD = true;
+
             return mode;
         }
 
@@ -657,9 +676,17 @@ namespace Game
                     CharacterController character = EventSheet.FindCharacterController(subject);
                     if (character == null)
                         break; // body vanished mid-move: leave the actor where it is
-                    PhysicsMovement.CharacterDisplacement(
-                        direction.X, direction.Y, direction.Z, speed, DeltaTime,
-                        out double cx, out double cy, out double cz);
+
+                    // Grounded characters walk; airborne ones fall straight down (no air
+                    // steering). A short ray below the capsule respects the character's slope
+                    // limit, and `IsGrounded` covers contact cases the ray is too short to see.
+                    bool grounded = IsCharacterGrounded(character, subject);
+                    CharacterFallSpeeds.TryGetValue(subject, out float fallSpeed);
+                    PhysicsMovement.CharacterStep(
+                        direction.X, direction.Y, direction.Z, speed, fallSpeed, grounded,
+                        Math.Abs(Physics.Gravity.Y), PhysicsMovement.GroundStickSpeed, DeltaTime,
+                        out double cx, out double cy, out double cz, out double newFallSpeed);
+                    CharacterFallSpeeds[subject] = (float)newFallSpeed;
                     character.Move(new Vector3((float)cx, (float)cy, (float)cz));
                     break;
                 }
@@ -694,6 +721,40 @@ namespace Game
                     subject.Position = subject.Position + direction * step;
                     break;
             }
+        }
+
+        /// <summary>
+        /// Ground probe for a walking character. A short downward ray from just below the
+        /// capsule (within the sheet's Ground Check Distance) rejects slopes steeper than the
+        /// controller's own limit; when the ray sees nothing, the controller's last-move
+        /// <c>IsGrounded</c> is the fallback (contact offset / collider edge).
+        /// </summary>
+        private static bool IsCharacterGrounded(CharacterController character, Actor subject)
+        {
+            float groundCheck = GroundCheckDistanceFor(subject);
+            if (groundCheck > 0f)
+            {
+                float feet = (float)PhysicsMovement.FeetY(
+                    character.Position.Y,
+                    character.OriginMode == CharacterController.OriginModes.Base,
+                    character.Height,
+                    character.Radius);
+                // Start a hair below the feet so the ray cannot hit the character's own capsule;
+                // triggers are ignored so a pickup volume isn't mistaken for ground.
+                Vector3 origin = new Vector3(character.Position.X, feet - 0.5f, character.Position.Z);
+                if (Physics.RayCast(origin, Vector3.Down, out RayCastHit hit, groundCheck, ~0u, false))
+                    return PhysicsMovement.IsWalkableSlope(hit.Normal.Y, character.SlopeLimit);
+            }
+            return character.IsGrounded;
+        }
+
+        /// <summary>The actor sheet's authored ground-check distance, or the character default.</summary>
+        private static float GroundCheckDistanceFor(Actor subject)
+        {
+            SheetInstance sheet = EventsManager.Instance?.Runtime?.FindSheetFor(subject);
+            return sheet != null
+                ? sheet.GroundCheckDistance
+                : (float)PhysicsMovement.DefaultGroundCheckDistance;
         }
 
         /// <summary>Stop a physics-driven actor: brake a dynamic body's horizontal velocity
@@ -1418,6 +1479,8 @@ namespace Game
         public static void ClearActor(object actor)
         {
             if (actor == null) return;
+            if (actor is Actor body)
+                CharacterFallSpeeds.Remove(body);
             if (AnimStates.TryGetValue(actor, out AnimState state))
             {
                 if (state.Graph != null)

@@ -71,6 +71,23 @@ namespace Game
     public static class PhysicsMovement
     {
         /// <summary>
+        /// Flax's default gravity magnitude in engine units (cm/s²) — 9.81 m/s². Used when the
+        /// event runtime feeds a CharacterController's vertical motion (its own <c>AutoGravity</c>
+        /// stays off so gravity is applied exactly once).
+        /// </summary>
+        public const double DefaultGravity = 981.0;
+
+        /// <summary>
+        /// Downward speed (cm/s) used to keep a grounded character glued to the floor while it
+        /// walks down slopes and off small steps. Small enough to be invisible, large enough to
+        /// beat the collision system's contact offset.
+        /// </summary>
+        public const double GroundStickSpeed = 2.0;
+
+        /// <summary>Default distance below the feet that still counts as ground (cm).</summary>
+        public const double DefaultGroundCheckDistance = 10.0;
+
+        /// <summary>
         /// Transform movement stays the default: physics only runs when the actor's EventSheet
         /// opted in ("Use Physics Movement") and the actor actually has a body.
         /// </summary>
@@ -170,6 +187,75 @@ namespace Game
             if (deltaTime <= 0.0 || !ReachesWaypoint(distance, speed, deltaTime))
                 return speed;
             return distance / deltaTime;
+        }
+
+        /// <summary>
+        /// World-space height of a character's feet. In Flax's default <c>CapsuleCenter</c>
+        /// origin mode the actor position is the capsule centre, so the feet sit half the capsule
+        /// below it (height between the sphere centres plus one radius). In <c>Base</c> mode the
+        /// actor position already is the feet.
+        /// </summary>
+        public static double FeetY(double originY, bool originAtBase, double height, double radius)
+        {
+            if (originAtBase)
+                return originY;
+            return originY - (Math.Max(0.0, height) * 0.5 + Math.Max(0.0, radius));
+        }
+
+        /// <summary>
+        /// Whether a surface normal is walkable under a slope limit in degrees. This is the same
+        /// rule the CharacterController's own <c>SlopeLimit</c> uses, exposed so the ground probe
+        /// can reject a steep face before the character starts climbing it.
+        /// </summary>
+        public static bool IsWalkableSlope(double normalY, double slopeLimitDegrees)
+        {
+            double cos = Math.Min(1.0, Math.Max(-1.0, normalY));
+            double angle = Math.Acos(cos) * 180.0 / Math.PI;
+            double limit = Math.Min(90.0, Math.Max(0.0, slopeLimitDegrees));
+            return angle <= limit + 1e-9;
+        }
+
+        /// <summary>
+        /// Next vertical speed for a character. Grounded characters rest (no accumulating fall),
+        /// airborne ones accelerate downward by gravity. An explicit up/down move bypasses this
+        /// and is handled by <see cref="CharacterStep"/>.
+        /// </summary>
+        public static double FallSpeed(double currentVelocityY, bool grounded, double gravity, double deltaTime)
+        {
+            if (grounded)
+                return 0.0;
+            return currentVelocityY - Math.Max(0.0, gravity) * Math.Max(0.0, deltaTime);
+        }
+
+        /// <summary>
+        /// One tick of character motion with gravity and ground contact. Horizontal movement only
+        /// applies while grounded (no air steering); airborne ticks fall straight down. An
+        /// explicit up/down move (<paramref name="directionY"/> ≠ 0) still wins over gravity, so
+        /// elevators and flying characters keep working. The controller's collide-and-slide
+        /// <c>Move</c> then resolves walls, slopes up to its limit and step offsets.
+        /// </summary>
+        public static void CharacterStep(
+            double directionX, double directionY, double directionZ,
+            double speed, double currentFallSpeed, bool grounded,
+            double gravity, double groundStickSpeed, double deltaTime,
+            out double x, out double y, out double z, out double fallSpeed)
+        {
+            double dt = Math.Max(0.0, deltaTime);
+            double horizontal = grounded ? speed * dt : 0.0;
+            x = directionX * horizontal;
+            z = directionZ * horizontal;
+
+            if (directionY != 0.0)
+            {
+                y = directionY * speed * dt;
+                fallSpeed = 0.0;
+                return;
+            }
+
+            fallSpeed = grounded
+                ? -Math.Max(0.0, groundStickSpeed)
+                : FallSpeed(currentFallSpeed, false, gravity, dt);
+            y = fallSpeed * dt;
         }
     }
 }

@@ -1679,6 +1679,48 @@ Check(Math.Abs(PhysicsMovement.PathSpeed(4.9, 120, 0.05) - 98) < 1e-9,
 Check(Math.Abs(PhysicsMovement.PathSpeed(3, 120, 0) - 120) < 1e-9,
     "a zero-length tick cannot divide by zero (speed unchanged)");
 
+// ---- Task 12 Part C: ground / slope / collision handling ----
+
+Check(PhysicsMovement.IsWalkableSlope(1.0, 45) &&
+      PhysicsMovement.IsWalkableSlope(Math.Cos(30 * Math.PI / 180), 45),
+    "flat ground and a 30° slope are walkable under a 45° limit");
+Check(!PhysicsMovement.IsWalkableSlope(Math.Cos(60 * Math.PI / 180), 45),
+    "a 60° slope is rejected by a 45° limit (the character won't climb it)");
+Check(PhysicsMovement.IsWalkableSlope(1.0, 0) &&
+      !PhysicsMovement.IsWalkableSlope(Math.Cos(1 * Math.PI / 180), 0),
+    "a 0° limit still allows flat ground but rejects any real slope");
+
+Check(Math.Abs(PhysicsMovement.FeetY(500, false, 150, 50) - 375) < 1e-9 &&
+      Math.Abs(PhysicsMovement.FeetY(500, true, 150, 50) - 500) < 1e-9,
+    "feet sit half the capsule below a CapsuleCenter origin, and at the origin itself in Base mode");
+
+Check(Math.Abs(PhysicsMovement.FallSpeed(-100, true, 981, 0.5)) < 1e-9,
+    "a grounded character stops falling instead of accumulating speed");
+Check(Math.Abs(PhysicsMovement.FallSpeed(0, false, PhysicsMovement.DefaultGravity, 0.5) + 490.5) < 1e-9,
+    "an airborne character accelerates by gravity each tick (981 cm/s² for half a second)");
+
+PhysicsMovement.CharacterStep(0, 0, -1, 100, 0, true, PhysicsMovement.DefaultGravity, 2, 0.1,
+    out double gx, out double gy, out double gz, out double gFall);
+Check(Math.Abs(gz + 10) < 1e-9 && Math.Abs(gx) < 1e-9 &&
+      Math.Abs(gy + 0.2) < 1e-9 && Math.Abs(gFall + 2) < 1e-9,
+    "a grounded character walks at speed and sticks to the floor with a small downward snap");
+
+PhysicsMovement.CharacterStep(0, 0, -1, 100, -50, false, PhysicsMovement.DefaultGravity, 2, 0.1,
+    out gx, out gy, out gz, out gFall);
+Check(Math.Abs(gx) < 1e-9 && Math.Abs(gz) < 1e-9 &&
+      Math.Abs(gy + 14.81) < 1e-9 && Math.Abs(gFall + 148.1) < 1e-9,
+    "an airborne character falls straight down with no air steering");
+
+PhysicsMovement.CharacterStep(0, 1, 0, 100, 0, false, PhysicsMovement.DefaultGravity, 2, 0.1,
+    out gx, out gy, out gz, out gFall);
+Check(Math.Abs(gy - 10) < 1e-9 && Math.Abs(gFall) < 1e-9,
+    "an explicit up move still wins over gravity (elevators and flying characters)");
+
+PhysicsMovement.CharacterStep(0, 0, -1, 100, 0, true, PhysicsMovement.DefaultGravity, 2, 0,
+    out gx, out gy, out gz, out gFall);
+Check(Math.Abs(gx) < 1e-9 && Math.Abs(gy) < 1e-9 && Math.Abs(gz) < 1e-9,
+    "a zero-length character tick moves nothing");
+
 var physicsEngine = FreshEngine(new FakeWorld());
 var physicsSheet = physicsEngine.AddSheet(new FakeActor("Mover"),
     parser.Parse("when me appears\n  move forward speed 5"));

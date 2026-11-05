@@ -400,6 +400,29 @@ moving` brakes the horizontal velocity; `goto` brakes on arrival.
   before. `goto <thing> facing forward` turns the nose toward the next waypoint (Task 7 E).
 - `face <thing>` stays rotation-only (`LookAt`) and never fights the body's translation.
 
+**Ground, slopes and collisions (Task 12 C):**
+
+- **The event runtime feeds the character's gravity.** `CharacterController.Move` applies no
+  gravity, so the bridge keeps a per-actor vertical speed, uses the scene's `Physics.Gravity`
+  (981 cm/s² by default) and passes the resulting displacement to `Move` every tick. The
+  controller's own `AutoGravity` is switched off (with a once-per-actor warning) so gravity is
+  never applied twice.
+- **Ground detection gates horizontal movement.** A short downward ray starts just below the
+  capsule (using `OriginMode` to find the feet) and reaches out by the sheet's **Character Ground
+  Check Distance**; `IsGrounded` is the fallback. While airborne the character falls straight
+  down (no air steering) until it lands. Grounded ticks add a tiny downward stick so the
+  character follows slopes and small steps instead of stepping off and falling each frame.
+- **Slope limit** is enforced twice: the ground probe rejects a surface whose normal is steeper
+  than `SlopeLimit` (so a too-steep face is not ground and the character slides/falls), and the
+  controller's collide-and-slide `Move` refuses to climb it. Moving down a slope stays attached
+  because of the ground stick.
+- **Step up** is the capsule's own `Character Step Offset` (30 by default): small ledges are
+  climbed by `Move`, taller walls are not.
+- **Walls stop/slide.** A `CharacterController` slides along walls, a dynamic body is resolved by
+  PhysX (and the runtime enables `UseCCD` so a fast move cannot tunnel), and a kinematic body
+  uses a swept `AddMovement`. Transform movement stays a plain position write — still the
+  default for games with no colliders.
+
 `push` is a real impulse (`AddForce` with `ForceMode.Impulse`) on a **dynamic** body — that is
 what the word always meant. Kinematic bodies ignore forces, so they keep the old one-tick
 transform nudge; with the flag off every push stays a transform nudge.
@@ -902,9 +925,12 @@ window around a broken runtime.
   swept `AddMovement`, no body/flag off keeps `Position`. The bullet is the dynamic experiment
   (`EnableGravity = false`, `UseCCD = true`); Player/Enemy stay kinematic so speed is exact and
   bullets don't shove them. `push` is a real impulse only on dynamic bodies.
-  Still to feel in the editor: whether Player/Enemy should ever go dynamic, whether `goto` should
-  rotate toward its next waypoint (Task 7 E), and whether the CharacterController should apply its
-  own gravity (`AutoGravity`) or let the event runtime feed vertical velocity (Task 12 C).
+  **Decided in Task 12 C:** the event runtime feeds the CharacterController's vertical speed
+  (scene `Physics.Gravity`, ground probe + ground stick); `AutoGravity` stays off so gravity is
+  applied exactly once. Horizontal movement only applies while grounded. Dynamic bodies keep
+  PhysX gravity and get `UseCCD` enabled automatically; kinematic bodies stay swept.
+  Still to feel in the editor: whether Player/Enemy should ever go dynamic and whether `goto`
+  should rotate toward its next waypoint (Task 7 E).
 - **Persistence:** do global variables survive scene *reload* (not just scene *change*)? Proposal for now: yes, and a `wipe game variables` action to explicitly reset.
 - **`me touches` without physics:** supported now via `Contact Mode = Distance` (bounding-sphere
   contact); `overlaps` remains distance-based in every mode. The two words still overlap

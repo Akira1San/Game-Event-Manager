@@ -92,6 +92,11 @@ namespace Game
             controller.Height = settings.Height;
             controller.StepOffset = settings.StepOffset;
             controller.SlopeLimit = settings.SlopeLimit;
+            // The event runtime keeps the character's vertical speed (gravity/ground snap), so
+            // the controller must not apply its own gravity on top of it (Task 12 C).
+            controller.AutoGravity = false;
+            // A steep face should be a slide, not a wall the character can stand on.
+            controller.NonWalkableMode = CharacterController.NonWalkableModes.PreventClimbingAndForceSliding;
         }
 
         /// <summary>
