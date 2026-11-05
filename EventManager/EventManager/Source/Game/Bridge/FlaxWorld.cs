@@ -11,15 +11,6 @@ namespace Game
         /// <summary>Actor names already warned about a missing physics material (warn once each).</summary>
         private readonly HashSet<string> _missingMaterialWarned = new HashSet<string>();
 
-        /// <summary>Pre-load every PhysicalMaterial asset so their <see cref="JsonAssetReference{T}.Instance"/>
-        /// is populated when <see cref="MaterialOf"/> reads a collider's material. Call once from
-        /// <see cref="EventsManager.OnStart"/> before any contact occurs.</summary>
-        public static void Initialize()
-        {
-            foreach (Guid id in Content.GetAllAssetsByType(typeof(PhysicalMaterial)))
-                Content.Load<PhysicalMaterial>(id);
-        }
-
         public bool IsKeyHeld(string key)
         {
             string name = key.Trim();
