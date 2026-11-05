@@ -73,6 +73,7 @@ namespace Game
             Instance = this;
             FlaxActions.Warn = FlaxActions.WarnOnce;
             Runtime.World = _world;
+            FlaxWorld.Initialize();
             Runtime.PollOverlaps = true; // overlaps is distance-based in every mode
             Runtime.PollTouches = ContactMode != EventContactMode.Colliders;
             Runtime.OnRuntimeWarning = message => Debug.LogWarning("Event sheet: " + message);
