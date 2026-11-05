@@ -1,32 +1,49 @@
 # --- Player_task13.events ---
-# Task 13: Footstep sounds by material
+# Task 13: Footstep sounds by material — complete, playable example
 #
-# This file demonstrates all three Task 13 parts together:
-#
-#   Part A — `me is moving`            : true only while a move/goto/face is active
-#   Part B — `when me touches <mat>`   : fires on enter-edge contact with a material
-#   Part C — `play step sound "<mat>"` : plays the mapped clip, cooldown-gated (0.3s)
+# Part A: `me is moving`          — true while a move/goto/face is active
+# Part B: `when me touches <mat>` — fires on enter-edge contact with a material
+# Part C: `play step sound "<mat>"` — plays the mapped clip, cooldown-gated (0.3s)
 #
 # ========================================================================
-# SETUP — do these four steps in the editor (no C# needed):
+# SETUP — do these steps in the editor:
 #
-#  1. Create a Physical Material: Content window → right-click → New →
-#     Physics → Physical Material. Name it "Grass" and set its Tag to "Grass".
-#     (Optional: repeat for other surfaces, e.g. "Stone", "Wood".)
+#  1. Create a Physical Material: Content → right-click → New → Physics →
+#     Physical Material. Name it "Grass", set Tag = "Grass".
 #
-#  2. Assign the material to your floor: select the floor actor → Collider
-#     component → Material = Grass.
+#  2. Floor: select the floor actor → Collider component → Material = Grass.
+#     (The floor needs a Collider so contact can be detected.)
 #
-#  3. Import a step-sound clip into Content (e.g. "footstep.wav"). Clips are
+#  3. Player collider: select the player actor → add a Collider component
+#     (Box Collider or Capsule Collider around the player). The player needs
+#     a Collider so the EventSheet can detect when it touches the floor.
+#
+#  4. Import a step-sound clip into Content (e.g. "footstep.wav"). Clips are
 #     referenced by name only — folder, extension, and case are ignored.
 #
-#  4. Map the material to the clip: select the player actor → EventSheet
-#     component → Step Sound Map → add entry: Material = "Grass", Clip = "footstep".
-#     (Add more entries for other surfaces: Material = "Stone", Clip = "stone_step", …)
+#  5. Player → EventSheet component → Step Sound Map → add entry:
+#     Material = "Grass", Clip = "footstep".
+#     (Add more for other surfaces: Stone → stone_step, Wood → wood_step, …)
+#
+#  6. Player → EventSheet component → Event File = Player_task13.
+#     (Blank = the actor's own name also works.)
 #
 # ========================================================================
+# Move with WASD so `me is moving` becomes true while walking.
+when W is held
+  move forward speed 5
+
+when S is held
+  move backward speed 5
+
+when A is held
+  move left speed 5
+
+when D is held
+  move right speed 5
+
 # Walk on Grass → play the grass step sound (only while moving).
-# Standing still produces nothing (`me is moving` is false).
+# Standing still → silence (`me is moving` is false).
 # Switching floors mid-stride switches the sound on re-entry (enter-edge).
 
 when me touches Grass and me is moving
