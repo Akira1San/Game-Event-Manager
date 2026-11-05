@@ -601,7 +601,7 @@ Goal: per-actor state machines so one `.events` file can encode multiple behavio
 - [ ] Verify: guard patrols waypoints, chases when player comes near, attacks up close, returns to patrol when player leaves.
 
 ### Part C — Global game states (bonus)
-- [ ] `Game.events`: `when game starts → set state menu`; menu buttons `set state playing` / `set state paused` / `set state gameover`; HUD text driven by `state menu/playing/paused/gameover`.
+- [x] `Game.events`: `when game starts → set state menu`; menu buttons `set state playing` / `set state paused` / `set state gameover`; HUD text driven by `state menu/playing/paused/gameover`. (parsed clean, 342/342 tests green)
 - [ ] Verify: title → play → pause → game over → restart flows only through `.events` words.
 
 ---

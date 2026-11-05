@@ -1,0 +1,55 @@
+# ---------------- Game.events (global sheet: game states) ----------------
+# Global state machine: menu -> playing -> paused -> gameover -> restart.
+# Driven entirely by set state / when state is / state gates.
+
+when game starts
+  set Score to 0
+  set Lives to 3
+  set state menu
+
+when state is menu
+  show text "Title Screen"
+  show PlayButton
+  show QuitButton
+  hide PausePanel
+  hide GameOverPanel
+
+when PlayButton is clicked
+  set state playing
+
+when QuitButton is clicked
+  quit game
+
+when state is playing
+  set text of ScoreLabel to Score
+  set text of LivesLabel to Lives
+  hide PausePanel
+  hide GameOverPanel
+
+when P is pressed
+  unless state is paused
+  set state paused
+
+when state is paused
+  show PausePanel
+  show ResumeButton
+  show QuitButton
+
+when ResumeButton is clicked
+  set state playing
+
+when QuitButton is clicked state paused
+  quit game
+
+when Lives becomes 0
+  unless state is gameover
+  set state gameover
+
+when state is gameover
+  show text "Game Over"
+  show GameOverPanel
+  show RestartButton
+  hide PausePanel
+
+when RestartButton is clicked
+  restart scene
