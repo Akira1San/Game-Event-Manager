@@ -104,15 +104,28 @@ namespace Game
                 collider = actor as Collider;
             if (collider == null)
                 return "";
-            PhysicalMaterial material = collider.Material.Instance as PhysicalMaterial;
+
+            PhysicalMaterial material = null;
+            var materialRef = collider.Material;
+            if (materialRef != null)
+                material = materialRef.Instance as PhysicalMaterial;
+
+            // The asset reference may not be loaded into memory yet — try loading it by asset id.
+            if (material == null && materialRef != null && materialRef.Id != Guid.Empty)
+                material = Content.Load<PhysicalMaterial>(materialRef.Id);
+
             if (material == null)
             {
                 if (act != null && _missingMaterialWarned.Add(act.Name))
                     Debug.LogWarning($"Event sheet: \"{act.Name}\" has no physics material — `when me touches <material>` will not match it.");
                 return "";
             }
+
             // PhysicalMaterial.Tag is the gameplay surface identifier (e.g. "Grass", "Stone").
-            return material.Tag.ToString();
+            string name = material.Tag.ToString();
+            if (string.IsNullOrEmpty(name))
+                name = materialRef.Path;
+            return name;
         }
 
         public bool IsMoving(object actor)
