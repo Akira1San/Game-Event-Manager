@@ -15,6 +15,9 @@ namespace Game
         string NameOf(object actor);
         /// <summary>Distance-based contact test, used when no colliders are present.</summary>
         bool IsTouching(object a, object b);
+        /// <summary>True when <paramref name="actor"/> is actively moving this tick (an ongoing
+        /// <c>goto</c>/<c>face</c> move, or a <c>move</c> word that ran this tick).</summary>
+        bool IsMoving(object actor);
         /// <summary>True when nothing (walls included) blocks the straight line from <paramref name="from"/> to <paramref name="to"/>.</summary>
         bool HasLineOfSight(object from, object to);
         /// <summary>Finds a live scene actor by name (waypoints, goto targets, ...), or null.</summary>
@@ -53,6 +56,11 @@ namespace Game
         }
 
         public bool IsTouching(object a, object b)
+        {
+            return false;
+        }
+
+        public bool IsMoving(object actor)
         {
             return false;
         }

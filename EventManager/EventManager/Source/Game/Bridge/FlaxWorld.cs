@@ -90,6 +90,11 @@ namespace Game
             return Vector3.Distance(first.Position, second.Position) <= radius;
         }
 
+        public bool IsMoving(object actor)
+        {
+            return FlaxActions.IsMoving(actor as Actor);
+        }
+
         public bool HasLineOfSight(object from, object to)
         {
             var first = from as Actor;

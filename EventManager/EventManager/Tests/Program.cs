@@ -1178,6 +1178,38 @@ tagWorld.SetTag(bomb, "Enemy");
     hoverEngine.Tick(2);
     Check(hoverEngine.Variables.GetGlobal("Hint").AsNumber() == 2, "`when me is hovered` stops when unhovered");
 
+    // ------------------------------------------------------------------
+    // Task 13 Part A: `me is moving` (movement gate condition)
+    // ------------------------------------------------------------------
+
+    var movingProg = parser.Parse(@"when every 0 seconds
+  me is moving
+  set Moved to Moved + 1");
+    Check(movingProg.Events.Count == 1, "`when every 0 seconds and me is moving` parses as one event");
+    var movingDesc = TriggerClassifier.Classify(movingProg.Events[0]);
+    Check(movingDesc.Kind == TriggerKind.Every, "`every 0 seconds` classifies to Every");
+    var condNode = Conditions.Parse(movingProg.Events[0].Body[0].Words);
+    Check(condNode.Kind == ConditionKind.Moving, "`me is moving` parses to ConditionKind.Moving");
+
+    var moveWorld = new FakeWorld();
+    var mover = new FakeActor("Mover");
+    moveWorld.AddActor(mover);
+    var moveEngine = FreshEngine(moveWorld);
+    moveEngine.AddSheet(mover, movingProg);
+
+    moveEngine.Tick(0);
+    Check(moveEngine.Variables.GetGlobal("Moved").AsNumber() == 0, "`me is moving` is false while standing still");
+
+    moveWorld.SetMoving(mover, true);
+    moveEngine.Tick(1);
+    Check(moveEngine.Variables.GetGlobal("Moved").AsNumber() == 1, "`me is moving` fires while moving");
+    moveEngine.Tick(2);
+    Check(moveEngine.Variables.GetGlobal("Moved").AsNumber() == 2, "`me is moving` keeps firing while moving");
+
+    moveWorld.SetMoving(mover, false);
+    moveEngine.Tick(3);
+    Check(moveEngine.Variables.GetGlobal("Moved").AsNumber() == 2, "`me is moving` is false when stopped again");
+
     var thereProg = parser.Parse("when Ground is clicked\n  goto there\n\nwhen me arrives at there\n  set Arrived to 1\n");
     Check(thereProg.Events.Count == 2, "`goto there` / `when me arrives at there` parses as two events");
     var gotoStmt = thereProg.Events[0].Body[0].Statement as RawActionNode;
@@ -2197,6 +2229,7 @@ class FakeWorld : IEventWorld
     private readonly HashSet<string> held = new HashSet<string>();
     private readonly Dictionary<(object, object), double> distances = new Dictionary<(object, object), double>();
     private readonly HashSet<(object, string)> tags = new HashSet<(object, string)>();
+    private readonly HashSet<object> moving = new HashSet<object>();
     private readonly List<object> actors = new List<object>();
     private readonly HashSet<(object, object)> touching = new HashSet<(object, object)>();
     private readonly HashSet<object> hovered = new HashSet<object>();
@@ -2239,6 +2272,14 @@ class FakeWorld : IEventWorld
             hovered.Add(actor);
         else
             hovered.Remove(actor);
+    }
+
+    public void SetMoving(object actor, bool on)
+    {
+        if (on)
+            moving.Add(actor);
+        else
+            moving.Remove(actor);
     }
 
     public bool IsKeyHeld(string key)
@@ -2284,6 +2325,11 @@ class FakeWorld : IEventWorld
     public bool IsHovered(object actor)
     {
         return hovered.Contains(actor);
+    }
+
+    public bool IsMoving(object actor)
+    {
+        return moving.Contains(actor);
     }
 
     public object FindActor(string name)

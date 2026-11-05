@@ -679,11 +679,11 @@ Design: read the physics material of the surface the actor touches/stands on, ma
 names to sound clips, and trigger once per step with a cooldown.
 
 ### Part A — Movement gate word
-- [ ] Word registry + parser: new condition word `me is moving` (true on any tick where
+- [x] Word registry + parser: new condition word `me is moving` (true on any tick where
   `move`, `goto`, or `face`/`turn` is actively changing the actor's transform/velocity).
-- [ ] Runtime: polled condition evaluated each tick; `FlaxActions` exposes whether the actor
+- [x] Runtime: polled condition evaluated each tick; `FlaxActions` exposes whether the actor
   has an ongoing `OngoingMove` this tick (or the sheet's `move` word ran this tick).
-- [ ] Unit test: `when every 0 seconds and me is moving` fires while moving, not while
+- [x] Unit test: `when every 0 seconds and me is moving` fires while moving, not while
   standing still.
 
 ### Part B — Material detection on contact

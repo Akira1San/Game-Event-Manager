@@ -30,8 +30,11 @@ namespace Game
 
     public static class FlaxActions
     {
-        public static float DeltaTime;
-        public static readonly List<OngoingMove> Moves = new List<OngoingMove>();
+    public static float DeltaTime;
+    public static readonly List<OngoingMove> Moves = new List<OngoingMove>();
+    /// <summary>Actors a <c>move</c> word ran for this tick (transient: cleared at the start of
+    /// each <c>Step</c>, so <c>me is moving</c> is true only while motion is actually happening).</summary>
+    public static readonly HashSet<Actor> MovedThisTick = new HashSet<Actor>();
         private static readonly HashSet<string> WarnedOnce = new HashSet<string>();
         public static Action<string> Warn = FlaxActions.WarnOnce;
         /// <summary>Animation state per actor (current/previous clip + the virtual graphs that play them).</summary>
@@ -102,6 +105,21 @@ namespace Game
                     FlaxEngine.Object.Destroy(state.PreviousGraph);
             }
             AnimStates.Clear();
+        }
+
+        /// <summary>True when <paramref name="actor"/> is actively moving this tick: an ongoing
+        /// <c>goto</c>/<c>face</c> move in <see cref="Moves"/>, or a <c>move</c> word that ran this
+        /// tick (<see cref="MovedThisTick"/>).</summary>
+        public static bool IsMoving(Actor actor)
+        {
+            if (actor == null)
+                return false;
+            if (MovedThisTick.Contains(actor))
+                return true;
+            foreach (var move in Moves)
+                if (move.Subject == actor)
+                    return true;
+            return false;
         }
 
         public static object ResolveThing(EventContext context, string thing)
@@ -186,6 +204,7 @@ namespace Game
         public static void Step(float deltaTime)
         {
             DeltaTime = deltaTime;
+            MovedThisTick.Clear();
             for (int i = ActiveSounds.Count - 1; i >= 0; i--)
                 if (ActiveSounds[i].Source == null)
                     ActiveSounds.RemoveAt(i);
@@ -314,6 +333,7 @@ namespace Game
                         WarnOnce("\u201Cmove me\u201D needs to run on an actor's sheet — the global Game sheet has no body to move.");
                         return;
                     }
+                    MovedThisTick.Add(me);
                     bool physics = context.Sheet != null && context.Sheet.UsePhysicsMovement;
                     PhysicsMoveMode mode = ResolveMoveMode(me, physics);
                     if (!string.IsNullOrEmpty(spec.Thing))

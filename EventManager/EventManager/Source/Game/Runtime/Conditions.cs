@@ -15,6 +15,7 @@ namespace Game
         KeyHeld,
         Chance,
         Near,
+        Moving,
         HasTag,
         BagHas,
     }
@@ -56,6 +57,12 @@ namespace Game
                     percentText = percentText.Substring(0, percentText.Length - 1);
                 double.TryParse(percentText, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out node.Percent);
                 node.Kind = ConditionKind.Chance;
+                return node;
+            }
+
+            if (texts.Length == 3 && texts[0] == "me" && texts[1] == "is" && texts[2] == "moving")
+            {
+                node.Kind = ConditionKind.Moving;
                 return node;
             }
 
@@ -178,6 +185,8 @@ namespace Game
                         return false;
                     return context.World.Distance2D(anchor, thing) <= node.Distance;
                 }
+                case ConditionKind.Moving:
+                    return context.World.IsMoving(context.Me);
                 case ConditionKind.HasTag:
                 {
                     object target = FindTarget(node.Thing, context);
