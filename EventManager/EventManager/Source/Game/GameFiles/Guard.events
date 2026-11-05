@@ -1,0 +1,38 @@
+# ---------------- Guard.events (state machine: patrol/chase/attack) ----------------
+# Patrol: wander between waypoints.
+# Chase:  pursue the player when spotted.
+# Attack: strike when in melee range, then resume chase.
+# Returns to patrol when the player leaves sight.
+
+when me appears
+  set state patrol
+
+when state is patrol
+  goto random Waypoint speed 5 facing forward
+
+when me arrives at Waypoint
+  wait random 0.5 to 2 seconds
+  set state patrol
+
+when me sees Player by 8
+  set state chase
+  print "Guard: spotted the player"
+
+when state is chase
+  goto Player speed 8 facing forward
+
+when every 0.2 seconds state chase
+  goto Player speed 8 facing forward
+
+when me is near Player by 1.5 state chase
+  set state attack
+
+when state is attack
+  play anim "Attack"
+  send message "hurt" to Player
+  wait 1 seconds
+  set state chase
+
+when me stops seeing Player by 8
+  set state patrol
+  print "Guard: lost sight, back to patrol"

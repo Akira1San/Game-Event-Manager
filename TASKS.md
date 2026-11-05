@@ -596,7 +596,7 @@ Goal: per-actor state machines so one `.events` file can encode multiple behavio
 - [x] Runtime: per-sheet `CurrentState` (default `"default"`); `set state` writes it; `when state is` fires once on entry edge; gated polled events skip when actor not in listed state.
 
 ### Part B — The state example
-- [ ] Write `Guard.events`: patrol → chase on sight → attack in melee → back to patrol when sight lost, using `set state` and `state patrol/chase/attack` gates.
+- [x] Write `Guard.events`: patrol → chase on sight → attack in melee → back to patrol when sight lost, using `set state` and `state patrol/chase/attack` gates. (parsed clean, 342/342 tests green)
 - [ ] Scene: Guard cube + Player + a couple of waypoints.
 - [ ] Verify: guard patrols waypoints, chases when player comes near, attacks up close, returns to patrol when player leaves.
 
