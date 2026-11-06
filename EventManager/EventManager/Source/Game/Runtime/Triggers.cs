@@ -49,6 +49,9 @@ namespace Game
         public string WatchOwner = "";
         public string WatchName = "";
         public ValueNode WatchTarget;
+        /// <summary>Additional conditions parsed from "and ..." clauses in trigger lines
+        /// (e.g. "me is moving" in "when me touches Grass and me is moving").</summary>
+        public List<ConditionNode> ExtraConditions = new List<ConditionNode>();
     }
 
     public static class TriggerClassifier
@@ -140,14 +143,43 @@ namespace Game
             if (words.Length >= 3 && words[1] == "touches")
             {
                 descriptor.Kind = TriggerKind.Touches;
-                descriptor.RequireName = Join(trigger, 2, words.Length);
-                descriptor.RequireMaterial = descriptor.RequireName;
+                int andIndex = IndexOf(words, "and");
+                if (andIndex > 2)
+                {
+                    descriptor.RequireName = Join(trigger, 2, andIndex);
+                    descriptor.RequireMaterial = descriptor.RequireName;
+                    var extraTokens = new List<Token>();
+                    for (int i = andIndex + 1; i < trigger.Count; i++)
+                        extraTokens.Add(trigger[i]);
+                    var cond = Conditions.Parse(extraTokens);
+                    if (cond.Kind != ConditionKind.Unknown)
+                        descriptor.ExtraConditions.Add(cond);
+                }
+                else
+                {
+                    descriptor.RequireName = Join(trigger, 2, words.Length);
+                    descriptor.RequireMaterial = descriptor.RequireName;
+                }
                 return descriptor;
             }
             if (words.Length >= 3 && words[1] == "overlaps")
             {
                 descriptor.Kind = TriggerKind.Overlaps;
-                descriptor.RequireName = Join(trigger, 2, words.Length);
+                int overlapsAndIndex = IndexOf(words, "and");
+                if (overlapsAndIndex > 2)
+                {
+                    descriptor.RequireName = Join(trigger, 2, overlapsAndIndex);
+                    var extraTokens = new List<Token>();
+                    for (int i = overlapsAndIndex + 1; i < trigger.Count; i++)
+                        extraTokens.Add(trigger[i]);
+                    var cond = Conditions.Parse(extraTokens);
+                    if (cond.Kind != ConditionKind.Unknown)
+                        descriptor.ExtraConditions.Add(cond);
+                }
+                else
+                {
+                    descriptor.RequireName = Join(trigger, 2, words.Length);
+                }
                 return descriptor;
             }
             if (words.Length >= 4 && words[1] == "arrives" && words[2] == "at")

@@ -30,8 +30,11 @@
 #
 # ========================================================================
 # Move with WASD so `me is moving` becomes true while walking.
+
 when W is held
   move forward speed 50
+  me is moving
+  print "moving"
 
 when S is held
   move backward speed 50
@@ -46,8 +49,15 @@ when D is held
 # Standing still → silence (`me is moving` is false).
 # Switching floors mid-stride switches the sound on re-entry (enter-edge).
 
+when me touches Grass
+  print "touching grass"
+
 when me touches Grass and me is moving
-  play step sound "walk-on-grass"
+  print "moving on grass"
+  play step sound "Grass"
+
+#when W is held
+#  print "moving"
 
 when Space is pressed
   play sound "walk-on-grass"

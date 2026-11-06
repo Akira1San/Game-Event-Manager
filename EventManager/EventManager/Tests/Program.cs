@@ -2024,6 +2024,44 @@ enterEngine.PollTouches = true;
         "an actor with no material never matches `touches Grass`");
 
     // ------------------------------------------------------------------
+    // Task 13 Part D: `when me touches <material> and <condition>`
+    // ------------------------------------------------------------------
+
+    var comboProg = parser.Parse("when me touches Grass and me is moving\n  set Combo to Combo + 1");
+    Check(comboProg.Events.Count == 1, "`when me touches Grass and me is moving` parses as one event");
+    var comboDesc = TriggerClassifier.Classify(comboProg.Events[0]);
+    Check(comboDesc.Kind == TriggerKind.Touches && comboDesc.RequireMaterial == "Grass",
+        "`when me touches Grass and me is moving` classifies to Touches with RequireMaterial \"Grass\"");
+    Check(comboDesc.ExtraConditions.Count == 1 && comboDesc.ExtraConditions[0].Kind == ConditionKind.Moving,
+        "`and me is moving` becomes one ExtraCondition of kind Moving");
+
+    var noComboProg = parser.Parse("when me touches Grass\n  set Combo to Combo + 1");
+    var noComboDesc = TriggerClassifier.Classify(noComboProg.Events[0]);
+    Check(noComboDesc.ExtraConditions.Count == 0, "`when me touches Grass` without `and` has no extra conditions");
+
+    var comboWorld = new FakeWorld();
+    var comboFeet = new FakeActor("Feet");
+    var comboGrass = new FakeActor("GrassPatch");
+    comboWorld.AddActor(comboFeet);
+    comboWorld.AddActor(comboGrass);
+    comboWorld.SetMaterial(comboGrass, "Grass");
+    comboWorld.SetTouching(comboFeet, comboGrass, true);
+    var comboEngine = FreshEngine(comboWorld);
+    comboEngine.PollTouches = true;
+    comboEngine.AddSheet(comboFeet, comboProg);
+    comboEngine.Tick(0);
+    Check(comboEngine.Variables.GetGlobal("Combo").IsNone(),
+        "`touches Grass and me is moving` does not fire when standing still");
+    comboWorld.SetMoving(comboFeet, true);
+    comboEngine.Tick(1);
+    Check(comboEngine.Variables.GetGlobal("Combo").AsNumber() == 1,
+        "`touches Grass and me is moving` fires while moving");
+    comboWorld.SetMoving(comboFeet, false);
+    comboEngine.Tick(2);
+    Check(comboEngine.Variables.GetGlobal("Combo").AsNumber() == 1,
+        "`touches Grass and me is moving` stops firing when standing still again");
+
+    // ------------------------------------------------------------------
     // Task 13 Part C: `play step sound "<material>"` + per-step cooldown
     // ------------------------------------------------------------------
 

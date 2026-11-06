@@ -515,11 +515,22 @@ namespace Game
             if (descriptor.Kind == TriggerKind.AnimEnd)
                 return string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase);
             // Name match, or material match for `when me touches <material>`.
-            if (signal.Name == descriptor.RequireName)
+            if (signal.Name == descriptor.RequireName && ExtraConditionsMatch(descriptor, sheet, signal.Other))
                 return true;
-            if (descriptor.RequireMaterial.Length > 0 && signal.Material == descriptor.RequireMaterial)
+            if (descriptor.RequireMaterial.Length > 0 && signal.Material == descriptor.RequireMaterial && ExtraConditionsMatch(descriptor, sheet, signal.Other))
                 return true;
             return false;
+        }
+
+        private bool ExtraConditionsMatch(TriggerDescriptor descriptor, SheetInstance sheet, object other)
+        {
+            if (descriptor.ExtraConditions.Count == 0)
+                return true;
+            var ctx = new EventContext { Variables = Variables, World = World, Me = sheet.Actor, Other = other, Runtime = this, Sheet = sheet };
+            foreach (var cond in descriptor.ExtraConditions)
+                if (!Conditions.Evaluate(cond, ctx))
+                    return false;
+            return true;
         }
 
         private static bool IsClickKind(TriggerKind kind)
@@ -973,6 +984,14 @@ namespace Game
                 // state: fire every tick so `play step sound` can repeat with its cooldown
                 // and the `me is moving` condition (re-checked each tick) gates silence.
                 bool matchedByName = NameMatches(descriptor, other);
+                if (descriptor.ExtraConditions.Count > 0)
+                {
+                    var ctx = new EventContext { Variables = Variables, World = World, Me = sheet.Actor, Other = other, Runtime = this, Sheet = sheet };
+                    bool allMatch = true;
+                    foreach (var cond in descriptor.ExtraConditions)
+                        if (!Conditions.Evaluate(cond, ctx)) { allMatch = false; break; }
+                    if (!allMatch) continue;
+                }
                 if (matchedByName)
                 {
                     if (contacts.Contains(other))

@@ -47,6 +47,7 @@ namespace Game
             new WordEntry { Kind = "condition", Word = "<thing> exists", Example = "Key exists", AltShape = "<thing> does not exist" },
             new WordEntry { Kind = "condition", Word = "me is near <thing> by <dist>", Example = "me is near Player by 2" },
             new WordEntry { Kind = "condition", Word = "me is moving", Example = "me is moving" },
+            new WordEntry { Kind = "condition", Word = "me touches <material> and <condition>", Example = "me touches Grass and me is moving" },
             new WordEntry { Kind = "condition", Word = "<key> is held", Example = "Shift is held" },
             new WordEntry { Kind = "condition", Word = "chance <n>%", Example = "chance 20%" },
             new WordEntry { Kind = "condition", Word = "<thing> is/has tag <tag>", Example = "other has tag Enemy" },
