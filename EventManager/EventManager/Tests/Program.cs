@@ -1659,8 +1659,8 @@ Check(Math.Abs(pvx) < 1e-9 && Math.Abs(pvy - 4) < 1e-9 && Math.Abs(pvz) < 1e-9,
     "`stop moving` brakes horizontal velocity but keeps a fall");
 
 Check(PhysicsMovement.PushModeFor(false, false) == PhysicsPushMode.Transform &&
-      PhysicsMovement.PushModeFor(true, true) == PhysicsPushMode.Transform,
-    "`push` stays a transform nudge with no body or on a kinematic one");
+      PhysicsMovement.PushModeFor(true, true) == PhysicsPushMode.Sweep,
+    "`push` nudges with no body and sweeps a kinematic body");
 Check(PhysicsMovement.PushModeFor(true, false) == PhysicsPushMode.Impulse,
     "`push` becomes a real impulse on a dynamic body");
 
@@ -1752,6 +1752,29 @@ PhysicsMovement.CharacterStep(0, 0, -1, 100, 0, true, PhysicsMovement.DefaultGra
     out gx, out gy, out gz, out gFall);
 Check(Math.Abs(gx) < 1e-9 && Math.Abs(gy) < 1e-9 && Math.Abs(gz) < 1e-9,
     "a zero-length character tick moves nothing");
+
+// ---- Task 12 Part D: integration with the existing movement words ----
+
+Check(PhysicsMovement.IsTurnDirection("left") && PhysicsMovement.IsTurnDirection("right") &&
+      !PhysicsMovement.IsTurnDirection("up") && !PhysicsMovement.IsTurnDirection("forward"),
+    "`turn` only accepts left/right (not every direction word)");
+Check(PhysicsMovement.SignedTurnDegrees("left", 90) == -90 &&
+      PhysicsMovement.SignedTurnDegrees("right", 90) == 90,
+    "`turn left/right degrees 90` becomes the correct signed local yaw (Flax +Y turns right)");
+Check(PhysicsMovement.SignedTurnDegrees("up", 90) == 0,
+    "an unsupported turn direction cannot spin the actor");
+
+Check(PhysicsMovement.PushModeFor(false, false, true, false) == PhysicsPushMode.Transform &&
+      PhysicsMovement.PushModeFor(true, false, false, false) == PhysicsPushMode.Transform,
+    "`push` stays a transform nudge when physics movement is off or the target has no body");
+Check(PhysicsMovement.PushModeFor(true, true, false, false) == PhysicsPushMode.Character,
+    "`push` moves a CharacterController through its collide-and-slide Move");
+Check(PhysicsMovement.PushModeFor(true, false, true, true) == PhysicsPushMode.Sweep,
+    "`push` sweeps a kinematic body so it cannot tunnel");
+Check(PhysicsMovement.PushModeFor(true, false, true, false) == PhysicsPushMode.Impulse,
+    "`push` is a real impulse on a dynamic body");
+Check(PhysicsMovement.PushModeFor(true, true, true, false) == PhysicsPushMode.Character,
+    "a CharacterController wins over a RigidBody for push, just like movement");
 
 var physicsEngine = FreshEngine(new FakeWorld());
 var physicsSheet = physicsEngine.AddSheet(new FakeActor("Mover"),

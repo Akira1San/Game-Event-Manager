@@ -18,10 +18,14 @@ namespace Game
     /// <summary>How the <c>push</c> word reaches an actor.</summary>
     public enum PhysicsPushMode
     {
-        /// <summary>Nudge the transform for one tick (no body, or a kinematic one that ignores forces).</summary>
+        /// <summary>Nudge the transform for one tick (no body, or physics movement not opted in).</summary>
         Transform,
         /// <summary>A real impulse on a dynamic body.</summary>
         Impulse,
+        /// <summary>A swept <c>AddMovement</c> on a kinematic body, so it cannot pass through walls.</summary>
+        Sweep,
+        /// <summary>A collide-and-slide <c>Move</c> on a walking CharacterController.</summary>
+        Character,
     }
 
     /// <summary>
@@ -140,14 +144,45 @@ namespace Game
 
         /// <summary>
         /// <c>push</c> is a real impulse only where physics can take one: a dynamic body.
-        /// Kinematic bodies and CharacterControllers ignore forces, so they keep the old one-tick
-        /// transform nudge.
+        /// A CharacterController and a kinematic body ignore forces, so they are moved with the
+        /// same collision-aware step they use for their own motion. No body (or physics movement
+        /// not opted in) keeps the old one-tick transform nudge.
         /// </summary>
         public static PhysicsPushMode PushModeFor(bool hasRigidBody, bool bodyIsKinematic)
+            => PushModeFor(true, false, hasRigidBody, bodyIsKinematic);
+
+        /// <summary>
+        /// Full push mode pick, matching the move-mode rules: the target's EventSheet must opt
+        /// in, a CharacterController wins over a RigidBody, and kinematic bodies are swept.
+        /// </summary>
+        public static PhysicsPushMode PushModeFor(
+            bool optedIn, bool hasCharacterController, bool hasRigidBody, bool bodyIsKinematic)
         {
-            if (!hasRigidBody || bodyIsKinematic)
+            if (!optedIn)
                 return PhysicsPushMode.Transform;
-            return PhysicsPushMode.Impulse;
+            if (hasCharacterController)
+                return PhysicsPushMode.Character;
+            if (!hasRigidBody)
+                return PhysicsPushMode.Transform;
+            return bodyIsKinematic ? PhysicsPushMode.Sweep : PhysicsPushMode.Impulse;
+        }
+
+        /// <summary>Whether a <c>turn</c> word names a horizontal turn (only left/right are valid).</summary>
+        public static bool IsTurnDirection(string direction)
+            => direction == "left" || direction == "right";
+
+        /// <summary>
+        /// Signed yaw for <c>turn left/right degrees &lt;n&gt;</c>. In Flax a positive yaw turns
+        /// forward (+Z) toward +X, i.e. to the actor's right, so left is negative and right is
+        /// positive. Unknown directions return 0 so a malformed line cannot spin an actor.
+        /// </summary>
+        public static double SignedTurnDegrees(string direction, double degrees)
+        {
+            if (direction == "left")
+                return -degrees;
+            if (direction == "right")
+                return degrees;
+            return 0.0;
         }
 
         /// <summary>

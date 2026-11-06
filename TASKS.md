@@ -658,11 +658,21 @@ detection work only for actors that opt in. Depends on Tasks 4 C (physics-native
   **366/366 green**; module build 0/0.
 
 ### Part D — Integration with existing words
-- [ ] `move forward/back/left/right` → velocity in local axes.
-- [ ] `turn left/right degrees` → rotation (instant or smooth).
-- [ ] `look at <thing>` / `face <thing>` → rotation only.
-- [ ] `push <thing>` → `AddImpulse` / `AddForce` (kinematic vs dynamic decision from Task 4 C).
-- [ ] `teleport` → warp position (bypass physics, for spawns/checkpoints).
+- [x] `move forward/back/left/right` → direction is resolved in the actor's local axes and
+  handed to every mode (transform step, `LinearVelocity`, swept `AddMovement`, character `Move`).
+- [x] `turn left/right degrees` → instant rotation-only local yaw. Flax's sign is now correct
+  (+Y turns toward +X = the actor's right), and other direction words warn instead of turning.
+- [x] `look at <thing>` / `face <thing>` → rotation only (`LookAt`); `face` stays a continuous
+  tracker and a new target replaces the old tracker. Missing targets warn once instead of
+  failing silently.
+- [x] `push <thing>` → follows the **target's** physics opt-in and body: `AddForce(...,
+  ForceMode.Impulse)` on a dynamic body, collide-and-slide `Move` on a CharacterController,
+  swept `AddMovement` on a kinematic body, transform nudge otherwise. New pure `PushModeFor`
+  overload (`Sweep` / `Character`) covers the Task 4 C decision and the Task 12 body types.
+- [x] `teleport` → explicit warp: cancels the subject's ongoing moves and face tracker, clears
+  the stored character fall speed, zeros a dynamic body's linear/angular velocity, then writes
+  `Position` (physics collision bypassed on purpose for spawns/checkpoints). 8 new pure checks
+  → **403/403 green**; module build has 0 errors (2 pre-existing Task 13 XML warnings).
 
 ### Part E — Tests & editor verify
 - [ ] Unit test: physics movement flag toggles code path in `FlaxActions.Step`.
@@ -905,3 +915,4 @@ Goal: implement remaining Tapan Kaikki 4 (TK4) features not yet covered, achievi
 | 2026-11-02 | Dragon demo controls (`dragon.events`): WASD moves the dragon (`move forward/back/left/right speed 40`), Shift+WASD runs (`speed 100`), idle/walk/run swap through `loop anim "animation idle pose"/"animation walk"/"animation run"`, Left Mouse plays the one-shot `"dragon_fire"` attack (`my Attacking` roots the dragon and blocks re-triggering until `when anim "dragon_fire" ends`), and release events return to idle only when the last movement key is up. Implemented the long-advertised `camera follows <thing>` word (`ActionVerb.CameraFollow`, parse + `FlaxActions.StartCameraFollow`/`Step`) so the camera translates with the target while preserving the authored offset; it also switches off the legacy `cameraFollow` Player follow. 1 new parse test -> **258/258 green**, module build 0 warnings. Editor verify pending (clip-rig compatibility of the older `dragon_fire` clip). | Task 5 B/C follow-up; dragon demo controls |
 | 2026-11-05 | Task 12 Part A (`c55f85a`): CharacterController as a third opt-in movement type — `PhysicsMoveMode.Character`, 4-arg `PhysicsMovement.ModeFor` (controller wins over a RigidBody), `CharacterBodySettings` defaults/clamping, `EventSheet` optional **Configure Character Body** capsule fields + `FindCharacterController`, `FlaxActions.MoveSubject` collide-and-slide `Move` (misplaced controller warns + falls back), ground-check distance on `SheetInstance`. **Part B**: every move resolves one `PhysicsMoveMode` up front (`ResolveMoveMode`, stored on `OngoingMove.Mode`), so `move`/`goto` drive velocity/swept/character bodies instead of `Position +=`; body-aware `goto` waypoint stepping (`PhysicsMovement.ReachesWaypoint`/`PathSpeed`) lands physics bodies exactly on each waypoint instead of teleporting or overshooting. DESIGN §5/§9 updated; TASKS goal reworded to additive. **356/356 green**, module build 0/0. Editor acceptance (character scene) still pending. | Task 12 A+B code complete |
 | 2026-11-05 | Task 12 Part C (ground/slope/collision): the event runtime now feeds CharacterController gravity - a per-actor fall speed (new `CharacterFallSpeeds`), scene `Physics.Gravity` (981 cm/s2 default) and `PhysicsMovement.CharacterStep`; grounded ticks gate horizontal movement, airborne ticks fall straight down with a small ground stick while grounded; `AutoGravity` is turned off (warn once) so gravity is applied once. Ground probe uses a downward ray from the capsule feet (`OriginMode`-aware) within the sheet Ground Check Distance, rejects normals steeper than `SlopeLimit` and ignores triggers, with `IsGrounded` as fallback. Dynamic bodies get `UseCCD` enabled automatically; kinematic stay swept; step offset and wall sliding stay native to the controller. New pure helpers (`FeetY`, `IsWalkableSlope`, `FallSpeed`, `CharacterStep`); 10 new checks -> **366/366 green**, module build 0/0. DESIGN section 5/9 updated (AutoGravity question settled); editor acceptance still pending. | Task 12 C code complete |
+| 2026-11-06 | Task 12 Part D (integration with existing words): `move` already resolves forward/back/left/right in the actor local axes and hands that vector to every mode. `turn` is now rotation-only and only accepts left/right; fixed the yaw sign after verifying Flax `Quaternion.Euler(0,+90,0)` turns local forward (+Z) toward +X (the actor right), so left is negative and right positive. `look at` / `face` only set orientation; `face` replaces its previous tracker and missing targets warn once. `push` now follows the target own opt-in and body: dynamic = `AddForce(..., ForceMode.Impulse)`, CharacterController = collide-and-slide `Move`, kinematic = swept `AddMovement`, else transform nudge (new `PhysicsPushMode.Sweep`/`Character` and 4-arg `PushModeFor`). `teleport` warps position and cancels the subject moves/face tracker, clears `CharacterFallSpeeds`, and zeros dynamic linear/angular velocity. 8 new pure checks -> **403/403 green**; module build 0 errors (2 pre-existing Task 13 XML warnings). DESIGN section 5/9 and Task 12 Part D updated; editor acceptance still pending. | Task 12 D code complete |

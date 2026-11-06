@@ -367,8 +367,13 @@ namespace Game
                     var me = context.Me as Actor;
                     if (me == null)
                         return;
-                    double degrees = ResolveNumber(context, spec);
-                    degrees = spec.Dir == "left" ? degrees : -degrees;
+                    if (!PhysicsMovement.IsTurnDirection(spec.Dir))
+                    {
+                        WarnOnce($"\u201Cturn\u201D needs \u201Cleft\u201D or \u201Cright\u201D, like \u201Cturn left degrees 90\u201D.");
+                        break;
+                    }
+                    // Rotation only: yaw around the actor's own up axis, never a position change.
+                    double degrees = PhysicsMovement.SignedTurnDegrees(spec.Dir, ResolveNumber(context, spec));
                     me.Orientation = Quaternion.Multiply(me.Orientation, Quaternion.Euler(0, (float)degrees, 0));
                     break;
                 }
@@ -376,42 +381,92 @@ namespace Game
                 {
                     var target = ResolveThing(context, spec.Thing) as Actor;
                     var me = context.Me as Actor;
-                    if (target != null && me != null)
-                        me.LookAt(target.Position);
+                    if (me == null)
+                        break;
+                    if (target == null)
+                    {
+                        WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D to look at.");
+                        break;
+                    }
+                    // Rotation only; a one-shot snap that never touches Position.
+                    me.LookAt(target.Position);
                     break;
                 }
                 case ActionVerb.Face:
                 {
                     var target = ResolveThing(context, spec.Thing) as Actor;
                     var me = context.Me as Actor;
-                    if (target != null && me != null)
-                        Remember(new OngoingMove { Subject = me, Target = target, FaceTarget = true });
+                    if (me == null)
+                        break;
+                    if (target == null)
+                    {
+                        WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D to face.");
+                        break;
+                    }
+                    // Continuous rotation-only tracker; a new face target replaces the old one.
+                    Remember(new OngoingMove { Subject = me, Target = target, FaceTarget = true });
                     break;
                 }
                 case ActionVerb.Teleport:
                 {
                     var me = context.Me as Actor;
+                    if (me == null)
+                        break;
                     var to = ResolveThing(context, spec.To) as Actor;
-                    if (me != null && to != null)
-                        me.Position = to.Position;
+                    if (to == null)
+                    {
+                        WarnOnce($"I couldn't find \u201C{spec.To}\u201D to teleport to.");
+                        break;
+                    }
+                    TeleportSubject(me, to.Position);
                     break;
                 }
                 case ActionVerb.Push:
                 {
                     var target = ResolveThing(context, spec.Thing) as Actor;
-                    if (target != null)
+                    if (target == null)
                     {
-                        Vector3 direction = DirectionOf(target, spec.Dir);
-                        double strength = ResolveNumber(context, spec);
-                        RigidBody body = FindBody(target);
-                        bool character = EventSheet.FindCharacterController(target) != null;
-                        if (!character && PhysicsMovement.PushModeFor(body != null, body != null && body.IsKinematic) == PhysicsPushMode.Impulse)
+                        WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D to push.");
+                        break;
+                    }
+                    Vector3 direction = DirectionOf(target, spec.Dir);
+                    double strength = ResolveNumber(context, spec);
+                    float step = (float)strength * DeltaTime;
+                    switch (ResolvePushMode(target))
+                    {
+                        case PhysicsPushMode.Impulse:
                         {
-                            body.WakeUp();
-                            body.AddForce(direction * (float)strength, ForceMode.Impulse);
+                            RigidBody body = FindBody(target);
+                            if (body != null)
+                            {
+                                body.WakeUp();
+                                body.AddForce(direction * (float)strength, ForceMode.Impulse);
+                            }
+                            else
+                                target.Position = target.Position + direction * step;
+                            break;
                         }
-                        else
-                            target.Position = target.Position + direction * (float)strength * DeltaTime;
+                        case PhysicsPushMode.Sweep:
+                        {
+                            RigidBody body = FindBody(target);
+                            if (body != null && IsAncestorOrSelf(body, target))
+                                body.AddMovement(direction * step);
+                            else
+                                target.AddMovement(direction * step);
+                            break;
+                        }
+                        case PhysicsPushMode.Character:
+                        {
+                            CharacterController character = EventSheet.FindCharacterController(target);
+                            if (character != null)
+                                character.Move(direction * step);
+                            else
+                                target.Position = target.Position + direction * step;
+                            break;
+                        }
+                        default:
+                            target.Position = target.Position + direction * step;
+                            break;
                     }
                     break;
                 }
@@ -633,6 +688,14 @@ namespace Game
             }
             else
             {
+                // A new face target replaces the previous tracker: two trackers would fight
+                // over the same orientation every tick.
+                if (move.FaceTarget)
+                {
+                    for (int i = Moves.Count - 1; i >= 0; i--)
+                        if (Moves[i].Subject == move.Subject && Moves[i].FaceTarget)
+                            Moves.RemoveAt(i);
+                }
                 foreach (OngoingMove existing in Moves)
                 {
                     if (existing.Subject == move.Subject && existing.Target == move.Target &&
@@ -789,6 +852,47 @@ namespace Game
                 return;
             PhysicsMovement.BrakeVelocity(body.LinearVelocity.Y, out double vx, out double vy, out double vz);
             body.LinearVelocity = new Vector3((float)vx, (float)vy, (float)vz);
+        }
+
+        /// <summary>
+        /// Warp an actor to a spawn/checkpoint. Teleport deliberately bypasses physics: every
+        /// ongoing move for the subject is cancelled (so a path or face tracker cannot drag it
+        /// back), the character's stored fall speed is cleared, and a dynamic body is put at rest
+        /// so it does not carry its old velocity through the warp.
+        /// </summary>
+        private static void TeleportSubject(Actor subject, Vector3 position)
+        {
+            for (int i = Moves.Count - 1; i >= 0; i--)
+                if (Moves[i].Subject == subject)
+                    Moves.RemoveAt(i);
+            CharacterFallSpeeds.Remove(subject);
+
+            RigidBody body = FindBody(subject);
+            if (body != null && !body.IsKinematic)
+            {
+                body.LinearVelocity = Vector3.Zero;
+                body.AngularVelocity = Vector3.Zero;
+            }
+            subject.Position = position;
+        }
+
+        /// <summary>
+        /// How <c>push</c> reaches its target: the target's own EventSheet opt-in and body pick
+        /// the mode (dynamic = impulse, kinematic = swept move, character = collide-and-slide,
+        /// otherwise a transform nudge).
+        /// </summary>
+        private static PhysicsPushMode ResolvePushMode(Actor target)
+        {
+            bool physics = EventsManager.Instance?.Runtime?.FindSheetFor(target)?.UsePhysicsMovement ?? false;
+            CharacterController character = physics ? EventSheet.FindCharacterController(target) : null;
+            RigidBody body = physics ? FindBody(target) : null;
+            if (character != null && !IsAncestorOrSelf(character, target))
+            {
+                WarnOnce($"\"{target.Name}\" uses physics movement, but its CharacterController is a child — push can't move it. Put the EventSheet on the CharacterController actor with the mesh under it.");
+                return PhysicsPushMode.Transform;
+            }
+            return PhysicsMovement.PushModeFor(
+                physics, character != null, body != null, body != null && body.IsKinematic);
         }
 
         /// <summary>Finish a path: raise <c>when me arrives at there</c> for click-walks, then

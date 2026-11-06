@@ -305,7 +305,7 @@ like GDevelop, so the editor teaches the vocabulary passively.
 | `look at <thing>` | `look at Player` | one-shot snap: turn toward the target, once |
 | `face <thing>` | `face Player` | continuous: keeps turning toward the target while it moves (BGE Track To) â€” the turret/chaser word |
 | `teleport me/other to <thing>` | `teleport me to SpawnPoint` | |
-| `push <target> direction <dir> strength <n>` | `push other up strength 10` | impulse on a dynamic body; transform nudge otherwise |
+| `push <target> direction <dir> strength <n>` | `push other up strength 10` | follows the target's move mode: impulse (dynamic), swept (kinematic), collide-and-slide (character), else a transform nudge |
 | `make <target> unmovable` | `make me solid` | physics toggle |
 | `destroy <me/other/thing>` | `destroy me` | |
 | `spawn <thing> at <thing>` | `spawn Coin at SpawnPoint` | thing must be a prefab or scene-named object |
@@ -423,9 +423,25 @@ moving` brakes the horizontal velocity; `goto` brakes on arrival.
   uses a swept `AddMovement`. Transform movement stays a plain position write — still the
   default for games with no colliders.
 
-`push` is a real impulse (`AddForce` with `ForceMode.Impulse`) on a **dynamic** body — that is
-what the word always meant. Kinematic bodies ignore forces, so they keep the old one-tick
-transform nudge; with the flag off every push stays a transform nudge.
+**Word integration (Task 12 D):**
+
+- `move forward/back/left/right` is always resolved in the actor's **local axes** (the facing
+  rotates the direction), then handed to whichever mode is active — the same vector drives a
+  transform step, a body's velocity, a swept move or a character's collide-and-slide.
+- `turn left/right degrees <n>` is rotation-only and instant. In Flax a positive Y yaw turns
+  local forward (+Z) toward +X, i.e. to the actor's **right**, so left is a negative yaw and right
+  is positive. Any other direction word is rejected with a warning instead of silently turning
+  the actor the wrong way.
+- `look at` and `face` change **orientation only** (`LookAt`), never position. `look at` is a
+  one-shot; `face` is a continuous tracker, and a new `face` target replaces the previous tracker
+  so two trackers cannot fight over the same orientation each tick.
+- `push <target>` follows the **target's own** opt-in and body, not the pusher's: dynamic body =
+  `AddForce(..., ForceMode.Impulse)`, `CharacterController` = collide-and-slide `Move`, kinematic
+  body = swept `AddMovement`, and no body / flag off = the old one-tick transform nudge.
+- `teleport me to <thing>` is an explicit warp for spawns and checkpoints: it cancels the
+  subject's ongoing moves (so a path or face tracker cannot drag it back), clears the stored
+  character fall speed, zeros a dynamic body's linear/angular velocity, then writes `Position`.
+  Physics collision is bypassed on purpose.
 
 **Body settings that ship with the shooter:**
 
@@ -924,11 +940,16 @@ window around a broken runtime.
   walking (slopes, steps, wall sliding), dynamic bodies get `LinearVelocity`, kinematic bodies get
   swept `AddMovement`, no body/flag off keeps `Position`. The bullet is the dynamic experiment
   (`EnableGravity = false`, `UseCCD = true`); Player/Enemy stay kinematic so speed is exact and
-  bullets don't shove them. `push` is a real impulse only on dynamic bodies.
+  bullets don't shove them. `push` follows the target's own opt-in and body: an impulse on
+  dynamic bodies, a swept move on kinematic ones, collide-and-slide `Move` on a character, and a
+  transform nudge when the flag is off.
   **Decided in Task 12 C:** the event runtime feeds the CharacterController's vertical speed
   (scene `Physics.Gravity`, ground probe + ground stick); `AutoGravity` stays off so gravity is
   applied exactly once. Horizontal movement only applies while grounded. Dynamic bodies keep
   PhysX gravity and get `UseCCD` enabled automatically; kinematic bodies stay swept.
+  **Decided in Task 12 D:** `turn left/right` is an instant local yaw with Flax's sign fixed
+  (left = negative Y, right = positive Y), `look at` / `face` stay rotation-only, and `teleport`
+  is the one word that deliberately warps position while cancelling moves and body velocity.
   Still to feel in the editor: whether Player/Enemy should ever go dynamic and whether `goto`
   should rotate toward its next waypoint (Task 7 E).
 - **Persistence:** do global variables survive scene *reload* (not just scene *change*)? Proposal for now: yes, and a `wipe game variables` action to explicitly reset.
