@@ -359,7 +359,7 @@ namespace Game
         }
 
         /// <summary>True when <paramref name="name"/> is a scanned input key (W, Space, Left Mouse, ...),
-        /// so `<name> is pressed` is treated as a key press rather than a button press.</summary>
+        /// so `&lt;name&gt; is pressed` is treated as a key press rather than a button press.</summary>
         private static bool IsKeyName(string name)
         {
             foreach (string key in ActionWords.KeyNamesForScanning)

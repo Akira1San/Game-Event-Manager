@@ -1,7 +1,7 @@
 {
 	"ID": "f18ae1b44189bbf8d4fa0e9081de59fc",
 	"TypeName": "FlaxEngine.SceneAsset",
-	"EngineBuild": 7012,
+	"EngineBuild": 7014,
 	"Data": [
 		{
 			"ID": "f18ae1b44189bbf8d4fa0e9081de59fc",
@@ -75,7 +75,8 @@
 		},
 		"World": {
 			"$type": "Game.DefaultEventWorld, Game.CSharp"
-		}
+		},
+		"Selection": {}
 	}
 }
 		},

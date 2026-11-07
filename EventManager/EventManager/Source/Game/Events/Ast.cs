@@ -64,21 +64,21 @@ namespace Game
         public ValueNode Value = new NumberValue();
     }
 
-    /// <summary><c>set button <thing> enabled/disabled</c>.</summary>
+    /// <summary><c>set button &lt;thing&gt; enabled/disabled</c>.</summary>
     public class SetButtonEnabledNode : StatementNode
     {
         public string Thing = "";
         public bool Enabled = true;
     }
 
-    /// <summary><c>set image of <thing> to <sprite></c> — swaps the Image control's brush.</summary>
+    /// <summary><c>set image of &lt;thing&gt; to &lt;sprite&gt;</c> — swaps the Image control's brush.</summary>
     public class SetImageBrushNode : StatementNode
     {
         public string Thing = "";
         public string Sprite = "";
     }
 
-    /// <summary><c>set color of <thing> to <color></c> — tints a control (e.g. an Image).</summary>
+    /// <summary><c>set color of &lt;thing&gt; to &lt;color&gt;</c> — tints a control (e.g. an Image).</summary>
     public class SetControlColorNode : StatementNode
     {
         public string Thing = "";

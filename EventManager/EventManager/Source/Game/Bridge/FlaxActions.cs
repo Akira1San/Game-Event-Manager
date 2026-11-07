@@ -1333,7 +1333,7 @@ namespace Game
             return actor as Light ?? actor.FindActor<Light>();
         }
 
-        /// <summary><c>set light intensity to <n></c>: sets <see cref="Light.Brightness"/>.</summary>
+        /// <summary><c>set light intensity to &lt;n&gt;</c>: sets <see cref="Light.Brightness"/>.</summary>
         private static void SetLightIntensity(EventContext context, ActionSpec spec)
         {
             if (!spec.HasNumber)
@@ -1374,7 +1374,7 @@ namespace Game
             light.Color = color;
         }
 
-        /// <summary><c>set light range to <n></c>: sets <see cref="Light.ViewDistance"/>.</summary>
+        /// <summary><c>set light range to &lt;n&gt;</c>: sets <see cref="Light.ViewDistance"/>.</summary>
         private static void SetLightRange(EventContext context, ActionSpec spec)
         {
             if (!spec.HasNumber)
@@ -1513,7 +1513,7 @@ namespace Game
                 WarnOnce($"\u201Cset text of\u201D needs an actor with a Label on a UIControl (I couldn't find one called \u201C{thing}\u201D). Labels in this scene: {ControlActorNames<FlaxEngine.GUI.Label>()}.");
         }
 
-        /// <summary><c>set button <thing> enabled/disabled</c>: flips <see cref="FlaxEngine.GUI.Button.Enabled"/>.</summary>
+        /// <summary><c>set button &lt;thing&gt; enabled/disabled</c>: flips <see cref="FlaxEngine.GUI.Control.Enabled"/>.</summary>
         public static void SetButtonEnabled(string thing, bool enabled)
         {
             if (string.IsNullOrEmpty(thing))
@@ -1525,10 +1525,10 @@ namespace Game
                 WarnOnce($"\u201Cset button {thing} { (enabled ? "enabled" : "disabled") }\u201D needs an actor with a Button on a UIControl (I couldn't find one called \u201C{thing}\u201D). Buttons in this scene: {ControlActorNames<FlaxEngine.GUI.Button>()}.");
         }
 
-        /// <summary><c>set button <thing> text to <value></c>: a Button is a Label, so this reuses SetText.</summary>
+        /// <summary><c>set button &lt;thing&gt; text to &lt;value&gt;</c>: a Button is a Label, so this reuses SetText.</summary>
         public static void SetButtonText(string thing, string text) => SetText(thing, text);
 
-        /// <summary><c>set image of <thing> to <sprite></c>: swaps the Image control's brush to the named sprite.</summary>
+        /// <summary><c>set image of &lt;thing&gt; to &lt;sprite&gt;</c>: swaps the Image control's brush to the named sprite.</summary>
         public static void SetImageBrush(string thing, string sprite)
         {
             if (string.IsNullOrEmpty(thing) || string.IsNullOrEmpty(sprite))
@@ -1551,7 +1551,7 @@ namespace Game
             image.Brush = new FlaxEngine.GUI.TextureBrush { Texture = texture };
         }
 
-        /// <summary><c>set color of <thing> to <color></c>: tints a control ("r g b" or "r g b a", 0-1).</summary>
+        /// <summary><c>set color of &lt;thing&gt; to &lt;color&gt;</c>: tints a control ("r g b" or "r g b a", 0-1).</summary>
         public static void SetControlColor(string thing, string color)
         {
             if (string.IsNullOrEmpty(thing) || string.IsNullOrEmpty(color))
@@ -1564,8 +1564,8 @@ namespace Game
                 WarnOnce($"I couldn't parse \u201C{color}\u201D as a control color — use \u201C\"r g b\"\u201D or \u201C\"r g b a\"\u201D with 0-1 floats.");
                 return;
             }
-            if (!SetControl<FlaxEngine.GUI.Control>(thing, control => control.Color = c))
-                WarnOnce($"\u201Cset color of {thing}\u201D needs an actor with a control on a UIControl (I couldn't find one called \u201C{thing}\u201D). Controls in this scene: {ControlActorNames<FlaxEngine.GUI.Control>()}.");
+            if (!SetControl<FlaxEngine.GUI.Image>(thing, control => control.Color = c))
+                WarnOnce($"\u201Cset color of {thing}\u201D needs an actor with an Image on a UIControl (I couldn't find one called \u201C{thing}\u201D). Images in this scene: {ControlActorNames<FlaxEngine.GUI.Image>()}.");
         }
 
         /// <summary>Loads a texture by name, ignoring folder and extension (mirrors <see cref="LoadAudioClip"/>).</summary>
@@ -1598,6 +1598,10 @@ namespace Game
             names.Sort(StringComparer.OrdinalIgnoreCase);
             return string.Join(", ", names);
         }
+
+        /// <summary>Loads a scene asset by its name (folder, extension and case ignored), so
+        /// <c>load scene "Level1"</c> can switch to any scene in the project.</summary>
+        private static void ReplaceScene(Guid sceneId)
         {
             // Unload all currently loaded scenes so the new one replaces them
             foreach (var scene in Level.Scenes)
