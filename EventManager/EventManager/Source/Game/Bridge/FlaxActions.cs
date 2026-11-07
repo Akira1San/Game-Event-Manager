@@ -655,6 +655,24 @@ namespace Game
                 case ActionVerb.StopParticle:
                     StopParticle(context, spec);
                     break;
+                case ActionVerb.SetLightIntensity:
+                    SetLightIntensity(context, spec);
+                    break;
+                case ActionVerb.SetLightColor:
+                    SetLightColor(context, spec);
+                    break;
+                case ActionVerb.SetLightRange:
+                    SetLightRange(context, spec);
+                    break;
+                case ActionVerb.EnableLight:
+                    SetLightEnabled(context, spec, true);
+                    break;
+                case ActionVerb.DisableLight:
+                    SetLightEnabled(context, spec, false);
+                    break;
+                case ActionVerb.ToggleLight:
+                    ToggleLight(context, spec);
+                    break;
                 case ActionVerb.PlayAnim:
                     PlayAnim(context, spec);
                     break;
@@ -1292,6 +1310,119 @@ namespace Game
                 return;
             state.Effect.Stop();
             ParticleStates.Remove(me);
+        }
+
+        /// <summary>The Light on this actor, or on one of its children (the recommended setup: the
+        /// light sits under the actor the EventSheet is on).</summary>
+        private static Light FindLight(Actor actor)
+        {
+            if (actor == null)
+                return null;
+            return actor as Light ?? actor.FindActor<Light>();
+        }
+
+        /// <summary><c>set light intensity to <n></c>: sets <see cref="Light.Brightness"/>.</summary>
+        private static void SetLightIntensity(EventContext context, ActionSpec spec)
+        {
+            if (!spec.HasNumber)
+            {
+                WarnOnce("\u201Cset light intensity to\u201D needs a number, like \u201Cset light intensity to 2\u201D.");
+                return;
+            }
+            var me = context.Me as Actor;
+            var light = FindLight(me);
+            if (light == null)
+            {
+                WarnOnce($"I couldn't find a Light on \u201C{me?.Name}\u201D to set intensity on.");
+                return;
+            }
+            light.Brightness = (float)spec.Number;
+        }
+
+        /// <summary><c>set light color to "r g b [a]"</c>: sets <see cref="Light.Color"/> (0-1 floats).</summary>
+        private static void SetLightColor(EventContext context, ActionSpec spec)
+        {
+            if (string.IsNullOrEmpty(spec.Thing))
+            {
+                WarnOnce("\u201Cset light color to\u201D needs a color in quotes, like \u201Cset light color to \"1 0 0\"\u201D.");
+                return;
+            }
+            var me = context.Me as Actor;
+            var light = FindLight(me);
+            if (light == null)
+            {
+                WarnOnce($"I couldn't find a Light on \u201C{me?.Name}\u201D to set color on.");
+                return;
+            }
+            if (!TryParseColor(spec.Thing, out var color))
+            {
+                WarnOnce($"I couldn't parse \u201C{spec.Thing}\u201D as a light color — use \u201C\"r g b\"\u201D or \u201C\"r g b a\"\u201D with 0-1 floats.");
+                return;
+            }
+            light.Color = color;
+        }
+
+        /// <summary><c>set light range to <n></c>: sets <see cref="Light.ViewDistance"/>.</summary>
+        private static void SetLightRange(EventContext context, ActionSpec spec)
+        {
+            if (!spec.HasNumber)
+            {
+                WarnOnce("\u201Cset light range to\u201D needs a number, like \u201Cset light range to 10\u201D.");
+                return;
+            }
+            var me = context.Me as Actor;
+            var light = FindLight(me);
+            if (light == null)
+            {
+                WarnOnce($"I couldn't find a Light on \u201C{me?.Name}\u201D to set range on.");
+                return;
+            }
+            light.ViewDistance = (float)spec.Number;
+        }
+
+        /// <summary><c>enable light</c> / <c>disable light</c>: sets <see cref="Actor.IsActive"/> on the light.</summary>
+        private static void SetLightEnabled(EventContext context, ActionSpec spec, bool enabled)
+        {
+            var me = context.Me as Actor;
+            var light = FindLight(me);
+            if (light == null)
+            {
+                WarnOnce($"I couldn't find a Light on \u201C{me?.Name}\u201D to {(enabled ? "enable" : "disable")}.");
+                return;
+            }
+            light.IsActive = enabled;
+        }
+
+        /// <summary><c>toggle light</c>: flips <see cref="Actor.IsActive"/> on the light.</summary>
+        private static void ToggleLight(EventContext context, ActionSpec spec)
+        {
+            var me = context.Me as Actor;
+            var light = FindLight(me);
+            if (light == null)
+            {
+                WarnOnce($"I couldn't find a Light on \u201C{me?.Name}\u201D to toggle.");
+                return;
+            }
+            light.IsActive = !light.IsActive;
+        }
+
+        private static bool TryParseColor(string text, out Color color)
+        {
+            color = Color.White;
+            var parts = text.Split(' ');
+            if (parts.Length != 3 && parts.Length != 4)
+                return false;
+            float[] vals = new float[parts.Length];
+            for (int i = 0; i < parts.Length; i++)
+                if (!float.TryParse(parts[i], System.Globalization.NumberStyles.Any,
+                                    System.Globalization.CultureInfo.InvariantCulture, out vals[i]) ||
+                    vals[i] < 0 || vals[i] > 1)
+                    return false;
+            if (parts.Length == 3)
+                color = new Color(vals[0], vals[1], vals[2]);
+            else
+                color = new Color(vals[0], vals[1], vals[2], vals[3]);
+            return true;
         }
 
         public static void PlayStepSound(EventContext context, string material, string clipName)

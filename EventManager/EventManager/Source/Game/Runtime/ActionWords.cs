@@ -26,6 +26,12 @@ namespace Game
         StopAnim,
         PlayParticle,
         StopParticle,
+        SetLightIntensity,
+        SetLightColor,
+        SetLightRange,
+        EnableLight,
+        DisableLight,
+        ToggleLight,
         CameraFollow,
         CameraLooksAt,
         CameraAt,
@@ -307,6 +313,45 @@ namespace Game
                         return Finish(spec, ActionVerb.Spawn, words, 4);
                     }
                     return Unknown(spec, words, "\u201Cspawn\u201D looks like this: \u201Cspawn Bullet at me\u201D", warn);
+                case "set":
+                {
+                    if (words.Count >= 5 && words[1].Text == "light" && words[2].Text == "intensity" && words[3].Text == "to")
+                    {
+                        spec.AmountNode = ValueNodeAt(words, 4);
+                        spec.HasNumber = words[4].Type == TokenType.Number;
+                        if (spec.HasNumber)
+                            spec.Number = words[4].Number;
+                        return Finish(spec, ActionVerb.SetLightIntensity, words, 5);
+                    }
+                    if (words.Count >= 5 && words[1].Text == "light" && words[2].Text == "color" && words[3].Text == "to" && words[4].Type == TokenType.Str)
+                    {
+                        spec.Thing = words[4].Text;
+                        return Finish(spec, ActionVerb.SetLightColor, words, 5);
+                    }
+                    if (words.Count >= 5 && words[1].Text == "light" && words[2].Text == "range" && words[3].Text == "to")
+                    {
+                        spec.AmountNode = ValueNodeAt(words, 4);
+                        spec.HasNumber = words[4].Type == TokenType.Number;
+                        if (spec.HasNumber)
+                            spec.Number = words[4].Number;
+                        return Finish(spec, ActionVerb.SetLightRange, words, 5);
+                    }
+                    if (words.Count >= 2 && words[1].Text == "light")
+                        return Unknown(spec, words, "\u201Cset light\u201D looks like this: \u201Cset light intensity to 2\u201D, \u201Cset light color to \"1 0 0\"\u201D, or \u201Cset light range to 10\u201D", warn);
+                    return Unknown(spec, words, "yes, a \u201Cset\u201D line — I only know \u201Cset <variable> to <value>\u201D, \u201Cset text of\u201D, \u201Cset state\u201D, \u201Cset my control group\u201D, and \u201Cset light\u201D", warn);
+                }
+                case "enable":
+                    if (words.Count >= 2 && words[1].Text == "light")
+                        return Finish(spec, ActionVerb.EnableLight, words, 2);
+                    return Unknown(spec, words, "\u201Cenable\u201D looks like this: \u201Cenable light\u201D", warn);
+                case "disable":
+                    if (words.Count >= 2 && words[1].Text == "light")
+                        return Finish(spec, ActionVerb.DisableLight, words, 2);
+                    return Unknown(spec, words, "\u201Cdisable\u201D looks like this: \u201Cdisable light\u201D", warn);
+                case "toggle":
+                    if (words.Count >= 2 && words[1].Text == "light")
+                        return Finish(spec, ActionVerb.ToggleLight, words, 2);
+                    return Unknown(spec, words, "\u201Ctoggle\u201D looks like this: \u201Ctoggle light\u201D", warn);
             }
 
             if (words.Count >= 3 && words[0].Text == "play" && words[1].Text == "sound" && words[2].Type == TokenType.Str)

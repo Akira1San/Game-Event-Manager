@@ -406,6 +406,28 @@ namespace Game
             if (words.Count > 2 && words[1].Type == TokenType.Word && words[1].Text == "text" &&
                 words[2].Type == TokenType.Word && words[2].Text == "of")
                 return ParseSetText(line);
+            // `set my control group to <n>` — RTS control group assignment (Task 18 Part A).
+            if (words.Count >= 3 && words[1].Type == TokenType.Word && words[1].Text == "my" &&
+                words[2].Type == TokenType.Word && words[2].Text == "control")
+            {
+                if (words.Count >= 6 && words[3].Text == "group" && words[4].Text == "to" &&
+                    words[5].Type == TokenType.Number)
+                {
+                    var groupNode = new SetControlGroupNode { Line = line.Line, Group = (int)words[5].Number };
+                    if (groupNode.Group < 0 || groupNode.Group > 9)
+                        throw new ParseException("control groups are 1 to 0 (ten groups) — `set my control group to 1`", line.Line);
+                    CheckEndOfLine(words, 6, line.Line, "set my control group to 1");
+                    return groupNode;
+                }
+                throw new ParseException("`set my control group` looks like this: `set my control group to 1`", line.Line);
+            }
+            // `set light intensity/color/range to <value>` — handled as a raw action word.
+            if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "light")
+            {
+                var raw = new RawActionNode { Line = line.Line };
+                raw.Words.AddRange(words);
+                return raw;
+            }
             var node = new SetNode { Line = line.Line };
             int index = 1;
             node.Target = ReadVariable(words, ref index, line.Line, "`set`");

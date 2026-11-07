@@ -413,6 +413,55 @@ Check(AssetNames.Key("EFFECTS/Explosion.FLAX") == "explosion", "AssetNames.Key i
 Check(AssetNames.Key("smoke") == "smoke", "AssetNames.Key passes a plain particle name through");
 Check(AssetNames.Key("") == "", "AssetNames.Key of an empty name is empty");
 
+// ------------------------------------------------------------------
+// Task 14 Part B: Light words
+// ------------------------------------------------------------------
+
+var li = parser.Parse("when me appears\n  set light intensity to 2\n");
+var liSpec = ActionWords.Parse(((RawActionNode)li.Events[0].Body[0].Statement!).Words, _ => { });
+Check(liSpec.Verb == ActionVerb.SetLightIntensity && liSpec.HasNumber && liSpec.Number == 2,
+    "`set light intensity to 2` parses to SetLightIntensity with Number 2");
+
+var liVar = parser.Parse("when me appears\n  set light intensity to Score\n");
+var liVarSpec = ActionWords.Parse(((RawActionNode)liVar.Events[0].Body[0].Statement!).Words, _ => { });
+Check(liVarSpec.Verb == ActionVerb.SetLightIntensity && liVarSpec.AmountNode is VariableValue,
+    "`set light intensity to Score` parses to SetLightIntensity with a variable amount");
+
+var lc = parser.Parse("when me appears\n  set light color to \"1 0 0\"\n");
+var lcSpec = ActionWords.Parse(((RawActionNode)lc.Events[0].Body[0].Statement!).Words, _ => { });
+Check(lcSpec.Verb == ActionVerb.SetLightColor && lcSpec.Thing == "1 0 0",
+    "`set light color to \"1 0 0\"` parses to SetLightColor with Thing \"1 0 0\"");
+
+var lc4 = parser.Parse("when me appears\n  set light color to \"0.5 0.25 1 0.5\"\n");
+var lc4Spec = ActionWords.Parse(((RawActionNode)lc4.Events[0].Body[0].Statement!).Words, _ => { });
+Check(lc4Spec.Verb == ActionVerb.SetLightColor && lc4Spec.Thing == "0.5 0.25 1 0.5",
+    "`set light color to \"0.5 0.25 1 0.5\"` parses to SetLightColor with alpha");
+
+var lr = parser.Parse("when me appears\n  set light range to 10\n");
+var lrSpec = ActionWords.Parse(((RawActionNode)lr.Events[0].Body[0].Statement!).Words, _ => { });
+Check(lrSpec.Verb == ActionVerb.SetLightRange && lrSpec.HasNumber && lrSpec.Number == 10,
+    "`set light range to 10` parses to SetLightRange with Number 10");
+
+var en = parser.Parse("when me appears\n  enable light\n");
+var enSpec = ActionWords.Parse(((RawActionNode)en.Events[0].Body[0].Statement!).Words, _ => { });
+Check(enSpec.Verb == ActionVerb.EnableLight, "`enable light` parses to EnableLight");
+
+var dis = parser.Parse("when me appears\n  disable light\n");
+var disSpec = ActionWords.Parse(((RawActionNode)dis.Events[0].Body[0].Statement!).Words, _ => { });
+Check(disSpec.Verb == ActionVerb.DisableLight, "`disable light` parses to DisableLight");
+
+var tg = parser.Parse("when me appears\n  toggle light\n");
+var tgSpec = ActionWords.Parse(((RawActionNode)tg.Events[0].Body[0].Statement!).Words, _ => { });
+Check(tgSpec.Verb == ActionVerb.ToggleLight, "`toggle light` parses to ToggleLight");
+
+var liBare = parser.Parse("when me appears\n  set light intensity\n");
+var liBareSpec = ActionWords.Parse(((RawActionNode)liBare.Events[0].Body[0].Statement!).Words, _ => { });
+Check(liBareSpec.Verb == ActionVerb.Unknown, "`set light intensity` without a value is unknown");
+
+var enBare = parser.Parse("when me appears\n  enable\n");
+var enBareSpec = ActionWords.Parse(((RawActionNode)enBare.Events[0].Body[0].Statement!).Words, _ => { });
+Check(enBareSpec.Verb == ActionVerb.Unknown, "`enable` without `light` is unknown");
+
 var sceneStart = parser.Parse("when scene starts\n  set Score to 0\n");
 Check(sceneStart.Events.Count == 1, "`when scene starts` parses as an event");
 var sceneDesc = TriggerClassifier.Classify(sceneStart.Events[0]);

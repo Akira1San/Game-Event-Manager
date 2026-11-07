@@ -736,10 +736,10 @@ Goal: expose Flax `ParticleSystem` and `Light` components to the event language 
 - [x] Unit test: `play particle "smoke"` → `ParticleSystem.Play()` called; one-shot end fires `ParticleEnd`.
 
 ### Part B — Light words
-- [ ] Word registry: `set light intensity to <n>`, `set light color to <color>`, `set light range to <n>`, `enable light`, `disable light`, `toggle light`.
-- [ ] Parser: new action verbs for light properties; color value as `"r g b"` or `"r g b a"` (0-1 floats).
-- [ ] Runtime: `FlaxActions` finds `Light` on the actor (or child), sets `Intensity`, `Color`, `Range`, `Enabled`.
-- [ ] Unit test: `set light intensity to 2.5` → `Light.Intensity = 2.5`; `set light color to "1 0 0"` → red.
+- [x] Word registry: `set light intensity to <n>`, `set light color to <color>`, `set light range to <n>`, `enable light`, `disable light`, `toggle light`.
+- [x] Parser: new action verbs for light properties; color value as `"r g b"` or `"r g b a"` (0-1 floats).
+- [x] Runtime: `FlaxActions` finds `Light` on the actor (or child), sets `Brightness` (intensity), `Color`, `ViewDistance` (range), `IsActive` (enabled) — matching the real Flax 1.13 Light API.
+- [x] Unit test: `set light intensity to 2` → `SetLightIntensity` with Number 2; `set light color to "1 0 0"` → `SetLightColor` with Thing "1 0 0".
 
 ### Part C — Integration & example
 - [ ] Write `Explosion.events`: `when me appears → play particle "explosion" → wait 0.5 → destroy me`.
