@@ -1281,6 +1281,7 @@ namespace Game
                 WarnOnce($"I couldn't find a ParticleEffect on \u201C{me.Name}\u201D to play \u201C{spec.Thing}\u201D.");
                 return;
             }
+            effect.IsActive = true;
             effect.Play();
             string key = AssetNames.Key(spec.Thing);
             bool oneShot = !effect.IsLooping;
