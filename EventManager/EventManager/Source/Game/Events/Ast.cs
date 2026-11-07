@@ -64,6 +64,27 @@ namespace Game
         public ValueNode Value = new NumberValue();
     }
 
+    /// <summary><c>set button <thing> enabled/disabled</c>.</summary>
+    public class SetButtonEnabledNode : StatementNode
+    {
+        public string Thing = "";
+        public bool Enabled = true;
+    }
+
+    /// <summary><c>set image of <thing> to <sprite></c> — swaps the Image control's brush.</summary>
+    public class SetImageBrushNode : StatementNode
+    {
+        public string Thing = "";
+        public string Sprite = "";
+    }
+
+    /// <summary><c>set color of <thing> to <color></c> — tints a control (e.g. an Image).</summary>
+    public class SetControlColorNode : StatementNode
+    {
+        public string Thing = "";
+        public string Color = "";
+    }
+
     public class RawActionNode : StatementNode
     {
         public List<Token> Words = new List<Token>();
@@ -79,5 +100,12 @@ namespace Game
     public class SetStateNode : StatementNode
     {
         public string State = "";
+    }
+
+    /// <summary><c>set my control group to &lt;n&gt;</c>: assigns this unit (or the current
+    /// selection, from a global sheet) to control group 1–0.</summary>
+    public class SetControlGroupNode : StatementNode
+    {
+        public int Group = -1;
     }
 }

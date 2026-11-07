@@ -156,6 +156,30 @@ namespace Game
             return false;
         }
 
+        public bool IsButtonPressed(object actor)
+        {
+            var button = FindButton(actor as Actor);
+            return button != null && button.IsPressed;
+        }
+
+        public bool IsButtonDisabled(object actor)
+        {
+            var button = FindButton(actor as Actor);
+            return button == null || !button.Enabled;
+        }
+
+        /// <summary>The <see cref="FlaxEngine.GUI.Button"/> on this actor's UIControl, or on a
+        /// child UIControl (a button's mesh/image can sit under the actor).</summary>
+        private static FlaxEngine.GUI.Button FindButton(Actor actor)
+        {
+            if (actor == null)
+                return null;
+            var ui = actor as UIControl;
+            if (ui != null)
+                return ui.Control as FlaxEngine.GUI.Button;
+            return actor.FindActor<UIControl>()?.Control as FlaxEngine.GUI.Button;
+        }
+
         public bool HasLineOfSight(object from, object to)
         {
             var first = from as Actor;

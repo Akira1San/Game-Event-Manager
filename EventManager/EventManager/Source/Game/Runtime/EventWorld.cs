@@ -29,6 +29,11 @@ namespace Game
         IReadOnlyList<object> Actors();
         /// <summary>True when the cursor is currently over the actor (point &amp; click hover).</summary>
         bool IsHovered(object actor);
+        /// <summary>True when <paramref name="actor"/> carries a UI Button that is currently
+        /// pressed (mouse held down on it).</summary>
+        bool IsButtonPressed(object actor);
+        /// <summary>True when <paramref name="actor"/> carries a UI Button that is disabled.</summary>
+        bool IsButtonDisabled(object actor);
         /// <summary>True when a particle named <paramref name="name"/> is playing on
         /// <paramref name="actor"/> (a child or the actor itself), used by
         /// <c>particle "&lt;name&gt;" is playing</c>.</summary>
@@ -97,6 +102,16 @@ namespace Game
         }
 
         public bool IsHovered(object actor)
+        {
+            return false;
+        }
+
+        public bool IsButtonPressed(object actor)
+        {
+            return false;
+        }
+
+        public bool IsButtonDisabled(object actor)
         {
             return false;
         }

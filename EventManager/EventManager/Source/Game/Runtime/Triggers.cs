@@ -20,7 +20,10 @@ namespace Game
         Clicked,
         RightClicked,
         MiddleClicked,
+        DoubleClicked,
         Hovered,
+        ButtonPressed,
+        ButtonReleased,
         Arrives,
         Sees,
         StopsSeeing,
@@ -111,6 +114,35 @@ namespace Game
                 return new TriggerDescriptor { Kind = TriggerKind.SceneStart };
             if (words.Length >= 3 && words[0] == "state" && words[1] == "is")
                 return new TriggerDescriptor { Kind = TriggerKind.StateIs, RequireName = Join(trigger, 2, words.Length) };
+            // `when <thing> is double-clicked` / `right-clicked` / `middle-clicked` — hyphenated words
+            // are a single lexed token, so the suffix sits in the last word.
+            if (words.Length >= 3 && words[words.Length - 2] == "is")
+            {
+                string suffix = words[words.Length - 1];
+                if (suffix == "double-clicked" || suffix == "right-clicked" || suffix == "middle-clicked")
+                {
+                    return new TriggerDescriptor
+                    {
+                        Kind = suffix == "double-clicked" ? TriggerKind.DoubleClicked :
+                               suffix == "right-clicked" ? TriggerKind.RightClicked :
+                               TriggerKind.MiddleClicked,
+                        RequireName = Join(trigger, 0, words.Length - 2),
+                    };
+                }
+            }
+            // `when <thing> is pressed` / `when <thing> is released` — button edge triggers.
+            // `me`/`other` are allowed (`when me is pressed` = this sheet's own button). Only when
+            // <thing> is NOT a key name: `when W is pressed` stays a key press.
+            if (words.Length >= 3 && words[words.Length - 2] == "is" &&
+                (words[words.Length - 1] == "pressed" || words[words.Length - 1] == "released") &&
+                !IsKeyName(Join(trigger, 0, words.Length - 2)))
+            {
+                return new TriggerDescriptor
+                {
+                    Kind = words[words.Length - 1] == "pressed" ? TriggerKind.ButtonPressed : TriggerKind.ButtonReleased,
+                    RequireName = Join(trigger, 0, words.Length - 2),
+                };
+            }
             if (words.Length >= 3 && words[words.Length - 2] == "is" && words[words.Length - 1] != "clicked" && words[0] != "me" && words[0] != "other")
                 return KeyDescriptor(words, trigger);
             if (words.Length >= 4 && words[words.Length - 3] == "is" && words[words.Length - 2] == "right" && words[words.Length - 1] == "clicked")
@@ -324,6 +356,16 @@ namespace Game
                 if (words[i] == word)
                     return i;
             return -1;
+        }
+
+        /// <summary>True when <paramref name="name"/> is a scanned input key (W, Space, Left Mouse, ...),
+        /// so `<name> is pressed` is treated as a key press rather than a button press.</summary>
+        private static bool IsKeyName(string name)
+        {
+            foreach (string key in ActionWords.KeyNamesForScanning)
+                if (string.Equals(key, name, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
         }
 
         private static string Join(List<Token> trigger, int from, int until)

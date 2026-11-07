@@ -150,6 +150,12 @@ namespace Game
         /// "Grass"), <paramref name="clipName"/> is the resolved clip to play. The bridge
         /// wires this to actual audio playback.</summary>
         public Action<EventContext, string, string> OnPlayStepSound = (context, material, clipName) => { };
+        /// <summary>Set a UI Button enabled/disabled.</summary>
+        public Action<EventContext, string, bool> OnSetButtonEnabled = (context, thing, enabled) => { };
+        /// <summary>Swap a UI Image's brush to the named sprite.</summary>
+        public Action<EventContext, string, string> OnSetImageBrush = (context, thing, sprite) => { };
+        /// <summary>Tint a UI control to the named color ("r g b" or "r g b a").</summary>
+        public Action<EventContext, string, string> OnSetControlColor = (context, thing, color) => { };
 
         private readonly List<SheetInstance> sheets = new List<SheetInstance>();
         private readonly HashSet<string> warnedLines = new HashSet<string>();
@@ -572,7 +578,10 @@ namespace Game
         {
             return kind == TriggerKind.Clicked ||
                    kind == TriggerKind.RightClicked ||
-                   kind == TriggerKind.MiddleClicked;
+                   kind == TriggerKind.MiddleClicked ||
+                   kind == TriggerKind.DoubleClicked ||
+                   kind == TriggerKind.ButtonPressed ||
+                   kind == TriggerKind.ButtonReleased;
         }
 
         private void RunEvent(SheetInstance sheet, int eventIndex, object other, object meOverride = null)
@@ -633,6 +642,18 @@ namespace Game
                 else if (statement is SetTextNode setText)
                 {
                     OnSetText(context, setText.Target, context.Evaluate(setText.Value));
+                }
+                else if (statement is SetButtonEnabledNode setButton)
+                {
+                    OnSetButtonEnabled(context, setButton.Thing, setButton.Enabled);
+                }
+                else if (statement is SetImageBrushNode setImage)
+                {
+                    OnSetImageBrush(context, setImage.Thing, setImage.Sprite);
+                }
+                else if (statement is SetControlColorNode setColor)
+                {
+                    OnSetControlColor(context, setColor.Thing, setColor.Color);
                 }
                 else if (statement is SetStateNode setState)
                 {

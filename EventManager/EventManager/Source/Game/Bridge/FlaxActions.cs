@@ -1143,7 +1143,7 @@ namespace Game
         private static void ShowHudText(string text)
         {
             if (!SetLabel("GameText", text))
-                WarnOnce($"I couldn't find the HUD text. Create a UIControl actor named \u201CGameText\u201D with a Label. Labels in this scene: {LabelActorNames()}.");
+                WarnOnce($"I couldn't find the HUD text. Create a UIControl actor named \u201CGameText\u201D with a Label. Labels in this scene: {ControlActorNames<FlaxEngine.GUI.Label>()}.");
         }
 
         private static void HideHudText()
@@ -1152,84 +1152,95 @@ namespace Game
             if (label != null)
                 label.Visible = false;
             else
-                WarnOnce($"I couldn't find the HUD text. Create a UIControl actor named \u201CGameText\u201D with a Label. Labels in this scene: {LabelActorNames()}.");
+                WarnOnce($"I couldn't find the HUD text. Create a UIControl actor named \u201CGameText\u201D with a Label. Labels in this scene: {ControlActorNames<FlaxEngine.GUI.Label>()}.");
         }
 
         /// <summary>
-        /// Finds the GUI label named by an event. The name is a UIControl actor, or a parent
-        /// actor that owns exactly one label (a panel/canvas). <c>UIControl</c> is an Actor,
-        /// so this uses <c>as</c>, never <c>GetScript&lt;UIControl&gt;</c>.
+        /// Finds the GUI control named by an event, cast to <typeparamref name="T"/>. The name
+        /// is a UIControl actor, or a parent actor that owns exactly one matching control
+        /// (a panel/canvas). <c>UIControl</c> is an Actor, so this uses <c>as</c>, never
+        /// <c>GetScript&lt;UIControl&gt;</c>.
         /// </summary>
-        private static FlaxEngine.GUI.Label FindLabel(string thing, out UIControl ui)
+        private static T FindControl<T>(string thing, out UIControl ui) where T : FlaxEngine.GUI.Control
         {
             ui = null;
             if (string.IsNullOrEmpty(thing))
-                return null;
+                return default;
 
             Actor actor = Level.FindActor(thing);
             if (actor == null)
-                return null;
+                return default;
 
             ui = actor as UIControl;
             if (ui == null)
             {
                 var found = new List<UIControl>();
-                CollectLabels(actor, found);
+                CollectControls<T>(actor, found);
                 if (found.Count != 1)
-                    return null;
+                    return default;
                 ui = found[0];
             }
 
-            return ui.Control as FlaxEngine.GUI.Label;
+            return ui.Control as T;
         }
 
-        private static void CollectLabels(Actor node, List<UIControl> found)
+        private static void CollectControls<T>(Actor node, List<UIControl> found) where T : FlaxEngine.GUI.Control
         {
             foreach (Actor child in node.Children)
             {
                 if (child == null)
                     continue;
-                if (child is UIControl ui && ui.Control is FlaxEngine.GUI.Label)
+                if (child is UIControl ui && ui.Control is T)
                     found.Add(ui);
-                CollectLabels(child, found);
+                CollectControls<T>(child, found);
             }
         }
 
-        /// <summary>Names of the label actors in the scene, for "I couldn't find it" warnings.</summary>
-        private static string LabelActorNames()
+        /// <summary>Names of the control actors in the scene, for "I couldn't find it" warnings.</summary>
+        private static string ControlActorNames<T>() where T : FlaxEngine.GUI.Control
         {
             var names = new List<string>();
             Scene[] scenes = Level.Scenes;
             for (int s = 0; s < scenes.Length; s++)
                 if (scenes[s] != null)
-                    CollectLabelNames(scenes[s], names);
+                    CollectControlNames<T>(scenes[s], names);
             return names.Count == 0 ? "(none)" : string.Join(", ", names);
         }
 
-        private static void CollectLabelNames(Actor node, List<string> names)
+        private static void CollectControlNames<T>(Actor node, List<string> names) where T : FlaxEngine.GUI.Control
         {
             foreach (Actor child in node.Children)
             {
                 if (child == null)
                     continue;
-                if (child is UIControl ui && ui.Control is FlaxEngine.GUI.Label)
+                if (child is UIControl ui && ui.Control is T)
                     names.Add(child.Name);
-                CollectLabelNames(child, names);
+                CollectControlNames<T>(child, names);
             }
         }
 
-        private static bool SetLabel(string thing, string text)
+        private static bool SetControl<T>(string thing, Action<T> apply) where T : FlaxEngine.GUI.Control
         {
-            var label = FindLabel(thing, out UIControl ui);
-            if (label == null)
+            var control = FindControl<T>(thing, out UIControl ui);
+            if (control == null)
                 return false;
             // A `hide GameText` earlier in the session must not brick `show text`.
             if (!ui.IsActive)
                 ui.IsActive = true;
-            label.Text = text; // Label.Text is a LocalizedString; string converts implicitly
-            label.Visible = true;
+            apply(control);
             return true;
         }
+
+        /// <summary>Finds the GUI label named by an event.</summary>
+        private static FlaxEngine.GUI.Label FindLabel(string thing, out UIControl ui)
+            => FindControl<FlaxEngine.GUI.Label>(thing, out ui);
+
+        private static bool SetLabel(string thing, string text)
+            => SetControl<FlaxEngine.GUI.Label>(thing, label =>
+            {
+                label.Text = text; // Label.Text is a LocalizedString; string converts implicitly
+                label.Visible = true;
+            });
 
         private static void PlaySound(EventContext context, ActionSpec spec)
         {
@@ -1499,12 +1510,94 @@ namespace Game
                 return;
             }
             if (!SetLabel(thing, text))
-                WarnOnce($"\u201Cset text of\u201D needs an actor with a Label on a UIControl (I couldn't find one called \u201C{thing}\u201D). Labels in this scene: {LabelActorNames()}.");
+                WarnOnce($"\u201Cset text of\u201D needs an actor with a Label on a UIControl (I couldn't find one called \u201C{thing}\u201D). Labels in this scene: {ControlActorNames<FlaxEngine.GUI.Label>()}.");
         }
 
-        /// <summary>Loads a scene asset by its name (folder, extension and case ignored), so
-        /// <c>load scene "Level1"</c> can switch to any scene in the project.</summary>
-        private static void ReplaceScene(Guid sceneId)
+        /// <summary><c>set button <thing> enabled/disabled</c>: flips <see cref="FlaxEngine.GUI.Button.Enabled"/>.</summary>
+        public static void SetButtonEnabled(string thing, bool enabled)
+        {
+            if (string.IsNullOrEmpty(thing))
+            {
+                WarnOnce("\u201Cset button\u201D needs the name of the button — like \u201Cset button RestartButton enabled\u201D.");
+                return;
+            }
+            if (!SetControl<FlaxEngine.GUI.Button>(thing, button => button.Enabled = enabled))
+                WarnOnce($"\u201Cset button {thing} { (enabled ? "enabled" : "disabled") }\u201D needs an actor with a Button on a UIControl (I couldn't find one called \u201C{thing}\u201D). Buttons in this scene: {ControlActorNames<FlaxEngine.GUI.Button>()}.");
+        }
+
+        /// <summary><c>set button <thing> text to <value></c>: a Button is a Label, so this reuses SetText.</summary>
+        public static void SetButtonText(string thing, string text) => SetText(thing, text);
+
+        /// <summary><c>set image of <thing> to <sprite></c>: swaps the Image control's brush to the named sprite.</summary>
+        public static void SetImageBrush(string thing, string sprite)
+        {
+            if (string.IsNullOrEmpty(thing) || string.IsNullOrEmpty(sprite))
+            {
+                WarnOnce("\u201Cset image of\u201D needs a thing and a sprite name — like \u201Cset image of HeartIcon to \"heart_full\"\u201D.");
+                return;
+            }
+            var image = FindControl<FlaxEngine.GUI.Image>(thing, out UIControl ui);
+            if (image == null)
+            {
+                WarnOnce($"\u201Cset image of {thing} to \"{sprite}\"\u201D needs an actor with an Image on a UIControl (I couldn't find one called \u201C{thing}\u201D). Images in this scene: {ControlActorNames<FlaxEngine.GUI.Image>()}.");
+                return;
+            }
+            var texture = LoadTexture(sprite);
+            if (texture == null)
+            {
+                WarnOnce($"I couldn't find a sprite texture named \u201C{sprite}\u201D for \u201Cset image of {thing}\u201D. Imported textures: {AvailableTextureNames()}.");
+                return;
+            }
+            image.Brush = new FlaxEngine.GUI.TextureBrush { Texture = texture };
+        }
+
+        /// <summary><c>set color of <thing> to <color></c>: tints a control ("r g b" or "r g b a", 0-1).</summary>
+        public static void SetControlColor(string thing, string color)
+        {
+            if (string.IsNullOrEmpty(thing) || string.IsNullOrEmpty(color))
+            {
+                WarnOnce("\u201Cset color of\u201D needs a thing and a color — like \u201Cset color of HeartIcon to \"1 0 0\"\u201D.");
+                return;
+            }
+            if (!TryParseColor(color, out var c))
+            {
+                WarnOnce($"I couldn't parse \u201C{color}\u201D as a control color — use \u201C\"r g b\"\u201D or \u201C\"r g b a\"\u201D with 0-1 floats.");
+                return;
+            }
+            if (!SetControl<FlaxEngine.GUI.Control>(thing, control => control.Color = c))
+                WarnOnce($"\u201Cset color of {thing}\u201D needs an actor with a control on a UIControl (I couldn't find one called \u201C{thing}\u201D). Controls in this scene: {ControlActorNames<FlaxEngine.GUI.Control>()}.");
+        }
+
+        /// <summary>Loads a texture by name, ignoring folder and extension (mirrors <see cref="LoadAudioClip"/>).</summary>
+        private static FlaxEngine.Texture LoadTexture(string name)
+        {
+            var index = TextureIndex();
+            return index.TryGetValue(AssetNames.Key(name), out Guid id) ? Content.Load<FlaxEngine.Texture>(id) : null;
+        }
+
+        private static Dictionary<string, Guid> TextureIndex()
+        {
+            var index = new Dictionary<string, Guid>(StringComparer.OrdinalIgnoreCase);
+            foreach (Guid id in Content.GetAllAssetsByType(typeof(FlaxEngine.Texture)))
+            {
+                if (!Content.GetAssetInfo(id, out AssetInfo info))
+                    continue;
+                string key = AssetNames.Key(info.Path);
+                if (key.Length == 0 || index.ContainsKey(key))
+                    continue;
+                index[key] = id;
+            }
+            return index;
+        }
+
+        private static string AvailableTextureNames()
+        {
+            var names = new List<string>(TextureIndex().Keys);
+            if (names.Count == 0)
+                return "(none)";
+            names.Sort(StringComparer.OrdinalIgnoreCase);
+            return string.Join(", ", names);
+        }
         {
             // Unload all currently loaded scenes so the new one replaces them
             foreach (var scene in Level.Scenes)

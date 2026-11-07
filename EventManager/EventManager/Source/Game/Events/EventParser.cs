@@ -428,6 +428,60 @@ namespace Game
                 raw.Words.AddRange(words);
                 return raw;
             }
+            // `set button <thing> enabled/disabled`.
+            if (words.Count >= 4 && words[1].Type == TokenType.Word && words[1].Text == "button" &&
+                words[2].Type == TokenType.Word)
+            {
+                string buttonThing = words[2].Text;
+                if (words[3].Text == "enabled")
+                {
+                    CheckEndOfLine(words, 4, line.Line, "set button <thing> enabled");
+                    return new SetButtonEnabledNode { Line = line.Line, Thing = buttonThing, Enabled = true };
+                }
+                if (words[3].Text == "disabled")
+                {
+                    CheckEndOfLine(words, 4, line.Line, "set button <thing> disabled");
+                    return new SetButtonEnabledNode { Line = line.Line, Thing = buttonThing, Enabled = false };
+                }
+            }
+            // `set button <thing> text to <value>` — a Button is a Label, so this reuses SetTextNode.
+            if (words.Count >= 6 && words[1].Type == TokenType.Word && words[1].Text == "button" &&
+                words[2].Type == TokenType.Word &&
+                words[3].Type == TokenType.Word && words[3].Text == "text" &&
+                words[4].Type == TokenType.Word && words[4].Text == "to")
+            {
+                var textNode = new SetTextNode { Line = line.Line, Target = words[2].Text };
+                int idx = 5;
+                textNode.Value = ReadValue(words, ref idx, line.Line);
+                CheckEndOfLine(words, idx, line.Line, $"set button {textNode.Target} text to <value>");
+                return textNode;
+            }
+            // `set image of <thing> to <sprite>`.
+            if (words.Count >= 6 && words[1].Type == TokenType.Word && words[1].Text == "image" &&
+                words[2].Type == TokenType.Word && words[2].Text == "of" &&
+                words[3].Type == TokenType.Word &&
+                words[4].Type == TokenType.Word && words[4].Text == "to")
+            {
+                var imgNode = new SetImageBrushNode { Line = line.Line, Thing = words[3].Text };
+                int idx = 5;
+                var value = ReadValue(words, ref idx, line.Line);
+                imgNode.Sprite = value is TextValue tv ? tv.Text : Values.Describe(value);
+                CheckEndOfLine(words, idx, line.Line, $"set image of {imgNode.Thing} to <sprite>");
+                return imgNode;
+            }
+            // `set color of <thing> to <color>`.
+            if (words.Count >= 6 && words[1].Type == TokenType.Word && words[1].Text == "color" &&
+                words[2].Type == TokenType.Word && words[2].Text == "of" &&
+                words[3].Type == TokenType.Word &&
+                words[4].Type == TokenType.Word && words[4].Text == "to")
+            {
+                var colorNode = new SetControlColorNode { Line = line.Line, Thing = words[3].Text };
+                int idx = 5;
+                var value = ReadValue(words, ref idx, line.Line);
+                colorNode.Color = value is TextValue cv ? cv.Text : Values.Describe(value);
+                CheckEndOfLine(words, idx, line.Line, $"set color of {colorNode.Thing} to <color>");
+                return colorNode;
+            }
             var node = new SetNode { Line = line.Line };
             int index = 1;
             node.Target = ReadVariable(words, ref index, line.Line, "`set`");

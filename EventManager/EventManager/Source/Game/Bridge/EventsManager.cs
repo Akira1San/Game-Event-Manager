@@ -37,6 +37,11 @@ namespace Game
         private bool _middleMouseDownLastFrame;
         private UIControl _hoveredUI;
         private Color _hoveredBaseColor;
+        /// <summary>Last-tick pressed state per UI button, used to raise press/release edge triggers.</summary>
+        private readonly Dictionary<Actor, bool> _buttonPressedLastTick = new Dictionary<Actor, bool>();
+        /// <summary>Last click time per actor, used to detect double-clicks.</summary>
+        private readonly Dictionary<Actor, double> _buttonLastClickTime = new Dictionary<Actor, double>();
+        private const double DoubleClickSeconds = 0.3;
 
         [Tooltip("How touches/overlaps are detected. Distance needs no colliders; Colliders uses Flax trigger events; Both compares them without double-firing.")]
         public EventContactMode ContactMode = EventContactMode.Both;
@@ -90,6 +95,12 @@ namespace Game
             {
                 FlaxActions.SetText(thing, value.AsText());
             };
+            Runtime.OnSetButtonEnabled = (context, thing, enabled) =>
+                FlaxActions.SetButtonEnabled(thing, enabled);
+            Runtime.OnSetImageBrush = (context, thing, sprite) =>
+                FlaxActions.SetImageBrush(thing, sprite);
+            Runtime.OnSetControlColor = (context, thing, color) =>
+                FlaxActions.SetControlColor(thing, color);
             Runtime.OnPlayStepSound = (context, material, clipName) =>
                 FlaxActions.PlayStepSound(context, material, clipName);
 
@@ -412,6 +423,7 @@ namespace Game
             FlaxActions.Step(delta);
             CheckForChanges();
             InputEdges();
+            UpdateButtons();
             UpdateCameraFollow();
             UpdatePlayerLookAtMouse();
             Runtime.Tick(Time.GameTime);
@@ -598,7 +610,7 @@ namespace Game
                     uiHit = true;
                     // Clicks are broadcast by name: the clicked actor's own `when me is clicked`
                     // fires, and other sheets can listen with `when Ground is clicked`.
-                    Runtime.RaiseClick(actor, kind);
+                    HandleClick(actor, kind);
                 }
             }
             if (uiHit)
@@ -620,7 +632,55 @@ namespace Game
                 }
             }
             if (bestActor != null)
-                Runtime.RaiseClick(bestActor, kind);
+                HandleClick(bestActor, kind);
+        }
+
+        /// <summary>Raises a click (or double-click) on <paramref name="actor"/>. A second left
+        /// click on the same actor within <see cref="DoubleClickSeconds"/> becomes a
+        /// <c>DoubleClicked</c> trigger instead of a second <c>Clicked</c>.</summary>
+        private void HandleClick(Actor actor, TriggerKind kind)
+        {
+            if (actor == null)
+                return;
+            double now = Time.GameTime;
+            bool doubleClick = kind == TriggerKind.Clicked &&
+                _buttonLastClickTime.TryGetValue(actor, out double last) && now - last < DoubleClickSeconds;
+            _buttonLastClickTime[actor] = now;
+            Runtime.RaiseClick(actor, doubleClick ? TriggerKind.DoubleClicked : kind);
+        }
+
+        /// <summary>Polls every UI Button for press/release edges, raising <c>ButtonPressed</c>/
+        /// <c>ButtonReleased</c> triggers, and prunes stale click/press tracking.</summary>
+        private void UpdateButtons()
+        {
+            var dead = new List<Actor>();
+            foreach (Actor actor in SceneActors())
+            {
+                if (actor == null || !actor.IsActive)
+                {
+                    dead.Add(actor);
+                    continue;
+                }
+                var ui = actor as UIControl;
+                if (ui == null)
+                    continue;
+                var button = ui.Control as FlaxEngine.GUI.Button;
+                if (button == null)
+                    continue;
+                bool pressed = button.IsPressed;
+                _buttonPressedLastTick.TryGetValue(actor, out bool wasPressed);
+                if (pressed && !wasPressed)
+                    Runtime.RaisePushAll(new PushSignal { Kind = TriggerKind.ButtonPressed, Name = actor.Name, Other = actor });
+                else if (!pressed && wasPressed)
+                    Runtime.RaisePushAll(new PushSignal { Kind = TriggerKind.ButtonReleased, Name = actor.Name, Other = actor });
+                _buttonPressedLastTick[actor] = pressed;
+            }
+            foreach (Actor actor in dead)
+                _buttonPressedLastTick.Remove(actor);
+            // Prune actors whose scene is gone.
+            foreach (var pair in _buttonPressedLastTick.ToArray())
+                if (pair.Key == null || pair.Key.Scene == null)
+                    _buttonPressedLastTick.Remove(pair.Key);
         }
 
         /// <summary>Walks up from a hit collider to the actor that carries an EventSheet, so

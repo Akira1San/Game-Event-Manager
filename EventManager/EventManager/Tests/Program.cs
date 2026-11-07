@@ -1291,6 +1291,130 @@ tagWorld.SetTag(bomb, "Enemy");
     Check(hoverEngine.Variables.GetGlobal("Hint").AsNumber() == 2, "`when me is hovered` stops when unhovered");
 
     // ------------------------------------------------------------------
+    // Task 15 Part A: UI button & image support
+    // ------------------------------------------------------------------
+
+    // Trigger classification.
+    var dblProg = parser.Parse("when PlayButton is double-clicked\n  set Clicked2 to 1\n");
+    Check(dblProg.Events.Count == 1, "`when PlayButton is double-clicked` parses as an event");
+    var dblDesc = TriggerClassifier.Classify(dblProg.Events[0]);
+    Check(dblDesc.Kind == TriggerKind.DoubleClicked && dblDesc.RequireName == "PlayButton",
+        "`when PlayButton is double-clicked` classifies to DoubleClicked");
+
+    var rightProg = parser.Parse("when RestartButton is right-clicked\n  set ClickedR to 1\n");
+    var rightDesc = TriggerClassifier.Classify(rightProg.Events[0]);
+    Check(rightDesc.Kind == TriggerKind.RightClicked && rightDesc.RequireName == "RestartButton",
+        "`when RestartButton is right-clicked` classifies to RightClicked");
+
+    var pressProg = parser.Parse("when RestartButton is pressed\n  set Pressed to 1\n");
+    var pressDesc = TriggerClassifier.Classify(pressProg.Events[0]);
+    Check(pressDesc.Kind == TriggerKind.ButtonPressed && pressDesc.RequireName == "RestartButton",
+        "`when RestartButton is pressed` classifies to ButtonPressed");
+
+    var releaseProg = parser.Parse("when RestartButton is released\n  set Released to 1\n");
+    var releaseDesc = TriggerClassifier.Classify(releaseProg.Events[0]);
+    Check(releaseDesc.Kind == TriggerKind.ButtonReleased && releaseDesc.RequireName == "RestartButton",
+        "`when RestartButton is released` classifies to ButtonReleased");
+
+    // `when W is pressed` is still a key press, not a button press.
+    var keyPressProg = parser.Parse("when W is pressed\n  set K to 1\n");
+    var keyPressDesc = TriggerClassifier.Classify(keyPressProg.Events[0]);
+    Check(keyPressDesc.Kind == TriggerKind.KeyPressed, "`when W is pressed` stays a key press");
+
+    // Condition parsing.
+    var pressCondProg = parser.Parse(@"when every 1 seconds
+  RestartButton is pressed
+  set PressGate to 1
+  RestartButton is released
+  set ReleasedGate to 1
+  RestartButton is disabled
+  set DisabledGate to 1");
+    Check(pressCondProg.Events.Count == 1, "`is pressed`/`released`/`disabled` conditions parse in one event");
+    var pressCond = Conditions.Parse(pressCondProg.Events[0].Body[0].Words);
+    Check(pressCond.Kind == ConditionKind.ButtonPressed, "`RestartButton is pressed` parses to ButtonPressed");
+    var releasedCond = Conditions.Parse(pressCondProg.Events[0].Body[2].Words);
+    Check(releasedCond.Kind == ConditionKind.ButtonReleased, "`RestartButton is released` parses to ButtonReleased");
+    var disabledCond = Conditions.Parse(pressCondProg.Events[0].Body[4].Words);
+    Check(disabledCond.Kind == ConditionKind.ButtonDisabled, "`RestartButton is disabled` parses to ButtonDisabled");
+
+    // Action parsing.
+    var setEnabledProg = parser.Parse("when W is pressed\n  set button RestartButton enabled\n");
+    var setEnabledStmt = setEnabledProg.Events[0].Body[0].Statement as SetButtonEnabledNode;
+    Check(setEnabledStmt != null && setEnabledStmt.Thing == "RestartButton" && setEnabledStmt.Enabled,
+        "`set button RestartButton enabled` builds a SetButtonEnabledNode (enabled)");
+
+    var setDisabledProg = parser.Parse("when W is pressed\n  set button RestartButton disabled\n");
+    var setDisabledStmt = setDisabledProg.Events[0].Body[0].Statement as SetButtonEnabledNode;
+    Check(setDisabledStmt != null && setDisabledStmt.Thing == "RestartButton" && !setDisabledStmt.Enabled,
+        "`set button RestartButton disabled` builds a SetButtonEnabledNode (disabled)");
+
+    var setTextProg = parser.Parse("when W is pressed\n  set button RestartButton text to \"Go\"\n");
+    var setTextStmt = setTextProg.Events[0].Body[0].Statement as SetTextNode;
+    Check(setTextStmt != null && setTextStmt.Target == "RestartButton" &&
+          setTextStmt.Value is TextValue tv && tv.Text == "Go",
+        "`set button RestartButton text to \"Go\"` builds a SetTextNode");
+
+    var setImageProg = parser.Parse("when W is pressed\n  set image of HeartIcon to \"heart_full\"\n");
+    var setImageStmt = setImageProg.Events[0].Body[0].Statement as SetImageBrushNode;
+    Check(setImageStmt != null && setImageStmt.Thing == "HeartIcon" && setImageStmt.Sprite == "heart_full",
+        "`set image of HeartIcon to \"heart_full\"` builds a SetImageBrushNode");
+
+    var setColorProg = parser.Parse("when W is pressed\n  set color of HeartIcon to \"1 0 0\"\n");
+    var setColorStmt = setColorProg.Events[0].Body[0].Statement as SetControlColorNode;
+    Check(setColorStmt != null && setColorStmt.Thing == "HeartIcon" && setColorStmt.Color == "1 0 0",
+        "`set color of HeartIcon to \"1 0 0\"` builds a SetControlColorNode");
+
+    // Runtime: press/release edge triggers and disabled condition.
+    var buttonProg = parser.Parse(@"when me is pressed
+  set PressCount to PressCount + 1
+when me is released
+  set ReleaseCount to ReleaseCount + 1");
+    var buttonWorld = new FakeWorld();
+    var buttonActor = new FakeActor("RestartButton");
+    buttonWorld.AddActor(buttonActor);
+    var buttonEngine = FreshEngine(buttonWorld);
+    buttonEngine.AddSheet(buttonActor, buttonProg);
+    buttonEngine.Tick(0);
+    Check(buttonEngine.Variables.GetGlobal("PressCount").IsNone() &&
+          buttonEngine.Variables.GetGlobal("ReleaseCount").IsNone(),
+        "button triggers do not fire before any press");
+    buttonEngine.RaisePushAll(new PushSignal
+    {
+        Kind = TriggerKind.ButtonPressed,
+        Name = buttonActor.Name,
+        Other = buttonActor,
+    });
+    buttonEngine.Tick(1);
+    Check(buttonEngine.Variables.GetGlobal("PressCount").AsNumber() == 1, "`when me is pressed` fires on the press edge");
+    buttonEngine.Tick(2);
+    Check(buttonEngine.Variables.GetGlobal("PressCount").AsNumber() == 1, "`when me is pressed` does not refire while held");
+    buttonEngine.RaisePushAll(new PushSignal
+    {
+        Kind = TriggerKind.ButtonReleased,
+        Name = buttonActor.Name,
+        Other = buttonActor,
+    });
+    buttonEngine.Tick(3);
+    Check(buttonEngine.Variables.GetGlobal("ReleaseCount").AsNumber() == 1, "`when me is released` fires on the release edge");
+
+    // Condition: `me is disabled`.
+    var disabledProg = parser.Parse(@"when every 1 seconds
+  me is disabled
+  set DisabledGate to 1");
+    var disabledWorld = new FakeWorld();
+    var disabledActor = new FakeActor("RestartButton");
+    disabledWorld.AddActor(disabledActor);
+    var disabledEngine = FreshEngine(disabledWorld);
+    disabledEngine.AddSheet(disabledActor, disabledProg);
+    disabledEngine.Tick(0);
+    Check(disabledEngine.Variables.GetGlobal("DisabledGate").IsNone(),
+        "`me is disabled` is false while enabled");
+    disabledWorld.SetButtonDisabled(disabledActor, true);
+    disabledEngine.Tick(1);
+    Check(disabledEngine.Variables.GetGlobal("DisabledGate").AsNumber() == 1, "`me is disabled` fires while disabled");
+
+
+    // ------------------------------------------------------------------
     // Task 13 Part A: `me is moving` (movement gate condition)
     // ------------------------------------------------------------------
 
@@ -2728,6 +2852,8 @@ class FakeWorld : IEventWorld
     private readonly List<object> actors = new List<object>();
     private readonly HashSet<(object, object)> touching = new HashSet<(object, object)>();
     private readonly HashSet<object> hovered = new HashSet<object>();
+    private readonly HashSet<object> buttonPressed = new HashSet<object>();
+    private readonly HashSet<object> buttonDisabled = new HashSet<object>();
     private readonly Dictionary<object, string> materials = new Dictionary<object, string>();
 
     public void SetHeld(string key, bool on)
@@ -2773,6 +2899,22 @@ class FakeWorld : IEventWorld
             hovered.Add(actor);
         else
             hovered.Remove(actor);
+    }
+
+    public void SetButtonPressed(object actor, bool on)
+    {
+        if (on)
+            buttonPressed.Add(actor);
+        else
+            buttonPressed.Remove(actor);
+    }
+
+    public void SetButtonDisabled(object actor, bool on)
+    {
+        if (on)
+            buttonDisabled.Add(actor);
+        else
+            buttonDisabled.Remove(actor);
     }
 
     public void SetMoving(object actor, bool on)
@@ -2831,6 +2973,16 @@ class FakeWorld : IEventWorld
     public bool IsHovered(object actor)
     {
         return hovered.Contains(actor);
+    }
+
+    public bool IsButtonPressed(object actor)
+    {
+        return buttonPressed.Contains(actor);
+    }
+
+    public bool IsButtonDisabled(object actor)
+    {
+        return buttonDisabled.Contains(actor);
     }
 
     public bool IsMoving(object actor)

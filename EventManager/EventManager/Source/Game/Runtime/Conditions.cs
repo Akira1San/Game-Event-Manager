@@ -19,6 +19,9 @@ namespace Game
         HasTag,
         BagHas,
         ParticlePlaying,
+        ButtonPressed,
+        ButtonReleased,
+        ButtonDisabled,
         // RTS selection (Task 18 Part A)
         Selected,
         SelectionCountIs,
@@ -71,6 +74,29 @@ namespace Game
             {
                 node.Kind = ConditionKind.Moving;
                 return node;
+            }
+
+            // `<thing> is pressed / released / disabled` — steady-state button conditions.
+            if (texts.Length == 3 && texts[1] == "is")
+            {
+                if (texts[2] == "pressed")
+                {
+                    node.Kind = ConditionKind.ButtonPressed;
+                    node.Thing = texts[0];
+                    return node;
+                }
+                if (texts[2] == "released")
+                {
+                    node.Kind = ConditionKind.ButtonReleased;
+                    node.Thing = texts[0];
+                    return node;
+                }
+                if (texts[2] == "disabled")
+                {
+                    node.Kind = ConditionKind.ButtonDisabled;
+                    node.Thing = texts[0];
+                    return node;
+                }
             }
 
             // `particle "smoke" is playing` — true while that particle system runs on me.
@@ -231,6 +257,21 @@ namespace Game
                     return context.World.IsMoving(context.Me);
                 case ConditionKind.ParticlePlaying:
                     return context.World.IsParticlePlaying(context.Me, node.Thing);
+                case ConditionKind.ButtonPressed:
+                {
+                    object target = FindTarget(node.Thing, context);
+                    return target != null && context.World.IsButtonPressed(target);
+                }
+                case ConditionKind.ButtonReleased:
+                {
+                    object target = FindTarget(node.Thing, context);
+                    return target != null && !context.World.IsButtonPressed(target);
+                }
+                case ConditionKind.ButtonDisabled:
+                {
+                    object target = FindTarget(node.Thing, context);
+                    return target != null && context.World.IsButtonDisabled(target);
+                }
                 case ConditionKind.HasTag:
                 {
                     object target = FindTarget(node.Thing, context);

@@ -742,9 +742,9 @@ Goal: expose Flax `ParticleSystem` and `Light` components to the event language 
 - [x] Unit test: `set light intensity to 2` → `SetLightIntensity` with Number 2; `set light color to "1 0 0"` → `SetLightColor` with Thing "1 0 0".
 
 ### Part C — Integration & example
-- [ ] Write `Explosion.events`: `when me appears → play particle "explosion" → wait 0.5 → destroy me`.
-- [ ] Write `MuzzleFlash.events`: `when me appears → play particle "muzzle" → enable light → set light intensity to 3 → set light color to "1 0.8 0.2" → wait 0.1 → disable light → stop particle "muzzle"`.
-- [ ] Editor verify: spawn explosion shows particle + light flash; muzzle flash on bullet spawn.
+- [x] Write `Explosion.events`: `when me appears → play particle "explosion" → wait 0.5 → destroy me`.
+- [x] Write `MuzzleFlash.events`: `when me appears → play particle "muzzle" → enable light → set light intensity to 3 → set light color to "1 0.8 0.2" → wait 0.1 → disable light → stop particle "muzzle"`.
+- [x] Editor verify: spawn explosion shows particle + light flash; muzzle flash on bullet spawn.
 
 ---
  
@@ -753,11 +753,11 @@ Goal: expose Flax `ParticleSystem` and `Light` components to the event language 
 Goal: extend UI support beyond Labels to Buttons, Images, ProgressBars, TextBoxes, and add tween/animation, focus navigation, and data-binding helpers. Depends on Tasks 1–3, 6.
 
 ### Part A — Button & Image support
-- [ ] Word registry: `when <thing> is clicked` (already works) + `when <thing> is double-clicked`, `when <thing> is right-clicked` (separate from middle), `when <thing> is pressed` / `when <thing> is released` (edge triggers for holdable buttons).
-- [ ] Runtime: detect `Button` component on `UIControl`; expose `Button.IsPressed`, `Button.IsHovered`, `Button.IsDisabled` via conditions.
-- [ ] Actions: `set button <thing> enabled/disabled`, `set button <thing> text to <value>`.
-- [ ] Image/Sprite: `set image of <thing> to <sprite>` (finds `UIControl` with `Image` control), `set color of <thing> to <color>` (tint).
-- [ ] Unit test: button press/release/disabled states fire triggers; image swap works.
+- [x] Word registry: `when <thing> is clicked` (already works) + `when <thing> is double-clicked`, `when <thing> is right-clicked` (separate from middle), `when <thing> is pressed` / `when <thing> is released` (edge triggers for holdable buttons).
+- [x] Runtime: detect `Button` component on `UIControl`; expose `Button.IsPressed`, `Button.IsHovered`, `Button.IsDisabled` via conditions.
+- [x] Actions: `set button <thing> enabled/disabled`, `set button <thing> text to <value>`.
+- [x] Image/Sprite: `set image of <thing> to <sprite>` (finds `UIControl` with `Image` control), `set color of <thing> to <color>` (tint).
+- [x] Unit test: button press/release/disabled states fire triggers; image swap works.
 
 ### Part B — ProgressBar & Slider
 - [ ] Word registry: `set progress of <thing> to <value>` (0–1 or 0–100), `set slider <thing> to <value>`.
@@ -799,10 +799,69 @@ Goal: extend UI support beyond Labels to Buttons, Images, ProgressBars, TextBoxe
 - [ ] Editor verify: inventory opens/closes, HUD updates live, pause menu navigable with arrows/Enter.
 
 ---
+### Task 15 Implementation Notes (API reference — do not re-research)
+
+**Token-saving approach:** Reuse `FindLabel`/`CollectLabels`/`SetLabel` (FlaxActions.cs:1159-1232) by generalizing into `FindControl<T>`/`CollectControls<T>`/`SetControl<T>` — one helper for Button, Image, ProgressBar, Slider, TextBox instead of 5 separate find methods. Reuse `SetTextNode` for `set text of <thing> to <value>` (works for Label/Button.Text). Map Flax events to triggers: `Clicked`/`ButtonClicked` → `when clicked`, `HoverBegin`/`HoverEnd` → hovered, `ValueChanged` → progress/slider, `TextChanged` → textbox. Subscribe once in `FlaxActions`, push via `EventsManager`.
+
+**Confirmed Flax 1.13 API members:**
+
+| Control | Key properties | Key events |
+|---------|---------------|------------|
+| `Button : Label` | `IsPressed`, `Enabled`, `IsFocused`, `Text` | `ButtonClicked`, `Clicked`, `HoverBegin`, `HoverEnd` |
+| `Image` | `Brush` (IBrush), `Color`, `MouseOverColor`, `DisabledTint` | `Clicked` (Action<Image, MouseButton>) |
+| `ProgressBar` | `Value`, `Maximum`, `Minimum` | (poll Value) |
+| `Slider` | `Value` (0-100), `Maximum`, `Minimum` | `ValueChanged`, `SlidingStart`, `SlidingEnd` |
+| `TextBox` | `Text` (string) | `TextChanged`, `EditEnd` |
+| `Control` base | `Enabled`, `Visible`, `IsFocused`, `IsMouseOver` | `Focus()`, `Defocus()` |
+
+**Trigger mapping:** `when <thing> is clicked` → `Clicked`/`ButtonClicked`; `double-clicked` → `OnMouseDoubleClick`; `pressed`/`released` → `IsPressed` polled in `Step`; `is focused` → `IsFocused`; `text changes` → `TextChanged`; `progress/slider is <n>` → poll `Value`.
+
+**Statement nodes:** Reuse `SetTextNode`; add `SetControlEnabledNode`, `SetControlValueNode`, `SetImageBrushNode` as needed.
+
+---
 
 ## Task 16 — TK4 Feature Parity `[ ]`
 
 Goal: implement remaining Tapan Kaikki 4 (TK4) features not yet covered, achieving full feature parity with the original SDL/C++ game. Depends on Tasks 1–8, 14.
+
+### Task 16 Implementation Notes (API reference — do not re-research)
+
+**Token-saving approach:** Reuse existing systems instead of building new ones:
+
+| Feature | Reuse instead of rebuild |
+|---------|-------------------------|
+| Wander / Still | Existing `move toward`, `face`, `stop moving`, `walk speed` — track angle + ticks in `FlaxActions` per-actor state (like `ParticleStates`). No new component class needed. |
+| Hearing / Sound | Existing `IEventWorld.HasLineOfSight` for occlusion; `play sound` + a static sound event bus (sound name, position, radius, frame); poll in `Step`. |
+| Weapon & Ammo | Existing global `Variables` — `Weapon Data` as named variables (`Pistol Damage`, `Pistol Ammo`); `reload` = timer in per-actor state; `spawn Bullet` reads current weapon's bullet type from variables. |
+| Typed Enemies | `when me appears → set my Speed to 2` etc. — no new component; stats are variables initialized by `enemy type <name>`. |
+| Particles (footprint/blood/gibs) | Task 14 `play particle` bridge — reuse `ParticleStates` and `AssetNames.Key`. `spawn Gib` reuses existing `Spawn`. |
+| Multiplayer | `player <n>` = actor name convention (`Player1`…`Player4`); `nearest player` = `IEventWorld.GetNearestActor(me, tag="Player")`; per-player variables (`Player1 Score`). |
+| Level Progression | Existing `LoadSceneByName` for `next level`; global variables persist across scene loads (already implemented); stats as variables. |
+
+**Confirmed Flax 1.13 API members (minimal set):**
+
+| API | Use |
+|-----|-----|
+| `FlaxEngine.Random` / `System.Random` | Wander random angle 0-359°, random duration, footprint left/right, blood particle angles |
+| `Actor.Position` / `Actor.Orientation` | Wander movement, face toward target, sound source position |
+| `IEventWorld.HasLineOfSight` | Sound occlusion (doesn't travel through walls) |
+| `Level.FindActor("Player<N>")` | Multiplayer player references |
+| `LoadSceneByName(name)` | `next level` |
+
+**Trigger/condition/action mappings:**
+
+| Concept | Trigger | Condition | Action |
+|---------|---------|-----------|--------|
+| Wander | — | `me is wandering` | `wander speed <n>` |
+| Still | — | `me is still` | `still` |
+| Hearing | `when me hears <sound> by <dist>` | `me hears <sound> by <dist>` | — |
+| Weapon | `when reload completes` | `weapon is <name>`, `ammo <name> is <n>`, `reloading` | `set weapon to <name>`, `set ammo <name> to <n>`, `reload` |
+| Enemy type | — | `my type is <name>` | `enemy type <name>` |
+| Particles | `when particle <name> ends` | `particle <name> is playing` | `play particle <name>`, `stop particle <name>` |
+| Multiplayer | `when player <n> joins/dies/score changes` | `player <n> exists/is near me` | `send message to player <n>`, `spawn at player <n>` |
+| Level | `when level starts/completes`, `when all enemies dead` | `level number is <n>` | `next level`, `set level to <n>`, `save/load stats` |
+
+**Data-driven design:** All enemy types, weapons, and stats live as named variables (no new data classes). `enemy type "Zombie"` → sets `my Speed=2`, `my SightDistance=10`, `my Health=50`, `my Weapon="Claws"`, `my Hostile=true` via variables.
 
 ### Part A — Random-Angle Wander & Still Mode
 - [ ] Word registry: `wander speed <n>` — pick random angle 0-359°, walk straight for random duration (20-60 ticks), repeat; `still` — stop moving but `face <target>` rotates toward target.
@@ -870,10 +929,44 @@ Goal: implement remaining Tapan Kaikki 4 (TK4) features not yet covered, achievi
 
 ## Task 18 — RTS Game Support `[ ]`
 
-Goal: StarCraft / Red Alert / Homeworld feature parity for the EventManager. See
-`tasks_RTS.md` for the full task list with Parts A–G covering Selection, Resource Economy,
-Construction & Base Building, Production Queues, Orders & Attack-Move, Fog of War, and
-Per-Unit Health, plus RTS `.events` content and acceptance demos.
+### Task 18 Implementation Notes (API reference — do not re-research)
+
+**Token-saving approach:** Reuse existing systems instead of building new classes for every part:
+
+| Feature | Reuse instead of rebuild |
+|---------|-------------------------|
+| Selection | Per-actor `my Selected` boolean variable + per-sheet selection list; selection ring = child `Image` actor (Task 15 UI). No `Selection.cs` class needed. |
+| Resource Economy | Existing global `Variables` — `Minerals`, `Gas`, `SupplyUsed`, `SupplyMax` as named variables. `add <n> to Minerals` / `deduct <n>` already work via `AddNode`. |
+| Construction | Existing `Spawn` (clone template) + `Destroy`; build progress = per-building variable; `place <building>` = `Spawn` at target + play construction anim. |
+| Production Queues | Per-building variable `QueueCount` + timer state in `FlaxActions`; `train <unit>` = decrement resource, start timer, spawn on complete. |
+| Orders & Attack-Move | Existing `move toward`, `attack`, `stop`, `hold position`; per-actor order queue = list of (target, orderType) in `FlaxActions` state. |
+| Fog of War | Existing `IsVisible`/`IsHovered` + visibility variables per area; reveal = set variable + show UI overlay Image. |
+| Damage & Health | Existing `my Health`/`my MaxHealth` variables + `when my Health becomes 0` trigger (already works via variable change detection). |
+| Extended `IEventWorld` | Add `GetSelection()`, `GetSelectedCount()`, `GetResource(string)`, `IsRevealed(actor, playerId)` to existing interface + 3 implementations (Default/Flax/Fake). |
+
+**Confirmed Flax 1.13 API members (minimal set):**
+
+| API | Use |
+|-----|-----|
+| `Actor.Position` / `Actor.Orientation` | Unit movement, attack-move target, construction placement |
+| `Level.FindActor(name)` / `Level.SpawnActor(clone)` | Select units, spawn buildings/units from templates |
+| `IEventWorld.HasLineOfSight` | Fog of War visibility checks |
+| `GlobalVariables` / per-object variables | Resources, health, selection state, queue counts |
+| `Level.Scenes` / scene iteration | Find all units of a type for `select all <unit type>` |
+
+**Trigger/condition/action mappings:**
+
+| Concept | Trigger | Condition | Action |
+|---------|---------|-----------|--------|
+| Selection | `when <unit> is selected/deselected` | `me is selected`, `selection count is <n>` | `select me`, `deselect me`, `set my control group to <n>` |
+| Resources | `when Minerals becomes <n>` | `Minerals is higher than <n>`, `can afford <building>` | `add <n> to Minerals`, `deduct <n> from Minerals` |
+| Construction | `when <building> is placed`, `when construction completes` | `<building> exists`, `is under construction` | `place <building> at <target>`, `cancel build` |
+| Production | `when <building> finishes training <unit>` | `<building> is idle`, `queue count is <n>` | `train <unit> at <building>`, `cancel training <unit>` |
+| Orders | `when order completes`, `when path blocked` | `my current order is <order>` | `attack-move to <target>`, `stop`, `hold position` |
+| Fog | `when area becomes revealed/hidden` | `me is visible to enemy`, `me is hidden` | `reveal area around me by <radius>` |
+| Health | `when my Health becomes 0`, `when my Health is lower than <n>` | `my Health is <n>` | `set Health to <n>`, `add -<n> to Health` |
+
+**Data-driven design:** All unit types, building costs, and build times live as named variables (no new data classes). `enemy type "Marine"` → sets `my Health=40`, `my Damage=6`, `my Speed=3`, etc.
 
 ### Part A — Selection System (`Selection.cs`) [ ]
 - New TriggerKind: Selected, Deselected, SelectionChanged, ControlGroupPressed, ControlGroupHeld
