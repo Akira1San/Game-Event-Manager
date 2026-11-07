@@ -85,6 +85,20 @@ namespace Game
         public string Color = "";
     }
 
+    /// <summary><c>set progress of &lt;thing&gt; to &lt;value&gt;</c> — fills a ProgressBar (0-1 or 0-100).</summary>
+    public class SetProgressNode : StatementNode
+    {
+        public string Thing = "";
+        public ValueNode Value = new NumberValue();
+    }
+
+    /// <summary><c>set slider &lt;thing&gt; to &lt;value&gt;</c> — moves a Slider (0-1 or 0-100).</summary>
+    public class SetSliderNode : StatementNode
+    {
+        public string Thing = "";
+        public ValueNode Value = new NumberValue();
+    }
+
     public class RawActionNode : StatementNode
     {
         public List<Token> Words = new List<Token>();

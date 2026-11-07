@@ -22,6 +22,8 @@ namespace Game
         ButtonPressed,
         ButtonReleased,
         ButtonDisabled,
+        ProgressIs,
+        SliderIs,
         // RTS selection (Task 18 Part A)
         Selected,
         SelectionCountIs,
@@ -97,6 +99,22 @@ namespace Game
                     node.Thing = texts[0];
                     return node;
                 }
+            }
+
+            // `progress of <thing> is <value>` / `slider <thing> is <value>` — UI control values.
+            if (texts.Length >= 5 && texts[0] == "progress" && texts[1] == "of" && texts[3] == "is")
+            {
+                node.Kind = ConditionKind.ProgressIs;
+                node.Thing = texts[2];
+                node.Right = ValueFrom(tokens, texts, 4);
+                return node;
+            }
+            if (texts.Length == 4 && texts[0] == "slider" && texts[2] == "is")
+            {
+                node.Kind = ConditionKind.SliderIs;
+                node.Thing = texts[1];
+                node.Right = ValueFrom(tokens, texts, 3);
+                return node;
             }
 
             // `particle "smoke" is playing` — true while that particle system runs on me.
@@ -271,6 +289,26 @@ namespace Game
                 {
                     object target = FindTarget(node.Thing, context);
                     return target != null && context.World.IsButtonDisabled(target);
+                }
+                case ConditionKind.ProgressIs:
+                {
+                    if (node.Right == null)
+                        return false;
+                    double wanted = ValueEvaluator.Evaluate(node.Right, ContextResolver(context)).AsNumber();
+                    if (wanted > 1)
+                        wanted /= 100; // 0-100 form: 50 means half full
+                    object target = FindTarget(node.Thing, context);
+                    return target != null && Math.Abs(context.World.ProgressOf(target) - wanted) < 0.001;
+                }
+                case ConditionKind.SliderIs:
+                {
+                    if (node.Right == null)
+                        return false;
+                    double wanted = ValueEvaluator.Evaluate(node.Right, ContextResolver(context)).AsNumber();
+                    if (wanted <= 1)
+                        wanted *= 100; // 0-1 form: 0.5 means 50 on a 0-100 slider
+                    object target = FindTarget(node.Thing, context);
+                    return target != null && Math.Abs(context.World.SliderOf(target) - wanted) < 1.0;
                 }
                 case ConditionKind.HasTag:
                 {

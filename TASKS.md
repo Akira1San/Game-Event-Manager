@@ -10,7 +10,7 @@ That session should read `DESIGN.md`, do only that Part, and check the box when 
 `DESIGN.md` says *how it should work*.
 
 **Status legend:** `[ ]` not started  `[~]` in progress  `[x]` done  `[!]` blocked (say why)
-
+read for project links Docs/FlaxSetup.md
 ---
 
 ## Task 1 — Flax Project Scaffold `[x]`
@@ -760,10 +760,10 @@ Goal: extend UI support beyond Labels to Buttons, Images, ProgressBars, TextBoxe
 - [x] Unit test: button press/release/disabled states fire triggers; image swap works.
 
 ### Part B — ProgressBar & Slider
-- [ ] Word registry: `set progress of <thing> to <value>` (0–1 or 0–100), `set slider <thing> to <value>`.
-- [ ] Condition: `progress of <thing> is <value>`, `slider <thing> is <value>`.
-- [ ] Runtime: finds `ProgressBar` / `Slider` controls on `UIControl`, sets `Value` / `MaxValue`.
-- [ ] Unit test: progress bar fills from variable; slider reads back value.
+- [x] Word registry: `set progress of <thing> to <value>` (0–1 or 0–100), `set slider <thing> to <value>`.
+- [x] Condition: `progress of <thing> is <value>`, `slider <thing> is <value>`.
+- [x] Runtime: finds `ProgressBar` / `Slider` controls on `UIControl`, sets `Value` / `MaxValue`.
+- [x] Unit test: progress bar fills from variable; slider reads back value.
 
 ### Part C — TextBox / InputField
 - [ ] Word registry: `when <thing> text changes`, `when <thing> is focused`, `when <thing> loses focus`, `when <thing> submits` (Enter).
@@ -1059,3 +1059,4 @@ Goal: implement remaining Tapan Kaikki 4 (TK4) features not yet covered, achievi
 | 2026-11-05 | Task 12 Part A (`c55f85a`): CharacterController as a third opt-in movement type — `PhysicsMoveMode.Character`, 4-arg `PhysicsMovement.ModeFor` (controller wins over a RigidBody), `CharacterBodySettings` defaults/clamping, `EventSheet` optional **Configure Character Body** capsule fields + `FindCharacterController`, `FlaxActions.MoveSubject` collide-and-slide `Move` (misplaced controller warns + falls back), ground-check distance on `SheetInstance`. **Part B**: every move resolves one `PhysicsMoveMode` up front (`ResolveMoveMode`, stored on `OngoingMove.Mode`), so `move`/`goto` drive velocity/swept/character bodies instead of `Position +=`; body-aware `goto` waypoint stepping (`PhysicsMovement.ReachesWaypoint`/`PathSpeed`) lands physics bodies exactly on each waypoint instead of teleporting or overshooting. DESIGN §5/§9 updated; TASKS goal reworded to additive. **356/356 green**, module build 0/0. Editor acceptance (character scene) still pending. | Task 12 A+B code complete |
 | 2026-11-05 | Task 12 Part C (ground/slope/collision): the event runtime now feeds CharacterController gravity - a per-actor fall speed (new `CharacterFallSpeeds`), scene `Physics.Gravity` (981 cm/s2 default) and `PhysicsMovement.CharacterStep`; grounded ticks gate horizontal movement, airborne ticks fall straight down with a small ground stick while grounded; `AutoGravity` is turned off (warn once) so gravity is applied once. Ground probe uses a downward ray from the capsule feet (`OriginMode`-aware) within the sheet Ground Check Distance, rejects normals steeper than `SlopeLimit` and ignores triggers, with `IsGrounded` as fallback. Dynamic bodies get `UseCCD` enabled automatically; kinematic stay swept; step offset and wall sliding stay native to the controller. New pure helpers (`FeetY`, `IsWalkableSlope`, `FallSpeed`, `CharacterStep`); 10 new checks -> **366/366 green**, module build 0/0. DESIGN section 5/9 updated (AutoGravity question settled); editor acceptance still pending. | Task 12 C code complete |
 | 2026-11-06 | Task 12 Part D (integration with existing words): `move` already resolves forward/back/left/right in the actor local axes and hands that vector to every mode. `turn` is now rotation-only and only accepts left/right; fixed the yaw sign after verifying Flax `Quaternion.Euler(0,+90,0)` turns local forward (+Z) toward +X (the actor right), so left is negative and right positive. `look at` / `face` only set orientation; `face` replaces its previous tracker and missing targets warn once. `push` now follows the target own opt-in and body: dynamic = `AddForce(..., ForceMode.Impulse)`, CharacterController = collide-and-slide `Move`, kinematic = swept `AddMovement`, else transform nudge (new `PhysicsPushMode.Sweep`/`Character` and 4-arg `PushModeFor`). `teleport` warps position and cancels the subject moves/face tracker, clears `CharacterFallSpeeds`, and zeros dynamic linear/angular velocity. 8 new pure checks -> **403/403 green**; module build 0 errors (2 pre-existing Task 13 XML warnings). DESIGN section 5/9 and Task 12 Part D updated; editor acceptance still pending. | Task 12 D code complete |
+| 2026-11-08 | Task 15 Part B (ProgressBar & Slider): registry entries for `set progress of <thing> to <value>` / `set slider <thing> to <value>` and `progress of <thing> is <value>` / `slider <thing> is <value>`; `SetProgressNode`/`SetSliderNode` statement nodes parsed in `EventParser.ParseSet`; `ConditionKind.ProgressIs`/`SliderIs` with `IEventWorld.ProgressOf`/`SliderOf` (0-1 or 0-100 normalization); `EventRuntime.OnSetProgress`/`OnSetSlider` hooks wired in `EventsManager` to `FlaxActions.SetProgress`/`SetSlider` (finds ProgressBar/Slider on UIControl, sets Value/Maximum). 12 new pure checks -> **492 passed**, 11 pre-existing unrelated failures; Game module builds 0 errors (2 pre-existing XML doc warnings). | Task 15 Part B |

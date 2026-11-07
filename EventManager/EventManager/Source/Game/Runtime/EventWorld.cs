@@ -34,6 +34,12 @@ namespace Game
         bool IsButtonPressed(object actor);
         /// <summary>True when <paramref name="actor"/> carries a UI Button that is disabled.</summary>
         bool IsButtonDisabled(object actor);
+        /// <summary>The current fill of the ProgressBar on <paramref name="actor"/>, 0 to 1
+        /// (0 when there is no progress bar).</summary>
+        double ProgressOf(object actor);
+        /// <summary>The current value of the Slider on <paramref name="actor"/>, 0 to 100
+        /// (0 when there is no slider).</summary>
+        double SliderOf(object actor);
         /// <summary>True when a particle named <paramref name="name"/> is playing on
         /// <paramref name="actor"/> (a child or the actor itself), used by
         /// <c>particle "&lt;name&gt;" is playing</c>.</summary>
@@ -114,6 +120,16 @@ namespace Game
         public bool IsButtonDisabled(object actor)
         {
             return false;
+        }
+
+        public double ProgressOf(object actor)
+        {
+            return 0;
+        }
+
+        public double SliderOf(object actor)
+        {
+            return 0;
         }
 
         public bool IsParticlePlaying(object actor, string name)

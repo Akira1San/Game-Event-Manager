@@ -482,6 +482,29 @@ namespace Game
                 CheckEndOfLine(words, idx, line.Line, $"set color of {colorNode.Thing} to <color>");
                 return colorNode;
             }
+            // `set progress of <thing> to <value>` (0-1 or 0-100).
+            if (words.Count >= 6 && words[1].Type == TokenType.Word && words[1].Text == "progress" &&
+                words[2].Type == TokenType.Word && words[2].Text == "of" &&
+                words[3].Type == TokenType.Word &&
+                words[4].Type == TokenType.Word && words[4].Text == "to")
+            {
+                var progressNode = new SetProgressNode { Line = line.Line, Thing = words[3].Text };
+                int idx = 5;
+                progressNode.Value = ReadValue(words, ref idx, line.Line);
+                CheckEndOfLine(words, idx, line.Line, $"set progress of {progressNode.Thing} to <value>");
+                return progressNode;
+            }
+            // `set slider <thing> to <value>` (0-1 or 0-100).
+            if (words.Count >= 5 && words[1].Type == TokenType.Word && words[1].Text == "slider" &&
+                words[2].Type == TokenType.Word &&
+                words[3].Type == TokenType.Word && words[3].Text == "to")
+            {
+                var sliderNode = new SetSliderNode { Line = line.Line, Thing = words[2].Text };
+                int idx = 4;
+                sliderNode.Value = ReadValue(words, ref idx, line.Line);
+                CheckEndOfLine(words, idx, line.Line, $"set slider {sliderNode.Thing} to <value>");
+                return sliderNode;
+            }
             var node = new SetNode { Line = line.Line };
             int index = 1;
             node.Target = ReadVariable(words, ref index, line.Line, "`set`");

@@ -1415,6 +1415,125 @@ when me is released
 
 
     // ------------------------------------------------------------------
+    // Task 15 Part B: ProgressBar & Slider
+    // ------------------------------------------------------------------
+
+    // Parser nodes: `set progress of <thing> to <value>` / `set slider <thing> to <value>`.
+    var progressSpec = parser.Parse("when W is pressed\n  set progress of HealthBar to 0.5\n");
+    var progressStmt = progressSpec.Events[0].Body[0].Statement as SetProgressNode;
+    Check(progressStmt != null && progressStmt.Thing == "HealthBar" &&
+          progressStmt.Value is NumberValue progNum && progNum.Value == 0.5,
+        "`set progress of HealthBar to 0.5` builds a SetProgressNode");
+
+    var sliderSpec = parser.Parse("when W is pressed\n  set slider HealthBar to 50\n");
+    var sliderStmt = sliderSpec.Events[0].Body[0].Statement as SetSliderNode;
+    Check(sliderStmt != null && sliderStmt.Thing == "HealthBar" &&
+          sliderStmt.Value is NumberValue sliderNum && sliderNum.Value == 50,
+        "`set slider HealthBar to 50` builds a SetSliderNode");
+
+    var progressVarSpec = parser.Parse("when W is pressed\n  set progress of HealthBar to Score\n");
+    var progressVarStmt = progressVarSpec.Events[0].Body[0].Statement as SetProgressNode;
+    Check(progressVarStmt != null && progressVarStmt.Value is VariableValue progVal && progVal.Name == "Score",
+        "`set progress of HealthBar to Score` reads a variable");
+
+    ExpectParseError("when W is pressed\n  set progress of HealthBar\n", "variable",
+        "`set progress of` without a value is a friendly error");
+    ExpectParseError("when W is pressed\n  set slider HealthBar\n", "variable",
+        "`set slider` without a value is a friendly error");
+
+    // Condition parsing.
+    var progressCondTokens = new List<Token>
+    {
+        new Token { Type = TokenType.Word, Text = "progress" },
+        new Token { Type = TokenType.Word, Text = "of" },
+        new Token { Type = TokenType.Word, Text = "HealthBar" },
+        new Token { Type = TokenType.Word, Text = "is" },
+        new Token { Type = TokenType.Number, Text = "1", Number = 1 },
+    };
+    var progressCond = Conditions.Parse(progressCondTokens);
+    Check(progressCond.Kind == ConditionKind.ProgressIs && progressCond.Thing == "HealthBar" &&
+          progressCond.Right is NumberValue pcn && pcn.Value == 1,
+        "`progress of HealthBar is 1` parses to ProgressIs with thing \"HealthBar\"");
+
+    var sliderCondTokens = new List<Token>
+    {
+        new Token { Type = TokenType.Word, Text = "slider" },
+        new Token { Type = TokenType.Word, Text = "HealthBar" },
+        new Token { Type = TokenType.Word, Text = "is" },
+        new Token { Type = TokenType.Number, Text = "50", Number = 50 },
+    };
+    var sliderCond = Conditions.Parse(sliderCondTokens);
+    Check(sliderCond.Kind == ConditionKind.SliderIs && sliderCond.Thing == "HealthBar" &&
+          sliderCond.Right is NumberValue scn && scn.Value == 50,
+        "`slider HealthBar is 50` parses to SliderIs with thing \"HealthBar\"");
+
+    // Condition evaluation: progress reads the world value (0-1); 0-100 input normalizes.
+    var pbA = new FakeActor("HealthBar");
+    var worldA = new FakeWorld();
+    worldA.AddActor(pbA);
+    worldA.SetProgress(pbA, 0.5);
+    var engineA = FreshEngine(worldA);
+    engineA.AddSheet(pbA, parser.Parse(@"when me appears
+  progress of HealthBar is 0.5
+  set Half to 1
+  progress of HealthBar is 1
+  set Full to 1"));
+    engineA.Tick(0);
+    Check(engineA.Variables.GetGlobal("Half").AsNumber() == 1 &&
+          engineA.Variables.GetGlobal("Full").Kind == ValueKind.None,
+        "`progress of HealthBar is 0.5` matches a half bar; `is 1` does not");
+
+    var pbB = new FakeActor("HealthBar");
+    var worldB = new FakeWorld();
+    worldB.AddActor(pbB);
+    worldB.SetProgress(pbB, 1);
+    var engineB = FreshEngine(worldB);
+    engineB.AddSheet(pbB, parser.Parse("when me appears\n  progress of HealthBar is 1\n  set Full to 1\n"));
+    engineB.Tick(0);
+    Check(engineB.Variables.GetGlobal("Full").AsNumber() == 1, "`progress of HealthBar is 1` matches a full bar");
+
+    var pbC = new FakeActor("HealthBar");
+    var worldC = new FakeWorld();
+    worldC.AddActor(pbC);
+    worldC.SetProgress(pbC, 50);
+    var engineC = FreshEngine(worldC);
+    engineC.AddSheet(pbC, parser.Parse("when me appears\n  progress of HealthBar is 50\n  set Half50 to 1\n"));
+    engineC.Tick(0);
+    Check(engineC.Variables.GetGlobal("Half50").AsNumber() == 1,
+        "`progress of HealthBar is 50` matches a bar written as 50 (0-100 form)");
+
+    // Slider: `set slider ... to 0.5` writes 50 to a 0-100 slider; `slider ... is 50` reads it back.
+    var sb = new FakeActor("HealthBar");
+    var worldS = new FakeWorld();
+    worldS.AddActor(sb);
+    var engineS = FreshEngine(worldS);
+    engineS.OnSetSlider = (context, thing, value) =>
+    {
+        var target = worldS.FindActor(thing);
+        if (target != null) worldS.SetSlider(target, value.AsNumber());
+    };
+    engineS.AddSheet(sb, parser.Parse(@"when me appears
+  set slider HealthBar to 0.5
+  slider HealthBar is 50
+  set Slid to 1"));
+    engineS.Tick(0);
+    Check(engineS.Variables.GetGlobal("Slid").AsNumber() == 1,
+        "`set slider ... to 0.5` then `slider ... is 50` reads back the 0-100 value");
+
+    // Runtime: the set actions reach the bridge hooks with the values as written.
+    var hookActor = new FakeActor("HealthBar");
+    var hookWorld = new FakeWorld();
+    hookWorld.AddActor(hookActor);
+    var hookEngine = FreshEngine(hookWorld);
+    var hookLog = new List<string>();
+    hookEngine.OnSetProgress = (context, thing, value) => hookLog.Add($"{thing}={value.AsNumber()}");
+    hookEngine.OnSetSlider = (context, thing, value) => hookLog.Add($"{thing}={value.AsNumber()}");
+    hookEngine.AddSheet(hookActor, parser.Parse("when me appears\n  set progress of HealthBar to 0.75\n  set slider HealthBar to 80\n"));
+    hookEngine.Tick(0);
+    Check(hookLog.Contains("HealthBar=0.75") && hookLog.Contains("HealthBar=80"),
+        "`set progress of` / `set slider of` reach the runtime hooks");
+
+    // ------------------------------------------------------------------
     // Task 13 Part A: `me is moving` (movement gate condition)
     // ------------------------------------------------------------------
 
@@ -2854,6 +2973,8 @@ class FakeWorld : IEventWorld
     private readonly HashSet<object> hovered = new HashSet<object>();
     private readonly HashSet<object> buttonPressed = new HashSet<object>();
     private readonly HashSet<object> buttonDisabled = new HashSet<object>();
+    private readonly Dictionary<object, double> progress = new Dictionary<object, double>();
+    private readonly Dictionary<object, double> sliders = new Dictionary<object, double>();
     private readonly Dictionary<object, string> materials = new Dictionary<object, string>();
 
     public void SetHeld(string key, bool on)
@@ -2915,6 +3036,16 @@ class FakeWorld : IEventWorld
             buttonDisabled.Add(actor);
         else
             buttonDisabled.Remove(actor);
+    }
+
+    public void SetProgress(object actor, double value)
+    {
+        progress[actor] = value;
+    }
+
+    public void SetSlider(object actor, double value)
+    {
+        sliders[actor] = value;
     }
 
     public void SetMoving(object actor, bool on)
@@ -2983,6 +3114,18 @@ class FakeWorld : IEventWorld
     public bool IsButtonDisabled(object actor)
     {
         return buttonDisabled.Contains(actor);
+    }
+
+    public double ProgressOf(object actor)
+    {
+        double v = progress.TryGetValue(actor, out var raw) ? raw : 0;
+        return v > 1 ? v / 100.0 : v; // 0-100 input normalizes to 0-1, matching the Flax bar
+    }
+
+    public double SliderOf(object actor)
+    {
+        double v = sliders.TryGetValue(actor, out var raw) ? raw : 0;
+        return v <= 1 ? v * 100.0 : v; // 0-1 input normalizes to 0-100, matching the Flax slider
     }
 
     public bool IsMoving(object actor)

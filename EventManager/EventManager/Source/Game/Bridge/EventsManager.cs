@@ -102,6 +102,10 @@ namespace Game
                 FlaxActions.SetImageBrush(thing, sprite);
             Runtime.OnSetControlColor = (context, thing, color) =>
                 FlaxActions.SetControlColor(thing, color);
+            Runtime.OnSetProgress = (context, thing, value) =>
+                FlaxActions.SetProgress(thing, value.AsNumber());
+            Runtime.OnSetSlider = (context, thing, value) =>
+                FlaxActions.SetSlider(thing, value.AsNumber());
             Runtime.OnPlayStepSound = (context, material, clipName) =>
                 FlaxActions.PlayStepSound(context, material, clipName);
 

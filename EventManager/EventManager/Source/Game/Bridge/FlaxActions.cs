@@ -1568,6 +1568,48 @@ namespace Game
                 WarnOnce($"\u201Cset color of {thing}\u201D needs an actor with an Image on a UIControl (I couldn't find one called \u201C{thing}\u201D). Images in this scene: {ControlActorNames<FlaxEngine.GUI.Image>()}.");
         }
 
+        /// <summary><c>set progress of &lt;thing&gt; to &lt;value&gt;</c>: fills a ProgressBar.
+        /// Accepts 0-1 (e.g. 0.5) or 0-100 (e.g. 50) and normalizes to the bar's 0-1 range.</summary>
+        public static void SetProgress(string thing, double value)
+        {
+            if (string.IsNullOrEmpty(thing))
+            {
+                WarnOnce("\u201Cset progress of\u201D needs the name of the progress bar — like \u201Cset progress of HealthBar to 0.5\u201D.");
+                return;
+            }
+            double progress = value > 1 ? value / 100.0 : value;
+            if (progress < 0) progress = 0;
+            if (progress > 1) progress = 1;
+            if (!SetControl<FlaxEngine.GUI.ProgressBar>(thing, bar =>
+            {
+                bar.Minimum = 0;
+                bar.Maximum = 1;
+                bar.Value = (float)progress;
+            }))
+                WarnOnce($"\u201Cset progress of {thing}\u201D needs an actor with a ProgressBar on a UIControl (I couldn't find one called \u201C{thing}\u201D). Progress bars in this scene: {ControlActorNames<FlaxEngine.GUI.ProgressBar>()}.");
+        }
+
+        /// <summary><c>set slider &lt;thing&gt; to &lt;value&gt;</c>: moves a Slider.
+        /// Accepts 0-1 (e.g. 0.5) or 0-100 (e.g. 50) and normalizes to the slider's 0-100 range.</summary>
+        public static void SetSlider(string thing, double value)
+        {
+            if (string.IsNullOrEmpty(thing))
+            {
+                WarnOnce("\u201Cset slider\u201D needs the name of the slider — like \u201Cset slider HealthBar to 50\u201D.");
+                return;
+            }
+            double sliderValue = value <= 1 ? value * 100.0 : value;
+            if (sliderValue < 0) sliderValue = 0;
+            if (sliderValue > 100) sliderValue = 100;
+            if (!SetControl<FlaxEngine.GUI.Slider>(thing, slider =>
+            {
+                slider.Minimum = 0;
+                slider.Maximum = 100;
+                slider.Value = (float)sliderValue;
+            }))
+                WarnOnce($"\u201Cset slider {thing}\u201D needs an actor with a Slider on a UIControl (I couldn't find one called \u201C{thing}\u201D). Sliders in this scene: {ControlActorNames<FlaxEngine.GUI.Slider>()}.");
+        }
+
         /// <summary>Loads a texture by name, ignoring folder and extension (mirrors <see cref="LoadAudioClip"/>).</summary>
         private static FlaxEngine.Texture LoadTexture(string name)
         {

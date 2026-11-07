@@ -156,6 +156,10 @@ namespace Game
         public Action<EventContext, string, string> OnSetImageBrush = (context, thing, sprite) => { };
         /// <summary>Tint a UI control to the named color ("r g b" or "r g b a").</summary>
         public Action<EventContext, string, string> OnSetControlColor = (context, thing, color) => { };
+        /// <summary>Fill a UI ProgressBar: the value is 0-1 or 0-100.</summary>
+        public Action<EventContext, string, ValueBox> OnSetProgress = (context, thing, value) => { };
+        /// <summary>Move a UI Slider: the value is 0-1 or 0-100.</summary>
+        public Action<EventContext, string, ValueBox> OnSetSlider = (context, thing, value) => { };
 
         private readonly List<SheetInstance> sheets = new List<SheetInstance>();
         private readonly HashSet<string> warnedLines = new HashSet<string>();
@@ -654,6 +658,14 @@ namespace Game
                 else if (statement is SetControlColorNode setColor)
                 {
                     OnSetControlColor(context, setColor.Thing, setColor.Color);
+                }
+                else if (statement is SetProgressNode setProgress)
+                {
+                    OnSetProgress(context, setProgress.Thing, context.Evaluate(setProgress.Value));
+                }
+                else if (statement is SetSliderNode setSlider)
+                {
+                    OnSetSlider(context, setSlider.Thing, context.Evaluate(setSlider.Value));
                 }
                 else if (statement is SetStateNode setState)
                 {

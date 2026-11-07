@@ -168,6 +168,18 @@ namespace Game
             return button == null || !button.Enabled;
         }
 
+        public double ProgressOf(object actor)
+        {
+            var bar = FindProgressBar(actor as Actor);
+            return bar != null && bar.Maximum > 0 ? bar.Value / bar.Maximum : 0;
+        }
+
+        public double SliderOf(object actor)
+        {
+            var slider = FindSlider(actor as Actor);
+            return slider != null ? slider.Value : 0;
+        }
+
         /// <summary>The <see cref="FlaxEngine.GUI.Button"/> on this actor's UIControl, or on a
         /// child UIControl (a button's mesh/image can sit under the actor).</summary>
         private static FlaxEngine.GUI.Button FindButton(Actor actor)
@@ -178,6 +190,30 @@ namespace Game
             if (ui != null)
                 return ui.Control as FlaxEngine.GUI.Button;
             return actor.FindActor<UIControl>()?.Control as FlaxEngine.GUI.Button;
+        }
+
+        /// <summary>The <see cref="FlaxEngine.GUI.ProgressBar"/> on this actor's UIControl, or on a
+        /// child UIControl.</summary>
+        private static FlaxEngine.GUI.ProgressBar FindProgressBar(Actor actor)
+        {
+            if (actor == null)
+                return null;
+            var ui = actor as UIControl;
+            if (ui != null)
+                return ui.Control as FlaxEngine.GUI.ProgressBar;
+            return actor.FindActor<UIControl>()?.Control as FlaxEngine.GUI.ProgressBar;
+        }
+
+        /// <summary>The <see cref="FlaxEngine.GUI.Slider"/> on this actor's UIControl, or on a
+        /// child UIControl.</summary>
+        private static FlaxEngine.GUI.Slider FindSlider(Actor actor)
+        {
+            if (actor == null)
+                return null;
+            var ui = actor as UIControl;
+            if (ui != null)
+                return ui.Control as FlaxEngine.GUI.Slider;
+            return actor.FindActor<UIControl>()?.Control as FlaxEngine.GUI.Slider;
         }
 
         public bool HasLineOfSight(object from, object to)
