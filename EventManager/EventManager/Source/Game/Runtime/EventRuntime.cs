@@ -131,6 +131,8 @@ namespace Game
     {
         public EventVariables Variables = new EventVariables();
         public IEventWorld World = new DefaultEventWorld();
+        /// <summary>RTS selection + control groups (Task 18 Part A).</summary>
+        public Selection Selection;
         public double Time;
         /// <summary>Bridge flag: poll `touches` from world contacts (distance mode / both mode).</summary>
         public bool PollTouches;
@@ -158,6 +160,7 @@ namespace Game
         public EventRuntime()
         {
             Variables.OnWarning = message => OnRuntimeWarning(message);
+            Selection = new Selection(this);
             ClearArrivalContact = ClearArrivalContactForSubjectTarget;
         }
 
@@ -280,6 +283,25 @@ namespace Game
             var signal = new PushSignal { Kind = kind, Name = NameOf(actor), Other = actor };
             foreach (var sheet in sheets)
                 sheet.PushQueue.Enqueue(signal);
+        }
+
+        /// <summary>Select one actor (used by the bridge's click/box select and by
+        /// <c>select me</c>). Returns true when the selection changed.</summary>
+        public bool SelectActor(object actor)
+        {
+            return Selection.Select(actor);
+        }
+
+        /// <summary>Deselect one actor. Returns true when the selection changed.</summary>
+        public bool DeselectActor(object actor)
+        {
+            return Selection.Deselect(actor);
+        }
+
+        /// <summary>Recall a control group (pressing 1–0 in the engine bridge).</summary>
+        public bool SelectControlGroup(int group)
+        {
+            return Selection.SelectControlGroup(group);
         }
 
         public void PushContact(TriggerKind kind, object a, object b)
@@ -410,6 +432,9 @@ namespace Game
         public void Tick(double time)
         {
             Time = time;
+            // Control group keys are global input: raise ControlGroupPressed on the enter
+            // edge before the push queues are drained so the event runs this same tick.
+            Selection.PollControlGroupKeys(World);
             var snapshot = sheets.ToArray();
             foreach (var sheet in snapshot)
             {
@@ -503,6 +528,15 @@ namespace Game
                 return false;
             if (descriptor.RequireName.Length == 0)
                 return true;
+            // `when me is selected` / `when me is deselected`: the signal is broadcast, so
+            // filter it to the sheet's own actor. A named form (`when Marine is selected`)
+            // matches on the signal name below.
+            if (descriptor.Kind == TriggerKind.Selected || descriptor.Kind == TriggerKind.Deselected)
+            {
+                return descriptor.RequireName == "me"
+                    ? ReferenceEquals(signal.Other, sheet.Actor)
+                    : signal.Name == descriptor.RequireName;
+            }
             // `when other touches me` / `when other overlaps me` means "any toucher".
             if (descriptor.RequireName == "me" && IsContactKind(descriptor.Kind))
                 return true;
@@ -512,7 +546,8 @@ namespace Game
             if (descriptor.RequireName == "me" && IsClickKind(descriptor.Kind))
                 return ReferenceEquals(signal.Other, sheet.Actor);
             // Clip names are matched loosely: `play anim "Walk"` answers `when anim "walk" ends`.
-            if (descriptor.Kind == TriggerKind.AnimEnd)
+            // Particle names match the same way: `play particle "Smoke"` answers `when particle "smoke" ends`.
+            if (descriptor.Kind == TriggerKind.AnimEnd || descriptor.Kind == TriggerKind.ParticleEnd)
                 return string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase);
             // Name match, or material match for `when me touches <material>`.
             if (signal.Name == descriptor.RequireName && ExtraConditionsMatch(descriptor, sheet, signal.Other))
@@ -603,6 +638,10 @@ namespace Game
                 {
                     ExecuteSetState(context, setState);
                 }
+                else if (statement is SetControlGroupNode setControlGroup)
+                {
+                    ExecuteSetControlGroup(context, setControlGroup);
+                }
                 else if (statement is PlayStepSoundNode step)
                 {
                     ExecutePlayStepSound(context, step);
@@ -684,6 +723,23 @@ namespace Game
                 if (desc.Kind == TriggerKind.StateIs && desc.RequireName == setState.State)
                     RunEvent(sheet, eventIndex, context.Me);
             }
+        }
+
+        /// <summary>
+        /// <c>set my control group to &lt;n&gt;</c>. On a unit's own sheet it adds that unit
+        /// to the group; on the global sheet it stores the current selection as the group.
+        /// </summary>
+        private void ExecuteSetControlGroup(EventContext context, SetControlGroupNode node)
+        {
+            if (!Selection.IsValidGroup(node.Group))
+            {
+                OnRuntimeWarning($"control groups are 1 to 0 (ten groups) — {node.Group} was skipped.");
+                return;
+            }
+            if (context.Me == null || context.Me is GlobalHost)
+                Selection.SetControlGroup(node.Group, Selection.Selected);
+            else
+                Selection.AddToControlGroup(node.Group, context.Me);
         }
 
         private void ExecuteAdd(EventContext context, AddNode add)
@@ -854,6 +910,10 @@ namespace Game
             switch (descriptor.Kind)
             {
                 case TriggerKind.KeyHeld:
+                    if (World.IsKeyHeld(descriptor.Key))
+                        RunEvent(sheet, eventIndex, null);
+                    break;
+                case TriggerKind.ControlGroupHeld:
                     if (World.IsKeyHeld(descriptor.Key))
                         RunEvent(sheet, eventIndex, null);
                     break;

@@ -132,6 +132,30 @@ namespace Game
             return FlaxActions.IsMoving(actor as Actor);
         }
 
+        public bool IsParticlePlaying(object actor, string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return false;
+            Actor act = actor as Actor;
+            if (act == null)
+                return false;
+            string wanted = AssetNames.Key(name);
+            if (wanted.Length == 0)
+                return false;
+            foreach (ParticleEffect effect in CollectParticleEffects(act))
+            {
+                if (effect == null || effect.ParticlesCount <= 0)
+                    continue;
+                ParticleSystem sys = effect.ParticleSystem;
+                if (sys == null)
+                    continue;
+                string key = AssetNames.Key(sys.Path);
+                if (key.Length > 0 && string.Equals(key, wanted, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
         public bool HasLineOfSight(object from, object to)
         {
             var first = from as Actor;
@@ -294,6 +318,25 @@ namespace Game
                     continue; // templates are inactive and must never be contact targets
                 found.Add(child);
                 Collect(child, found);
+            }
+        }
+
+        /// <summary>This actor and every descendant ParticleEffect, depth-first.</summary>
+        private static IEnumerable<ParticleEffect> CollectParticleEffects(Actor root)
+        {
+            var stack = new Stack<Actor>();
+            stack.Push(root);
+            while (stack.Count > 0)
+            {
+                Actor node = stack.Pop();
+                if (node == null)
+                    continue;
+                ParticleEffect effect = node as ParticleEffect;
+                if (effect != null)
+                    yield return effect;
+                foreach (Actor child in node.Children)
+                    if (child != null)
+                        stack.Push(child);
             }
         }
     }

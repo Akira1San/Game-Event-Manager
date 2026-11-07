@@ -350,6 +350,69 @@ animEndEngine.Tick(0);
 Check(animEndEngine.Variables.GetGlobal("AnimEnded").AsNumber() == 1,
     "`when anim \"shoot\" ends` matches the clip name case-insensitively");
 
+// ------------------------------------------------------------------
+// Task 14 Part A: Particle System words
+// ------------------------------------------------------------------
+
+var playParticle = parser.Parse("when me appears\n  play particle \"smoke\"\n");
+var playParticleSpec = ActionWords.Parse(((RawActionNode)playParticle.Events[0].Body[0].Statement!).Words, _ => { });
+Check(playParticleSpec.Verb == ActionVerb.PlayParticle && playParticleSpec.Thing == "smoke",
+    "`play particle \"smoke\"` parses to PlayParticle with thing \"smoke\"");
+
+var stopParticle = parser.Parse("when me appears\n  stop particle \"smoke\"\n");
+var stopParticleSpec = ActionWords.Parse(((RawActionNode)stopParticle.Events[0].Body[0].Statement!).Words, _ => { });
+Check(stopParticleSpec.Verb == ActionVerb.StopParticle && stopParticleSpec.Thing == "smoke",
+    "`stop particle \"smoke\"` parses to StopParticle with thing \"smoke\"");
+
+var playBare = parser.Parse("when me appears\n  play particle\n");
+var playBareSpec = ActionWords.Parse(((RawActionNode)playBare.Events[0].Body[0].Statement!).Words, _ => { });
+Check(playBareSpec.Verb == ActionVerb.Unknown, "`play particle` without a quoted name is unknown");
+
+var stopBare = parser.Parse("when me appears\n  stop particle\n");
+var stopBareSpec = ActionWords.Parse(((RawActionNode)stopBare.Events[0].Body[0].Statement!).Words, _ => { });
+Check(stopBareSpec.Verb == ActionVerb.Unknown, "`stop particle` without a quoted name is unknown");
+
+var particleEnd = parser.Parse("when particle \"smoke\" ends\n  set Done to 1\n");
+var particleEndDesc = TriggerClassifier.Classify(particleEnd.Events[0]);
+Check(particleEndDesc.Kind == TriggerKind.ParticleEnd && particleEndDesc.RequireName == "smoke",
+    "`when particle \"smoke\" ends` classifies to ParticleEnd with RequireName \"smoke\"");
+
+// runtime: the end push fires the event (name match is case-insensitive)
+var peEngine = FreshEngine(new FakeWorld());
+var peActor = new FakeActor("Cannon");
+peEngine.AddSheet(peActor, particleEnd);
+peEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.ParticleEnd, Name = "Smoke" });
+peEngine.Tick(0);
+Check(peEngine.Variables.GetGlobal("Done").AsNumber() == 1, "`when particle \"smoke\" ends` fires on a case-insensitive name match");
+
+// condition: parses and evaluates through the world
+var cond = parser.Parse("when me appears\n  unless particle \"smoke\" is playing\n  set Playing to 0\n");
+Check(cond.Events[0].Body[0].IsCondition, "`particle \"smoke\" is playing` classifies as a condition");
+var particleCondTokens = new List<Token>
+{
+    new Token { Type = TokenType.Word, Text = "particle" },
+    new Token { Type = TokenType.Str, Text = "smoke" },
+    new Token { Type = TokenType.Word, Text = "is" },
+    new Token { Type = TokenType.Word, Text = "playing" },
+};
+var particleCondNode = Conditions.Parse(particleCondTokens);
+Check(particleCondNode.Kind == ConditionKind.ParticlePlaying && particleCondNode.Thing == "smoke",
+    "`particle \"smoke\" is playing` parses to ParticlePlaying with thing \"smoke\"");
+
+var playingWorld = new FakeWorld();
+var cannon = new FakeActor("Cannon");
+playingWorld.SetParticlePlaying(cannon, "smoke", true);
+var particlePlayingCtx = new EventContext { Variables = new EventVariables(), World = playingWorld, Me = cannon, Runtime = peEngine };
+Check(Conditions.Evaluate(particleCondNode, particlePlayingCtx) == true, "`particle \"smoke\" is playing` is true while the world plays it");
+playingWorld.SetParticlePlaying(cannon, "smoke", false);
+Check(Conditions.Evaluate(particleCondNode, particlePlayingCtx) == false, "`particle \"smoke\" is playing` is false once it stops");
+
+// AssetNames reuse: particles resolve like sounds — folder, .flax and case ignored
+Check(AssetNames.Key("effects/explosion.flax") == "explosion", "AssetNames.Key strips folder and .flax for a particle");
+Check(AssetNames.Key("EFFECTS/Explosion.FLAX") == "explosion", "AssetNames.Key is case-insensitive for a particle");
+Check(AssetNames.Key("smoke") == "smoke", "AssetNames.Key passes a plain particle name through");
+Check(AssetNames.Key("") == "", "AssetNames.Key of an empty name is empty");
+
 var sceneStart = parser.Parse("when scene starts\n  set Score to 0\n");
 Check(sceneStart.Events.Count == 1, "`when scene starts` parses as an event");
 var sceneDesc = TriggerClassifier.Classify(sceneStart.Events[0]);
@@ -2350,6 +2413,227 @@ when 1 is pressed
     rsEngine.Tick(0);
     Check(rsEngine.Variables.GetGlobal("MyState").AsText() == "chase", "`my state` reads \"chase\" after `set state chase`");
 
+    // ------------------------------------------------------------------
+    // Task 18 Part A: RTS selection & control groups
+    // ------------------------------------------------------------------
+
+    // Trigger classification.
+    var selectedProg = parser.Parse("when me is selected\n  set Picked to 1\n");
+    Check(selectedProg.Events.Count == 1, "`when me is selected` parses as an event");
+    var selectedDesc = TriggerClassifier.Classify(selectedProg.Events[0]);
+    Check(selectedDesc.Kind == TriggerKind.Selected && selectedDesc.RequireName == "me",
+        "`when me is selected` classifies to Selected with RequireName \"me\"");
+
+    var namedSelected = parser.Parse("when Marine is selected\n  set Picked to 1\n");
+    var namedSelectedDesc = TriggerClassifier.Classify(namedSelected.Events[0]);
+    Check(namedSelectedDesc.Kind == TriggerKind.Selected && namedSelectedDesc.RequireName == "Marine",
+        "`when Marine is selected` classifies to Selected with RequireName \"Marine\"");
+
+    var deselectedProg = parser.Parse("when me is deselected\n  set Dropped to 1\n");
+    var deselectedDesc = TriggerClassifier.Classify(deselectedProg.Events[0]);
+    Check(deselectedDesc.Kind == TriggerKind.Deselected && deselectedDesc.RequireName == "me",
+        "`when me is deselected` classifies to Deselected");
+
+    var selectionChangedProg = parser.Parse("when selection changes\n  set Changed to 1\n");
+    var selectionChangedDesc = TriggerClassifier.Classify(selectionChangedProg.Events[0]);
+    Check(selectionChangedDesc.Kind == TriggerKind.SelectionChanged,
+        "`when selection changes` classifies to SelectionChanged");
+
+    var groupPressedProg = parser.Parse("when control group 1 is pressed\n  set GroupKey to 1\n");
+    var groupPressedDesc = TriggerClassifier.Classify(groupPressedProg.Events[0]);
+    Check(groupPressedDesc.Kind == TriggerKind.ControlGroupPressed &&
+          groupPressedDesc.RequireName == "1" && groupPressedDesc.Key == "D1",
+        "`when control group 1 is pressed` classifies to ControlGroupPressed (key D1)");
+
+    var groupHeldProg = parser.Parse("when control group 0 is held\n  set GroupKey to 1\n");
+    var groupHeldDesc = TriggerClassifier.Classify(groupHeldProg.Events[0]);
+    Check(groupHeldDesc.Kind == TriggerKind.ControlGroupHeld && groupHeldDesc.Key == "D0",
+        "`when control group 0 is held` classifies to ControlGroupHeld (key D0)");
+
+    // Condition parsing.
+    var selectionCondProg = parser.Parse(@"when every 1 seconds
+  me is selected
+  set Gate to 1
+  selection count is 2
+  set CountGate to 1
+  my control group 1 is assigned
+  set GroupGate to 1");
+    var selectedCond = Conditions.Parse(selectionCondProg.Events[0].Body[0].Words);
+    Check(selectedCond.Kind == ConditionKind.Selected, "`me is selected` parses to ConditionKind.Selected");
+    var countCond = Conditions.Parse(selectionCondProg.Events[0].Body[2].Words);
+    Check(countCond.Kind == ConditionKind.SelectionCountIs && countCond.Right is NumberValue cn && cn.Value == 2,
+        "`selection count is 2` parses to SelectionCountIs with the right value");
+    var groupCond = Conditions.Parse(selectionCondProg.Events[0].Body[4].Words);
+    Check(groupCond.Kind == ConditionKind.MyControlGroupAssigned && groupCond.Group == 1,
+        "`my control group 1 is assigned` parses to MyControlGroupAssigned with Group 1");
+
+    // Action parsing.
+    var selectMeSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  select me"), null);
+    Check(selectMeSpec.Verb == ActionVerb.Select && selectMeSpec.Thing == "me" && !selectMeSpec.All && !selectMeSpec.Near,
+        "`select me` parses as a single-target Select");
+
+    var deselectMeSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  deselect me"), null);
+    Check(deselectMeSpec.Verb == ActionVerb.Deselect && deselectMeSpec.Thing == "me",
+        "`deselect me` parses as Deselect");
+
+    var selectAllSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  select all Marine"), null);
+    Check(selectAllSpec.Verb == ActionVerb.Select && selectAllSpec.All && selectAllSpec.Thing == "Marine",
+        "`select all Marine` parses as an all-of-type Select");
+
+    var selectNearSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  select units near me by 5"), null);
+    Check(selectNearSpec.Verb == ActionVerb.Select && selectNearSpec.Near &&
+          selectNearSpec.Thing == "me" && selectNearSpec.Distance == 5,
+        "`select units near me by 5` parses as a near Select with radius 5");
+
+    var deselectAllSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  deselect all"), null);
+    Check(deselectAllSpec.Verb == ActionVerb.Deselect && deselectAllSpec.All,
+        "`deselect all` parses as Deselect with the all flag");
+
+    var controlGroupSet = parser.Parse("when me appears\n  set my control group to 2\n");
+    Check(controlGroupSet.Events[0].Body[0].Statement is SetControlGroupNode cgNode && cgNode.Group == 2,
+        "`set my control group to 2` builds a SetControlGroupNode with Group 2");
+    ExpectParseError("when me appears\n  set my control group to\n", "looks like",
+        "`set my control group to` without a number is a friendly error");
+
+    // Runtime: Selected / Deselected / SelectionChanged fire on real selection changes.
+    var selWorld = new FakeWorld();
+    var marine = new FakeActor("Marine");
+    selWorld.AddActor(marine);
+    var selEngine = FreshEngine(selWorld);
+    selEngine.AddSheet(marine, parser.Parse(@"when me is selected
+  set SelectedCount to SelectedCount + 1
+when me is deselected
+  set DeselectedCount to DeselectedCount + 1"));
+    selEngine.AddSheet(new GlobalHost(), parser.Parse(@"when selection changes
+  set Changes to Changes + 1
+when Marine is selected
+  set NamedSelections to NamedSelections + 1"));
+
+    selEngine.SelectActor(marine);
+    selEngine.Tick(0);
+    Check(selEngine.Variables.GetGlobal("SelectedCount").AsNumber() == 1,
+        "`when me is selected` fires on the selected actor's own sheet");
+    Check(selEngine.Variables.GetGlobal("NamedSelections").AsNumber() == 1,
+        "`when Marine is selected` reaches a global sheet by name");
+    Check(selEngine.Variables.GetGlobal("Changes").AsNumber() == 1,
+        "`when selection changes` fires once for the selection change");
+    selEngine.Tick(1);
+    Check(selEngine.Variables.GetGlobal("SelectedCount").AsNumber() == 1,
+        "still selected does not refire `when me is selected`");
+    selEngine.DeselectActor(marine);
+    selEngine.Tick(2);
+    Check(selEngine.Variables.GetGlobal("DeselectedCount").AsNumber() == 1,
+        "`when me is deselected` fires on deselection");
+    Check(selEngine.Variables.GetGlobal("Changes").AsNumber() == 2,
+        "`when selection changes` fires again for the deselection");
+
+    // Runtime: `me is selected` and `selection count is <n>` gate actions.
+    var selCondWorld = new FakeWorld();
+    var scout = new FakeActor("Scout");
+    var tank = new FakeActor("Tank");
+    selCondWorld.AddActor(scout);
+    selCondWorld.AddActor(tank);
+    var selCondEngine = FreshEngine(selCondWorld);
+    selCondEngine.AddSheet(scout, parser.Parse(@"when every 1 seconds
+  me is selected
+  set SelectedTicks to SelectedTicks + 1"));
+    selCondEngine.AddSheet(new GlobalHost(), parser.Parse(@"when every 1 seconds
+  selection count is 2
+  set TwoSelectedTicks to TwoSelectedTicks + 1"));
+    selCondEngine.Tick(1);
+    Check(selCondEngine.Variables.GetGlobal("SelectedTicks").IsNone(),
+        "`me is selected` blocks while the actor is not selected");
+    selCondEngine.SelectActor(scout);
+    selCondEngine.Tick(2);
+    Check(selCondEngine.Variables.GetGlobal("SelectedTicks").AsNumber() == 1,
+        "`me is selected` lets the event run once the actor is selected");
+    Check(selCondEngine.Variables.GetGlobal("TwoSelectedTicks").IsNone(),
+        "`selection count is 2` blocks with only one actor selected");
+    selCondEngine.SelectActor(tank);
+    selCondEngine.Tick(3);
+    Check(selCondEngine.Variables.GetGlobal("TwoSelectedTicks").AsNumber() == 1,
+        "`selection count is 2` runs with two actors selected");
+    Check(selCondEngine.Variables.GetGlobal("SelectedTicks").AsNumber() == 2,
+        "the selected actor keeps passing the condition each tick");
+
+    // Runtime: `set my control group to <n>` on a unit's sheet, plus membership condition.
+    var cgWorld = new FakeWorld();
+    var grunt = new FakeActor("Grunt");
+    cgWorld.AddActor(grunt);
+    var cgEngine = FreshEngine(cgWorld);
+    cgEngine.AddSheet(grunt, parser.Parse(@"when me appears
+  set my control group to 1
+when every 1 seconds
+  my control group 1 is assigned
+  set InGroupTicks to InGroupTicks + 1"));
+    cgEngine.Tick(0);
+    Check(cgEngine.Selection.IsInControlGroup(grunt, 1),
+        "`set my control group to 1` assigns the unit to control group 1");
+    cgEngine.Tick(1);
+    Check(cgEngine.Variables.GetGlobal("InGroupTicks").AsNumber() == 1,
+        "`my control group 1 is assigned` passes for a unit in that group");
+
+    // Runtime: assigning the current selection from the global sheet (group stores the selection).
+    cgEngine.SelectActor(grunt);
+    cgEngine.AddSheet(new GlobalHost(), parser.Parse(@"when 2 is pressed
+  set my control group to 2"));
+    cgEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "2" });
+    cgEngine.Tick(2);
+    Check(cgEngine.Selection.IsInControlGroup(grunt, 2),
+        "`set my control group to 2` on the global sheet stores the current selection");
+
+    // Runtime: pressing and holding a control-group key.
+    var keyWorld = new FakeWorld();
+    var keyUnit = new FakeActor("Unit");
+    keyWorld.AddActor(keyUnit);
+    var keyEngine = FreshEngine(keyWorld);
+    keyEngine.AddSheet(keyUnit, parser.Parse(@"when control group 1 is pressed
+  set GroupPressed to GroupPressed + 1
+when control group 1 is held
+  set GroupHeld to GroupHeld + 1"));
+    keyWorld.SetHeld("D1", true);
+    keyEngine.Tick(0);
+    Check(keyEngine.Variables.GetGlobal("GroupPressed").AsNumber() == 1,
+        "`when control group 1 is pressed` fires on the key's enter edge");
+    Check(keyEngine.Variables.GetGlobal("GroupHeld").AsNumber() == 1,
+        "`when control group 1 is held` fires while the key is down");
+    keyEngine.Tick(1);
+    Check(keyEngine.Variables.GetGlobal("GroupPressed").AsNumber() == 1,
+        "holding the group key does not refire `pressed`");
+    Check(keyEngine.Variables.GetGlobal("GroupHeld").AsNumber() == 2,
+        "`held` keeps firing every tick");
+    keyWorld.SetHeld("D1", false);
+    keyEngine.Tick(2);
+    Check(keyEngine.Variables.GetGlobal("GroupHeld").AsNumber() == 2, "`held` stops when the key is released");
+    keyWorld.SetHeld("D1", true);
+    keyEngine.Tick(3);
+    Check(keyEngine.Variables.GetGlobal("GroupPressed").AsNumber() == 2,
+        "pressing the group key again refires `pressed`");
+
+    // Selection state helpers: recall, replace, forget.
+    var stateEngine = FreshEngine(new FakeWorld());
+    var a1 = new FakeActor("A");
+    var a2 = new FakeActor("B");
+    stateEngine.Selection.ReplaceSelection(new object[] { a1, a2 });
+    Check(stateEngine.Selection.Count == 2 && stateEngine.Selection.IsSelected(a1) && stateEngine.Selection.IsSelected(a2),
+        "ReplaceSelection selects exactly the requested actors");
+    stateEngine.Selection.SetControlGroup(3, new object[] { a1, a2 });
+    Check(stateEngine.Selection.IsControlGroupAssigned(3) && stateEngine.Selection.IsInControlGroup(a2, 3),
+        "SetControlGroup stores the group members");
+    stateEngine.Selection.Clear();
+    Check(stateEngine.Selection.Count == 0, "Clear empties the selection");
+    Check(stateEngine.SelectControlGroup(3) && stateEngine.Selection.Count == 2,
+        "SelectControlGroup recalls the stored group");
+    stateEngine.Selection.Forget(a1);
+    Check(!stateEngine.Selection.IsSelected(a1) && !stateEngine.Selection.IsInControlGroup(a1, 3),
+        "Forget removes a destroyed actor from the selection and every control group");
+    Check(!stateEngine.SelectControlGroup(9), "recalling an unassigned group changes nothing");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
@@ -2503,6 +2787,21 @@ class FakeWorld : IEventWorld
     public bool IsMoving(object actor)
     {
         return moving.Contains(actor);
+    }
+
+    private readonly HashSet<(object, string)> playingParticles = new HashSet<(object, string)>();
+
+    public void SetParticlePlaying(object actor, string name, bool on)
+    {
+        if (on)
+            playingParticles.Add((actor, name));
+        else
+            playingParticles.Remove((actor, name));
+    }
+
+    public bool IsParticlePlaying(object actor, string name)
+    {
+        return playingParticles.Contains((actor, name));
     }
 
     public object FindActor(string name)

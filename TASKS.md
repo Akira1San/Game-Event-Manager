@@ -714,12 +714,12 @@ names to sound clips, and trigger once per step with a cooldown.
 - [x] Unit test: cooldown prevents double-play; material miss warns once and skips.
 
 ### Part D — Example
-- [ ] Write `Grass.events` / `Player.events` snippet:
+- [X] Write `Grass.events` / `Player.events` snippet:
   ```
   when me touches Grass and me is moving
     play sound "grass_step.wav"
   ```
-- [ ] Editor verify: walk on grass → footstep per step; stand still → silence; walk on stone
+- [X] Editor verify: walk on grass → footstep per step; stand still → silence; walk on stone
   → `stone_step.wav`.
 
 ---
@@ -729,11 +729,11 @@ names to sound clips, and trigger once per step with a cooldown.
 Goal: expose Flax `ParticleSystem` and `Light` components to the event language so effects and lighting can be controlled from `.events` files. Depends on Tasks 1–3.
 
 ### Part A — Particle System words
-- [ ] Word registry: `play particle "<name>"`, `stop particle "<name>"`, `when particle "<name>" ends` (one-shot), plus condition `particle "<name>" is playing`.
-- [ ] Parser: new action verbs (`play`/`stop` with `particle` noun), new trigger kind `ParticleEnd`.
-- [ ] Runtime: `FlaxActions` finds `ParticleSystem` on the actor (or child via `FindActor<ParticleSystem>()`), calls `Play()`/`Stop()`, tracks one-shots by asset key for `when particle ends`.
-- [ ] Asset resolution: reuse `AssetNames` pattern (folder/`.flax`/case-insensitive) so `"explosion"` finds `effects/explosion.flax`.
-- [ ] Unit test: `play particle "smoke"` → `ParticleSystem.Play()` called; one-shot end fires `ParticleEnd`.
+- [x] Word registry: `play particle "<name>"`, `stop particle "<name>"`, `when particle "<name>" ends` (one-shot), plus condition `particle "<name>" is playing`.
+- [x] Parser: new action verbs (`play`/`stop` with `particle` noun), new trigger kind `ParticleEnd`.
+- [x] Runtime: `FlaxActions` finds `ParticleSystem` on the actor (or child via `FindActor<ParticleSystem>()`), calls `Play()`/`Stop()`, tracks one-shots by asset key for `when particle ends`.
+- [x] Asset resolution: reuse `AssetNames` pattern (folder/`.flax`/case-insensitive) so `"explosion"` finds `effects/explosion.flax`.
+- [x] Unit test: `play particle "smoke"` → `ParticleSystem.Play()` called; one-shot end fires `ParticleEnd`.
 
 ### Part B — Light words
 - [ ] Word registry: `set light intensity to <n>`, `set light color to <color>`, `set light range to <n>`, `enable light`, `disable light`, `toggle light`.
@@ -865,6 +865,56 @@ Goal: implement remaining Tapan Kaikki 4 (TK4) features not yet covered, achievi
 - [ ] Persistence: global variables survive scene load (already implemented); `wipe game variables` for new game.
 - [ ] Unit test: kill 5 zombies → `kills Zombie` = 5; `next level` loads next scene; stats persist.
 - [ ] Example: `Game.events` — `when all enemies dead → show text "Level complete!" → wait 2 → next level`.
+
+---
+
+## Task 18 — RTS Game Support `[ ]`
+
+Goal: StarCraft / Red Alert / Homeworld feature parity for the EventManager. See
+`tasks_RTS.md` for the full task list with Parts A–G covering Selection, Resource Economy,
+Construction & Base Building, Production Queues, Orders & Attack-Move, Fog of War, and
+Per-Unit Health, plus RTS `.events` content and acceptance demos.
+
+### Part A — Selection System (`Selection.cs`) [ ]
+- New TriggerKind: Selected, Deselected, SelectionChanged, ControlGroupPressed, ControlGroupHeld
+- New ConditionKind: Selected, SelectionCountIs, MyControlGroupAssigned
+- New actions: `select me`, `deselect me`, `set my control group to <n>`, `select all <unit type>`, `select units near me by <dist>`
+- UI: selection ring per unit; control group indicators (1–0 keys)
+
+### Part B — Resource Economy (`ResourceManager.cs`) [ ]
+- Globals: Minerals, Gas, SupplyUsed, SupplyMax (SC); Ore, Gems, Power (RA); RUs (HW)
+- Triggers: `when Minerals becomes <n>`, `when Supply becomes <n>`
+- Conditions: `Minerals is higher than <n>`, `can afford <building>`
+- Actions: `add <n> to Minerals`, `set Minerals to <n>`, `deduct <n> from Minerals`, `increase Supply Max by <n>`
+
+### Part C — Construction & Base Building (`ConstructionManager.cs`) [ ]
+- Triggers: `when <building> is placed`, `when construction completes`, `when <building> is destroyed`
+- Actions: `place <building> at <target>`, `cancel build`, `set build progress to <n>`
+- Conditions: `<building> exists`, `<building> is under construction`, `enough Minerals for <building>`
+
+### Part D — Production Queues & Unit Training [ ]
+- Triggers: `when <building> finishes training <unit>`, `when production queue is empty`
+- Actions: `train <unit> at <building>`, `cancel training <unit>`, `set build time to <n> seconds`
+- Conditions: `<building> is idle`, `queue count is <n>`
+
+### Part E — Orders & Attack-Move (`OrderQueue.cs`) [ ]
+- Triggers: `when order completes`, `when queued order starts`, `when path blocked`
+- Actions: `attack-move to <target>`, `attack <target>`, `stop`, `hold position`, `add order to queue`, `clear orders`, `set rally point to <target>`
+- Per-unit state: `my current order`, `my order target`, `my order queue`
+
+### Part F — Fog of War / Visibility (`FogOfWarManager.cs`) [ ]
+- Triggers: `when area becomes revealed`, `when area becomes hidden`, `when <unit> enters fog`
+- Actions: `reveal area around me by <radius>`, `hide area around me by <radius>`, `set visibility to <radius>`
+- Conditions: `me is visible to enemy`, `me is hidden`
+
+### Part G — Damage & Per-Unit Health [ ]
+- Variables: `my Health`, `my MaxHealth`, `my Shield`, `my Armor`
+- Triggers: `when my Health becomes 0`, `when my Health is lower than <n>`
+- Actions: `set Health to <n>`, `add -<n> to Health`, `add <n> to Shield`, `set Shield to <n>`
+
+### Part H — Extended `IEventWorld` [ ]
+- `GetSelection()`, `GetSelectedCount()`, `GetResource(string)`, `IsRevealed(actor, playerId)`,
+  `RevealArea(center, radius)`, `HideArea(...)`, `GetBuildProgress(building)`, `GetOrderQueue(unit)`
 
 ---
 

@@ -18,6 +18,11 @@ namespace Game
         Moving,
         HasTag,
         BagHas,
+        ParticlePlaying,
+        // RTS selection (Task 18 Part A)
+        Selected,
+        SelectionCountIs,
+        MyControlGroupAssigned,
     }
 
     public class ConditionNode
@@ -31,6 +36,8 @@ namespace Game
         public string Tag = "";
         public double Percent;
         public double Distance;
+        /// <summary>Control group number for <c>my control group &lt;n&gt; is assigned</c>.</summary>
+        public int Group = -1;
     }
 
     public static class Conditions
@@ -64,6 +71,41 @@ namespace Game
             {
                 node.Kind = ConditionKind.Moving;
                 return node;
+            }
+
+            // `particle "smoke" is playing` — true while that particle system runs on me.
+            if (texts.Length >= 4 && texts[0] == "particle" && texts[2] == "is" && texts[3] == "playing")
+            {
+                node.Kind = ConditionKind.ParticlePlaying;
+                node.Thing = tokens[1].Text;
+                return node;
+            }
+
+            // ---- RTS selection (Task 18 Part A) ----
+            if (texts.Length == 3 && texts[0] == "me" && texts[1] == "is" && texts[2] == "selected")
+            {
+                node.Kind = ConditionKind.Selected;
+                return node;
+            }
+            if (texts.Length >= 4 && texts[0] == "selection" && texts[1] == "count" && texts[2] == "is")
+            {
+                node.Kind = ConditionKind.SelectionCountIs;
+                node.Right = ValueFrom(tokens, texts, 3);
+                return node;
+            }
+            {
+                // `my control group 3 is assigned` (a unit's membership) and the global
+                // `control group 3 is assigned` (the group holds at least one unit).
+                int groupStart = texts[0] == "my" ? 1 : 0;
+                if (texts.Length >= groupStart + 5 &&
+                    texts[groupStart] == "control" && texts[groupStart + 1] == "group" &&
+                    tokens[groupStart + 2].Type == TokenType.Number &&
+                    texts[groupStart + 3] == "is" && texts[groupStart + 4] == "assigned")
+                {
+                    node.Kind = ConditionKind.MyControlGroupAssigned;
+                    node.Group = (int)tokens[groupStart + 2].Number;
+                    return node;
+                }
             }
 
             int isIndex = IndexOf(texts, "is");
@@ -187,6 +229,8 @@ namespace Game
                 }
                 case ConditionKind.Moving:
                     return context.World.IsMoving(context.Me);
+                case ConditionKind.ParticlePlaying:
+                    return context.World.IsParticlePlaying(context.Me, node.Thing);
                 case ConditionKind.HasTag:
                 {
                     object target = FindTarget(node.Thing, context);
@@ -196,6 +240,24 @@ namespace Game
                 {
                     object owner = context.Me;
                     return context.Runtime.BagHas(owner, node.Thing);
+                }
+                case ConditionKind.Selected:
+                    return context.Me != null && context.Runtime.Selection.IsSelected(context.Me);
+                case ConditionKind.SelectionCountIs:
+                {
+                    if (node.Right == null)
+                        return false;
+                    double wanted = ValueEvaluator.Evaluate(node.Right, ContextResolver(context)).AsNumber();
+                    return context.Runtime.Selection.Count == wanted;
+                }
+                case ConditionKind.MyControlGroupAssigned:
+                {
+                    Selection selection = context.Runtime.Selection;
+                    // A global sheet asks whether the group exists at all; a unit's sheet
+                    // asks whether this unit belongs to the group.
+                    if (context.Me == null || context.Me is GlobalHost)
+                        return selection.IsControlGroupAssigned(node.Group);
+                    return selection.IsInControlGroup(context.Me, node.Group);
                 }
                 default:
                     return false;

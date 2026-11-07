@@ -50,6 +50,19 @@ namespace Game
         private static Dictionary<string, Guid> AnimIndexCache;
         /// <summary>Full animation asset keys (no aliases), for the friendly "I don't know the anim" list.</summary>
         private static List<string> AnimFullNames;
+        /// <summary>One tracked particle effect on an actor: the effect, its normalized asset key, the name as
+        /// written in the event, whether it is a one-shot (non-looping), and whether it was playing last tick.</summary>
+        private sealed class ParticleState
+        {
+            public ParticleEffect Effect;
+            public string Key;
+            public string Name;
+            public bool OneShot;
+            public bool WasPlaying;
+        }
+        /// <summary>Particles currently playing per actor, used to detect when a one-shot finishes
+        /// and raise <c>when particle "&lt;name&gt;" ends</c>.</summary>
+        private static readonly Dictionary<object, ParticleState> ParticleStates = new Dictionary<object, ParticleState>();
         /// <summary>Actor the camera keeps centered (<c>camera follows &lt;thing&gt;</c>).</summary>
         internal static Actor CameraFollowTarget;
         /// <summary>Camera position minus the target position, captured when the follow starts.</summary>
@@ -93,6 +106,7 @@ namespace Game
             SoundIndexCache = null;
             AnimIndexCache = null;
             AnimFullNames = null;
+            ParticleStates.Clear();
             CameraFollowTarget = null;
             CameraLookAtTarget = null;
             CameraAtTarget = null;
@@ -280,6 +294,29 @@ namespace Game
                     EventsManager.Instance?.HandleAnimEnd(actor, clip);
             }
 
+            // One-shot particles: when a tracked non-looping effect stops emitting on its own,
+            // fire `when particle "<name>" ends` on its actor's sheet(s).
+            var particleEnded = new List<(Actor Actor, string Name)>();
+            foreach (var pair in ParticleStates)
+            {
+                var actor = pair.Key as Actor;
+                var state = pair.Value;
+                if (actor == null || actor.Scene == null || state.Effect == null || state.Effect.Scene == null)
+                {
+                    particleEnded.Add((actor, state.Name));
+                    continue;
+                }
+                bool nowPlaying = state.Effect.ParticlesCount > 0;
+                if (state.OneShot && state.WasPlaying && !nowPlaying)
+                    particleEnded.Add((actor, state.Name));
+                state.WasPlaying = nowPlaying;
+            }
+            foreach (var (actor, name) in particleEnded)
+            {
+                EventsManager.Instance?.HandleParticleEnd(actor, name);
+                ParticleStates.Remove(actor);
+            }
+
             // `camera follows <thing>`: translate the camera by the target's movement, keeping
             // the offset captured when the follow started (the authored framing never changes).
             if (CameraFollowTarget != null && CameraFollowTarget.Scene == null)
@@ -362,6 +399,12 @@ namespace Game
                         BrakeBody(mover);
                     break;
                 }
+                case ActionVerb.Select:
+                    ExecuteSelect(context, spec);
+                    break;
+                case ActionVerb.Deselect:
+                    ExecuteDeselect(context, spec);
+                    break;
                 case ActionVerb.Turn:
                 {
                     var me = context.Me as Actor;
@@ -570,6 +613,7 @@ namespace Game
                             if (Moves[i].Subject == actor || Moves[i].Target == actor)
                                 Moves.RemoveAt(i);
                         ClearActor(actor);
+                        context.Runtime.Selection.Forget(actor);
                         FlaxEngine.Object.Destroy(actor, 0f);
                     }
                     break;
@@ -605,6 +649,12 @@ namespace Game
                     }
                     break;
                 }
+                case ActionVerb.PlayParticle:
+                    PlayParticle(context, spec);
+                    break;
+                case ActionVerb.StopParticle:
+                    StopParticle(context, spec);
+                    break;
                 case ActionVerb.PlayAnim:
                     PlayAnim(context, spec);
                     break;
@@ -662,6 +712,74 @@ namespace Game
                     Debug.LogWarning($"Event print: {spec.Thing}");
                     break;
             }
+        }
+
+        /// <summary>
+        /// <c>select me</c>, <c>select all Marine</c>, <c>select units near me by 5</c>.
+        /// The "all"/"near" forms replace the current selection (RTS group select); the
+        /// single-target form adds to it.
+        /// </summary>
+        private static void ExecuteSelect(EventContext context, ActionSpec spec)
+        {
+            Selection selection = context.Runtime.Selection;
+            if (spec.All)
+            {
+                var matches = new List<object>();
+                foreach (object other in context.Runtime.World.Actors())
+                {
+                    if (other == null)
+                        continue;
+                    if (context.Runtime.World.NameOf(other) == spec.Thing)
+                        matches.Add(other);
+                }
+                if (matches.Count == 0)
+                    WarnOnce($"I couldn't find any \u201C{spec.Thing}\u201D to select.");
+                selection.ReplaceSelection(matches);
+                return;
+            }
+            if (spec.Near)
+            {
+                object anchor = ResolveThing(context, spec.Thing);
+                if (anchor == null)
+                {
+                    WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D to select units near.");
+                    return;
+                }
+                var matches = new List<object>();
+                foreach (object other in context.Runtime.World.Actors())
+                {
+                    if (other == null)
+                        continue;
+                    if (context.Runtime.World.Distance2D(anchor, other) <= spec.Distance)
+                        matches.Add(other);
+                }
+                selection.ReplaceSelection(matches);
+                return;
+            }
+            object target = ResolveThing(context, spec.Thing);
+            if (target == null)
+            {
+                WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D to select.");
+                return;
+            }
+            context.Runtime.SelectActor(target);
+        }
+
+        /// <summary><c>deselect me</c> / <c>deselect all</c>.</summary>
+        private static void ExecuteDeselect(EventContext context, ActionSpec spec)
+        {
+            if (spec.All)
+            {
+                context.Runtime.Selection.Clear();
+                return;
+            }
+            object target = ResolveThing(context, spec.Thing);
+            if (target == null)
+            {
+                WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D to deselect.");
+                return;
+            }
+            context.Runtime.DeselectActor(target);
         }
 
         private static void Remember(OngoingMove move)
@@ -1122,6 +1240,58 @@ namespace Game
             audio.Play();
             ActiveSounds.Add((me, audio));
             FlaxEngine.Object.Destroy(audio, clip.Length);
+        }
+
+        /// <summary><c>play particle "&lt;name&gt;"</c>: plays the actor's <see cref="ParticleEffect"/>
+        /// (or one on a child), resolved like sounds by asset key so "explosion" finds effects/explosion.flax.</summary>
+        private static void PlayParticle(EventContext context, ActionSpec spec)
+        {
+            if (string.IsNullOrEmpty(spec.Thing))
+            {
+                WarnOnce("\u201Cplay particle\u201D needs a name in quotes, like \u201Cplay particle \"smoke\"\u201D.");
+                return;
+            }
+            var me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Cplay particle\u201D needs to run on an actor's sheet — the global Game sheet has no body to attach particles to.");
+                return;
+            }
+            var effect = FindParticleEffect(me);
+            if (effect == null)
+            {
+                WarnOnce($"I couldn't find a ParticleEffect on \u201C{me.Name}\u201D to play \u201C{spec.Thing}\u201D.");
+                return;
+            }
+            effect.Play();
+            string key = AssetNames.Key(spec.Thing);
+            bool oneShot = !effect.IsLooping;
+            ParticleStates[me] = new ParticleState
+            {
+                Effect = effect,
+                Key = key,
+                Name = spec.Thing.Trim(),
+                OneShot = oneShot,
+                WasPlaying = effect.ParticlesCount > 0,
+            };
+        }
+
+        /// <summary><c>stop particle "&lt;name&gt;"</c>: stops the actor's matching particle effect.</summary>
+        private static void StopParticle(EventContext context, ActionSpec spec)
+        {
+            if (string.IsNullOrEmpty(spec.Thing))
+            {
+                WarnOnce("\u201Cstop particle\u201D needs a name in quotes, like \u201Cstop particle \"smoke\"\u201D.");
+                return;
+            }
+            var me = context.Me as Actor;
+            if (me == null || !ParticleStates.TryGetValue(me, out var state) || state.Effect == null)
+                return;
+            if (!string.Equals(state.Key, AssetNames.Key(spec.Thing), StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(state.Name, spec.Thing, StringComparison.OrdinalIgnoreCase))
+                return;
+            state.Effect.Stop();
+            ParticleStates.Remove(me);
         }
 
         public static void PlayStepSound(EventContext context, string material, string clipName)
@@ -1623,6 +1793,15 @@ namespace Game
             return actor as FlaxEngine.AnimatedModel ?? actor.FindActor<FlaxEngine.AnimatedModel>();
         }
 
+        /// <summary>The ParticleEffect on this actor, or on one of its children (the recommended
+        /// setup: the effect sits under the actor the EventSheet is on).</summary>
+        private static ParticleEffect FindParticleEffect(Actor actor)
+        {
+            if (actor == null)
+                return null;
+            return actor as ParticleEffect ?? actor.FindActor<ParticleEffect>();
+        }
+
         public static void ClearActor(object actor)
         {
             if (actor == null) return;
@@ -1636,6 +1815,7 @@ namespace Game
                     FlaxEngine.Object.Destroy(state.PreviousGraph);
                 AnimStates.Remove(actor);
             }
+            ParticleStates.Remove(actor);
         }
 
         /// <summary>Animation asset key/alias to asset id, built from the registry once per play session.</summary>

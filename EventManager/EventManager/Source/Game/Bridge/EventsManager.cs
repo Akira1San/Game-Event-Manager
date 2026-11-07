@@ -59,6 +59,14 @@ namespace Game
             Runtime.RaisePush(actor, new PushSignal { Kind = TriggerKind.AnimEnd, Name = animName });
         }
 
+        /// <summary>A particle one-shot finished on this actor — push a ParticleEnd trigger to its sheet.</summary>
+        public void HandleParticleEnd(Actor actor, string particleName)
+        {
+            if (actor == null || string.IsNullOrEmpty(particleName))
+                return;
+            Runtime.RaisePush(actor, new PushSignal { Kind = TriggerKind.ParticleEnd, Name = particleName });
+        }
+
         public override void OnStart()
         {
             // Exactly one EventsManager per scene may run. A second one (usually an accident —
@@ -84,6 +92,13 @@ namespace Game
             };
             Runtime.OnPlayStepSound = (context, material, clipName) =>
                 FlaxActions.PlayStepSound(context, material, clipName);
+
+            // RTS selection presentation (Task 18 Part A): rings follow the selection and
+            // the 1–0 control-group indicators refresh whenever a group changes.
+            Runtime.Selection.OnActorSelected = target => SelectionView.SetRing(target, true);
+            Runtime.Selection.OnActorDeselected = target => SelectionView.SetRing(target, false);
+            Runtime.Selection.OnSelectionChanged = () => SelectionView.UpdateControlGroupIndicators(Runtime.Selection);
+            Runtime.Selection.OnControlGroupsChanged = () => SelectionView.UpdateControlGroupIndicators(Runtime.Selection);
 
             _gameFilesFolder = EventFiles.LocateGameFiles(System.IO.Directory.GetCurrentDirectory())
                 ?? EventFiles.LocateGameFiles(AppContext.BaseDirectory);
@@ -384,6 +399,7 @@ namespace Game
             Level.ActorDeleted -= ActorGoneAway;
             FlaxActions.ClearSession();
             _components.Clear();
+            Runtime.Selection.Reset();
             Runtime.RemoveAllSheets();
         }
 
@@ -476,6 +492,9 @@ namespace Game
                 {
                     var press = new PushSignal { Kind = TriggerKind.KeyPressed, Name = key };
                     Runtime.RaisePushAll(press);
+                    // Pressing 1–0 recalls that control group (classic RTS behaviour).
+                    if (Selection.TryGroupKey(key, out int group))
+                        Runtime.SelectControlGroup(group);
                 }
                 else if (wasHeld && !held)
                 {

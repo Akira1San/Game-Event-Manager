@@ -34,6 +34,13 @@ namespace Game
         Message,
         AnimEnd,
         StateIs,
+        ParticleEnd,
+        // RTS selection (Task 18 Part A)
+        Selected,
+        Deselected,
+        SelectionChanged,
+        ControlGroupPressed,
+        ControlGroupHeld,
     }
 
     public class TriggerDescriptor
@@ -70,6 +77,34 @@ namespace Game
                 {
                     Kind = words[words.Length - 1] == "up" ? TriggerKind.WheelScrollUp : TriggerKind.WheelScrollDown,
                 };
+            // RTS selection (Task 18 Part A). Call these before the generic key shape:
+            // `when Marine is selected` would otherwise read as the key "Marine" being held.
+            if (words.Length >= 3 && words[words.Length - 2] == "is" && words[words.Length - 1] == "selected")
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.Selected,
+                    RequireName = Join(trigger, 0, words.Length - 2),
+                };
+            if (words.Length >= 3 && words[words.Length - 2] == "is" && words[words.Length - 1] == "deselected")
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.Deselected,
+                    RequireName = Join(trigger, 0, words.Length - 2),
+                };
+            if (words.Length == 2 && words[0] == "selection" && words[1] == "changes")
+                return new TriggerDescriptor { Kind = TriggerKind.SelectionChanged };
+            if (words.Length == 5 && words[0] == "control" && words[1] == "group" &&
+                words[3] == "is" && (words[4] == "pressed" || words[4] == "held") &&
+                trigger[2].Type == TokenType.Number)
+            {
+                int group = (int)trigger[2].Number;
+                return new TriggerDescriptor
+                {
+                    Kind = words[4] == "pressed" ? TriggerKind.ControlGroupPressed : TriggerKind.ControlGroupHeld,
+                    RequireName = group.ToString(),
+                    Key = Selection.KeyForGroup(group),
+                };
+            }
             if (words.Length >= 2 && words[0] == "game" && words[words.Length - 1] == "starts")
                 return new TriggerDescriptor { Kind = TriggerKind.GameStart };
             if (words.Length >= 2 && words[0] == "scene" && words[words.Length - 1] == "starts")
@@ -88,6 +123,8 @@ namespace Game
                 return new TriggerDescriptor { Kind = TriggerKind.Message, RequireName = trigger[1].Text };
             if (words.Length >= 3 && words[0] == "anim")
                 return new TriggerDescriptor { Kind = TriggerKind.AnimEnd, RequireName = trigger[1].Text };
+            if (words.Length >= 3 && words[0] == "particle" && words[words.Length - 1] == "ends")
+                return new TriggerDescriptor { Kind = TriggerKind.ParticleEnd, RequireName = trigger[1].Text };
             if (words.Length >= 2 && (words[0] == "me" || words[0] == "other"))
                 return PronounDescriptor(trigger, ev);
             int becomesIndex = IndexOf(words, "becomes");

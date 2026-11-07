@@ -29,6 +29,10 @@ namespace Game
         IReadOnlyList<object> Actors();
         /// <summary>True when the cursor is currently over the actor (point &amp; click hover).</summary>
         bool IsHovered(object actor);
+        /// <summary>True when a particle named <paramref name="name"/> is playing on
+        /// <paramref name="actor"/> (a child or the actor itself), used by
+        /// <c>particle "&lt;name&gt;" is playing</c>.</summary>
+        bool IsParticlePlaying(object actor, string name);
         /// <summary>True when <paramref name="child"/> is <paramref name="root"/> itself or a
         /// descendant in the scene hierarchy — so a contact poll skips the actor's own child
         /// colliders instead of testing them as foreign contact targets.</summary>
@@ -93,6 +97,11 @@ namespace Game
         }
 
         public bool IsHovered(object actor)
+        {
+            return false;
+        }
+
+        public bool IsParticlePlaying(object actor, string name)
         {
             return false;
         }

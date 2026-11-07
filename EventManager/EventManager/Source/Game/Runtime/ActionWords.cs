@@ -24,6 +24,8 @@ namespace Game
         PlayAnim,
         LoopAnim,
         StopAnim,
+        PlayParticle,
+        StopParticle,
         CameraFollow,
         CameraLooksAt,
         CameraAt,
@@ -37,6 +39,9 @@ namespace Game
         LoadScene,
         QuitGame,
         Print,
+        // RTS selection (Task 18 Part A)
+        Select,
+        Deselect,
     }
 
     public class ActionSpec
@@ -50,6 +55,12 @@ namespace Game
         public bool FaceForward;
         public ValueNode AmountNode;
         public List<Token> Leftover = new List<Token>();
+        /// <summary><c>select all &lt;unit type&gt;</c> / <c>deselect all</c>.</summary>
+        public bool All;
+        /// <summary><c>select units near me by &lt;dist&gt;</c>.</summary>
+        public bool Near;
+        /// <summary>Radius for the <see cref="Near"/> form of <c>select</c>.</summary>
+        public double Distance;
     }
 
     public static class ActionWords
@@ -87,10 +98,23 @@ namespace Game
                         return Finish(spec, ActionVerb.StopSound, words, 2);
                     if (words.Count >= 2 && words[1].Text == "anim")
                         return Finish(spec, ActionVerb.StopAnim, words, 2);
-                    return Unknown(spec, words, "yes, a \u201Cstop\u201D line — I only know \u201Cstop sound\u201D, \u201Cstop anim\u201D, \u201Cstop moving\u201D, and \u201Cstop this event\u201D", warn);
+                    if (words.Count >= 3 && words[1].Text == "particle" && words[2].Type == TokenType.Str)
+                    {
+                        spec.Thing = words[2].Text;
+                        return Finish(spec, ActionVerb.StopParticle, words, 3);
+                    }
+                    if (words.Count >= 2 && words[1].Text == "particle")
+                        return Unknown(spec, words, "\u201Cstop particle\u201D needs a name in quotes, like \u201Cstop particle \"smoke\"\u201D", warn);
+                    return Unknown(spec, words, "yes, a \u201Cstop\u201D line — I only know \u201Cstop sound\u201D, \u201Cstop anim\u201D, \u201Cstop moving\u201D, \u201Cstop particle\u201D, and \u201Cstop this event\u201D", warn);
 
                 case "move":
                     return Move(spec, words, warn);
+
+                case "select":
+                    return SelectAction(spec, words, warn);
+
+                case "deselect":
+                    return DeselectAction(spec, words, warn);
 
                 case "goto":
                 {
@@ -299,6 +323,13 @@ namespace Game
             }
             if (words.Count >= 2 && words[0].Text == "play" && words[1].Text == "anim")
                 return Unknown(spec, words, "\u201Cplay anim\u201D needs a name in quotes, like \u201Cplay anim \"Attack\"\u201D", warn);
+            if (words.Count >= 3 && words[0].Text == "play" && words[1].Text == "particle" && words[2].Type == TokenType.Str)
+            {
+                spec.Thing = words[2].Text;
+                return Finish(spec, ActionVerb.PlayParticle, words, 3);
+            }
+            if (words.Count >= 2 && words[0].Text == "play" && words[1].Text == "particle")
+                return Unknown(spec, words, "\u201Cplay particle\u201D needs a name in quotes, like \u201Cplay particle \"smoke\"\u201D", warn);
             if (words.Count >= 3 && words[0].Text == "loop" && words[1].Text == "anim" && words[2].Type == TokenType.Str)
             {
                 spec.Thing = words[2].Text;
@@ -351,6 +382,68 @@ namespace Game
                 return Finish(spec, ActionVerb.Print, words, words.Count);
             }
             return Unknown(spec, words, "", warn);
+        }
+
+        private static ActionSpec SelectAction(ActionSpec spec, List<Token> words, Action<string> warn)
+        {
+            // `select units near me by 5` — box-select everything in a radius.
+            if (words.Count >= 4 && words[1].Text == "units" && words[2].Text == "near")
+            {
+                string anchor = ThingAt(words, 3, out int nearUsed);
+                if (anchor != null)
+                {
+                    spec.Thing = anchor;
+                    spec.Near = true;
+                    spec.Distance = 5;
+                    for (int i = 3 + nearUsed; i < words.Count - 1; i++)
+                    {
+                        if (words[i].Text != "by" || words[i + 1].Type != TokenType.Number)
+                            continue;
+                        spec.Distance = words[i + 1].Number;
+                        spec.HasNumber = true;
+                        spec.Number = spec.Distance;
+                    }
+                    return Finish(spec, ActionVerb.Select, words, words.Count);
+                }
+            }
+            // `select all Marine` — pick every actor of that type.
+            if (words.Count >= 3 && words[1].Text == "all")
+            {
+                string unit = ThingAt(words, 2, out int allUsed);
+                if (unit != null)
+                {
+                    spec.All = true;
+                    spec.Thing = unit;
+                    return Finish(spec, ActionVerb.Select, words, 2 + allUsed);
+                }
+                return Unknown(spec, words, "\u201Cselect all\u201D needs a unit type, like \u201Cselect all Marine\u201D", warn);
+            }
+            // `select me` / `select nearest Enemy` / `select Marine`.
+            {
+                string thing = ThingAt(words, 1, out int used);
+                if (thing != null)
+                {
+                    spec.Thing = thing;
+                    return Finish(spec, ActionVerb.Select, words, 1 + used);
+                }
+            }
+            return Unknown(spec, words, "\u201Cselect\u201D looks like this: \u201Cselect me\u201D, \u201Cselect all Marine\u201D, or \u201Cselect units near me by 5\u201D", warn);
+        }
+
+        private static ActionSpec DeselectAction(ActionSpec spec, List<Token> words, Action<string> warn)
+        {
+            if (words.Count == 2 && words[1].Text == "all")
+            {
+                spec.All = true;
+                return Finish(spec, ActionVerb.Deselect, words, 2);
+            }
+            string thing = ThingAt(words, 1, out int used);
+            if (thing != null)
+            {
+                spec.Thing = thing;
+                return Finish(spec, ActionVerb.Deselect, words, 1 + used);
+            }
+            return Unknown(spec, words, "\u201Cdeselect\u201D looks like this: \u201Cdeselect me\u201D or \u201Cdeselect all\u201D", warn);
         }
 
         private static ActionSpec Move(ActionSpec spec, List<Token> words, Action<string> warn)
