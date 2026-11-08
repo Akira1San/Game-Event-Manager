@@ -187,7 +187,10 @@ namespace Game
         {
             int isIndex = words.Length - 2;
             var keyName = Join(trigger, 0, isIndex);
-            var key = new TriggerDescriptor { Key = keyName, RequireName = keyName };
+            // `when 1 is pressed` — people write the top-row number keys as digits, while the
+            // input layer reports them as `D1`. Keep the written name for matching, but poll
+            // with the engine name.
+            var key = new TriggerDescriptor { Key = ActionWords.NormalizeKeyName(keyName), RequireName = keyName };
             switch (words[words.Length - 1])
             {
                 case "pressed":
@@ -362,6 +365,9 @@ namespace Game
         /// so `&lt;name&gt; is pressed` is treated as a key press rather than a button press.</summary>
         private static bool IsKeyName(string name)
         {
+            // A single digit is a top-row number key, even though the scan list spells it `D1`.
+            if (ActionWords.NormalizeKeyName(name) != name)
+                return true;
             foreach (string key in ActionWords.KeyNamesForScanning)
                 if (string.Equals(key, name, StringComparison.OrdinalIgnoreCase))
                     return true;

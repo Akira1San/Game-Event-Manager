@@ -75,6 +75,18 @@ namespace Game
 
         public static string[] KeyNamesForScanning = BuildKeyNames();
 
+        /// <summary>
+        /// Maps the way people write number keys (<c>1</c>, <c>0</c>) to Flax's key names
+        /// (<c>D1</c>, <c>D0</c>). Every other name is returned unchanged.
+        /// </summary>
+        public static string NormalizeKeyName(string name)
+        {
+            if (string.IsNullOrEmpty(name) || name.Length != 1)
+                return name;
+            char c = name[0];
+            return c >= '0' && c <= '9' ? "D" + c : name;
+        }
+
         private static string[] BuildKeyNames()
         {
             var names = new List<string>();

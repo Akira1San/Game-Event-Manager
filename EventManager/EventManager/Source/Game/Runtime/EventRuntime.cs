@@ -559,6 +559,12 @@ namespace Game
             // Particle names match the same way: `play particle "Smoke"` answers `when particle "smoke" ends`.
             if (descriptor.Kind == TriggerKind.AnimEnd || descriptor.Kind == TriggerKind.ParticleEnd)
                 return string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase);
+            // Number keys: `when 1 is pressed` must answer the input layer's `D1` signal (and
+            // tests/manual pushes of plain `1`).
+            if (IsKeyKind(descriptor.Kind) &&
+                KeyNameMatches(descriptor.RequireName, signal.Name) &&
+                ExtraConditionsMatch(descriptor, sheet, signal.Other))
+                return true;
             // Name match, or material match for `when me touches <material>`.
             if (signal.Name == descriptor.RequireName && ExtraConditionsMatch(descriptor, sheet, signal.Other))
                 return true;
@@ -586,6 +592,24 @@ namespace Game
                    kind == TriggerKind.DoubleClicked ||
                    kind == TriggerKind.ButtonPressed ||
                    kind == TriggerKind.ButtonReleased;
+        }
+
+        private static bool IsKeyKind(TriggerKind kind)
+        {
+            return kind == TriggerKind.KeyPressed ||
+                   kind == TriggerKind.KeyReleased ||
+                   kind == TriggerKind.KeyHeld;
+        }
+
+        /// <summary>Compares key names after mapping `1` → `D1`, case-insensitively.</summary>
+        private static bool KeyNameMatches(string required, string signal)
+        {
+            if (signal == null)
+                return false;
+            return string.Equals(
+                ActionWords.NormalizeKeyName(required),
+                ActionWords.NormalizeKeyName(signal),
+                StringComparison.OrdinalIgnoreCase);
         }
 
         private void RunEvent(SheetInstance sheet, int eventIndex, object other, object meOverride = null)
