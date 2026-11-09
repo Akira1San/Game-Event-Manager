@@ -77,13 +77,13 @@
 
   <div class="counts">
     <div class="count-card">
-      <div class="big">24</div><div class="label">Trigger shapes</div>
+      <div class="big">28</div><div class="label">Trigger shapes</div>
     </div>
     <div class="count-card">
-      <div class="big">8</div><div class="label">Condition marks</div>
+      <div class="big">11</div><div class="label">Condition marks</div>
     </div>
     <div class="count-card">
-      <div class="big">31</div><div class="label">Action verbs</div>
+      <div class="big">33</div><div class="label">Action verbs</div>
     </div>
     <div class="count-card">
       <div class="big">8</div><div class="label">Structural words</div>
@@ -128,13 +128,16 @@
         <tr><td><span class="kw">when selection changes</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when selection changes</span></td></tr>
         <tr><td><span class="kw">when control group</span> <span class="placeholder">&lt;n&gt;</span> <span class="kw">is pressed</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when control group 1 is pressed</span><br><span class="alt">keys 1–0 · fires once on the press</span></td></tr>
         <tr><td><span class="kw">when control group</span> <span class="placeholder">&lt;n&gt;</span> <span class="kw">is held</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when control group 1 is held</span></td></tr>
+        <tr><td><span class="kw">when Minerals becomes</span> <span class="placeholder">&lt;n&gt;</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when Minerals becomes 500</span><br><span class="alt">resource values are canonical globals · <code>Supply</code> is the same slot as <code>Supply Used</code></span></td></tr>
+        <tr><td><span class="kw">when Supply becomes</span> <span class="placeholder">&lt;n&gt;</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when Supply becomes 10</span><br><span class="alt">alt: when Supply Used becomes 10</span></td></tr>
+        <tr><td><span class="kw">when resources change</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when resources change</span><br><span class="alt">fires when any resource (Minerals, Gas, Supply, Ore, Gems, Power, RUs) changes</span></td></tr>
       </tbody>
     </table>
   </section>
 
   <section id="conditions">
     <h2>Conditions — <code>unless</code> / <code>if</code> lines inside <code>when</code> blocks</h2>
-    <p>Condition marks: <span class="kw">is</span> <span class="kw">has</span> <span class="kw">becomes</span> <span class="kw">changes</span> <span class="kw">exists</span> <span class="kw">does</span> <span class="kw">near</span> <span class="kw">chance</span>. Use <code>unless</code> to gate on a condition (runs only while true). Conditions are re-checked each tick for polled events.</p>
+    <p>Condition marks: <span class="kw">is</span> <span class="kw">has</span> <span class="kw">becomes</span> <span class="kw">changes</span> <span class="kw">exists</span> <span class="kw">does</span> <span class="kw">near</span> <span class="kw">chance</span> <span class="kw">afford</span>. Use <code>unless</code> to gate on a condition (runs only while true). Conditions are re-checked each tick for polled events.</p>
 
     <table>
       <thead>
@@ -153,6 +156,11 @@
         <tr><td><span class="kw">me is selected</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">me is selected</span></td></tr>
         <tr><td><span class="kw">selection count is</span> <span class="placeholder">&lt;n&gt;</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">selection count is 2</span></td></tr>
         <tr><td><span class="kw">my control group</span> <span class="placeholder">&lt;n&gt;</span> <span class="kw">is assigned</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">my control group 1 is assigned</span><br><span class="alt">on a unit's sheet: is this unit in the group · on the global sheet: does the group exist</span></td></tr>
+        <tr><td><span class="kw">Minerals is higher than</span> <span class="placeholder">&lt;n&gt;</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">Minerals is higher than 50</span><br><span class="alt">works for any resource · resources that were never set read as 0</span></td></tr>
+        <tr><td><span class="kw">Supply Used is lower than Supply Max</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">Supply Used is lower than Supply Max</span><br><span class="alt">compares the two canonical supply resources · falls back to <code>FoodCap</code> for the existing supply ceiling</span></td></tr>
+        <tr><td><span class="kw">can afford</span> <span class="placeholder">&lt;building&gt;</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">can afford Barracks</span><br><span class="alt">data-driven: reads <code>BarracksCost</code> (minerals), <code>BarracksGasCost</code>, <code>BarracksSupplyCost</code>, <code>BarracksOreCost</code>, <code>BarracksGemsCost</code>, <code>BarracksPowerCost</code>, <code>BarracksRUsCost</code></span></td></tr>
+        <tr><td><span class="kw">progress of</span> <span class="placeholder">&lt;thing&gt;</span> <span class="kw">is</span> <span class="placeholder">&lt;value&gt;</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">progress of HealthBar is 1</span><br><span class="alt">0–1 or 0–100 — 50 means half full</span></td></tr>
+        <tr><td><span class="kw">slider</span> <span class="placeholder">&lt;thing&gt;</span> <span class="kw">is</span> <span class="placeholder">&lt;value&gt;</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">slider HealthBar is 50</span><br><span class="alt">0–100 on a slider · same as progress of HealthBar is 0.5</span></td></tr>
       </tbody>
     </table>
   </section>
@@ -183,11 +191,13 @@
         <tr><td><span class="kw">loop</span></td><td><span class="kw">loop anim "animation walk"</span></td><td><span class="example">loop anim "animation walk"</span><br><span class="alt">repeats forever · use for idle / walk / run · see <a href="#animation">animation</a></span></td></tr>
         <tr><td><span class="kw">stop</span></td><td><span class="kw">stop anim</span> / <span class="kw">stop moving</span> / <span class="kw">stop this event</span></td><td><span class="example">stop anim</span><br><span class="example">stop moving</span><br><span class="example">stop this event</span><br><span class="alt">stop anim restores the previous clip or the bind pose</span></td></tr>
         <tr><td><span class="kw">send</span></td><td><span class="kw">send message "die"</span> / <span class="kw">send message "hit" to other</span></td><td><span class="example">send message "die"</span></td></tr>
-        <tr><td><span class="kw">set</span></td><td><span class="kw">set Score to 0</span> / <span class="kw">set my rotating to true</span> / <span class="kw">set text of ScoreLabel to Score</span> / <span class="kw">set A to B + C</span> / <span class="kw">set state chase</span> / <span class="kw">set my control group to 1</span></td><td><span class="example">set Score to 0</span><br><span class="example">set text of ScoreLabel to Score</span><br><span class="example">set my control group to 1</span></td></tr>
+        <tr><td><span class="kw">set</span></td><td><span class="kw">set Score to 0</span> / <span class="kw">set my rotating to true</span> / <span class="kw">set text of ScoreLabel to Score</span> / <span class="kw">set A to B + C</span> / <span class="kw">set state chase</span> / <span class="kw">set my control group to 1</span> / <span class="kw">set Minerals to 500</span> / <span class="kw">set progress of HealthBar to 1</span> / <span class="kw">set slider HealthBar to 50</span></td><td><span class="example">set Score to 0</span><br><span class="example">set text of ScoreLabel to Score</span><br><span class="example">set my control group to 1</span><br><span class="example">set Minerals to 500</span><br><span class="example">set progress of HealthBar to 0.5</span><br><span class="example">set slider HealthBar to 50</span><br><span class="alt">accepts 0–1 or 0–100 · normalizes to the control's range</span></td></tr>
         <tr><td><span class="kw">select</span></td><td><span class="kw">select me</span> / <span class="kw">select Marine</span> / <span class="kw">select all Marine</span> / <span class="kw">select units near me by 5</span></td><td><span class="example">select all Marine</span><br><span class="alt">adds one target · <code>all</code> and <code>near</code> replace the selection</span></td></tr>
         <tr><td><span class="kw">deselect</span></td><td><span class="kw">deselect me</span> / <span class="kw">deselect all</span></td><td><span class="example">deselect me</span></td></tr>
         <tr><td><span class="kw">scale</span></td><td><span class="kw">scale Box 2</span> / <span class="kw">scale Box to 2</span></td><td><span class="example">scale Box 2</span><br><span class="example">scale Box to mySize</span><br><span class="alt">uniform scale — applies equally on X, Y, Z · number can be a literal or a variable</span></td></tr>
-        <tr><td><span class="kw">add</span></td><td><span class="kw">add 1 to Score</span> / <span class="kw">add Sword to my bag</span></td><td><span class="example">add 1 to Score</span></td></tr>
+        <tr><td><span class="kw">add</span></td><td><span class="kw">add 1 to Score</span> / <span class="kw">add 50 to Minerals</span> / <span class="kw">add Sword to my bag</span></td><td><span class="example">add 1 to Score</span><br><span class="example">add 50 to Minerals</span></td></tr>
+        <tr><td><span class="kw">deduct</span></td><td><span class="kw">deduct 100 from Minerals</span></td><td><span class="example">deduct 100 from Minerals</span><br><span class="alt">subtracts a resource, clamping at 0</span></td></tr>
+        <tr><td><span class="kw">increase</span></td><td><span class="kw">increase Supply Max by 8</span></td><td><span class="example">increase Supply Max by 8</span><br><span class="alt">adds to any resource, e.g. <code>increase Minerals by 50</code></span></td></tr>
         <tr><td><span class="kw">wait</span></td><td><span class="kw">wait 0.5 seconds</span> / <span class="kw">wait random 1 to 3 seconds</span></td><td><span class="example">wait 0.5 seconds</span></td></tr>
         <tr><td><span class="kw">show</span></td><td><span class="kw">show PausePanel</span> / <span class="kw">show text "Game Over"</span></td><td><span class="example">show PausePanel</span><br><span class="example">show text "Game Over"</span></td></tr>
         <tr><td><span class="kw">hide</span></td><td><span class="kw">hide me</span> / <span class="kw">hide text</span></td><td><span class="example">hide me</span><br><span class="example">hide text</span></td></tr>
