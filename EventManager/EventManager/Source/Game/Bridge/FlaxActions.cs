@@ -44,6 +44,16 @@ namespace Game
         private static readonly Dictionary<Actor, float> CharacterFallSpeeds = new Dictionary<Actor, float>();
         /// <summary>Sources spawned by <c>play sound</c>, with the actor whose sheet started them.</summary>
         private static readonly List<(Actor Owner, AudioSource Source)> ActiveSounds = new List<(Actor, AudioSource)>();
+
+        /// <summary>One in-flight <c>tween</c> plus the control it writes to (UI tweens only).</summary>
+        private sealed class LiveTween
+        {
+            public Actor Subject;
+            public UIControl Ui;
+            public TweenTrack Track;
+        }
+        /// <summary>Coroutine-style tween list, advanced every tick in <see cref="Step"/>.</summary>
+        private static readonly List<LiveTween> LiveTweens = new List<LiveTween>();
         /// <summary>Clip key (see <see cref="AssetNames"/>) to asset id, built once per play session.</summary>
         private static Dictionary<string, Guid> SoundIndexCache;
         /// <summary>Animation asset key/alias to asset id, built once per play session.</summary>
@@ -102,6 +112,7 @@ namespace Game
         {
             Moves.Clear();
             ActiveSounds.Clear();
+            LiveTweens.Clear();
             CharacterFallSpeeds.Clear();
             SoundIndexCache = null;
             AnimIndexCache = null;
@@ -276,6 +287,24 @@ namespace Game
                 }
             }
 
+            // Tweens: advance every in-flight tween, write the interpolated value, and fire
+            // `when tween <thing> ends` on the tick it completes (final value is applied first).
+            for (int i = LiveTweens.Count - 1; i >= 0; i--)
+            {
+                LiveTween live = LiveTweens[i];
+                if (live.Subject == null || live.Subject.Scene == null)
+                {
+                    LiveTweens.RemoveAt(i);
+                    continue;
+                }
+                bool done = live.Track.Advance(deltaTime);
+                ApplyTween(live);
+                if (!done)
+                    continue;
+                LiveTweens.RemoveAt(i);
+                EventsManager.Instance?.HandleTweenEnd(live.Subject, live.Track.Name);
+            }
+
             // One-shots: fire `when anim "<clip>" ends` once, after the clip's length.
             // Collect first: the trigger may immediately play another clip (mutating AnimStates).
             List<(Actor Actor, string Clip)> ended = null;
@@ -410,6 +439,9 @@ namespace Game
                     break;
                 case ActionVerb.Unfocus:
                     SetControlFocus(spec.Thing, false);
+                    break;
+                case ActionVerb.Tween:
+                    StartTween(context, spec);
                     break;
                 case ActionVerb.Turn:
                 {
@@ -1251,6 +1283,161 @@ namespace Game
                 label.Text = text; // Label.Text is a LocalizedString; string converts implicitly
                 label.Visible = true;
             });
+
+        /// <summary><c>tween &lt;thing&gt; position/scale/alpha/color to ... in ...</c>: starts a
+        /// coroutine-style tween updated in <see cref="Step"/>.</summary>
+        private static void StartTween(EventContext context, ActionSpec spec)
+        {
+            var subject = ResolveThing(context, spec.Thing) as Actor;
+            if (subject == null)
+            {
+                WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D to tween.");
+                return;
+            }
+            UIControl ui = subject as UIControl ?? subject.FindActor<UIControl>();
+            var track = new TweenTrack
+            {
+                Subject = subject,
+                Name = subject.Name,
+                Kind = spec.TweenProperty,
+                Duration = spec.Duration,
+                Easing = spec.Easing,
+            };
+
+            switch (spec.TweenProperty)
+            {
+                case TweenKind.Position:
+                {
+                    var target = ResolveThing(context, spec.TweenTarget) as Actor;
+                    if (target == null)
+                    {
+                        WarnOnce($"I couldn't find \u201C{spec.TweenTarget}\u201D for \u201Ctween {spec.Thing} position\u201D.");
+                        return;
+                    }
+                    Vector3 from = subject.Position;
+                    Vector3 to = target.Position;
+                    track.FromX = from.X; track.FromY = from.Y; track.FromZ = from.Z;
+                    track.ToX = to.X; track.ToY = to.Y; track.ToZ = to.Z;
+                    break;
+                }
+                case TweenKind.Scale:
+                {
+                    double scale = spec.TweenValue == null ? spec.Number : context.Evaluate(spec.TweenValue).AsNumber();
+                    Vector3 from = subject.Scale;
+                    track.FromX = from.X; track.FromY = from.Y; track.FromZ = from.Z;
+                    track.ToX = scale; track.ToY = scale; track.ToZ = scale;
+                    break;
+                }
+                case TweenKind.Alpha:
+                {
+                    if (ui == null || ui.Control == null)
+                    {
+                        WarnOnce($"\u201Ctween {spec.Thing} alpha\u201D needs an actor with a UI control on a UIControl.");
+                        return;
+                    }
+                    if (!TryGetControlColor(ui.Control, out Color alphaFrom))
+                    {
+                        WarnOnce($"\u201Ctween {spec.Thing} alpha\u201D needs a Label or Image control (that is where UI alpha lives).");
+                        return;
+                    }
+                    double alpha = spec.TweenValue == null ? spec.Number : context.Evaluate(spec.TweenValue).AsNumber();
+                    if (alpha < 0) alpha = 0;
+                    if (alpha > 1) alpha = 1;
+                    track.FromValue = alphaFrom.A;
+                    track.ToValue = alpha;
+                    break;
+                }
+                case TweenKind.Color:
+                {
+                    if (ui == null || ui.Control == null)
+                    {
+                        WarnOnce($"\u201Ctween {spec.Thing} color\u201D needs an actor with a UI control on a UIControl.");
+                        return;
+                    }
+                    if (!TryParseColor(spec.TweenColor, out Color wanted))
+                    {
+                        WarnOnce($"I couldn't parse \u201C{spec.TweenColor}\u201D as a tween color — use \u201C\"r g b\"\u201D or \u201C\"r g b a\"\u201D with 0-1 floats.");
+                        return;
+                    }
+                    if (!TryGetControlColor(ui.Control, out Color from))
+                    {
+                        WarnOnce($"\u201Ctween {spec.Thing} color\u201D needs a Label or Image control (that is where UI color lives).");
+                        return;
+                    }
+                    track.FromR = from.R; track.FromG = from.G; track.FromB = from.B; track.FromA = from.A;
+                    track.ToR = wanted.R; track.ToG = wanted.G; track.ToB = wanted.B; track.ToA = wanted.A;
+                    break;
+                }
+            }
+
+            // A new tween of the same property replaces the old one, so events can retarget
+            // a move without two tweens fighting over the same transform channel.
+            for (int i = LiveTweens.Count - 1; i >= 0; i--)
+                if (LiveTweens[i].Subject == subject && LiveTweens[i].Track.Kind == track.Kind)
+                    LiveTweens.RemoveAt(i);
+
+            var live = new LiveTween { Subject = subject, Ui = ui, Track = track };
+            if (track.Duration <= 0)
+            {
+                track.Advance(0);
+                ApplyTween(live);
+                EventsManager.Instance?.HandleTweenEnd(subject, track.Name);
+                return;
+            }
+            LiveTweens.Add(live);
+        }
+
+        /// <summary>Writes one tick's interpolated tween values onto the actor/control.</summary>
+        private static void ApplyTween(LiveTween live)
+        {
+            TweenTrack track = live.Track;
+            switch (track.Kind)
+            {
+                case TweenKind.Position:
+                    live.Subject.Position = new Vector3((float)track.X, (float)track.Y, (float)track.Z);
+                    break;
+                case TweenKind.Scale:
+                    live.Subject.Scale = new Vector3((float)track.X, (float)track.Y, (float)track.Z);
+                    break;
+                case TweenKind.Alpha:
+                    if (live.Ui != null && live.Ui.Control != null &&
+                        TryGetControlColor(live.Ui.Control, out Color alphaColor))
+                    {
+                        alphaColor.A = (float)track.Value;
+                        SetControlColor(live.Ui.Control, alphaColor);
+                    }
+                    break;
+                case TweenKind.Color:
+                    if (live.Ui != null && live.Ui.Control != null)
+                        SetControlColor(live.Ui.Control, new Color((float)track.R, (float)track.G, (float)track.B, (float)track.A));
+                    break;
+            }
+        }
+
+        /// <summary>UI tint lives on Image.Color or Label.TextColor (Button is a Label).</summary>
+        private static bool TryGetControlColor(FlaxEngine.GUI.Control control, out Color color)
+        {
+            if (control is FlaxEngine.GUI.Image image)
+            {
+                color = image.Color;
+                return true;
+            }
+            if (control is FlaxEngine.GUI.Label label)
+            {
+                color = label.TextColor;
+                return true;
+            }
+            color = Color.White;
+            return false;
+        }
+
+        private static void SetControlColor(FlaxEngine.GUI.Control control, Color color)
+        {
+            if (control is FlaxEngine.GUI.Image image)
+                image.Color = color;
+            else if (control is FlaxEngine.GUI.Label label)
+                label.TextColor = color;
+        }
 
         private static void PlaySound(EventContext context, ActionSpec spec)
         {

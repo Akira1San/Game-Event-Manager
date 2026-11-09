@@ -3297,6 +3297,116 @@ when NameBox submits
     Check(condEngineB.Variables.GetGlobal("UiMatch").Kind == ValueKind.None,
         "an unfocused text box with different text fails both conditions");
 
+    // ------------------------------------------------------------------
+    // Task 15 Part D: Tween / Animation helpers
+    // ------------------------------------------------------------------
+
+    // Trigger: `when tween <thing> ends`.
+    var tweenEndProg = parser.Parse("when tween PausePanel ends\n  set PanelDone to 1\n");
+    var tweenEndDesc = TriggerClassifier.Classify(tweenEndProg.Events[0]);
+    Check(tweenEndDesc.Kind == TriggerKind.TweenEnd && tweenEndDesc.RequireName == "PausePanel",
+        "`when tween PausePanel ends` classifies to TweenEnd");
+    var tweenMeDesc = TriggerClassifier.Classify(parser.Parse("when tween me ends\n  set Mine to 1\n").Events[0]);
+    Check(tweenMeDesc.Kind == TriggerKind.TweenEnd && tweenMeDesc.RequireName == "me",
+        "`when tween me ends` classifies to TweenEnd with `me`");
+
+    // Actions: position / alpha / scale / color and the easing qualifier.
+    var tweenPositionProg = parser.Parse("when W is pressed\n  tween PausePanel position to CenterPoint in 0.5\n");
+    var tweenPosition = ActionWords.Parse(tweenPositionProg.Events[0].Body[0].Words, null);
+    Check(tweenPosition.Verb == ActionVerb.Tween && tweenPosition.HasTween &&
+          tweenPosition.Thing == "PausePanel" && tweenPosition.TweenProperty == TweenKind.Position &&
+          tweenPosition.TweenTarget == "CenterPoint" && tweenPosition.Duration == 0.5 &&
+          tweenPosition.Easing == TweenEasing.Linear,
+        "`tween ... position to ... in 0.5` parses to Tween/Position");
+
+    var tweenAlpha = ActionWords.Parse(parser.Parse("when W is pressed\n  tween PausePanel alpha to 0 in 0.3\n").Events[0].Body[0].Words, null);
+    Check(tweenAlpha.Verb == ActionVerb.Tween && tweenAlpha.TweenProperty == TweenKind.Alpha &&
+          tweenAlpha.TweenValue is NumberValue alphaNum && alphaNum.Value == 0 &&
+          tweenAlpha.Duration == 0.3,
+        "`tween ... alpha to 0 in 0.3` parses to Tween/Alpha");
+
+    var tweenScale = ActionWords.Parse(parser.Parse("when W is pressed\n  tween PausePanel scale to 1.2 in 0.25\n").Events[0].Body[0].Words, null);
+    Check(tweenScale.Verb == ActionVerb.Tween && tweenScale.TweenProperty == TweenKind.Scale &&
+          tweenScale.TweenValue is NumberValue scaleNum && scaleNum.Value == 1.2,
+        "`tween ... scale to 1.2 in 0.25` parses to Tween/Scale");
+
+    var tweenColor = ActionWords.Parse(parser.Parse("when W is pressed\n  tween PausePanel color to \"1 0 0\" in 0.5\n").Events[0].Body[0].Words, null);
+    Check(tweenColor.Verb == ActionVerb.Tween && tweenColor.TweenProperty == TweenKind.Color &&
+          tweenColor.TweenColor == "1 0 0" && tweenColor.Duration == 0.5,
+        "`tween ... color to \"1 0 0\" in 0.5` parses to Tween/Color");
+
+    var tweenEase = ActionWords.Parse(parser.Parse("when W is pressed\n  tween PausePanel alpha to 1 in 0.4 easing ease out\n").Events[0].Body[0].Words, null);
+    Check(tweenEase.Verb == ActionVerb.Tween && tweenEase.Easing == TweenEasing.EaseOut,
+        "`easing ease out` parses to TweenEasing.EaseOut");
+    var tweenEaseInOut = ActionWords.Parse(parser.Parse("when W is pressed\n  tween PausePanel alpha to 1 in 0.4 easing ease in out\n").Events[0].Body[0].Words, null);
+    Check(tweenEaseInOut.Verb == ActionVerb.Tween && tweenEaseInOut.Easing == TweenEasing.EaseInOut,
+        "`easing ease in out` parses to TweenEasing.EaseInOut");
+
+    // Pure tween timing/interpolation.
+    var positionTrack = new TweenTrack
+    {
+        Kind = TweenKind.Position,
+        Duration = 2,
+        FromX = 0, FromY = 0, FromZ = 0,
+        ToX = 10, ToY = 20, ToZ = -10,
+    };
+    positionTrack.Advance(1);
+    Check(Math.Abs(positionTrack.X - 5) < 0.001 && Math.Abs(positionTrack.Y - 10) < 0.001 &&
+          Math.Abs(positionTrack.Z + 5) < 0.001 && !positionTrack.Done,
+        "a position tween is halfway at half the duration");
+    Check(positionTrack.Advance(1) && Math.Abs(positionTrack.X - 10) < 0.001 &&
+          Math.Abs(positionTrack.Y - 20) < 0.001 && Math.Abs(positionTrack.Z + 10) < 0.001,
+        "a position tween lands exactly on the target and completes");
+    Check(Math.Abs(TweenMath.Ease(0.5, TweenEasing.EaseIn) - 0.25) < 0.001 &&
+          Math.Abs(TweenMath.Ease(0.5, TweenEasing.EaseOut) - 0.75) < 0.001 &&
+          Math.Abs(TweenMath.Ease(0.5, TweenEasing.EaseInOut) - 0.5) < 0.001 &&
+          Math.Abs(TweenMath.Ease(0.5, TweenEasing.Linear) - 0.5) < 0.001,
+        "the four easing curves map 0.5 correctly");
+
+    var alphaTrack = new TweenTrack { Kind = TweenKind.Alpha, Duration = 1, FromValue = 1, ToValue = 0 };
+    alphaTrack.Advance(0.5);
+    Check(Math.Abs(alphaTrack.Value - 0.5) < 0.001, "an alpha tween interpolates 1 to 0");
+    Check(alphaTrack.Advance(0.5) && Math.Abs(alphaTrack.Value) < 0.001, "an alpha tween reaches 0");
+
+    var colorTrack = new TweenTrack
+    {
+        Kind = TweenKind.Color,
+        Duration = 1,
+        FromR = 1, FromG = 1, FromB = 1, FromA = 1,
+        ToR = 0, ToG = 0.5, ToB = 0, ToA = 0.5,
+    };
+    colorTrack.Advance(0.5);
+    Check(Math.Abs(colorTrack.R - 0.5) < 0.001 && Math.Abs(colorTrack.G - 0.75) < 0.001 &&
+          Math.Abs(colorTrack.B - 0.5) < 0.001 && Math.Abs(colorTrack.A - 0.75) < 0.001,
+        "a color tween interpolates all four channels");
+    Check(colorTrack.Advance(0.5) && Math.Abs(colorTrack.R) < 0.001 && Math.Abs(colorTrack.G - 0.5) < 0.001,
+        "a color tween lands on the target color");
+
+    var instantTrack = new TweenTrack { Kind = TweenKind.Scale, Duration = 0, FromX = 1, FromY = 1, FromZ = 1, ToX = 2, ToY = 2, ToZ = 2 };
+    Check(instantTrack.Advance(0) && Math.Abs(instantTrack.X - 2) < 0.001,
+        "a zero-duration tween snaps to its target and completes immediately");
+
+    // Runtime: the end signal is broadcast, named listeners work from any sheet, and the
+    // `me` form fires only on the tweened actor's own sheet.
+    var tweenBox = new FakeActor("Box");
+    var tweenBox2 = new FakeActor("Box2");
+    var tweenWorld = new FakeWorld();
+    tweenWorld.AddActor(tweenBox);
+    tweenWorld.AddActor(tweenBox2);
+    var tweenEngine = FreshEngine(tweenWorld);
+    tweenEngine.AddSheet(tweenBox, parser.Parse("when tween me ends\n  set my Ends to Ends + 1\n"));
+    tweenEngine.AddSheet(tweenBox2, parser.Parse("when tween me ends\n  set my Ends to Ends + 1\n"));
+    tweenEngine.AddSheet(new GlobalHost(), parser.Parse("when tween Box ends\n  set BoxEnded to 1\n"));
+    tweenEngine.Tick(0);
+    tweenEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.TweenEnd, Name = "Box", Other = tweenBox });
+    tweenEngine.Tick(1);
+    Check(tweenEngine.Variables.GetLocal(tweenBox, "Ends").AsNumber() == 1,
+        "`when tween me ends` fires on the tweened actor's sheet");
+    Check(tweenEngine.Variables.GetLocal(tweenBox2, "Ends").Kind == ValueKind.None,
+        "`when tween me ends` ignores another actor's tween");
+    Check(tweenEngine.Variables.GetGlobal("BoxEnded").AsNumber() == 1,
+        "`when tween Box ends` fires on a named listener (the Game sheet)");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

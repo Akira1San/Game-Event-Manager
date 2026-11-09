@@ -76,6 +76,15 @@ namespace Game
             Runtime.RaisePush(actor, new PushSignal { Kind = TriggerKind.ParticleEnd, Name = particleName });
         }
 
+        /// <summary>A tween finished — broadcast <c>when tween &lt;thing&gt; ends</c>. Broadcast
+        /// (not just the subject's sheet) so a named listener on the Game sheet also hears it.</summary>
+        public void HandleTweenEnd(Actor actor, string tweenName)
+        {
+            if (actor == null || string.IsNullOrEmpty(tweenName))
+                return;
+            Runtime.RaisePushAll(new PushSignal { Kind = TriggerKind.TweenEnd, Name = tweenName, Other = actor });
+        }
+
         public override void OnStart()
         {
             // Exactly one EventsManager per scene may run. A second one (usually an accident —

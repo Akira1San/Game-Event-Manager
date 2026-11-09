@@ -43,6 +43,7 @@ namespace Game
         AnimEnd,
         StateIs,
         ParticleEnd,
+        TweenEnd,
         // RTS selection (Task 18 Part A)
         Selected,
         Deselected,
@@ -175,6 +176,8 @@ namespace Game
                 return new TriggerDescriptor { Kind = TriggerKind.AnimEnd, RequireName = trigger[1].Text };
             if (words.Length >= 3 && words[0] == "particle" && words[words.Length - 1] == "ends")
                 return new TriggerDescriptor { Kind = TriggerKind.ParticleEnd, RequireName = trigger[1].Text };
+            if (words.Length >= 3 && words[0] == "tween" && words[words.Length - 1] == "ends")
+                return new TriggerDescriptor { Kind = TriggerKind.TweenEnd, RequireName = Join(trigger, 1, words.Length - 1) };
             if (words.Length >= 2 && (words[0] == "me" || words[0] == "other"))
                 return PronounDescriptor(trigger, ev);
             int becomesIndex = IndexOf(words, "becomes");

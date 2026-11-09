@@ -560,6 +560,12 @@ namespace Game
             // Particle names match the same way: `play particle "Smoke"` answers `when particle "smoke" ends`.
             if (descriptor.Kind == TriggerKind.AnimEnd || descriptor.Kind == TriggerKind.ParticleEnd)
                 return string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase);
+            // `when tween me ends` belongs to the tweened actor's own sheet; a named form
+            // (`when tween PausePanel ends`) may live on any sheet because the signal is broadcast.
+            if (descriptor.Kind == TriggerKind.TweenEnd)
+                return descriptor.RequireName == "me"
+                    ? ReferenceEquals(signal.Other, sheet.Actor)
+                    : signal.Name == descriptor.RequireName;
             // Number keys: `when 1 is pressed` must answer the input layer's `D1` signal (and
             // tests/manual pushes of plain `1`).
             if (IsKeyKind(descriptor.Kind) &&

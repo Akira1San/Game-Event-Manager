@@ -51,6 +51,8 @@ namespace Game
         // UI text input focus (Task 15 Part C)
         Focus,
         Unfocus,
+        // Tween helpers (Task 15 Part D)
+        Tween,
     }
 
     public class ActionSpec
@@ -70,6 +72,14 @@ namespace Game
         public bool Near;
         /// <summary>Radius for the <see cref="Near"/> form of <c>select</c>.</summary>
         public double Distance;
+        /// <summary><c>tween</c>: which property animates, its target, and the duration/easing.</summary>
+        public bool HasTween;
+        public TweenKind TweenProperty;
+        public string TweenTarget = "";
+        public string TweenColor = "";
+        public ValueNode TweenValue;
+        public double Duration;
+        public TweenEasing Easing = TweenEasing.Linear;
     }
 
     public static class ActionWords
@@ -136,6 +146,9 @@ namespace Game
 
                 case "deselect":
                     return DeselectAction(spec, words, warn);
+
+                case "tween":
+                    return TweenAction(spec, words, warn);
 
                 case "focus":
                 case "unfocus":
@@ -454,6 +467,106 @@ namespace Game
                 return Finish(spec, ActionVerb.Print, words, words.Count);
             }
             return Unknown(spec, words, "", warn);
+        }
+
+        /// <summary>
+        /// <c>tween &lt;thing&gt; position to &lt;target&gt; in &lt;time&gt;</c>, plus alpha/scale/color
+        /// and an optional trailing <c>easing linear|ease in|ease out|ease in out</c>.
+        /// </summary>
+        private static ActionSpec TweenAction(ActionSpec spec, List<Token> words, Action<string> warn)
+        {
+            int index = 1;
+            string subject = ThingAt(words, index, out int subjectUsed);
+            if (subject == null)
+                return Unknown(spec, words, "\u201Ctween\u201D needs a thing to animate, like \u201Ctween PausePanel alpha to 0 in 0.3\u201D", warn);
+            spec.Thing = subject;
+            index += subjectUsed;
+
+            if (index >= words.Count)
+                return Unknown(spec, words, "\u201Ctween\u201D needs position, alpha, scale, or color after the thing", warn);
+            switch (words[index].Text)
+            {
+                case "position":
+                    spec.TweenProperty = TweenKind.Position;
+                    break;
+                case "alpha":
+                    spec.TweenProperty = TweenKind.Alpha;
+                    break;
+                case "scale":
+                    spec.TweenProperty = TweenKind.Scale;
+                    break;
+                case "color":
+                    spec.TweenProperty = TweenKind.Color;
+                    break;
+                default:
+                    return Unknown(spec, words, "\u201Ctween\u201D knows position, alpha, scale, and color", warn);
+            }
+            index++;
+
+            if (index >= words.Count || words[index].Text != "to")
+                return Unknown(spec, words, "\u201Ctween\u201D joins the property and its target with \u201Cto\u201D", warn);
+            index++;
+            if (index >= words.Count)
+                return Unknown(spec, words, "\u201Ctween\u201D is missing the target value after \u201Cto\u201D", warn);
+
+            if (spec.TweenProperty == TweenKind.Position)
+            {
+                string target = ThingAt(words, index, out int targetUsed);
+                if (target == null)
+                    return Unknown(spec, words, "\u201Ctween position\u201D needs an actor to move to, like \u201Ctween PausePanel position to CenterPoint in 0.5\u201D", warn);
+                spec.TweenTarget = target;
+                index += targetUsed;
+            }
+            else if (spec.TweenProperty == TweenKind.Color)
+            {
+                if (words[index].Type != TokenType.Str)
+                    return Unknown(spec, words, "\u201Ctween color\u201D needs a color in quotes, like \u201Ctween PausePanel color to \"1 0 0\" in 0.5\u201D", warn);
+                spec.TweenColor = words[index].Text;
+                index++;
+            }
+            else
+            {
+                spec.TweenValue = ValueNodeAt(words, index);
+                spec.HasNumber = words[index].Type == TokenType.Number;
+                if (spec.HasNumber)
+                    spec.Number = words[index].Number;
+                index++;
+            }
+
+            if (index + 1 >= words.Count || words[index].Text != "in" || words[index + 1].Type != TokenType.Number)
+                return Unknown(spec, words, "\u201Ctween\u201D needs a time in seconds, like \u201C... in 0.5\u201D", warn);
+            spec.Duration = words[index + 1].Number;
+            index += 2;
+
+            if (index < words.Count)
+            {
+                if (words[index].Text != "easing")
+                    return Unknown(spec, words, "after the time, \u201Ctween\u201D only takes \u201Ceasing ...\u201D", warn);
+                index++;
+                if (index < words.Count && words[index].Text == "linear")
+                {
+                    spec.Easing = TweenEasing.Linear;
+                    index++;
+                }
+                else if (index < words.Count && words[index].Text == "ease")
+                {
+                    index++;
+                    bool easeIn = index < words.Count && words[index].Text == "in";
+                    if (easeIn) index++;
+                    bool easeOut = index < words.Count && words[index].Text == "out";
+                    if (easeOut) index++;
+                    if (!easeIn && !easeOut)
+                        return Unknown(spec, words, "easing looks like \u201Ceasing linear\u201D, \u201Ceasing ease in\u201D, \u201Ceasing ease out\u201D, or \u201Ceasing ease in out\u201D", warn);
+                    spec.Easing = easeIn && easeOut ? TweenEasing.EaseInOut : easeIn ? TweenEasing.EaseIn : TweenEasing.EaseOut;
+                }
+                else
+                {
+                    return Unknown(spec, words, "easing looks like \u201Ceasing linear\u201D, \u201Ceasing ease in\u201D, \u201Ceasing ease out\u201D, or \u201Ceasing ease in out\u201D", warn);
+                }
+            }
+
+            spec.HasTween = true;
+            return Finish(spec, ActionVerb.Tween, words, index);
         }
 
         private static ActionSpec SelectAction(ActionSpec spec, List<Token> words, Action<string> warn)
