@@ -28,6 +28,8 @@ namespace Game
         Selected,
         SelectionCountIs,
         MyControlGroupAssigned,
+        // RTS resource economy (Task 18 Part B)
+        CanAfford,
     }
 
     public class ConditionNode
@@ -152,6 +154,15 @@ namespace Game
                 }
             }
 
+            // ---- RTS resource economy (Task 18 Part B) ----
+            // `can afford Barracks` — data-driven cost check (see ResourceManager).
+            if (texts.Length >= 3 && texts[0] == "can" && texts[1] == "afford")
+            {
+                node.Kind = ConditionKind.CanAfford;
+                node.Thing = JoinTexts(texts, 2, texts.Length);
+                return node;
+            }
+
             int isIndex = IndexOf(texts, "is");
             if (isIndex > 0)
             {
@@ -160,9 +171,10 @@ namespace Game
                 if (higher || lower)
                 {
                     node.Kind = higher ? ConditionKind.Higher : ConditionKind.Lower;
-                    SetSubject(node, tokens, texts, isIndex);
-                    int thanIndex = higher ? Array.IndexOf(texts, "higher", isIndex) + 1 : Array.IndexOf(texts, "lower", isIndex) + 1;
-                    node.Right = ValueFrom(tokens, texts, thanIndex + 1);
+                    if (!TrySetResourceSubject(node, texts, isIndex))
+                        SetSubject(node, tokens, texts, isIndex);
+                    int opIndex = higher ? Array.IndexOf(texts, "higher", isIndex) : Array.IndexOf(texts, "lower", isIndex);
+                    node.Right = ValueFromSpan(tokens, texts, opIndex + 2);
                     return node;
                 }
                 int nearIndex = IndexOf(texts, "near");
@@ -338,6 +350,8 @@ namespace Game
                         return selection.IsControlGroupAssigned(node.Group);
                     return selection.IsInControlGroup(context.Me, node.Group);
                 }
+                case ConditionKind.CanAfford:
+                    return ResourceManager.CanAfford(context.Variables, node.Thing);
                 default:
                     return false;
             }
@@ -371,6 +385,20 @@ namespace Game
                 node.Owner = "";
                 node.Name = texts[isIndex - 1];
             }
+        }
+
+        /// <summary>Recognises a (possibly multiword) global resource on the left of
+        /// <c>is</c>, e.g. <c>Supply Used is lower than Supply Max</c>.</summary>
+        private static bool TrySetResourceSubject(ConditionNode node, string[] texts, int isIndex)
+        {
+            if (texts.Length == 0 || texts[0] == "my")
+                return false;
+            string name = JoinTexts(texts, 0, isIndex);
+            if (!ResourceManager.TryCanonical(name, out string canonical))
+                return false;
+            node.Owner = "";
+            node.Name = canonical;
+            return true;
         }
 
         private static ValueBox ReadSubject(ConditionNode node, EventContext context)
@@ -412,6 +440,24 @@ namespace Game
                 default:
                     return null;
             }
+        }
+
+        /// <summary>
+        /// Reads the right-hand side of a comparison. A single token behaves as before;
+        /// a run of words is first tried as a resource name (`Supply Max`), then folded
+        /// back to its first token.
+        /// </summary>
+        private static ValueNode ValueFromSpan(List<Token> tokens, string[] texts, int index)
+        {
+            if (index < 0 || index >= tokens.Count)
+                return null;
+            if (index + 1 < tokens.Count)
+            {
+                string name = JoinTexts(texts, index, tokens.Count);
+                if (ResourceManager.TryCanonical(name, out string canonical))
+                    return new VariableValue { Line = tokens[index].Line, Name = canonical };
+            }
+            return ValueFrom(tokens, texts, index);
         }
 
         private static int IndexOf(string[] texts, string word)

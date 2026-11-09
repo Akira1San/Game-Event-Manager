@@ -2926,6 +2926,242 @@ when control group 1 is held
         "Forget removes a destroyed actor from the selection and every control group");
     Check(!stateEngine.SelectControlGroup(9), "recalling an unassigned group changes nothing");
 
+// ------------------------------------------------------------------
+// Task 18 Part B: RTS resource economy
+// ------------------------------------------------------------------
+
+Check(ResourceManager.TryCanonical("supply", out var supplyCanonical) && supplyCanonical == "SupplyUsed",
+      "resource alias `supply` canonicalises to SupplyUsed");
+Check(ResourceManager.TryCanonical("Supply Used", out var supplyUsedCanonical) && supplyUsedCanonical == "SupplyUsed",
+      "resource alias `Supply Used` canonicalises to SupplyUsed");
+Check(ResourceManager.TryCanonical("supply max", out var supplyMaxCanonical) && supplyMaxCanonical == "SupplyMax",
+      "resource alias `supply max` canonicalises to SupplyMax");
+Check(ResourceManager.TryCanonical("Food Cap", out var foodCanonical) && foodCanonical == "FoodCap",
+      "resource alias `Food Cap` canonicalises to FoodCap");
+Check(ResourceManager.TryCanonical("rus", out var rusCanonical) && rusCanonical == "RUs",
+      "resource alias `rus` canonicalises to RUs");
+Check(!ResourceManager.IsResource("Score"), "a normal variable is not mistaken for a resource");
+
+var resourceWarnings = 0;
+var resourceVars = new EventVariables();
+resourceVars.OnWarning = _ => resourceWarnings++;
+Check(ResourceManager.ReadNumber(resourceVars, "Minerals") == 0 && resourceWarnings == 0,
+      "an unset resource reads as 0 without a read-before-set warning");
+
+// Trigger parsing + canonicalisation.
+var resourceTriggers = parser.Parse(@"when Minerals becomes 500
+  set Hit to 1
+when Supply becomes 10
+  set Hit to 1
+when Supply Used becomes 10
+  set Hit to 1
+when resources change
+  set Hit to 1");
+var mineralsBecomes = TriggerClassifier.Classify(resourceTriggers.Events[0]);
+Check(mineralsBecomes.Kind == TriggerKind.WatchBecomes && mineralsBecomes.WatchName == "Minerals",
+      "`when Minerals becomes 500` watches Minerals");
+var supplyBecomes = TriggerClassifier.Classify(resourceTriggers.Events[1]);
+Check(supplyBecomes.Kind == TriggerKind.WatchBecomes && supplyBecomes.WatchName == "SupplyUsed",
+      "`when Supply becomes 10` watches the canonical SupplyUsed");
+var supplyUsedBecomes = TriggerClassifier.Classify(resourceTriggers.Events[2]);
+Check(supplyUsedBecomes.Kind == TriggerKind.WatchBecomes && supplyUsedBecomes.WatchName == "SupplyUsed",
+      "`when Supply Used becomes 10` watches the canonical SupplyUsed");
+var resourcesChange = TriggerClassifier.Classify(resourceTriggers.Events[3]);
+Check(resourcesChange.Kind == TriggerKind.ResourceChanges,
+      "`when resources change` classifies to ResourceChanges");
+
+// Condition parsing.
+var mineralCondition = Conditions.Parse(parser.Parse(@"when every 1 seconds
+  Minerals is higher than 50").Events[0].Body[0].Words);
+Check(mineralCondition.Kind == ConditionKind.Higher && mineralCondition.Name == "Minerals" &&
+      mineralCondition.Right is NumberValue mineralValue && mineralValue.Value == 50,
+      "`Minerals is higher than 50` parses to Higher with value 50");
+var supplyCondition = Conditions.Parse(parser.Parse(@"when every 1 seconds
+  Supply Used is lower than Supply Max").Events[0].Body[0].Words);
+Check(supplyCondition.Kind == ConditionKind.Lower && supplyCondition.Name == "SupplyUsed" &&
+      supplyCondition.Right is VariableValue supplyRight && supplyRight.Name == "SupplyMax",
+      "`Supply Used is lower than Supply Max` compares the two canonical resources");
+var affordCondition = Conditions.Parse(parser.Parse(@"when every 1 seconds
+  can afford Barracks").Events[0].Body[0].Words);
+Check(affordCondition.Kind == ConditionKind.CanAfford && affordCondition.Thing == "Barracks",
+      "`can afford Barracks` parses to CanAfford");
+
+// Action parsing.
+var resourceActions = parser.Parse(@"when game starts
+  set Minerals to 500
+  add 50 to Minerals
+  deduct 100 from Minerals
+  increase Supply Max by 8
+  set Supply Used to 0");
+Check(resourceActions.Events[0].Body[0].Statement is SetNode setMinerals &&
+      setMinerals.Target.Name == "Minerals",
+      "`set Minerals to 500` targets Minerals");
+Check(resourceActions.Events[0].Body[1].Statement is AddNode addMinerals &&
+      addMinerals.Target.Name == "Minerals",
+      "`add 50 to Minerals` targets Minerals");
+Check(resourceActions.Events[0].Body[2].Statement is DeductNode deductMinerals &&
+      deductMinerals.Target.Name == "Minerals",
+      "`deduct 100 from Minerals` builds a DeductNode");
+Check(resourceActions.Events[0].Body[3].Statement is AddNode increaseSupply &&
+      increaseSupply.Target.Name == "SupplyMax" &&
+      increaseSupply.Amount is NumberValue increaseValue && increaseValue.Value == 8,
+      "`increase Supply Max by 8` reuses AddNode on the canonical SupplyMax");
+Check(resourceActions.Events[0].Body[4].Statement is SetNode setSupply &&
+      setSupply.Target.Name == "SupplyUsed",
+      "`set Supply Used to 0` targets the canonical SupplyUsed");
+
+// Runtime set/add/deduct/increase and clamping.
+var resourceEngine = FreshEngine(new FakeWorld());
+resourceEngine.AddSheet(new GlobalHost(), parser.Parse(@"when game starts
+  set Minerals to 500
+  add 50 to Minerals
+  deduct 100 from Minerals
+  increase Supply Max by 8
+  set Supply Used to 3"));
+resourceEngine.SessionStarted();
+resourceEngine.Tick(0);
+Check(resourceEngine.Variables.GetGlobal("Minerals").AsNumber() == 450,
+      "set/add/deduct run in order (500 + 50 - 100 = 450)");
+Check(resourceEngine.Variables.GetGlobal("SupplyMax").AsNumber() == 8,
+      "`increase Supply Max by 8` raises SupplyMax");
+Check(resourceEngine.Variables.GetGlobal("SupplyUsed").AsNumber() == 3,
+      "`set Supply Used to 3` writes canonical SupplyUsed");
+
+var clampEngine = FreshEngine(new FakeWorld());
+clampEngine.AddSheet(new GlobalHost(), parser.Parse(@"when game starts
+  set Minerals to 10
+  deduct 999 from Minerals"));
+clampEngine.SessionStarted();
+clampEngine.Tick(0);
+Check(clampEngine.Variables.GetGlobal("Minerals").AsNumber() == 0,
+      "`deduct` clamps resources at 0");
+
+// Aliases share one slot.
+var aliasEngine = FreshEngine(new FakeWorld());
+aliasEngine.AddSheet(new GlobalHost(), parser.Parse(@"when game starts
+  set Supply to 5
+  add 2 to Supply Used"));
+aliasEngine.SessionStarted();
+aliasEngine.Tick(0);
+Check(aliasEngine.Variables.HasGlobal("SupplyUsed") &&
+      aliasEngine.Variables.GetGlobal("SupplyUsed").AsNumber() == 7 &&
+      !aliasEngine.Variables.HasGlobal("Supply"),
+      "`Supply` and `Supply Used` write the same canonical global");
+
+// `when Minerals becomes` fires on the change edge, not on the baseline tick.
+var becomesWorld = new FakeWorld();
+var becomesEngine = FreshEngine(becomesWorld);
+becomesEngine.AddSheet(new FakeActor("Economy"), parser.Parse(@"when Minerals becomes 500
+  set Hit to Hit + 1
+when Supply becomes 10
+  set SupplyHit to SupplyHit + 1"));
+becomesEngine.Tick(0);
+Check(becomesEngine.Variables.GetGlobal("Hit").IsNone(),
+      "the first tick only establishes the resource baseline");
+becomesEngine.Variables.SetGlobal("Minerals", ValueBox.OfNumber(500));
+becomesEngine.Tick(1);
+Check(becomesEngine.Variables.GetGlobal("Hit").AsNumber() == 1,
+      "`when Minerals becomes 500` fires when the resource reaches 500");
+becomesEngine.Variables.SetGlobal("SupplyUsed", ValueBox.OfNumber(10));
+becomesEngine.Tick(2);
+Check(becomesEngine.Variables.GetGlobal("SupplyHit").AsNumber() == 1,
+      "`when Supply becomes 10` reads the canonical SupplyUsed slot");
+becomesEngine.Tick(3);
+Check(becomesEngine.Variables.GetGlobal("Hit").AsNumber() == 1,
+      "staying at 500 does not refire `when Minerals becomes 500`");
+
+// `when resources change` fires for any resource, once per change.
+var resourcesWorld = new FakeWorld();
+var resourcesEngine = FreshEngine(resourcesWorld);
+resourcesEngine.AddSheet(new GlobalHost(), parser.Parse(@"when resources change
+  set ResourceChanges to ResourceChanges + 1"));
+resourcesEngine.Tick(0);
+Check(resourcesEngine.Variables.GetGlobal("ResourceChanges").IsNone(),
+      "`when resources change` does not fire on its baseline tick");
+resourcesEngine.Variables.SetGlobal("Gas", ValueBox.OfNumber(25));
+resourcesEngine.Tick(1);
+Check(resourcesEngine.Variables.GetGlobal("ResourceChanges").AsNumber() == 1,
+      "`when resources change` fires when Gas changes");
+resourcesEngine.Tick(2);
+Check(resourcesEngine.Variables.GetGlobal("ResourceChanges").AsNumber() == 1,
+      "unchanged resources do not refire `when resources change`");
+resourcesEngine.Variables.SetGlobal("Ore", ValueBox.OfNumber(4));
+resourcesEngine.Tick(3);
+Check(resourcesEngine.Variables.GetGlobal("ResourceChanges").AsNumber() == 2,
+      "a second resource change fires again");
+
+// `can afford` uses data-driven cost variables.
+var affordVars = new EventVariables();
+Check(ResourceManager.CanAfford(affordVars, "Barracks"),
+      "a building with no cost variables is affordable");
+affordVars.SetGlobal("BarracksCost", ValueBox.OfNumber(150));
+Check(!ResourceManager.CanAfford(affordVars, "Barracks"),
+      "`BarracksCost` blocks when Minerals are short");
+affordVars.SetGlobal("Minerals", ValueBox.OfNumber(200));
+Check(ResourceManager.CanAfford(affordVars, "Barracks"),
+      "`BarracksCost` passes when Minerals are enough");
+affordVars.SetGlobal("BarracksGasCost", ValueBox.OfNumber(100));
+Check(!ResourceManager.CanAfford(affordVars, "Barracks"),
+      "a gas cost also blocks when Gas is short");
+affordVars.SetGlobal("Gas", ValueBox.OfNumber(100));
+Check(ResourceManager.CanAfford(affordVars, "Barracks"),
+      "the building is affordable once Minerals and Gas are covered");
+affordVars.SetGlobal("BarracksSupplyCost", ValueBox.OfNumber(2));
+affordVars.SetGlobal("SupplyMax", ValueBox.OfNumber(10));
+affordVars.SetGlobal("SupplyUsed", ValueBox.OfNumber(9));
+Check(!ResourceManager.CanAfford(affordVars, "Barracks"),
+      "a supply cost blocks when the supply cap would be exceeded");
+affordVars.SetGlobal("SupplyUsed", ValueBox.OfNumber(8));
+Check(ResourceManager.CanAfford(affordVars, "Barracks"),
+      "a supply cost passes exactly at the cap");
+
+var foodVars = new EventVariables();
+foodVars.SetGlobal("FactorySupplyCost", ValueBox.OfNumber(1));
+foodVars.SetGlobal("FoodCap", ValueBox.OfNumber(5));
+foodVars.SetGlobal("SupplyUsed", ValueBox.OfNumber(4));
+Check(ResourceManager.CanAfford(foodVars, "Factory"),
+      "FoodCap is the supply ceiling when SupplyMax is unset");
+foodVars.SetGlobal("SupplyUsed", ValueBox.OfNumber(5));
+Check(!ResourceManager.CanAfford(foodVars, "Factory"),
+      "FoodCap blocks a building that would exceed it");
+
+// `can afford` gates actions at runtime, and the supply condition compares resources.
+var resourceGateWorld = new FakeWorld();
+var resourceGateEngine = FreshEngine(resourceGateWorld);
+resourceGateEngine.AddSheet(new GlobalHost(), parser.Parse(@"when every 1 seconds
+  can afford Barracks
+  set CanBuild to CanBuild + 1
+  Supply Used is lower than Supply Max
+  set SupplyRoom to SupplyRoom + 1"));
+resourceGateEngine.Variables.SetGlobal("BarracksCost", ValueBox.OfNumber(100));
+resourceGateEngine.Variables.SetGlobal("Minerals", ValueBox.OfNumber(50));
+resourceGateEngine.Variables.SetGlobal("SupplyUsed", ValueBox.OfNumber(3));
+resourceGateEngine.Variables.SetGlobal("SupplyMax", ValueBox.OfNumber(10));
+resourceGateEngine.Tick(1);
+Check(resourceGateEngine.Variables.GetGlobal("CanBuild").IsNone(),
+      "`can afford Barracks` blocks while Minerals are short");
+Check(resourceGateEngine.Variables.GetGlobal("SupplyRoom").AsNumber() == 1,
+      "`Supply Used is lower than Supply Max` passes with spare supply");
+resourceGateEngine.Variables.SetGlobal("Minerals", ValueBox.OfNumber(150));
+resourceGateEngine.Tick(2);
+Check(resourceGateEngine.Variables.GetGlobal("CanBuild").AsNumber() == 1,
+      "`can afford Barracks` lets the event run once the cost is covered");
+resourceGateEngine.Variables.SetGlobal("SupplyUsed", ValueBox.OfNumber(10));
+resourceGateEngine.Tick(3);
+Check(resourceGateEngine.Variables.GetGlobal("SupplyRoom").AsNumber() == 2,
+      "`Supply Used is lower than Supply Max` blocks at the cap");
+
+// Reading a resource through an event does not warn.
+var quietWorld = new FakeWorld();
+var quietEngine = FreshEngine(quietWorld);
+int quietWarnings = 0;
+quietEngine.Variables.OnWarning = _ => quietWarnings++;
+quietEngine.AddSheet(new GlobalHost(), parser.Parse(@"when every 1 seconds
+  set Seen to Minerals"));
+quietEngine.Tick(1);
+Check(quietEngine.Variables.GetGlobal("Seen").AsNumber() == 0 && quietWarnings == 0,
+      "reading an unset resource from an event is quiet and reads 0");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

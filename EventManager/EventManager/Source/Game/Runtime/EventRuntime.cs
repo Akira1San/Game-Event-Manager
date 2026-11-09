@@ -23,13 +23,13 @@ namespace Game
         public bool Stopped;
 
         public ValueBox ReadGlobal(string name)
-            => Variables.GetGlobal(name);
+            => ResourceManager.Read(Variables, name);
 
         public ValueBox ReadMy(string name)
             => Variables.GetLocal(Me, name);
 
         public void WriteGlobal(string name, ValueBox value)
-            => Variables.SetGlobal(name, value);
+            => Variables.SetGlobal(ResourceManager.CanonicalOrName(name), value);
 
         public void WriteMy(string name, ValueBox value)
             => Variables.SetLocal(Me, name, value);
@@ -655,6 +655,10 @@ namespace Game
                 {
                     ExecuteAdd(context, add);
                 }
+                else if (statement is DeductNode deduct)
+                {
+                    ExecuteDeduct(context, deduct);
+                }
                 else if (statement is BagRemoveNode bagRemove)
                 {
                     ExecuteBagRemove(context, bagRemove);
@@ -826,6 +830,21 @@ namespace Game
                 context.WriteGlobal(add.Target.Name, updated);
         }
 
+        /// <summary><c>deduct &lt;n&gt; from &lt;resource&gt;</c>: a normal subtraction that
+        /// never goes below 0 (spending can't leave a negative stockpile).</summary>
+        private void ExecuteDeduct(EventContext context, DeductNode deduct)
+        {
+            double amount = context.Evaluate(deduct.Amount).AsNumber();
+            ValueBox current = deduct.Target.Owner == "my"
+                ? context.ReadMy(deduct.Target.Name)
+                : context.ReadGlobal(deduct.Target.Name);
+            double updated = Math.Max(0, current.AsNumber() - amount);
+            if (deduct.Target.Owner == "my")
+                context.WriteMy(deduct.Target.Name, ValueBox.OfNumber(updated));
+            else
+                context.WriteGlobal(deduct.Target.Name, ValueBox.OfNumber(updated));
+        }
+
         private void ExecuteBagRemove(EventContext context, BagRemoveNode node)
         {
             context.Runtime.BagRemove(context.Me, node.Thing);
@@ -995,6 +1014,9 @@ namespace Game
                 case TriggerKind.WatchBecomesNot:
                 case TriggerKind.WatchChanges:
                     TickWatch(sheet, eventIndex, descriptor);
+                    break;
+                case TriggerKind.ResourceChanges:
+                    TickResourceChanges(sheet, eventIndex);
                     break;
                 case TriggerKind.Arrives:
                     PollArrival(sheet, eventIndex, descriptor);
@@ -1256,6 +1278,24 @@ namespace Game
             }
             state.Last = ValueBox.Copy(current);
             if (fires)
+                RunEvent(sheet, eventIndex, null);
+        }
+
+        /// <summary>Fires when any RTS resource changes. The first tick establishes the
+        /// baseline (like <c>when &lt;var&gt; changes</c>), so loading a scene does not fire it.</summary>
+        private void TickResourceChanges(SheetInstance sheet, int eventIndex)
+        {
+            string signature = ResourceManager.Snapshot(Variables);
+            WatchState state = sheet.Watches[eventIndex];
+            if (!state.Initialized)
+            {
+                state.Last = ValueBox.OfText(signature);
+                state.Initialized = true;
+                return;
+            }
+            bool changed = state.Last.Kind != ValueKind.Text || state.Last.Text != signature;
+            state.Last = ValueBox.OfText(signature);
+            if (changed)
                 RunEvent(sheet, eventIndex, null);
         }
 

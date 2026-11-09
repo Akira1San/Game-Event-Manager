@@ -24,7 +24,7 @@ zero breaking changes to existing `.events` files.
 - UI integration: selection ring/highlight actor per selected unit; control group indicators (1–0 keys)
 - StarCraft click/box-select; Red Alert control groups; Homeworld strike groups
 
-### Part B — Resource Economy (`ResourceManager.cs`) [ ]
+### Part B — Resource Economy (`ResourceManager.cs`) [x]
 - Global variables: Minerals, Gas, SupplyUsed, SupplyMax, FoodCap, Ore, Gems, Power, RUs
 - New triggers: `when Minerals becomes <n>`, `when Supply becomes <n>`, `when ResourcesChange`
 - New conditions: `Minerals is higher than <n>`, `Supply Used is lower than Supply Max`,

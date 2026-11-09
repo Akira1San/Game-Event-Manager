@@ -44,6 +44,8 @@ namespace Game
         SelectionChanged,
         ControlGroupPressed,
         ControlGroupHeld,
+        // RTS resource economy (Task 18 Part B)
+        ResourceChanges,
     }
 
     public class TriggerDescriptor
@@ -165,13 +167,17 @@ namespace Game
             int notIndex = IndexOf(words, "not");
             if (notIndex > 0 && IndexOf(words, "becomes") > 0 && IndexOf(words, "becomes") < notIndex)
                 return WatchDescriptor(trigger, ev, IndexOf(words, "becomes"), becomesNot: true);
+            if (words.Length >= 2 && (words[0] == "resources" || words[0] == "resource") &&
+                (words[words.Length - 1] == "change" || words[words.Length - 1] == "changes"))
+                return new TriggerDescriptor { Kind = TriggerKind.ResourceChanges };
+            if (words.Length == 1 && string.Equals(words[0], "ResourcesChange", StringComparison.OrdinalIgnoreCase))
+                return new TriggerDescriptor { Kind = TriggerKind.ResourceChanges };
             if (words.Length >= 2 && words[words.Length - 1] == "changes")
-                return new TriggerDescriptor
-                {
-                    Kind = TriggerKind.WatchChanges,
-                    WatchOwner = Owner(words, IndexOf(words, "changes")),
-                    WatchName = NameOf(words, IndexOf(words, "changes")),
-                };
+            {
+                var changes = new TriggerDescriptor { Kind = TriggerKind.WatchChanges };
+                SetWatchName(changes, trigger, IndexOf(words, "changes"));
+                return changes;
+            }
             return new TriggerDescriptor { Kind = TriggerKind.Unknown };
         }
 
@@ -327,13 +333,31 @@ namespace Game
                 descriptor.WatchOwner = "my";
                 descriptor.WatchName = trigger[nameIndex].Text;
             }
-            else if (nameIndex >= 0)
+            else
             {
-                descriptor.WatchOwner = "";
-                descriptor.WatchName = trigger[nameIndex].Text;
+                // Resource names and variables can be several words (`Supply Used`,
+                // `Supply Max`); join everything before `becomes`.
+                SetWatchName(descriptor, trigger, becomesIndex);
             }
             descriptor.WatchTarget = ValueFromToken(trigger[trigger.Count - 1]);
             return descriptor;
+        }
+
+        /// <summary>Reads the watched variable name ending just before <paramref name="until"/>,
+        /// canonicalising RTS resources so `Supply`, `Supply Used` and `SupplyUsed` share one slot.</summary>
+        private static void SetWatchName(TriggerDescriptor descriptor, List<Token> trigger, int until)
+        {
+            int from = 0;
+            descriptor.WatchOwner = "";
+            if (until > 0 && trigger[0].Text == "my")
+            {
+                descriptor.WatchOwner = "my";
+                from = 1;
+            }
+            string name = Join(trigger, from, until);
+            descriptor.WatchName = descriptor.WatchOwner.Length == 0
+                ? ResourceManager.CanonicalOrName(name)
+                : name;
         }
 
         private static ValueNode ValueFromToken(Token token)
@@ -386,19 +410,6 @@ namespace Game
             return parts.ToString();
         }
 
-        private static string Owner(string[] words, int anchorIndex)
-        {
-            if (anchorIndex - 2 >= 0 && words[anchorIndex - 2] == "my")
-                return "my";
-            return "";
-        }
-
-        private static string NameOf(string[] words, int anchorIndex)
-        {
-            if (anchorIndex >= 1)
-                return words[anchorIndex - 1];
-            return "";
-        }
     }
 
     public class PushSignal

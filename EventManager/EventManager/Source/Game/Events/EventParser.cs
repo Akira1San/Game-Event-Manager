@@ -260,6 +260,16 @@ namespace Game
                 line.Statement = ParseAdd(line);
                 return;
             }
+            if (first.Text == "deduct")
+            {
+                line.Statement = ParseDeduct(line);
+                return;
+            }
+            if (first.Text == "increase")
+            {
+                line.Statement = ParseIncrease(line);
+                return;
+            }
             if (first.Text == "remove")
             {
                 line.Statement = ParseRemove(line);
@@ -507,7 +517,16 @@ namespace Game
             }
             var node = new SetNode { Line = line.Line };
             int index = 1;
-            node.Target = ReadVariable(words, ref index, line.Line, "`set`");
+            // `set Supply Used to 5` / `set Minerals to 500`: resources may be multiword.
+            if (TryReadResourcePrefix(words, index, "to", out VariableValue resourceTarget, out int toIndex))
+            {
+                node.Target = resourceTarget;
+                index = toIndex;
+            }
+            else
+            {
+                node.Target = ReadVariable(words, ref index, line.Line, "`set`");
+            }
             if (index >= words.Count || words[index].Type != TokenType.Word || words[index].Text != "to")
                 throw new ParseException("a `set` line joins a variable and a value with `to` — `set Score to 0`", line.Line);
             index++;
@@ -564,11 +583,119 @@ namespace Game
             if (index >= words.Count || words[index].Type != TokenType.Word || words[index].Text != "to")
                 throw new ParseException("an `add` line joins a value and a variable with `to` — `add 1 to Score`", line.Line);
             index++;
-            node.Target = ReadVariable(words, ref index, line.Line, "`add`");
+            if (TryReadResourceSuffix(words, index, out VariableValue resourceTarget))
+            {
+                node.Target = resourceTarget;
+                index = words.Count;
+            }
+            else
+            {
+                node.Target = ReadVariable(words, ref index, line.Line, "`add`");
+            }
             CheckEndOfLine(words, index, line.Line, node.Target.Owner.Length == 0
                 ? $"add 1 to {node.Target.Name}"
                 : $"add 1 to my {node.Target.Name}");
             return node;
+        }
+
+        private StatementNode ParseDeduct(BodyLineNode line)
+        {
+            var words = line.Words;
+            var node = new DeductNode { Line = line.Line };
+            int index = 1;
+            node.Amount = ReadValue(words, ref index, line.Line);
+            if (index >= words.Count || words[index].Type != TokenType.Word || words[index].Text != "from")
+                throw new ParseException("a `deduct` line joins a value and a resource with `from` — `deduct 100 from Minerals`", line.Line);
+            index++;
+            if (TryReadResourceSuffix(words, index, out VariableValue resourceTarget))
+            {
+                node.Target = resourceTarget;
+                index = words.Count;
+            }
+            else
+            {
+                node.Target = ReadVariable(words, ref index, line.Line, "`deduct`");
+            }
+            CheckEndOfLine(words, index, line.Line, $"deduct <amount> from {node.Target.Name}");
+            return node;
+        }
+
+        private StatementNode ParseIncrease(BodyLineNode line)
+        {
+            var words = line.Words;
+            int byIndex = -1;
+            for (int i = 1; i < words.Count; i++)
+                if (words[i].Type == TokenType.Word && words[i].Text == "by")
+                {
+                    byIndex = i;
+                    break;
+                }
+            if (byIndex < 2)
+                throw new ParseException("`increase` looks like this: `increase Supply Max by 8`", line.Line);
+            string name = JoinWords(words, 1, byIndex);
+            if (!ResourceManager.TryCanonical(name, out string canonical))
+                throw new ParseException($"`increase` needs a resource name like `Minerals` or `Supply Max` — I don't know one called \u201C{name}\u201D", line.Line);
+            var node = new AddNode
+            {
+                Line = line.Line,
+                Target = new VariableValue { Line = words[1].Line, Name = canonical },
+            };
+            int index = byIndex + 1;
+            node.Amount = ReadValue(words, ref index, line.Line);
+            CheckEndOfLine(words, index, line.Line, $"increase Supply Max by <amount>");
+            return node;
+        }
+
+        /// <summary>Joins a run of words back into one name (used for multiword resources).</summary>
+        private static string JoinWords(List<Token> words, int from, int until)
+        {
+            var parts = new System.Text.StringBuilder();
+            for (int i = from; i < until; i++)
+            {
+                if (parts.Length > 0)
+                    parts.Append(' ');
+                parts.Append(words[i].Text);
+            }
+            return parts.ToString();
+        }
+
+        /// <summary>Reads a resource name that runs up to <paramref name="separator"/>
+        /// (e.g. `set Supply Used to 5`). Returns false when the words are not a resource.</summary>
+        private static bool TryReadResourcePrefix(List<Token> words, int start, string separator,
+            out VariableValue target, out int separatorIndex)
+        {
+            target = null;
+            separatorIndex = -1;
+            int separatorAt = -1;
+            for (int i = start; i < words.Count; i++)
+            {
+                if (words[i].Type == TokenType.Word && words[i].Text == separator)
+                {
+                    separatorAt = i;
+                    break;
+                }
+            }
+            if (separatorAt <= start)
+                return false;
+            string name = JoinWords(words, start, separatorAt);
+            if (!ResourceManager.TryCanonical(name, out string canonical))
+                return false;
+            target = new VariableValue { Line = words[start].Line, Name = canonical };
+            separatorIndex = separatorAt;
+            return true;
+        }
+
+        /// <summary>Reads a trailing resource name (e.g. `deduct 5 from Supply Used`).</summary>
+        private static bool TryReadResourceSuffix(List<Token> words, int start, out VariableValue target)
+        {
+            target = null;
+            if (start >= words.Count)
+                return false;
+            string name = JoinWords(words, start, words.Count);
+            if (!ResourceManager.TryCanonical(name, out string canonical))
+                return false;
+            target = new VariableValue { Line = words[start].Line, Name = canonical };
+            return true;
         }
 
         private StatementNode ParseRemove(BodyLineNode line)

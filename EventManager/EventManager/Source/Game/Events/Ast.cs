@@ -43,6 +43,13 @@ namespace Game
         public VariableValue Target = new VariableValue();
     }
 
+    /// <summary><c>deduct &lt;n&gt; from &lt;resource&gt;</c>: subtracts, clamping at 0.</summary>
+    public class DeductNode : StatementNode
+    {
+        public ValueNode Amount = new NumberValue();
+        public VariableValue Target = new VariableValue();
+    }
+
     public class BagRemoveNode : StatementNode
     {
         public string Thing = "";

@@ -51,6 +51,11 @@ namespace Game
             new WordEntry { Kind = "trigger", Word = "when selection changes", Example = "when selection changes" },
             new WordEntry { Kind = "trigger", Word = "when control group <n> is pressed", Example = "when control group 1 is pressed" },
             new WordEntry { Kind = "trigger", Word = "when control group <n> is held", Example = "when control group 1 is held" },
+            new WordEntry { Kind = "trigger", Word = "when Minerals becomes <n>", Example = "when Minerals becomes 500" },
+            new WordEntry { Kind = "trigger", Word = "when Supply becomes <n>", Example = "when Supply becomes 10" },
+            new WordEntry { Kind = "trigger", Word = "when Supply Used becomes <n>", Example = "when Supply Used becomes 10" },
+            new WordEntry { Kind = "trigger", Word = "when resources change", Example = "when resources change" },
+            new WordEntry { Kind = "trigger", Word = "when ResourcesChange", Example = "when ResourcesChange", AltShape = "when resources change" },
 
             new WordEntry { Kind = "condition", Word = "<var> is <value>", Example = "Score is 3" },
             new WordEntry { Kind = "condition", Word = "<var> is not <value>", Example = "my health is lower than 1" },
@@ -71,6 +76,9 @@ namespace Game
             new WordEntry { Kind = "condition", Word = "me is selected", Example = "me is selected" },
             new WordEntry { Kind = "condition", Word = "selection count is <n>", Example = "selection count is 2" },
             new WordEntry { Kind = "condition", Word = "my control group <n> is assigned", Example = "my control group 1 is assigned" },
+            new WordEntry { Kind = "condition", Word = "Minerals is higher than <n>", Example = "Minerals is higher than 50" },
+            new WordEntry { Kind = "condition", Word = "Supply Used is lower than Supply Max", Example = "Supply Used is lower than Supply Max" },
+            new WordEntry { Kind = "condition", Word = "can afford <building>", Example = "can afford Barracks" },
 
             new WordEntry { Kind = "action", Word = "move", Example = "move forward speed 5" },
             new WordEntry { Kind = "action", Word = "turn", Example = "turn left degrees 90" },
@@ -115,7 +123,11 @@ namespace Game
             new WordEntry { Kind = "action", Word = "deselect", Example = "deselect me" },
             new WordEntry { Kind = "action", Word = "set state", Example = "set state patrol" },
             new WordEntry { Kind = "action", Word = "add", Example = "add 1 to Score" },
+            new WordEntry { Kind = "action", Word = "add", Example = "add 50 to Minerals" },
             new WordEntry { Kind = "action", Word = "add", Example = "add Sword to my bag" },
+            new WordEntry { Kind = "action", Word = "deduct", Example = "deduct 100 from Minerals" },
+            new WordEntry { Kind = "action", Word = "increase", Example = "increase Supply Max by 8" },
+            new WordEntry { Kind = "action", Word = "set", Example = "set Minerals to 500" },
             new WordEntry { Kind = "action", Word = "wait", Example = "wait 0.5 seconds" },
             new WordEntry { Kind = "action", Word = "show", Example = "show PausePanel" },
             new WordEntry { Kind = "action", Word = "show", Example = "show text \"Game Over\"" },
@@ -135,7 +147,7 @@ namespace Game
 
         public static readonly string[] ConditionMarks =
         {
-            "is", "has", "becomes", "changes", "exists", "does", "near", "chance",
+            "is", "has", "becomes", "changes", "exists", "does", "near", "chance", "afford",
         };
 
         public static readonly string[] Suggestables = BuildSuggestables();
