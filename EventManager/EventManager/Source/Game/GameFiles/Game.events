@@ -5,9 +5,13 @@
 when game starts
   set Score to 0
   set Lives to 3
+  set time scale to 1
+  print "Game started"
   set state menu
 
 when state is menu
+  print "State: menu"
+  set time scale to 1
   show text "Title Screen"
   show PlayButton
   show QuitButton
@@ -15,12 +19,16 @@ when state is menu
   hide GameOverPanel
 
 when PlayButton is clicked
+  print "Clicked PlayButton"
   set state playing
 
 when QuitButton is clicked
+  print "Clicked QuitButton"
   quit game
 
 when state is playing
+  print "State: playing"
+  set time scale to 1
   set text of ScoreLabel to Score
   set text of LivesLabel to Lives
   hide PausePanel
@@ -31,25 +39,32 @@ when P is pressed
   set state paused
 
 when state is paused
+  print "State: paused"
+  set time scale to 0
   show PausePanel
   show ResumeButton
   show QuitButton
 
 when ResumeButton is clicked
+  print "Clicked ResumeButton"
   set state playing
 
 when QuitButton is clicked state paused
+  print "Clicked QuitButton (paused)"
   quit game
 
 when Lives becomes 0
   unless state is gameover
+  print "Lives = 0"
   set state gameover
 
 when state is gameover
+  print "State: gameover"
   show text "Game Over"
   show GameOverPanel
   show RestartButton
   hide PausePanel
 
 when RestartButton is clicked
+  print "Clicked RestartButton"
   restart scene

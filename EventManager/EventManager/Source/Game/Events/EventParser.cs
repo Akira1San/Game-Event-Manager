@@ -515,6 +515,14 @@ namespace Game
                 CheckEndOfLine(words, idx, line.Line, $"set slider {sliderNode.Thing} to <value>");
                 return sliderNode;
             }
+            // `set time scale to <value>` — handled as a raw action word.
+            if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "time" &&
+                words[2].Type == TokenType.Word && words[2].Text == "scale")
+            {
+                var raw = new RawActionNode { Line = line.Line };
+                raw.Words.AddRange(words);
+                return raw;
+            }
             var node = new SetNode { Line = line.Line };
             int index = 1;
             // `set Supply Used to 5` / `set Minerals to 500`: resources may be multiword.

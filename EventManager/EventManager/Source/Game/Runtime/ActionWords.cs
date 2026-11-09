@@ -53,6 +53,8 @@ namespace Game
         Unfocus,
         // Tween helpers (Task 15 Part D)
         Tween,
+        // Global time scale (Task 17 Part C pause/resume)
+        SetTimeScale,
     }
 
     public class ActionSpec
@@ -378,7 +380,15 @@ namespace Game
                     }
                     if (words.Count >= 2 && words[1].Text == "light")
                         return Unknown(spec, words, "\u201Cset light\u201D looks like this: \u201Cset light intensity to 2\u201D, \u201Cset light color to \"1 0 0\"\u201D, or \u201Cset light range to 10\u201D", warn);
-                    return Unknown(spec, words, "yes, a \u201Cset\u201D line — I only know \u201Cset <variable> to <value>\u201D, \u201Cset text of\u201D, \u201Cset state\u201D, \u201Cset my control group\u201D, and \u201Cset light\u201D", warn);
+                    if (words.Count >= 5 && words[1].Text == "time" && words[2].Text == "scale" && words[3].Text == "to")
+                    {
+                        spec.AmountNode = ValueNodeAt(words, 4);
+                        spec.HasNumber = words[4].Type == TokenType.Number;
+                        if (spec.HasNumber)
+                            spec.Number = words[4].Number;
+                        return Finish(spec, ActionVerb.SetTimeScale, words, 5);
+                    }
+                    return Unknown(spec, words, "yes, a \u201Cset\u201D line — I only know \u201Cset <variable> to <value>\u201D, \u201Cset text of\u201D, \u201Cset state\u201D, \u201Cset my control group\u201D, \u201Cset light\u201D, and \u201Cset time scale\u201D", warn);
                 }
                 case "enable":
                     if (words.Count >= 2 && words[1].Text == "light")

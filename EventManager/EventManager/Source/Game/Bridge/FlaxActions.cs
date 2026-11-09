@@ -767,6 +767,13 @@ namespace Game
                 case ActionVerb.Print:
                     Debug.LogWarning($"Event print: {spec.Thing}");
                     break;
+                case ActionVerb.SetTimeScale:
+                {
+                    float s = (float)ResolveNumber(context, spec);
+                    Time.TimeScale = s;
+                    Debug.LogWarning($"Event print: time scale set to {s}");
+                    break;
+                }
             }
         }
 
