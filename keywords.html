@@ -77,13 +77,13 @@
 
   <div class="counts">
     <div class="count-card">
-      <div class="big">28</div><div class="label">Trigger shapes</div>
+      <div class="big">29</div><div class="label">Trigger shapes</div>
     </div>
     <div class="count-card">
       <div class="big">11</div><div class="label">Condition marks</div>
     </div>
     <div class="count-card">
-      <div class="big">33</div><div class="label">Action verbs</div>
+      <div class="big">35</div><div class="label">Action verbs</div>
     </div>
     <div class="count-card">
       <div class="big">8</div><div class="label">Structural words</div>
@@ -109,6 +109,7 @@
         <tr><td><span class="kw">when me overlaps</span> <span class="placeholder">&lt;thing&gt;</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when me overlaps Enemy</span></td></tr>
         <tr><td><span class="kw">when game starts</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when game starts</span></td></tr>
         <tr><td><span class="kw">when scene starts</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when scene starts</span></td></tr>
+        <tr><td><span class="kw">when state is</span> <span class="placeholder">&lt;name&gt;</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when state is chase</span><br><span class="alt">fires once on entry edge when <code>set state</code> enters that state · per-actor state machine</span></td></tr>
         <tr><td><span class="kw">when</span> <span class="placeholder">&lt;thing&gt;</span> <span class="kw">is clicked</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when PlayButton is clicked</span></td></tr>
         <tr><td><span class="kw">when me arrives at</span> <span class="placeholder">&lt;thing&gt;</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when me arrives at Waypoint</span></td></tr>
         <tr><td><span class="kw">when me sees</span> <span class="placeholder">&lt;thing&gt;</span> <span class="kw">by</span> <span class="placeholder">&lt;dist&gt;</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when me sees Player by 8</span></td></tr>
@@ -192,6 +193,8 @@
         <tr><td><span class="kw">stop</span></td><td><span class="kw">stop anim</span> / <span class="kw">stop moving</span> / <span class="kw">stop this event</span></td><td><span class="example">stop anim</span><br><span class="example">stop moving</span><br><span class="example">stop this event</span><br><span class="alt">stop anim restores the previous clip or the bind pose</span></td></tr>
         <tr><td><span class="kw">send</span></td><td><span class="kw">send message "die"</span> / <span class="kw">send message "hit" to other</span></td><td><span class="example">send message "die"</span></td></tr>
         <tr><td><span class="kw">set</span></td><td><span class="kw">set Score to 0</span> / <span class="kw">set my rotating to true</span> / <span class="kw">set text of ScoreLabel to Score</span> / <span class="kw">set A to B + C</span> / <span class="kw">set state chase</span> / <span class="kw">set my control group to 1</span> / <span class="kw">set Minerals to 500</span> / <span class="kw">set progress of HealthBar to 1</span> / <span class="kw">set slider HealthBar to 50</span></td><td><span class="example">set Score to 0</span><br><span class="example">set text of ScoreLabel to Score</span><br><span class="example">set my control group to 1</span><br><span class="example">set Minerals to 500</span><br><span class="example">set progress of HealthBar to 0.5</span><br><span class="example">set slider HealthBar to 50</span><br><span class="alt">accepts 0–1 or 0–100 · normalizes to the control's range</span></td></tr>
+        <tr><td><span class="kw">set state</span></td><td><span class="kw">set state &lt;name&gt;</span> — changes the actor's sheet state (default <code>"default"</code>)</td><td><span class="example">set state chase</span><br><span class="example">set state patrol</span><br><span class="alt">fires <code>when state is &lt;name&gt;</code> once on entry edge · gate any trigger with <code>state &lt;name&gt;</code> modifier</span></td></tr>
+        <tr><td><span class="kw">set time scale to</span></td><td><span class="kw">set time scale to 0</span> / <span class="kw">set time scale to 1</span> — global pause/resume</td><td><span class="example">set time scale to 0</span><br><span class="example">set time scale to 1</span><br><span class="alt">0 freezes all movement/timers · 1 resumes normal speed · used for pause menus</span></td></tr>
         <tr><td><span class="kw">select</span></td><td><span class="kw">select me</span> / <span class="kw">select Marine</span> / <span class="kw">select all Marine</span> / <span class="kw">select units near me by 5</span></td><td><span class="example">select all Marine</span><br><span class="alt">adds one target · <code>all</code> and <code>near</code> replace the selection</span></td></tr>
         <tr><td><span class="kw">deselect</span></td><td><span class="kw">deselect me</span> / <span class="kw">deselect all</span></td><td><span class="example">deselect me</span></td></tr>
         <tr><td><span class="kw">scale</span></td><td><span class="kw">scale Box 2</span> / <span class="kw">scale Box to 2</span></td><td><span class="example">scale Box 2</span><br><span class="example">scale Box to mySize</span><br><span class="alt">uniform scale — applies equally on X, Y, Z · number can be a literal or a variable</span></td></tr>
@@ -472,7 +475,7 @@
   <div class="footnote">
     Source of truth: <code>Source/Game/Events/WordRegistry.cs</code> in the project.<br>
     Physics rules live in <code>Source/Game/Runtime/PhysicsMovement.cs</code> (pure, unit-tested) and are applied by <code>Source/Game/Bridge/FlaxActions.cs</code>. Animation clip lookup, one-shot timing and graph swaps live in that bridge file too. Worked example: <code>Docs/PhysicsTest.md</code> and <code>Content/scenes/PhysicsTest.scene</code>.<br>
-    This list reflects the shipped v0.1 implementation. Planned-but-not-implemented words (e.g. state-machine <code>set state</code> from Task 17) are tracked in TASKS.md, not here.
+    This list reflects the shipped v0.1 implementation. Planned-but-not-implemented words are tracked in TASKS.md.
   </div>
 </div>
 
