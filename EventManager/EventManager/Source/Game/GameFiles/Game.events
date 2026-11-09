@@ -38,12 +38,20 @@ when P is pressed
   unless state is paused
   set state paused
 
+when P is pressed state paused
+  print "P unpause"
+  set state playing
+
 when state is paused
   print "State: paused"
   set time scale to 0
   show PausePanel
   show ResumeButton
   show QuitButton
+
+when PauseButton is clicked
+  print "Clicked PauseButton"
+  set time scale to 0
 
 when ResumeButton is clicked
   print "Clicked ResumeButton"
