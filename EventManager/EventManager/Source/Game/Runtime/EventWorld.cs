@@ -34,6 +34,11 @@ namespace Game
         bool IsButtonPressed(object actor);
         /// <summary>True when <paramref name="actor"/> carries a UI Button that is disabled.</summary>
         bool IsButtonDisabled(object actor);
+        /// <summary>True when the UI control on <paramref name="actor"/> currently has keyboard focus.</summary>
+        bool IsFocused(object actor);
+        /// <summary>The current text of the TextBox on <paramref name="actor"/> (empty when
+        /// there is no text box).</summary>
+        string TextOf(object actor);
         /// <summary>The current fill of the ProgressBar on <paramref name="actor"/>, 0 to 1
         /// (0 when there is no progress bar).</summary>
         double ProgressOf(object actor);
@@ -120,6 +125,16 @@ namespace Game
         public bool IsButtonDisabled(object actor)
         {
             return false;
+        }
+
+        public bool IsFocused(object actor)
+        {
+            return false;
+        }
+
+        public string TextOf(object actor)
+        {
+            return "";
         }
 
         public double ProgressOf(object actor)

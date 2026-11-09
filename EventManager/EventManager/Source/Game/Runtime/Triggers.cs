@@ -22,6 +22,11 @@ namespace Game
         MiddleClicked,
         DoubleClicked,
         Hovered,
+        // UI text input (Task 15 Part C)
+        TextChanged,
+        Focused,
+        LostFocus,
+        Submitted,
         ButtonPressed,
         ButtonReleased,
         Arrives,
@@ -132,6 +137,17 @@ namespace Game
                     };
                 }
             }
+            // `when <thing> text changes` / `when <thing> loses focus` / `when <thing> submits` /
+            // `when <thing> is focused` — UI text input (Task 15 Part C). These must come before the
+            // generic key shape (`<name> is <word>`) and the `changes` watcher below.
+            if (words.Length >= 3 && words[words.Length - 2] == "text" && words[words.Length - 1] == "changes")
+                return new TriggerDescriptor { Kind = TriggerKind.TextChanged, RequireName = Join(trigger, 0, words.Length - 2) };
+            if (words.Length >= 3 && words[words.Length - 2] == "loses" && words[words.Length - 1] == "focus")
+                return new TriggerDescriptor { Kind = TriggerKind.LostFocus, RequireName = Join(trigger, 0, words.Length - 2) };
+            if (words.Length >= 2 && words[words.Length - 1] == "submits")
+                return new TriggerDescriptor { Kind = TriggerKind.Submitted, RequireName = Join(trigger, 0, words.Length - 1) };
+            if (words.Length >= 3 && words[words.Length - 2] == "is" && words[words.Length - 1] == "focused")
+                return new TriggerDescriptor { Kind = TriggerKind.Focused, RequireName = Join(trigger, 0, words.Length - 2) };
             // `when <thing> is pressed` / `when <thing> is released` — button edge triggers.
             // `me`/`other` are allowed (`when me is pressed` = this sheet's own button). Only when
             // <thing> is NOT a key name: `when W is pressed` stays a key press.

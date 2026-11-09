@@ -48,6 +48,9 @@ namespace Game
         // RTS selection (Task 18 Part A)
         Select,
         Deselect,
+        // UI text input focus (Task 15 Part C)
+        Focus,
+        Unfocus,
     }
 
     public class ActionSpec
@@ -133,6 +136,18 @@ namespace Game
 
                 case "deselect":
                     return DeselectAction(spec, words, warn);
+
+                case "focus":
+                case "unfocus":
+                {
+                    string target = ThingAt(words, 1, out int used);
+                    if (target != null)
+                    {
+                        spec.Thing = target;
+                        return Finish(spec, verb == "focus" ? ActionVerb.Focus : ActionVerb.Unfocus, words, 1 + used);
+                    }
+                    return Unknown(spec, words, $"\u201C{verb}\u201D needs a thing, like \u201C{verb} NameBox\u201D", warn);
+                }
 
                 case "goto":
                 {

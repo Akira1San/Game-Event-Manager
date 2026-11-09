@@ -552,8 +552,9 @@ namespace Game
                 return true;
             // `when me is clicked` means "the actor this sheet is attached to was clicked".
             // Clicks are broadcast (so `when Ground is clicked` can live on the Player sheet),
-            // which is why the name alone is not enough for the `me` form.
-            if (descriptor.RequireName == "me" && IsClickKind(descriptor.Kind))
+            // which is why the name alone is not enough for the `me` form. TextBox edits/focus
+            // and submits are broadcast the same way (Task 15 Part C).
+            if (descriptor.RequireName == "me" && IsUiKind(descriptor.Kind))
                 return ReferenceEquals(signal.Other, sheet.Actor);
             // Clip names are matched loosely: `play anim "Walk"` answers `when anim "walk" ends`.
             // Particle names match the same way: `play particle "Smoke"` answers `when particle "smoke" ends`.
@@ -592,6 +593,17 @@ namespace Game
                    kind == TriggerKind.DoubleClicked ||
                    kind == TriggerKind.ButtonPressed ||
                    kind == TriggerKind.ButtonReleased;
+        }
+
+        /// <summary>UI signals broadcast by name (clicks, text edits, focus, submit). The
+        /// <c>me</c> form matches the sheet's own actor; a named form matches the signal name.</summary>
+        private static bool IsUiKind(TriggerKind kind)
+        {
+            return IsClickKind(kind) ||
+                   kind == TriggerKind.TextChanged ||
+                   kind == TriggerKind.Focused ||
+                   kind == TriggerKind.LostFocus ||
+                   kind == TriggerKind.Submitted;
         }
 
         private static bool IsKeyKind(TriggerKind kind)

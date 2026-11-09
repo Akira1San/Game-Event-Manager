@@ -405,6 +405,12 @@ namespace Game
                 case ActionVerb.Deselect:
                     ExecuteDeselect(context, spec);
                     break;
+                case ActionVerb.Focus:
+                    SetControlFocus(spec.Thing, true);
+                    break;
+                case ActionVerb.Unfocus:
+                    SetControlFocus(spec.Thing, false);
+                    break;
                 case ActionVerb.Turn:
                 {
                     var me = context.Me as Actor;
@@ -742,6 +748,10 @@ namespace Game
             Selection selection = context.Runtime.Selection;
             if (spec.All)
             {
+                // `select all NameBox` selects the text inside a TextBox. It falls through
+                // to the RTS unit-type meaning below when the name isn't a text box.
+                if (SelectAllText(spec.Thing))
+                    return;
                 var matches = new List<object>();
                 foreach (object other in context.Runtime.World.Actors())
                 {
@@ -1509,8 +1519,53 @@ namespace Game
                 WarnOnce("\u201Cset text of\u201D needs the name of the thing whose text changes — like \u201Cset text of ScoreLabel to Score\u201D.");
                 return;
             }
-            if (!SetLabel(thing, text))
-                WarnOnce($"\u201Cset text of\u201D needs an actor with a Label on a UIControl (I couldn't find one called \u201C{thing}\u201D). Labels in this scene: {ControlActorNames<FlaxEngine.GUI.Label>()}.");
+            if (SetLabel(thing, text))
+                return;
+            // A TextBox (input field) is not a Label; write its Text instead.
+            var box = FindControl<FlaxEngine.GUI.TextBox>(thing, out UIControl boxUi);
+            if (box != null)
+            {
+                if (boxUi != null && !boxUi.IsActive)
+                    boxUi.IsActive = true;
+                box.Text = text;
+                return;
+            }
+            WarnOnce($"\u201Cset text of\u201D needs an actor with a Label or TextBox on a UIControl (I couldn't find one called \u201C{thing}\u201D). Labels in this scene: {ControlActorNames<FlaxEngine.GUI.Label>()}. Text boxes in this scene: {ControlActorNames<FlaxEngine.GUI.TextBox>()}.");
+        }
+
+        /// <summary><c>focus &lt;thing&gt;</c> / <c>unfocus &lt;thing&gt;</c>: moves keyboard focus
+        /// to the GUI control on a UIControl actor (a TextBox, Button, Slider, ...).</summary>
+        public static void SetControlFocus(string thing, bool focused)
+        {
+            if (string.IsNullOrEmpty(thing))
+            {
+                WarnOnce($"\u201C{(focused ? "focus" : "unfocus")}\u201D needs the name of the control — like \u201C{(focused ? "focus NameBox" : "unfocus NameBox")}\u201D.");
+                return;
+            }
+            var control = FindControl<FlaxEngine.GUI.Control>(thing, out UIControl ui);
+            if (control == null)
+            {
+                WarnOnce($"\u201C{(focused ? "focus" : "unfocus")} {thing}\u201D needs an actor with a UI control on a UIControl (I couldn't find one called \u201C{thing}\u201D).");
+                return;
+            }
+            if (ui != null && !ui.IsActive)
+                ui.IsActive = true;
+            if (focused)
+                control.Focus();
+            else
+                control.Defocus();
+        }
+
+        /// <summary><c>select all &lt;thing&gt;</c> on a TextBox highlights its whole text.
+        /// Returns false when <paramref name="thing"/> isn't a text box, so the RTS
+        /// "select all units" meaning can take over.</summary>
+        public static bool SelectAllText(string thing)
+        {
+            var box = FindControl<FlaxEngine.GUI.TextBox>(thing, out _);
+            if (box == null)
+                return false;
+            box.SelectAll();
+            return true;
         }
 
         /// <summary><c>set button &lt;thing&gt; enabled/disabled</c>: flips <see cref="FlaxEngine.GUI.Control.Enabled"/>.</summary>

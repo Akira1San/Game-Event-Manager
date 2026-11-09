@@ -3162,6 +3162,141 @@ quietEngine.Tick(1);
 Check(quietEngine.Variables.GetGlobal("Seen").AsNumber() == 0 && quietWarnings == 0,
       "reading an unset resource from an event is quiet and reads 0");
 
+    // ------------------------------------------------------------------
+    // Task 15 Part C: TextBox / InputField
+    // ------------------------------------------------------------------
+
+    var textUiProg = parser.Parse(@"when NameBox text changes
+  set TextChangedCount to TextChangedCount + 1
+
+when NameBox is focused
+  set FocusCount to FocusCount + 1
+
+when NameBox loses focus
+  set BlurCount to BlurCount + 1
+
+when NameBox submits
+  set SubmitCount to SubmitCount + 1");
+    Check(textUiProg.Events.Count == 4, "the four TextBox triggers parse as four events");
+    Check(TriggerClassifier.Classify(textUiProg.Events[0]).Kind == TriggerKind.TextChanged &&
+          TriggerClassifier.Classify(textUiProg.Events[0]).RequireName == "NameBox",
+        "`when NameBox text changes` classifies to TextChanged");
+    Check(TriggerClassifier.Classify(textUiProg.Events[1]).Kind == TriggerKind.Focused &&
+          TriggerClassifier.Classify(textUiProg.Events[1]).RequireName == "NameBox",
+        "`when NameBox is focused` classifies to Focused");
+    Check(TriggerClassifier.Classify(textUiProg.Events[2]).Kind == TriggerKind.LostFocus &&
+          TriggerClassifier.Classify(textUiProg.Events[2]).RequireName == "NameBox",
+        "`when NameBox loses focus` classifies to LostFocus");
+    Check(TriggerClassifier.Classify(textUiProg.Events[3]).Kind == TriggerKind.Submitted &&
+          TriggerClassifier.Classify(textUiProg.Events[3]).RequireName == "NameBox",
+        "`when NameBox submits` classifies to Submitted");
+
+    // `when me ...` forms use the sheet's own actor.
+    var meTextProg = parser.Parse("when me text changes\n  set MeChanged to MeChanged + 1\n");
+    Check(TriggerClassifier.Classify(meTextProg.Events[0]).Kind == TriggerKind.TextChanged &&
+          TriggerClassifier.Classify(meTextProg.Events[0]).RequireName == "me",
+        "`when me text changes` classifies to TextChanged with `me`");
+
+    // Actions: focus / unfocus / select all.
+    var focusProg = parser.Parse("when W is pressed\n  focus NameBox\n  unfocus NameBox\n  select all NameBox\n");
+    Check(focusProg.Events[0].Body.Count == 3, "`focus`, `unfocus` and `select all` parse as body lines");
+    var focusAction = ActionWords.Parse(focusProg.Events[0].Body[0].Words, null);
+    Check(focusAction.Verb == ActionVerb.Focus && focusAction.Thing == "NameBox",
+        "`focus NameBox` parses to ActionVerb.Focus");
+    var unfocusAction = ActionWords.Parse(focusProg.Events[0].Body[1].Words, null);
+    Check(unfocusAction.Verb == ActionVerb.Unfocus && unfocusAction.Thing == "NameBox",
+        "`unfocus NameBox` parses to ActionVerb.Unfocus");
+    var selectAllAction = ActionWords.Parse(focusProg.Events[0].Body[2].Words, null);
+    Check(selectAllAction.Verb == ActionVerb.Select && selectAllAction.All && selectAllAction.Thing == "NameBox",
+        "`select all NameBox` keeps the select-all spec (the bridge picks text over units)");
+
+    // Conditions: `<thing> is focused` and `text of <thing> is <value>`.
+    var focusedCond = Conditions.Parse(new List<Token>
+    {
+        new Token { Type = TokenType.Word, Text = "NameBox" },
+        new Token { Type = TokenType.Word, Text = "is" },
+        new Token { Type = TokenType.Word, Text = "focused" },
+    });
+    Check(focusedCond.Kind == ConditionKind.Focused && focusedCond.Thing == "NameBox",
+        "`NameBox is focused` parses to ConditionKind.Focused");
+    var textCond = Conditions.Parse(new List<Token>
+    {
+        new Token { Type = TokenType.Word, Text = "text" },
+        new Token { Type = TokenType.Word, Text = "of" },
+        new Token { Type = TokenType.Word, Text = "NameBox" },
+        new Token { Type = TokenType.Word, Text = "is" },
+        new Token { Type = TokenType.Str, Text = "Player" },
+    });
+    Check(textCond.Kind == ConditionKind.TextIs && textCond.Thing == "NameBox" &&
+          textCond.Right is TextValue tcv && tcv.Text == "Player",
+        "`text of NameBox is \"Player\"` parses to ConditionKind.TextIs");
+
+    // Runtime: text-change / focus / blur / submit pushes reach the matching sheet.
+    var nameBox = new FakeActor("NameBox");
+    var textWorld = new FakeWorld();
+    textWorld.AddActor(nameBox);
+    var textEngine = FreshEngine(textWorld);
+    textEngine.AddSheet(nameBox, textUiProg);
+    textEngine.Tick(0);
+    textEngine.RaisePush(nameBox, new PushSignal { Kind = TriggerKind.TextChanged, Name = "NameBox", Other = nameBox });
+    textEngine.Tick(1);
+    Check(textEngine.Variables.GetGlobal("TextChangedCount").AsNumber() == 1,
+        "a TextChanged push fires `when NameBox text changes`");
+    textEngine.RaisePush(nameBox, new PushSignal { Kind = TriggerKind.Focused, Name = "NameBox", Other = nameBox });
+    textEngine.Tick(2);
+    Check(textEngine.Variables.GetGlobal("FocusCount").AsNumber() == 1,
+        "a Focused push fires `when NameBox is focused`");
+    textEngine.RaisePush(nameBox, new PushSignal { Kind = TriggerKind.LostFocus, Name = "NameBox", Other = nameBox });
+    textEngine.Tick(3);
+    Check(textEngine.Variables.GetGlobal("BlurCount").AsNumber() == 1,
+        "a LostFocus push fires `when NameBox loses focus`");
+    textEngine.RaisePush(nameBox, new PushSignal { Kind = TriggerKind.Submitted, Name = "NameBox", Other = nameBox });
+    textEngine.Tick(4);
+    Check(textEngine.Variables.GetGlobal("SubmitCount").AsNumber() == 1,
+        "a Submitted push fires `when NameBox submits`");
+
+    // `when me text changes` ignores another text box's broadcast.
+    var otherBox = new FakeActor("OtherBox");
+    textWorld.AddActor(otherBox);
+    var meBoxEngine = FreshEngine(textWorld);
+    meBoxEngine.AddSheet(nameBox, meTextProg);
+    meBoxEngine.Tick(0);
+    meBoxEngine.RaisePush(otherBox, new PushSignal { Kind = TriggerKind.TextChanged, Name = "OtherBox", Other = otherBox });
+    meBoxEngine.Tick(1);
+    Check(meBoxEngine.Variables.GetGlobal("MeChanged").Kind == ValueKind.None,
+        "`when me text changes` ignores another text box");
+    meBoxEngine.RaisePush(nameBox, new PushSignal { Kind = TriggerKind.TextChanged, Name = "NameBox", Other = nameBox });
+    meBoxEngine.Tick(2);
+    Check(meBoxEngine.Variables.GetGlobal("MeChanged").AsNumber() == 1,
+        "`when me text changes` fires for the sheet's own text box");
+
+    // Condition evaluation against the world's focus/text state.
+    var condBox = new FakeActor("NameBox");
+    var condWorld = new FakeWorld();
+    condWorld.AddActor(condBox);
+    condWorld.SetFocused(condBox, true);
+    condWorld.SetText(condBox, "Player");
+    var condEngine = FreshEngine(condWorld);
+    condEngine.AddSheet(condBox, parser.Parse(@"when me appears
+  NameBox is focused
+  text of NameBox is ""Player""
+  set UiMatch to 1"));
+    condEngine.Tick(0);
+    Check(condEngine.Variables.GetGlobal("UiMatch").AsNumber() == 1,
+        "`<thing> is focused` and `text of <thing> is <value>` read the UI state");
+
+    var condWorldB = new FakeWorld();
+    condWorldB.AddActor(condBox);
+    condWorldB.SetText(condBox, "Enemy");
+    var condEngineB = FreshEngine(condWorldB);
+    condEngineB.AddSheet(condBox, parser.Parse(@"when me appears
+  NameBox is focused
+  text of NameBox is ""Player""
+  set UiMatch to 1"));
+    condEngineB.Tick(0);
+    Check(condEngineB.Variables.GetGlobal("UiMatch").Kind == ValueKind.None,
+        "an unfocused text box with different text fails both conditions");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
@@ -3212,6 +3347,8 @@ class FakeWorld : IEventWorld
     private readonly Dictionary<object, double> progress = new Dictionary<object, double>();
     private readonly Dictionary<object, double> sliders = new Dictionary<object, double>();
     private readonly Dictionary<object, string> materials = new Dictionary<object, string>();
+    private readonly HashSet<object> focused = new HashSet<object>();
+    private readonly Dictionary<object, string> texts = new Dictionary<object, string>();
 
     public void SetHeld(string key, bool on)
     {
@@ -3284,6 +3421,19 @@ class FakeWorld : IEventWorld
         sliders[actor] = value;
     }
 
+    public void SetFocused(object actor, bool on)
+    {
+        if (on)
+            focused.Add(actor);
+        else
+            focused.Remove(actor);
+    }
+
+    public void SetText(object actor, string text)
+    {
+        texts[actor] = text;
+    }
+
     public void SetMoving(object actor, bool on)
     {
         if (on)
@@ -3350,6 +3500,16 @@ class FakeWorld : IEventWorld
     public bool IsButtonDisabled(object actor)
     {
         return buttonDisabled.Contains(actor);
+    }
+
+    public bool IsFocused(object actor)
+    {
+        return focused.Contains(actor);
+    }
+
+    public string TextOf(object actor)
+    {
+        return texts.TryGetValue(actor, out string text) ? text : "";
     }
 
     public double ProgressOf(object actor)

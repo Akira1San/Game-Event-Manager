@@ -22,6 +22,8 @@ namespace Game
         ButtonPressed,
         ButtonReleased,
         ButtonDisabled,
+        Focused,
+        TextIs,
         ProgressIs,
         SliderIs,
         // RTS selection (Task 18 Part A)
@@ -101,6 +103,23 @@ namespace Game
                     node.Thing = texts[0];
                     return node;
                 }
+            }
+
+            // `<thing> is focused` / `text of <thing> is <value>` — UI text input (Task 15 Part C).
+            // These sit before the generic `<var> is <value>` handling so the control name is
+            // never mistaken for a variable.
+            if (texts.Length == 3 && texts[1] == "is" && texts[2] == "focused")
+            {
+                node.Kind = ConditionKind.Focused;
+                node.Thing = texts[0];
+                return node;
+            }
+            if (texts.Length >= 5 && texts[0] == "text" && texts[1] == "of" && texts[3] == "is")
+            {
+                node.Kind = ConditionKind.TextIs;
+                node.Thing = texts[2];
+                node.Right = ValueFrom(tokens, texts, 4);
+                return node;
             }
 
             // `progress of <thing> is <value>` / `slider <thing> is <value>` — UI control values.
@@ -301,6 +320,19 @@ namespace Game
                 {
                     object target = FindTarget(node.Thing, context);
                     return target != null && context.World.IsButtonDisabled(target);
+                }
+                case ConditionKind.Focused:
+                {
+                    object target = FindTarget(node.Thing, context);
+                    return target != null && context.World.IsFocused(target);
+                }
+                case ConditionKind.TextIs:
+                {
+                    if (node.Right == null)
+                        return false;
+                    string wanted = ValueEvaluator.Evaluate(node.Right, ContextResolver(context)).AsText();
+                    object target = FindTarget(node.Thing, context);
+                    return target != null && context.World.TextOf(target) == wanted;
                 }
                 case ConditionKind.ProgressIs:
                 {

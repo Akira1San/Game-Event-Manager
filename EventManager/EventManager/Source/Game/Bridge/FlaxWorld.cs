@@ -168,6 +168,18 @@ namespace Game
             return button == null || !button.Enabled;
         }
 
+        public bool IsFocused(object actor)
+        {
+            var control = FindControl(actor as Actor);
+            return control != null && control.IsFocused;
+        }
+
+        public string TextOf(object actor)
+        {
+            var box = FindTextBox(actor as Actor);
+            return box == null ? "" : box.Text ?? "";
+        }
+
         public double ProgressOf(object actor)
         {
             var bar = FindProgressBar(actor as Actor);
@@ -178,6 +190,30 @@ namespace Game
         {
             var slider = FindSlider(actor as Actor);
             return slider != null ? slider.Value : 0;
+        }
+
+        /// <summary>The <see cref="FlaxEngine.GUI.TextBox"/> on this actor's UIControl, or on a
+        /// child UIControl.</summary>
+        private static FlaxEngine.GUI.TextBox FindTextBox(Actor actor)
+        {
+            if (actor == null)
+                return null;
+            var ui = actor as UIControl;
+            if (ui != null)
+                return ui.Control as FlaxEngine.GUI.TextBox;
+            return actor.FindActor<UIControl>()?.Control as FlaxEngine.GUI.TextBox;
+        }
+
+        /// <summary>Any GUI control on this actor's UIControl (focus targets include TextBox,
+        /// Button and Slider).</summary>
+        private static FlaxEngine.GUI.Control FindControl(Actor actor)
+        {
+            if (actor == null)
+                return null;
+            var ui = actor as UIControl;
+            if (ui != null)
+                return ui.Control;
+            return actor.FindActor<UIControl>()?.Control;
         }
 
         /// <summary>The <see cref="FlaxEngine.GUI.Button"/> on this actor's UIControl, or on a

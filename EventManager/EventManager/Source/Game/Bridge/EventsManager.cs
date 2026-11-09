@@ -42,6 +42,9 @@ namespace Game
         private readonly Dictionary<Actor, bool> _buttonPressedLastTick = new Dictionary<Actor, bool>();
         /// <summary>Last click time per actor, used to detect double-clicks.</summary>
         private readonly Dictionary<Actor, double> _buttonLastClickTime = new Dictionary<Actor, double>();
+        /// <summary>Last-tick TextBox contents and focus state, used to raise text-change and focus edges.</summary>
+        private readonly Dictionary<Actor, string> _textLastValue = new Dictionary<Actor, string>();
+        private readonly Dictionary<Actor, bool> _textFocusedLastTick = new Dictionary<Actor, bool>();
         private const double DoubleClickSeconds = 0.3;
 
         [Tooltip("How touches/overlaps are detected. Distance needs no colliders; Colliders uses Flax trigger events; Both compares them without double-firing.")]
@@ -429,6 +432,7 @@ namespace Game
             CheckForChanges();
             InputEdges();
             UpdateButtons();
+            UpdateTextControls();
             UpdateCameraFollow();
             UpdatePlayerLookAtMouse();
             Runtime.Tick(Time.GameTime);
@@ -686,6 +690,57 @@ namespace Game
             foreach (var pair in _buttonPressedLastTick.ToArray())
                 if (pair.Key == null || pair.Key.Scene == null)
                     _buttonPressedLastTick.Remove(pair.Key);
+        }
+
+        /// <summary>Polls every UI TextBox for text edits and focus changes, and raises
+        /// <c>TextChanged</c> / <c>Focused</c> / <c>LostFocus</c> / <c>Submitted</c> triggers.
+        /// Polling keeps this consistent with Button press/release (no engine event
+        /// subscription that could double-fire or leak on scene unload).</summary>
+        private void UpdateTextControls()
+        {
+            var dead = new List<Actor>();
+            bool enterDown = Input.GetKeyDown(KeyboardKeys.Return);
+            foreach (Actor actor in SceneActors())
+            {
+                if (actor == null || !actor.IsActive)
+                {
+                    dead.Add(actor);
+                    continue;
+                }
+                var ui = actor as UIControl;
+                if (ui == null)
+                    continue;
+                var box = ui.Control as FlaxEngine.GUI.TextBox;
+                if (box == null)
+                    continue;
+
+                string text = box.Text ?? "";
+                if (_textLastValue.TryGetValue(actor, out string previousText) && previousText != text)
+                    Runtime.RaisePush(actor, new PushSignal { Kind = TriggerKind.TextChanged, Name = actor.Name, Other = actor });
+                _textLastValue[actor] = text;
+
+                bool focused = box.IsFocused;
+                _textFocusedLastTick.TryGetValue(actor, out bool wasFocused);
+                if (focused && !wasFocused)
+                    Runtime.RaisePush(actor, new PushSignal { Kind = TriggerKind.Focused, Name = actor.Name, Other = actor });
+                else if (!focused && wasFocused)
+                    Runtime.RaisePush(actor, new PushSignal { Kind = TriggerKind.LostFocus, Name = actor.Name, Other = actor });
+                _textFocusedLastTick[actor] = focused;
+
+                if (focused && enterDown)
+                    Runtime.RaisePush(actor, new PushSignal { Kind = TriggerKind.Submitted, Name = actor.Name, Other = actor });
+            }
+            foreach (Actor actor in dead)
+            {
+                _textLastValue.Remove(actor);
+                _textFocusedLastTick.Remove(actor);
+            }
+            foreach (var pair in _textLastValue.ToArray())
+                if (pair.Key == null || pair.Key.Scene == null)
+                    _textLastValue.Remove(pair.Key);
+            foreach (var pair in _textFocusedLastTick.ToArray())
+                if (pair.Key == null || pair.Key.Scene == null)
+                    _textFocusedLastTick.Remove(pair.Key);
         }
 
         /// <summary>Walks up from a hit collider to the actor that carries an EventSheet, so
