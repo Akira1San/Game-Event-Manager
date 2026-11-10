@@ -606,6 +606,17 @@ Goal: per-actor state machines so one `.events` file can encode multiple behavio
 
 ---
 
+### Part D — Prefab / scene spawning (new task)
+Goal: **spawn actors from prefab assets and scene files**, not just clone in-scene actors.
+Currently `spawn <thing> at <spot>` only clones actors already placed in the current scene.
+Add:
+- [ ] `spawn prefab "<name>" at <spot>` — load a `PrefabAsset` by name/path and instantiate it at `<spot>`.
+- [ ] `spawn scene "<name>" at <spot>` — load a `.scene` file as a scene asset and instance its root actors at `<spot>`.
+- [ ] Name-clash handling: spawned instances need unique names or a `my spawnedFrom` marker so `when me appears` fires on clones.
+- [ ] Verify: hero selection scene → spawn chosen hero at spawn point; weapon/attachment meshes parent correctly.
+
+---
+
 ## Task 12 — Character Physics Movement `[~]`
 
 Goal: **add** a physics-native movement option on top of the existing transform path — not
@@ -780,11 +791,11 @@ Goal: extend UI support beyond Labels to Buttons, Images, ProgressBars, TextBoxe
 - [x] Unit test: tween position/scale/alpha/color completes and fires end trigger.
 
 ### Part E — Focus & Keyboard/Gamepad Navigation
-- [ ] Word registry: `focus <thing>`, `when <thing> is focused`, `navigate up/down/left/right` (moves focus to nearest focusable UI in direction).
-- [ ] Condition: `<thing> is focused`.
-- [ ] Runtime: focus manager in `EventsManager` tracks focusable `UIControl`s (Button, TextBox, Slider, custom); arrow keys / gamepad D-pad move focus.
-- [ ] Visual: focused control gets `TextColorFocused` (Label) or outline tint (Image/Button).
-- [ ] Unit test: focus moves between buttons with arrow keys; `when focused` triggers fire.
+- [x] Word registry: `focus <thing>`, `when <thing> is focused`, `navigate up/down/left/right` (moves focus to nearest focusable UI in direction).
+- [x] Condition: `<thing> is focused`.
+- [x] Runtime: focus manager in `EventsManager` tracks focusable `UIControl`s (Button, TextBox, Slider, custom); arrow keys / gamepad D-pad move focus.
+- [x] Visual: focused control gets a focus text tint (Label/Button) or `Image.Color` tint (Flax 1.13 has no `TextColorFocused`).
+- [x] Unit test: focus moves between buttons with arrow keys; `when focused` triggers fire.
 
 ### Part F — Data-binding syntactic sugar
 - [ ] Word registry: `bind <label> to <variable>` (auto `when <variable> changes → set text of <label> to <variable>`), `bind <progress> to <variable>` (auto `when <variable> changes → set progress of <progress> to <variable>`).
@@ -1062,3 +1073,4 @@ Goal: implement remaining Tapan Kaikki 4 (TK4) features not yet covered, achievi
 | 2026-11-08 | Task 15 Part B (ProgressBar & Slider): registry entries for `set progress of <thing> to <value>` / `set slider <thing> to <value>` and `progress of <thing> is <value>` / `slider <thing> is <value>`; `SetProgressNode`/`SetSliderNode` statement nodes parsed in `EventParser.ParseSet`; `ConditionKind.ProgressIs`/`SliderIs` with `IEventWorld.ProgressOf`/`SliderOf` (0-1 or 0-100 normalization); `EventRuntime.OnSetProgress`/`OnSetSlider` hooks wired in `EventsManager` to `FlaxActions.SetProgress`/`SetSlider` (finds ProgressBar/Slider on UIControl, sets Value/Maximum). 12 new pure checks -> **492 passed**, 11 pre-existing unrelated failures; Game module builds 0 errors (2 pre-existing XML doc warnings). | Task 15 Part B |
 | 2026-11-09 | Task 15 Part C (TextBox / InputField): registry rows for the four text-input triggers, `<thing> is focused` / `text of <thing> is <value>` conditions, and `focus` / `unfocus` actions; `TriggerKind.TextChanged/Focused/LostFocus/Submitted` classified before the key and watcher fallbacks; `ConditionKind.Focused/TextIs` backed by new `IEventWorld.IsFocused`/`TextOf`; `EventsManager` polls each TextBox per frame (text diff, focus edges, Enter while focused) and broadcasts pushes (the `me` form matches the sheet's own control); `FlaxActions` gains `SetControlFocus` (`Focus()`/`Defocus()`), TextBox-aware `SetText`, and `select all <thing>` selecting the box's text before falling back to RTS unit selection. 20 new checks -> **569 passed, 0 failed**; Game module build 0 errors (2 pre-existing Task 13 XML warnings). | Task 15 Part C |
 | 2026-11-09 | Task 15 Part D (Tween / Animation helpers): registry rows for the four `tween` forms, `easing` qualifier and `when tween <thing> ends`; `ActionVerb.Tween` parser (`ActionSpec` carries property/target/value/color/duration/easing); pure `Runtime/Tweens.cs` (`TweenKind`, `TweenEasing`, `TweenTrack` interpolation/completion, zero-duration snap); `FlaxActions` keeps a live tween list advanced in `Step` (position/scale write `Actor.Position`/`Scale`, alpha/color write Label `TextColor` or Image `Color`), retargets same-property tweens, and fires a broadcast `TweenEnd` push (`when tween me ends` binds to the actor's own sheet). 19 new checks -> **588 passed, 0 failed**; Game module build 0 errors (2 pre-existing Task 13 XML warnings). | Task 15 Part D |
+| 2026-11-09 | Task 15 Part E (Focus & keyboard/gamepad navigation): `navigate up/down/left/right` registry rows + `ActionVerb.Navigate` parser (friendly unknown-direction hint); pure `Runtime/FocusNavigation.cs` (screen-space `FocusCandidate`, `First` topmost-leftmost, `Choose` nearest ahead with perpendicular-gap penalty, edge stops); `EventsManager.UpdateFocus` refreshes Button/TextBox/Slider/`AutoFocus` controls, polls the `NavigateUp/Down/Left/Right` actions (arrow keys + D-pad, skipping while a TextBox is editing), focuses the nearest candidate, broadcasts `Focused`/`LostFocus` by name (so `when me is focused` and `when PlayButton is focused` both work; per-frame TextBox focus polling removed to avoid double edges), and applies hover/focus tints only on transitions (Label/Button `TextColor`, Image `Color`; `FocusNavigation` temp probe removed). 17 new checks -> **605 passed, 0 failed**; Game module build 0 errors (2 pre-existing Task 13 XML warnings). | Task 15 Part E |
