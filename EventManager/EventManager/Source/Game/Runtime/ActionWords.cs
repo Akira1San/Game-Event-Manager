@@ -51,10 +51,15 @@ namespace Game
         // UI text input focus (Task 15 Part C)
         Focus,
         Unfocus,
+        // Keyboard/gamepad focus navigation (Task 15 Part E)
+        Navigate,
         // Tween helpers (Task 15 Part D)
         Tween,
         // Global time scale (Task 17 Part C pause/resume)
         SetTimeScale,
+        // Prefab / scene spawning (Task 17 Part D)
+        SpawnPrefab,
+        SpawnScene,
     }
 
     public class ActionSpec
@@ -162,6 +167,17 @@ namespace Game
                         return Finish(spec, verb == "focus" ? ActionVerb.Focus : ActionVerb.Unfocus, words, 1 + used);
                     }
                     return Unknown(spec, words, $"\u201C{verb}\u201D needs a thing, like \u201C{verb} NameBox\u201D", warn);
+                }
+
+                case "navigate":
+                {
+                    FocusDirection? direction = words.Count >= 2 ? FocusNavigation.ParseDirection(words[1].Text) : null;
+                    if (direction.HasValue)
+                    {
+                        spec.Dir = FocusNavigation.DirectionName(direction.Value);
+                        return Finish(spec, ActionVerb.Navigate, words, 2);
+                    }
+                    return Unknown(spec, words, "\u201Cnavigate\u201D needs a direction, like \u201Cnavigate down\u201D (up, down, left or right)", warn);
                 }
 
                 case "goto":
@@ -348,13 +364,35 @@ namespace Game
                     return Unknown(spec, words, "\u201Cdestroy\u201D needs a thing, like \u201Cdestroy other\u201D", warn);
 
                 case "spawn":
+                    if (words.Count >= 2 && words[1].Text == "prefab")
+                    {
+                        // `spawn prefab "Hero" at SpawnPoint`
+                        if (words.Count >= 5 && words[2].Type == TokenType.Str && words[3].Text == "at" && IsThing(words[4]))
+                        {
+                            spec.Thing = words[2].Text;
+                            spec.To = words[4].Text;
+                            return Finish(spec, ActionVerb.SpawnPrefab, words, 5);
+                        }
+                        return Unknown(spec, words, "\u201Cspawn prefab\u201D looks like this: \u201Cspawn prefab \"Hero\" at SpawnPoint\u201D", warn);
+                    }
+                    if (words.Count >= 2 && words[1].Text == "scene")
+                    {
+                        // `spawn scene "HeroScene" at SpawnPoint`
+                        if (words.Count >= 5 && words[2].Type == TokenType.Str && words[3].Text == "at" && IsThing(words[4]))
+                        {
+                            spec.Thing = words[2].Text;
+                            spec.To = words[4].Text;
+                            return Finish(spec, ActionVerb.SpawnScene, words, 5);
+                        }
+                        return Unknown(spec, words, "\u201Cspawn scene\u201D looks like this: \u201Cspawn scene \"HeroScene\" at SpawnPoint\u201D", warn);
+                    }
                     if (words.Count >= 4 && IsThing(words[1]) && words[2].Text == "at" && IsThing(words[3]))
                     {
                         spec.Thing = words[1].Text;
                         spec.To = words[3].Text;
                         return Finish(spec, ActionVerb.Spawn, words, 4);
                     }
-                    return Unknown(spec, words, "\u201Cspawn\u201D looks like this: \u201Cspawn Bullet at me\u201D", warn);
+                    return Unknown(spec, words, "\u201Cspawn\u201D looks like this: \u201Cspawn Bullet at me\u201D or \u201Cspawn prefab \"Hero\" at SpawnPoint\u201D or \u201Cspawn scene \"HeroScene\" at SpawnPoint\u201D", warn);
                 case "set":
                 {
                     if (words.Count >= 5 && words[1].Text == "light" && words[2].Text == "intensity" && words[3].Text == "to")

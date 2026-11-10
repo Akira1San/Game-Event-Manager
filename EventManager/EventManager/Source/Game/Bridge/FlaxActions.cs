@@ -440,6 +440,10 @@ namespace Game
                 case ActionVerb.Unfocus:
                     SetControlFocus(spec.Thing, false);
                     break;
+                case ActionVerb.Navigate:
+                    if (EventsManager.Instance == null || !EventsManager.Instance.NavigateFocus(spec.Dir))
+                        WarnOnce($"\u201Cnavigate {spec.Dir}\u201D needs a focusable UI control in the scene — add a Button, TextBox or Slider, or tick Auto Focus on a custom control.");
+                    break;
                 case ActionVerb.Tween:
                     StartTween(context, spec);
                     break;
@@ -658,6 +662,12 @@ namespace Game
                 }
                 case ActionVerb.Spawn:
                     Spawn(context, spec);
+                    break;
+                case ActionVerb.SpawnPrefab:
+                    SpawnPrefab(context, spec);
+                    break;
+                case ActionVerb.SpawnScene:
+                    SpawnScene(context, spec);
                     break;
                 case ActionVerb.PlaySound:
                     PlaySound(context, spec);
@@ -1187,6 +1197,89 @@ namespace Game
             }
             Level.SpawnActor(clone);
             EventsManager.Instance?.AttachSpawnedActor(clone);
+        }
+
+        private static void SpawnPrefab(EventContext context, ActionSpec spec)
+        {
+            // Prefabs in Flax 1.13 are scene-based assets; load them as SceneAsset.
+            SceneAsset prefabScene = null;
+            if (spec.Thing.Contains("/") || spec.Thing.Contains("\\") || spec.Thing.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase) || spec.Thing.EndsWith(".scene", StringComparison.OrdinalIgnoreCase))
+                prefabScene = Content.Load<SceneAsset>(spec.Thing);
+            if (prefabScene == null)
+            {
+                foreach (var id in Content.GetAllAssetsByType(typeof(Scene)))
+                {
+                    if (!Content.GetAssetInfo(id, out AssetInfo info))
+                        continue;
+                    var name = System.IO.Path.GetFileNameWithoutExtension(info.Path);
+                    if (name.Equals(spec.Thing, StringComparison.OrdinalIgnoreCase))
+                    {
+                        prefabScene = Content.Load<SceneAsset>(info.Path);
+                        break;
+                    }
+                }
+            }
+            if (prefabScene == null)
+            {
+                WarnOnce($"Couldn't load prefab \"{spec.Thing}\". Place it in Content or use a full asset path.");
+                return;
+            }
+            // Load the prefab scene (replaces all currently loaded scenes, same as load scene).
+            Level.LoadScene(prefabScene.ID);
+            Actor spawnAt = ResolveThing(context, spec.To) as Actor;
+            if (spawnAt != null)
+            {
+                Vector3 offset = spawnAt.Position;
+                foreach (var obj in context.Runtime.World.Actors())
+                {
+                    if (!(obj is Actor actor))
+                        continue;
+                    if (actor == spawnAt)
+                        continue;
+                    actor.Position = offset;
+                }
+            }
+        }
+
+        private static void SpawnScene(EventContext context, ActionSpec spec)
+        {
+            SceneAsset sceneAsset = null;
+            if (spec.Thing.Contains("/") || spec.Thing.Contains("\\") || spec.Thing.EndsWith(".scene", StringComparison.OrdinalIgnoreCase))
+                sceneAsset = Content.Load<SceneAsset>(spec.Thing);
+            if (sceneAsset == null)
+            {
+                foreach (var id in Content.GetAllAssetsByType(typeof(Scene)))
+                {
+                    if (!Content.GetAssetInfo(id, out AssetInfo info))
+                        continue;
+                    if (System.IO.Path.GetFileNameWithoutExtension(info.Path).Equals(spec.Thing, StringComparison.OrdinalIgnoreCase))
+                    {
+                        sceneAsset = Content.Load<SceneAsset>(info.Path);
+                        break;
+                    }
+                }
+            }
+            if (sceneAsset == null)
+            {
+                WarnOnce($"Couldn't load scene \"{spec.Thing}\". Place it in Content or use a full asset path.");
+                return;
+            }
+            // Load the scene (replaces all currently loaded scenes, same as load scene).
+            Level.LoadScene(sceneAsset.ID);
+            Actor spawnAt = ResolveThing(context, spec.To) as Actor;
+            if (spawnAt != null)
+            {
+                // Move every actor from the newly loaded scene to the spawn position.
+                Vector3 offset = spawnAt.Position;
+                foreach (var obj in context.Runtime.World.Actors())
+                {
+                    if (!(obj is Actor actor))
+                        continue;
+                    if (actor == spawnAt)
+                        continue;
+                    actor.Position = offset;
+                }
+            }
         }
 
         private static void ShowHudText(string text)
