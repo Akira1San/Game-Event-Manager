@@ -1201,44 +1201,38 @@ namespace Game
 
         private static void SpawnPrefab(EventContext context, ActionSpec spec)
         {
-            // Prefabs in Flax 1.13 are scene-based assets; load them as SceneAsset.
-            SceneAsset prefabScene = null;
-            if (spec.Thing.Contains("/") || spec.Thing.Contains("\\") || spec.Thing.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase) || spec.Thing.EndsWith(".scene", StringComparison.OrdinalIgnoreCase))
-                prefabScene = Content.Load<SceneAsset>(spec.Thing);
-            if (prefabScene == null)
+            Prefab prefab = null;
+            if (spec.Thing.Contains("/") || spec.Thing.Contains("\\") || spec.Thing.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+                prefab = Content.Load<Prefab>(spec.Thing);
+            if (prefab == null)
             {
-                foreach (var id in Content.GetAllAssetsByType(typeof(Scene)))
+                foreach (var id in Content.GetAllAssetsByType(typeof(Prefab)))
                 {
                     if (!Content.GetAssetInfo(id, out AssetInfo info))
                         continue;
                     var name = System.IO.Path.GetFileNameWithoutExtension(info.Path);
                     if (name.Equals(spec.Thing, StringComparison.OrdinalIgnoreCase))
                     {
-                        prefabScene = Content.Load<SceneAsset>(info.Path);
+                        prefab = Content.Load<Prefab>(info.Path);
                         break;
                     }
                 }
             }
-            if (prefabScene == null)
+            if (prefab == null)
             {
                 WarnOnce($"Couldn't load prefab \"{spec.Thing}\". Place it in Content or use a full asset path.");
                 return;
             }
-            // Load the prefab scene (replaces all currently loaded scenes, same as load scene).
-            Level.LoadScene(prefabScene.ID);
             Actor spawnAt = ResolveThing(context, spec.To) as Actor;
-            if (spawnAt != null)
+            Vector3 position = spawnAt != null ? spawnAt.Position : Vector3.Zero;
+            Quaternion rotation = spawnAt != null ? spawnAt.Orientation : Quaternion.Identity;
+            var instance = PrefabManager.SpawnPrefab(prefab, position, rotation);
+            if (instance == null)
             {
-                Vector3 offset = spawnAt.Position;
-                foreach (var obj in context.Runtime.World.Actors())
-                {
-                    if (!(obj is Actor actor))
-                        continue;
-                    if (actor == spawnAt)
-                        continue;
-                    actor.Position = offset;
-                }
+                WarnOnce($"Failed to spawn prefab \"{spec.Thing}\".");
+                return;
             }
+            EventsManager.Instance?.AttachSpawnedActor(instance);
         }
 
         private static void SpawnScene(EventContext context, ActionSpec spec)
