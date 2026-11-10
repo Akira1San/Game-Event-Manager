@@ -3407,6 +3407,91 @@ when NameBox submits
     Check(tweenEngine.Variables.GetGlobal("BoxEnded").AsNumber() == 1,
         "`when tween Box ends` fires on a named listener (the Game sheet)");
 
+    // ------------------------------------------------------------------
+    // Task 15 Part E: Focus & keyboard/gamepad navigation
+    // ------------------------------------------------------------------
+
+    // The `navigate` word accepts the four directions and rejects anything else.
+    foreach (string directionWord in new[] { "up", "down", "left", "right" })
+    {
+        var navigateProgram = parser.Parse($"when W is pressed\n  navigate {directionWord}\n");
+        var navigateSpec = ActionWords.Parse(navigateProgram.Events[0].Body[0].Words, null);
+        Check(navigateSpec.Verb == ActionVerb.Navigate && navigateSpec.Dir == directionWord,
+            $"`navigate {directionWord}` parses to ActionVerb.Navigate");
+    }
+    string navigateHint = null;
+    var badNavigate = ActionWords.Parse(
+        parser.Parse("when W is pressed\n  navigate sideways\n").Events[0].Body[0].Words,
+        message => navigateHint = message);
+    Check(badNavigate.Verb == ActionVerb.Unknown &&
+          navigateHint != null && navigateHint.Contains("down", StringComparison.OrdinalIgnoreCase),
+        "`navigate sideways` is a friendly unknown action that lists the directions");
+    Check(FocusNavigation.ParseDirection("Up") == FocusDirection.Up &&
+          FocusNavigation.ParseDirection("nowhere") == null,
+        "navigate directions parse case-insensitively and reject unknown words");
+
+    // Pure directional navigation over a 2x2 menu (screen coordinates, Y down).
+    FocusCandidate MenuButton(string name, double x, double y) => new FocusCandidate
+    {
+        Subject = name,
+        Name = name,
+        CenterX = x,
+        CenterY = y,
+        HalfWidth = 60,
+        HalfHeight = 20,
+    };
+    var buttonA = MenuButton("PlayButton", 100, 100);
+    var buttonB = MenuButton("OptionsButton", 300, 100);
+    var buttonC = MenuButton("ResumeButton", 100, 200);
+    var buttonD = MenuButton("QuitButton", 300, 200);
+    var menu = new List<FocusCandidate> { buttonA, buttonB, buttonC, buttonD };
+    Check(ReferenceEquals(FocusNavigation.Choose(menu, buttonA, FocusDirection.Right), buttonB),
+        "navigate right moves focus to the nearest button on the right");
+    Check(ReferenceEquals(FocusNavigation.Choose(menu, buttonB, FocusDirection.Down), buttonD),
+        "navigate down follows the button column");
+    Check(ReferenceEquals(FocusNavigation.Choose(menu, buttonD, FocusDirection.Left), buttonC),
+        "navigate left follows the button row");
+    Check(ReferenceEquals(FocusNavigation.Choose(menu, buttonC, FocusDirection.Up), buttonA),
+        "navigate up returns to the button above");
+    Check(FocusNavigation.Choose(menu, buttonA, FocusDirection.Left) == null &&
+          FocusNavigation.Choose(menu, buttonD, FocusDirection.Down) == null,
+        "navigation stops at the edge instead of wrapping");
+    Check(ReferenceEquals(FocusNavigation.First(menu), buttonA),
+        "the first focus picks the topmost-leftmost button");
+
+    // A control further straight below beats a closer one far off to the side.
+    var straightDown = MenuButton("StraightDown", 100, 320);
+    var offToTheSide = MenuButton("OffToTheSide", 420, 130);
+    Check(ReferenceEquals(FocusNavigation.Choose(new List<FocusCandidate> { offToTheSide, straightDown }, buttonA, FocusDirection.Down), straightDown),
+        "navigate down prefers the button in the same column over a closer off-axis one");
+
+    // Focus enter/exit is broadcast by name, so both `when me is focused` on the
+    // control's own sheet and a named listener on the Game sheet fire.
+    var focusPlay = new FakeActor("PlayButton");
+    var focusQuit = new FakeActor("QuitButton");
+    var focusWorld = new FakeWorld();
+    focusWorld.AddActor(focusPlay);
+    focusWorld.AddActor(focusQuit);
+    var focusEngine = FreshEngine(focusWorld);
+    focusEngine.AddSheet(focusPlay, parser.Parse("when me is focused\n  set my Focused to 1\n"));
+    focusEngine.AddSheet(focusQuit, parser.Parse("when me is focused\n  set my Focused to 1\n"));
+    focusEngine.AddSheet(new GlobalHost(), parser.Parse(
+        "when PlayButton is focused\n  set MenuFocus to 1\n" +
+        "when PlayButton loses focus\n  set MenuFocus to 0\n"));
+    focusEngine.Tick(0);
+    focusEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.Focused, Name = "PlayButton", Other = focusPlay });
+    focusEngine.Tick(1);
+    Check(focusEngine.Variables.GetLocal(focusPlay, "Focused").AsNumber() == 1,
+        "`when me is focused` fires on the focused control's own sheet");
+    Check(focusEngine.Variables.GetLocal(focusQuit, "Focused").Kind == ValueKind.None,
+        "`when me is focused` ignores another control's focus");
+    Check(focusEngine.Variables.GetGlobal("MenuFocus").AsNumber() == 1,
+        "`when <thing> is focused` fires on a named listener (the Game sheet)");
+    focusEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.LostFocus, Name = "PlayButton", Other = focusPlay });
+    focusEngine.Tick(2);
+    Check(focusEngine.Variables.GetGlobal("MenuFocus").AsNumber() == 0,
+        "`when <thing> loses focus` fires when focus leaves the control");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

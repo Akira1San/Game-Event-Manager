@@ -37,14 +37,39 @@ namespace Game
         private bool _rightMouseDownLastFrame;
         private bool _middleMouseDownLastFrame;
         private UIControl _hoveredUI;
-        private Color _hoveredBaseColor;
+        /// <summary>Focusable UI controls in the scene, refreshed every frame (Task 15 Part E).</summary>
+        private readonly List<UIControl> _focusControls = new List<UIControl>();
+        /// <summary>The UI control focus was on last frame, used to raise focus edges.</summary>
+        private UIControl _focusedUI;
+        /// <summary>Last-tick held state of the Navigate* input actions (keyboard arrows / D-pad).</summary>
+        private readonly Dictionary<string, bool> _navigationLastHeld = new Dictionary<string, bool>();
+        /// <summary>Hover/focus tint bookkeeping per UIControl, so colors are only written on transitions.</summary>
+        private readonly Dictionary<UIControl, UiVisualState> _uiVisualStates = new Dictionary<UIControl, UiVisualState>();
+        private static readonly Color FocusTint = new Color(1f, 0.84f, 0.25f, 1f);
+        private static readonly string[] NavigationActions = { "NavigateUp", "NavigateDown", "NavigateLeft", "NavigateRight" };
+        private static readonly FocusDirection[] NavigationDirections =
+        {
+            FocusDirection.Up, FocusDirection.Down, FocusDirection.Left, FocusDirection.Right,
+        };
+
+        /// <summary>Per-control tint state: colors are captured when hover/focus starts and
+        /// restored when it ends, so tweens and `set color of` are not overwritten every frame.</summary>
+        private sealed class UiVisualState
+        {
+            public bool Seen;
+            public bool Focused;
+            public bool Hovered;
+            public bool HasText;
+            public bool HasImage;
+            public Color TextBase;
+            public Color ImageBase;
+        }
         /// <summary>Last-tick pressed state per UI button, used to raise press/release edge triggers.</summary>
         private readonly Dictionary<Actor, bool> _buttonPressedLastTick = new Dictionary<Actor, bool>();
         /// <summary>Last click time per actor, used to detect double-clicks.</summary>
         private readonly Dictionary<Actor, double> _buttonLastClickTime = new Dictionary<Actor, double>();
-        /// <summary>Last-tick TextBox contents and focus state, used to raise text-change and focus edges.</summary>
+        /// <summary>Last-tick TextBox contents, used to raise text-change edges.</summary>
         private readonly Dictionary<Actor, string> _textLastValue = new Dictionary<Actor, string>();
-        private readonly Dictionary<Actor, bool> _textFocusedLastTick = new Dictionary<Actor, bool>();
         private const double DoubleClickSeconds = 0.3;
 
         [Tooltip("How touches/overlaps are detected. Distance needs no colliders; Colliders uses Flax trigger events; Both compares them without double-firing.")]
@@ -442,6 +467,7 @@ namespace Game
             InputEdges();
             UpdateButtons();
             UpdateTextControls();
+            UpdateFocus();
             UpdateCameraFollow();
             UpdatePlayerLookAtMouse();
             Runtime.Tick(Time.GameTime);
@@ -563,9 +589,9 @@ namespace Game
             _middleMouseDownLastFrame = middleMouseDown;
         }
 
-        /// <summary>Per-frame hover tracking: when the mouse enters a UIControl, switch its
-        /// label to the highlighted color and raise a Hovered push; when it leaves, restore
-        /// the base color.</summary>
+        /// <summary>Per-frame hover tracking: when the mouse enters a UIControl, raise a
+        /// Hovered push and remember it. The color change is applied by
+        /// <see cref="UpdateControlVisuals"/> together with the focus tint.</summary>
         private void UpdateHover(Float2 mousePos)
         {
             UIControl newHovered = null;
@@ -586,26 +612,10 @@ namespace Game
             if (newHovered == _hoveredUI)
                 return;
 
-            // Leave previous
-            if (_hoveredUI != null)
-            {
-                var prevLabel = _hoveredUI.Control as FlaxEngine.GUI.Label;
-                if (prevLabel != null)
-                    prevLabel.TextColor = _hoveredBaseColor;
-            }
-
-            // Enter new
+            // Enter new (leaving is handled by UpdateControlVisuals restoring the base color).
             _hoveredUI = newHovered;
             if (_hoveredUI != null)
-            {
-                var label = _hoveredUI.Control as FlaxEngine.GUI.Label;
-                if (label != null)
-                {
-                    _hoveredBaseColor = label.TextColor;
-                    label.TextColor = label.TextColorHighlighted;
-                    Runtime.RaisePush(_hoveredUI, new PushSignal { Kind = TriggerKind.Hovered, Name = _hoveredUI.Name });
-                }
-            }
+                Runtime.RaisePush(_hoveredUI, new PushSignal { Kind = TriggerKind.Hovered, Name = _hoveredUI.Name });
         }
 
         /// <summary>Raises <paramref name="kind"/> on the actor under the cursor. UIControls
@@ -701,10 +711,9 @@ namespace Game
                     _buttonPressedLastTick.Remove(pair.Key);
         }
 
-        /// <summary>Polls every UI TextBox for text edits and focus changes, and raises
-        /// <c>TextChanged</c> / <c>Focused</c> / <c>LostFocus</c> / <c>Submitted</c> triggers.
-        /// Polling keeps this consistent with Button press/release (no engine event
-        /// subscription that could double-fire or leak on scene unload).</summary>
+        /// <summary>Polls every UI TextBox for text edits and raises <c>TextChanged</c> /
+        /// <c>Submitted</c> triggers. Focus edges come from <see cref="UpdateFocus"/> so
+        /// mouse, keyboard and gamepad focus all take the same path.</summary>
         private void UpdateTextControls()
         {
             var dead = new List<Actor>();
@@ -729,27 +738,253 @@ namespace Game
                 _textLastValue[actor] = text;
 
                 bool focused = box.IsFocused;
-                _textFocusedLastTick.TryGetValue(actor, out bool wasFocused);
-                if (focused && !wasFocused)
-                    Runtime.RaisePush(actor, new PushSignal { Kind = TriggerKind.Focused, Name = actor.Name, Other = actor });
-                else if (!focused && wasFocused)
-                    Runtime.RaisePush(actor, new PushSignal { Kind = TriggerKind.LostFocus, Name = actor.Name, Other = actor });
-                _textFocusedLastTick[actor] = focused;
-
                 if (focused && enterDown)
                     Runtime.RaisePush(actor, new PushSignal { Kind = TriggerKind.Submitted, Name = actor.Name, Other = actor });
             }
             foreach (Actor actor in dead)
-            {
                 _textLastValue.Remove(actor);
-                _textFocusedLastTick.Remove(actor);
-            }
             foreach (var pair in _textLastValue.ToArray())
                 if (pair.Key == null || pair.Key.Scene == null)
                     _textLastValue.Remove(pair.Key);
-            foreach (var pair in _textFocusedLastTick.ToArray())
-                if (pair.Key == null || pair.Key.Scene == null)
-                    _textFocusedLastTick.Remove(pair.Key);
+        }
+
+        // ------------------------------------------------------------------
+        // Task 15 Part E: focus manager (keyboard arrows / gamepad D-pad)
+        // ------------------------------------------------------------------
+
+        /// <summary>Refreshes the focusable-control list, moves focus on arrow/D-pad input,
+        /// applies the hover/focus tint, and broadcasts focus enter/exit edges.</summary>
+        private void UpdateFocus()
+        {
+            RefreshFocusControls();
+            UIControl focused = FindFocusedControl();
+
+            // Poll every frame even while typing, so a held arrow does not become a fresh
+            // edge the moment the text box loses focus.
+            FocusDirection? direction = PollNavigationDirection();
+            bool editingText = focused != null && focused.Control is FlaxEngine.GUI.TextBox box && box.IsEditing;
+            if (direction.HasValue && !editingText && _focusControls.Count > 0)
+            {
+                MoveFocus(direction.Value);
+                focused = FindFocusedControl();
+            }
+
+            UpdateControlVisuals();
+
+            if (ReferenceEquals(focused, _focusedUI))
+                return;
+            if (_focusedUI != null)
+            {
+                Runtime.RaisePushAll(new PushSignal
+                {
+                    Kind = TriggerKind.LostFocus,
+                    Name = _focusedUI.Name,
+                    Other = _focusedUI,
+                });
+            }
+            _focusedUI = focused;
+            if (_focusedUI != null)
+            {
+                Runtime.RaisePushAll(new PushSignal
+                {
+                    Kind = TriggerKind.Focused,
+                    Name = _focusedUI.Name,
+                    Other = _focusedUI,
+                });
+            }
+        }
+
+        /// <summary><c>navigate up/down/left/right</c>: moves focus to the nearest control in
+        /// that direction. Returns false when the scene has nothing focusable.</summary>
+        public bool NavigateFocus(string directionWord)
+        {
+            FocusDirection? direction = FocusNavigation.ParseDirection(directionWord);
+            if (!direction.HasValue)
+                return false;
+            RefreshFocusControls();
+            if (_focusControls.Count == 0)
+                return false;
+            MoveFocus(direction.Value);
+            return true;
+        }
+
+        private void RefreshFocusControls()
+        {
+            _focusControls.Clear();
+            foreach (Actor actor in SceneActors())
+            {
+                var ui = actor as UIControl;
+                if (IsFocusable(ui))
+                    _focusControls.Add(ui);
+            }
+        }
+
+        /// <summary>Buttons, TextBoxes and Sliders are focusable; any custom control can opt in
+        /// with Flax's <c>Auto Focus</c> flag.</summary>
+        private static bool IsFocusable(UIControl ui)
+        {
+            if (ui == null || !ui.IsActiveInHierarchy || ui.Control == null)
+                return false;
+            FlaxEngine.GUI.Control control = ui.Control;
+            if (!control.Enabled || !control.VisibleInHierarchy)
+                return false;
+            return control is FlaxEngine.GUI.Button ||
+                   control is FlaxEngine.GUI.TextBox ||
+                   control is FlaxEngine.GUI.Slider ||
+                   control.AutoFocus;
+        }
+
+        private UIControl FindFocusedControl()
+        {
+            foreach (UIControl ui in _focusControls)
+                if (ui != null && ui.Control != null && ui.Control.IsFocused)
+                    return ui;
+            return null;
+        }
+
+        /// <summary>One navigation step per press: keyboard arrow keys and gamepad D-pad both
+        /// arrive through the Navigate* actions in the project's input settings.</summary>
+        private FocusDirection? PollNavigationDirection()
+        {
+            for (int i = 0; i < NavigationActions.Length; i++)
+            {
+                string action = NavigationActions[i];
+                bool held = Input.GetAction(action);
+                _navigationLastHeld.TryGetValue(action, out bool wasHeld);
+                _navigationLastHeld[action] = held;
+                if (held && !wasHeld)
+                    return NavigationDirections[i];
+            }
+            return null;
+        }
+
+        private bool MoveFocus(FocusDirection direction)
+        {
+            var candidates = new List<FocusCandidate>(_focusControls.Count);
+            UIControl currentUI = FindFocusedControl();
+            FocusCandidate current = null;
+            foreach (UIControl ui in _focusControls)
+            {
+                FocusCandidate candidate = ToCandidate(ui);
+                if (candidate == null)
+                    continue;
+                candidates.Add(candidate);
+                if (ReferenceEquals(ui, currentUI))
+                    current = candidate;
+            }
+            if (candidates.Count == 0)
+                return false;
+
+            FocusCandidate next = FocusNavigation.Choose(candidates, current, direction);
+            if (next == null && current == null)
+                next = FocusNavigation.First(candidates);
+            if (next?.Subject is UIControl nextUI && nextUI.Control != null)
+                nextUI.Control.Focus();
+            return true;
+        }
+
+        private static FocusCandidate ToCandidate(UIControl ui)
+        {
+            if (ui == null || ui.Control == null)
+                return null;
+            float width = Math.Max(ui.Control.Size.X, 1f);
+            float height = Math.Max(ui.Control.Size.Y, 1f);
+            return new FocusCandidate
+            {
+                Subject = ui,
+                Name = ui.Name,
+                // UIControl.Position is the control's screen-space pivot (the same center the
+                // hover hit test uses); screen Y grows downward, so flip the world Y.
+                CenterX = ui.Position.X,
+                CenterY = -ui.Position.Y,
+                HalfWidth = width * 0.5f,
+                HalfHeight = height * 0.5f,
+            };
+        }
+
+        /// <summary>Applies hover/focus colors on state changes only, so a tween or
+        /// <c>set color of</c> is not stomped every frame.</summary>
+        private void UpdateControlVisuals()
+        {
+            var alive = new HashSet<UIControl>();
+            foreach (Actor actor in SceneActors())
+            {
+                var ui = actor as UIControl;
+                if (ui == null || ui.Control == null)
+                    continue;
+                alive.Add(ui);
+
+                bool focused = ui.Control.IsFocused;
+                bool hovered = ReferenceEquals(_hoveredUI, ui);
+                if (!_uiVisualStates.TryGetValue(ui, out UiVisualState state))
+                {
+                    state = new UiVisualState();
+                    _uiVisualStates[ui] = state;
+                }
+
+                if (!state.Seen)
+                {
+                    state.Seen = true;
+                    state.Focused = focused;
+                    state.Hovered = hovered;
+                    if (focused || hovered)
+                    {
+                        CaptureBaseColors(ui.Control, state);
+                        ApplyVisual(ui.Control, state, focused, hovered);
+                    }
+                    continue;
+                }
+
+                if (focused == state.Focused && hovered == state.Hovered)
+                    continue;
+
+                bool wasHighlighted = state.Focused || state.Hovered;
+                bool isHighlighted = focused || hovered;
+                if (!wasHighlighted && isHighlighted)
+                    CaptureBaseColors(ui.Control, state);
+                state.Focused = focused;
+                state.Hovered = hovered;
+                ApplyVisual(ui.Control, state, focused, hovered);
+            }
+
+            foreach (var pair in _uiVisualStates.ToArray())
+                if (!alive.Contains(pair.Key))
+                    _uiVisualStates.Remove(pair.Key);
+        }
+
+        private static void CaptureBaseColors(FlaxEngine.GUI.Control control, UiVisualState state)
+        {
+            if (control is FlaxEngine.GUI.Label label)
+            {
+                state.HasText = true;
+                state.TextBase = label.TextColor;
+            }
+            if (control is FlaxEngine.GUI.Image image)
+            {
+                state.HasImage = true;
+                state.ImageBase = image.Color;
+            }
+        }
+
+        private static void ApplyVisual(
+            FlaxEngine.GUI.Control control,
+            UiVisualState state,
+            bool focused,
+            bool hovered)
+        {
+            if (control is FlaxEngine.GUI.Label label && state.HasText)
+            {
+                // Flax 1.13 has no TextColorFocused; the focus tint is our own highlight.
+                label.TextColor = focused
+                    ? FocusTint
+                    : hovered ? label.TextColorHighlighted : state.TextBase;
+            }
+            if (control is FlaxEngine.GUI.Image image && state.HasImage)
+            {
+                image.Color = focused
+                    ? FocusTint
+                    : hovered ? image.MouseOverColor : state.ImageBase;
+            }
         }
 
         /// <summary>Walks up from a hit collider to the actor that carries an EventSheet, so
