@@ -150,6 +150,8 @@ namespace Game
             new WordEntry { Kind = "action", Word = "tween", Example = "tween PausePanel scale to 1.2 in 0.25" },
             new WordEntry { Kind = "action", Word = "tween", Example = "tween PausePanel color to \"1 0 0\" in 0.5" },
             new WordEntry { Kind = "action", Word = "tween", Example = "tween PausePanel position to CenterPoint in 0.5 easing ease out" },
+            new WordEntry { Kind = "action", Word = "moveplatform", Example = "moveplatform Plat1 x 200 in 2" },
+            new WordEntry { Kind = "action", Word = "moveplatform", Example = "moveplatform Plat2 y -100 in 1.5 easing ease in out" },
             new WordEntry { Kind = "action", Word = "focus", Example = "focus NameBox" },
             new WordEntry { Kind = "action", Word = "unfocus", Example = "unfocus NameBox" },
             new WordEntry { Kind = "action", Word = "navigate", Example = "navigate up" },

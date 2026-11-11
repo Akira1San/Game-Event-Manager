@@ -292,5 +292,58 @@ namespace Game
                 : FallSpeed(currentFallSpeed, false, gravity, dt);
             y = fallSpeed * dt;
         }
+
+        /// <summary>
+        /// One in-flight moving-platform sweep. A platform pings back and forth along a world
+        /// axis by a signed distance, always ping-pong: each leg eases 0→1 (or 1→0 on the
+        /// return). Pure numbers only so the timing and interpolation are unit tested without
+        /// the engine; the bridge applies the per-tick delta to the actor through its
+        /// <see cref="PhysicsMoveMode"/>.
+        /// </summary>
+        public class OngoingPlatform
+        {
+            public object Subject;
+            public string Axis = "";            // "x", "y" or "z"
+            public double Distance;             // signed distance from start (sign = starting direction)
+            public double Duration;             // seconds per leg
+            public TweenEasing Easing = TweenEasing.Linear;
+            public double Elapsed;              // seconds into the current leg
+            public int Direction = 1;           // 1 = moving away from start, -1 = returning
+            public double StartX, StartY, StartZ;
+            public PhysicsMoveMode Mode = PhysicsMoveMode.Transform;
+
+            /// <summary>Interpolated progress on the current leg: 0 at start, 1 at end.
+            /// Direction flips each leg, so the return leg reads 1→0.</summary>
+            public double Progress
+            {
+                get
+                {
+                    if (Duration <= 0)
+                        return Direction > 0 ? 1.0 : 0.0;
+                    double raw = Math.Min(1.0, Elapsed / Duration);
+                    double eased = TweenMath.Ease(raw, Easing);
+                    return Direction > 0 ? eased : 1.0 - eased;
+                }
+            }
+
+            /// <summary>The offset value along the axis for the current progress.</summary>
+            public double AxisOffset => Distance * Progress;
+
+            /// <summary>Advances the clock by <paramref name="deltaSeconds"/> and returns true
+            /// on the tick a leg just completed (direction flips, elapsed resets).</summary>
+            public bool Advance(double deltaSeconds)
+            {
+                if (Duration <= 0)
+                    return true;
+                Elapsed += deltaSeconds;
+                if (Elapsed >= Duration)
+                {
+                    Elapsed = 0.0;
+                    Direction = -Direction;
+                    return true;
+                }
+                return false;
+            }
+        }
     }
 }

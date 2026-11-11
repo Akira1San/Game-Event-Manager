@@ -55,6 +55,8 @@ namespace Game
         Navigate,
         // Tween helpers (Task 15 Part D)
         Tween,
+        // Moving platforms (Task 15 Part H)
+        MovePlatform,
         // Global time scale (Task 17 Part C pause/resume)
         SetTimeScale,
         // Prefab / scene spawning (Task 17 Part D)
@@ -165,6 +167,9 @@ namespace Game
 
                 case "tween":
                     return TweenAction(spec, words, warn);
+
+                case "moveplatform":
+                    return MovePlatformAction(spec, words, warn);
 
                 case "focus":
                 case "unfocus":
@@ -661,6 +666,68 @@ namespace Game
 
             spec.HasTween = true;
             return Finish(spec, ActionVerb.Tween, words, index);
+        }
+
+        /// <summary>
+        /// <c>moveplatform &lt;thing&gt; &lt;axis&gt; &lt;distance&gt; in &lt;time&gt; [easing linear|ease in|ease out|ease in out]</c>.
+        /// The subject sweeps back and forth along a world axis (x/y/z) by the signed distance.
+        /// </summary>
+        private static ActionSpec MovePlatformAction(ActionSpec spec, List<Token> words, Action<string> warn)
+        {
+            int index = 1;
+            string subject = ThingAt(words, index, out int subjectUsed);
+            if (subject == null)
+                return Unknown(spec, words, "\u201Cmoveplatform\u201D needs a thing to move, like \u201Cmoveplatform Plat1 x 200 in 2\u201D", warn);
+            spec.Thing = subject;
+            index += subjectUsed;
+
+            if (index >= words.Count)
+                return Unknown(spec, words, "\u201Cmoveplatform\u201D needs an axis (x, y or z) after the thing", warn);
+            string axis = words[index].Text.ToLowerInvariant();
+            if (axis != "x" && axis != "y" && axis != "z")
+                return Unknown(spec, words, "\u201Cmoveplatform\u201D only knows axes x, y and z", warn);
+            spec.Dir = axis;
+            index++;
+
+            if (index >= words.Count || words[index].Type != TokenType.Number)
+                return Unknown(spec, words, "\u201Cmoveplatform\u201D needs a distance number after the axis, like \u201Cmoveplatform Plat1 x 200 in 2\u201D", warn);
+            spec.Number = words[index].Number;
+            spec.HasNumber = true;
+            index++;
+
+            if (index + 1 >= words.Count || words[index].Text != "in" || words[index + 1].Type != TokenType.Number)
+                return Unknown(spec, words, "\u201Cmoveplatform\u201D needs a time in seconds, like \u201C... in 2\u201D", warn);
+            spec.Duration = words[index + 1].Number;
+            index += 2;
+
+            if (index < words.Count)
+            {
+                if (words[index].Text != "easing")
+                    return Unknown(spec, words, "after the time, \u201Cmoveplatform\u201D only takes \u201Ceasing ...\u201D", warn);
+                index++;
+                if (index < words.Count && words[index].Text == "linear")
+                {
+                    spec.Easing = TweenEasing.Linear;
+                    index++;
+                }
+                else if (index < words.Count && words[index].Text == "ease")
+                {
+                    index++;
+                    bool easeIn = index < words.Count && words[index].Text == "in";
+                    if (easeIn) index++;
+                    bool easeOut = index < words.Count && words[index].Text == "out";
+                    if (easeOut) index++;
+                    if (!easeIn && !easeOut)
+                        return Unknown(spec, words, "easing looks like \u201Ceasing linear\u201D, \u201Ceasing ease in\u201D, \u201Ceasing ease out\u201D, or \u201Ceasing ease in out\u201D", warn);
+                    spec.Easing = easeIn && easeOut ? TweenEasing.EaseInOut : easeIn ? TweenEasing.EaseIn : TweenEasing.EaseOut;
+                }
+                else
+                {
+                    return Unknown(spec, words, "easing looks like \u201Ceasing linear\u201D, \u201Ceasing ease in\u201D, \u201Ceasing ease out\u201D, or \u201Ceasing ease in out\u201D", warn);
+                }
+            }
+
+            return Finish(spec, ActionVerb.MovePlatform, words, index);
         }
 
         private static ActionSpec SelectAction(ActionSpec spec, List<Token> words, Action<string> warn)

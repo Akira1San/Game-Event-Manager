@@ -32,6 +32,9 @@ namespace Game
     {
     public static float DeltaTime;
     public static readonly List<OngoingMove> Moves = new List<OngoingMove>();
+    /// <summary>In-flight moving platforms, ping-ponging along a world axis. Advanced each
+    /// tick in <see cref="Step"/> and applied through each subject's <see cref="PhysicsMoveMode"/>.</summary>
+    public static readonly List<OngoingPlatform> Platforms = new List<OngoingPlatform>();
     /// <summary>Actors a <c>move</c> word ran for this tick (transient: cleared at the start of
     /// each <c>Step</c>, so <c>me is moving</c> is true only while motion is actually happening).</summary>
     public static readonly HashSet<Actor> MovedThisTick = new HashSet<Actor>();
@@ -111,6 +114,7 @@ namespace Game
         public static void ClearSession()
         {
             Moves.Clear();
+            Platforms.Clear();
             ActiveSounds.Clear();
             LiveTweens.Clear();
             CharacterFallSpeeds.Clear();
@@ -287,6 +291,41 @@ namespace Game
                 }
             }
 
+            // Moving platforms: advance each ping-pong sweep and apply the per-tick delta
+            // through the subject's PhysicsMoveMode. Snap to the exact endpoint at each leg
+            // so there is no drift across legs.
+            for (int i = Platforms.Count - 1; i >= 0; i--)
+            {
+                OngoingPlatform platform = Platforms[i];
+                Actor actor = platform.Subject as Actor;
+                if (actor == null || actor.Scene == null)
+                {
+                    Platforms.RemoveAt(i);
+                    continue;
+                }
+                int legDirection = platform.Direction;
+                bool legDone = platform.Advance(DeltaTime);
+                double start = AxisValue(platform.StartX, platform.StartY, platform.StartZ, platform.Axis);
+                Vector3 target = actor.Position;
+                SetAxisValue(ref target, platform.Axis, start + platform.AxisOffset);
+                Vector3 delta = target - actor.Position;
+                ApplyPlatformDelta(actor, delta, platform.Mode, DeltaTime);
+                if (legDone)
+                {
+                    // Snap to the exact endpoint so there is no drift across legs.
+                    double endpointOffset = legDirection > 0 ? platform.Distance : 0.0;
+                    Vector3 exact = actor.Position;
+                    SetAxisValue(ref exact, platform.Axis, start + endpointOffset);
+                    actor.Position = exact;
+                    if (platform.Mode == PhysicsMoveMode.Dynamic)
+                    {
+                        RigidBody body = FindBody(actor);
+                        if (body != null)
+                            body.LinearVelocity = Vector3.Zero;
+                    }
+                }
+            }
+
             // Tweens: advance every in-flight tween, write the interpolated value, and fire
             // `when tween <thing> ends` on the tick it completes (final value is applied first).
             for (int i = LiveTweens.Count - 1; i >= 0; i--)
@@ -446,6 +485,9 @@ namespace Game
                     break;
                 case ActionVerb.Tween:
                     StartTween(context, spec);
+                    break;
+                case ActionVerb.MovePlatform:
+                    StartPlatform(context, spec);
                     break;
                 case ActionVerb.Turn:
                 {
@@ -1768,6 +1810,103 @@ namespace Game
                     if (live.Ui != null && live.Ui.Control != null)
                         SetControlColor(live.Ui.Control, new Color((float)track.R, (float)track.G, (float)track.B, (float)track.A));
                     break;
+            }
+        }
+
+        /// <summary><c>moveplatform &lt;thing&gt; &lt;axis&gt; &lt;distance&gt; in &lt;time&gt;</c>: starts a
+        /// ping-pong sweep along a world axis, tracked in <see cref="Platforms"/> and advanced
+        /// each tick in <see cref="Step"/>.</summary>
+        private static void StartPlatform(EventContext context, ActionSpec spec)
+        {
+            var subject = ResolveThing(context, spec.Thing) as Actor;
+            if (subject == null)
+            {
+                WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D to moveplatform.");
+                return;
+            }
+            if (!spec.HasNumber || spec.Duration <= 0)
+            {
+                WarnOnce($"\u201Cmoveplatform {spec.Thing}\u201D needs a positive time in seconds.");
+                return;
+            }
+            // A new platform for the same subject replaces the old one, so retargeting doesn't
+            // stack two sweeps on the same actor.
+            for (int i = Platforms.Count - 1; i >= 0; i--)
+                if (ReferenceEquals(Platforms[i].Subject, subject))
+                    Platforms.RemoveAt(i);
+
+            Platforms.Add(new OngoingPlatform
+            {
+                Subject = subject,
+                Axis = spec.Dir,
+                Distance = spec.Number,
+                Duration = spec.Duration,
+                Easing = spec.Easing,
+                StartX = subject.Position.X,
+                StartY = subject.Position.Y,
+                StartZ = subject.Position.Z,
+                Mode = ResolveMoveMode(subject, context.Sheet != null && context.Sheet.UsePhysicsMovement),
+            });
+        }
+
+        private static double AxisValue(double x, double y, double z, string axis)
+        {
+            switch (axis)
+            {
+                case "x": return x;
+                case "y": return y;
+                case "z": return z;
+                default: return 0;
+            }
+        }
+
+        private static void SetAxisValue(ref Vector3 v, string axis, double value)
+        {
+            switch (axis)
+            {
+                case "x": v.X = (float)value; break;
+                case "y": v.Y = (float)value; break;
+                case "z": v.Z = (float)value; break;
+            }
+        }
+
+        /// <summary>Applies one tick's platform delta through the subject's movement mode,
+        /// mirroring <see cref="MoveSubject"/>'s mode selection.</summary>
+        private static void ApplyPlatformDelta(Actor subject, Vector3 delta, PhysicsMoveMode mode, float deltaTime)
+        {
+            float step = deltaTime;
+            switch (mode)
+            {
+                case PhysicsMoveMode.Transform:
+                    subject.Position = subject.Position + delta;
+                    break;
+                case PhysicsMoveMode.Dynamic:
+                {
+                    RigidBody body = FindBody(subject);
+                    if (body != null)
+                        body.LinearVelocity = new Vector3(delta.X / step, delta.Y / step, delta.Z / step);
+                    else
+                        subject.Position = subject.Position + delta;
+                    break;
+                }
+                case PhysicsMoveMode.Kinematic:
+                {
+                    RigidBody body = FindBody(subject);
+                    if (body != null && IsAncestorOrSelf(body, subject))
+                        body.AddMovement(delta);
+                    else
+                        subject.AddMovement(delta);
+                    break;
+                }
+                case PhysicsMoveMode.Character:
+                {
+                    CharacterController character = EventSheet.FindCharacterController(subject);
+                    if (character != null)
+                        character.Move(delta);
+                    else
+                        subject.Position = subject.Position + delta;
+                    break;
+                }
             }
         }
 

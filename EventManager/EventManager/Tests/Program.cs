@@ -3933,6 +3933,94 @@ Check(badPlaceSpec.Verb == ActionVerb.Unknown && placeHint != null &&
       placeHint.Contains("place", StringComparison.OrdinalIgnoreCase),
       "`place` without `at <target>` stays a friendly unknown action");
 
+// ------------------------------------------------------------------
+// Task 15 Part H: moveplatform (moving platforms)
+// ------------------------------------------------------------------
+
+var mp = parser.Parse("when me appears\n  moveplatform Plat1 x 200 in 2\n");
+var mpSpec = ActionWords.Parse(mp.Events[0].Body[0].Words, _ => { });
+Check(mpSpec.Verb == ActionVerb.MovePlatform && mpSpec.Thing == "Plat1" && mpSpec.Dir == "x",
+      "`moveplatform Plat1 x 200 in 2` parses to MovePlatform with thing \"Plat1\" and axis x");
+Check(mpSpec.HasNumber && mpSpec.Number == 200 && mpSpec.Duration == 2 &&
+      mpSpec.Easing == TweenEasing.Linear,
+      "`moveplatform Plat1 x 200 in 2` carries distance 200, duration 2, linear easing");
+
+var mpEase = parser.Parse("when me appears\n  moveplatform Plat2 y -100 in 1.5 easing ease in out\n");
+var mpEaseSpec = ActionWords.Parse(mpEase.Events[0].Body[0].Words, _ => { });
+Check(mpEaseSpec.Verb == ActionVerb.MovePlatform && mpEaseSpec.Thing == "Plat2" && mpEaseSpec.Dir == "y",
+      "`moveplatform Plat2 y -100 in 1.5 easing ease in out` parses to MovePlatform with axis y");
+Check(mpEaseSpec.HasNumber && mpEaseSpec.Number == -100 && mpEaseSpec.Duration == 1.5 &&
+      mpEaseSpec.Easing == TweenEasing.EaseInOut,
+      "`moveplatform ... easing ease in out` carries distance -100, duration 1.5, EaseInOut");
+
+var mpBadAxis = parser.Parse("when me appears\n  moveplatform Plat1 w 200 in 2\n");
+var mpBadAxisSpec = ActionWords.Parse(mpBadAxis.Events[0].Body[0].Words, _ => { });
+Check(mpBadAxisSpec.Verb == ActionVerb.Unknown, "a bad axis (w) makes moveplatform unknown");
+
+var mpNoIn = parser.Parse("when me appears\n  moveplatform Plat1 x 200\n");
+var mpNoInSpec = ActionWords.Parse(mpNoIn.Events[0].Body[0].Words, _ => { });
+Check(mpNoInSpec.Verb == ActionVerb.Unknown, "moveplatform without `in <time>` is unknown");
+
+var mpBadTime = parser.Parse("when me appears\n  moveplatform Plat1 x 200 in slow\n");
+var mpBadTimeSpec = ActionWords.Parse(mpBadTime.Events[0].Body[0].Words, _ => { });
+Check(mpBadTimeSpec.Verb == ActionVerb.Unknown, "moveplatform with a non-number time is unknown");
+
+var mpBare = parser.Parse("when me appears\n  moveplatform\n");
+var mpBareSpec = ActionWords.Parse(mpBare.Events[0].Body[0].Words, _ => { });
+Check(mpBareSpec.Verb == ActionVerb.Unknown, "moveplatform with no subject is unknown");
+
+// Runtime: OngoingPlatform ping-pong stepping (pure math, no Flax needed).
+var plat = new PhysicsMovement.OngoingPlatform
+{
+    Axis = "x",
+    Distance = 100,
+    Duration = 2,
+    Easing = TweenEasing.Linear,
+    StartX = 10, StartY = 0, StartZ = 0,
+};
+Check(Math.Abs(plat.Progress - 0) < 0.0001, "a fresh platform starts at progress 0");
+Check(Math.Abs(plat.AxisOffset - 0) < 0.0001, "a fresh platform has axis offset 0");
+
+plat.Advance(1); // half the duration
+Check(Math.Abs(plat.Progress - 0.5) < 0.0001, "linear progress is 0.5 at half duration");
+Check(Math.Abs(plat.AxisOffset - 50) < 0.0001, "linear axis offset is half the distance at half duration");
+
+bool done = plat.Advance(1); // completes the forward leg
+Check(done && plat.Direction == -1, "the forward leg completes and direction flips to return");
+Check(Math.Abs(plat.Elapsed - 0) < 0.0001, "elapsed resets to 0 when a leg completes");
+Check(Math.Abs(plat.AxisOffset - 100) < 0.0001, "at the forward endpoint the offset equals the full distance");
+
+plat.Advance(1); // half the return leg
+Check(Math.Abs(plat.Progress - 0.5) < 0.0001, "return progress is 0.5 at half the return duration");
+Check(Math.Abs(plat.AxisOffset - 50) < 0.0001, "return axis offset is half the distance");
+
+done = plat.Advance(1); // completes the return leg
+Check(done && plat.Direction == 1, "the return leg completes and direction flips back to forward");
+Check(Math.Abs(plat.AxisOffset - 0) < 0.0001, "at the return endpoint the offset is back to 0 (no drift across legs)");
+
+// Easing: EaseIn at half duration = 0.25
+var easePlat = new PhysicsMovement.OngoingPlatform
+{
+    Axis = "z",
+    Distance = 100,
+    Duration = 2,
+    Easing = TweenEasing.EaseIn,
+    StartX = 0, StartY = 0, StartZ = 0,
+};
+easePlat.Advance(1);
+Check(Math.Abs(easePlat.Progress - 0.25) < 0.0001, "EaseIn gives progress 0.25 at half duration (t*t)");
+
+// Zero duration snaps immediately
+var instantPlat = new PhysicsMovement.OngoingPlatform
+{
+    Axis = "x",
+    Distance = 50,
+    Duration = 0,
+    StartX = 5, StartY = 0, StartZ = 0,
+};
+Check(instantPlat.Progress == 1, "a zero-duration platform snaps to progress 1");
+Check(Math.Abs(instantPlat.AxisOffset - 50) < 0.0001, "a zero-duration platform applies the full distance");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
