@@ -3492,6 +3492,284 @@ when NameBox submits
     Check(focusEngine.Variables.GetGlobal("MenuFocus").AsNumber() == 0,
         "`when <thing> loses focus` fires when focus leaves the control");
 
+// ------------------------------------------------------------------
+// Task 18 Part C: construction & base building
+// ------------------------------------------------------------------
+
+// Trigger classification.
+var buildingPlacedProg = parser.Parse("when Barracks is placed\n  set Placed to 1\n");
+var buildingPlacedDesc = TriggerClassifier.Classify(buildingPlacedProg.Events[0]);
+Check(buildingPlacedDesc.Kind == TriggerKind.BuildingPlaced && buildingPlacedDesc.RequireName == "Barracks",
+      "`when Barracks is placed` classifies to BuildingPlaced with RequireName \"Barracks\"");
+
+var constructionDesc = TriggerClassifier.Classify(parser.Parse("when construction completes\n  set Done to 1\n").Events[0]);
+Check(constructionDesc.Kind == TriggerKind.ConstructionCompleted && constructionDesc.RequireName.Length == 0,
+      "`when construction completes` classifies to ConstructionCompleted with no require name");
+
+var buildingDestroyedDesc = TriggerClassifier.Classify(parser.Parse("when Barracks is destroyed\n  set Gone to 1\n").Events[0]);
+Check(buildingDestroyedDesc.Kind == TriggerKind.BuildingDestroyed && buildingDestroyedDesc.RequireName == "Barracks",
+      "`when Barracks is destroyed` classifies to BuildingDestroyed with RequireName \"Barracks\"");
+
+// Action parsing.
+var placeProg = parser.Parse(@"when game starts
+  place Barracks at Mouse
+  place Barracks at Mouse on grid
+  place Barracks at Mouse on grid by 32
+  cancel build");
+var freePlaceSpec = ActionWords.Parse(((RawActionNode)placeProg.Events[0].Body[0].Statement).Words, null);
+Check(freePlaceSpec.Verb == ActionVerb.PlaceBuilding && freePlaceSpec.Thing == "Barracks" &&
+      freePlaceSpec.To == "Mouse" && !freePlaceSpec.OnGrid,
+      "`place Barracks at Mouse` is free-form placement");
+var gridPlaceSpec = ActionWords.Parse(((RawActionNode)placeProg.Events[0].Body[1].Statement).Words, null);
+Check(gridPlaceSpec.Verb == ActionVerb.PlaceBuilding && gridPlaceSpec.OnGrid && !gridPlaceSpec.HasGridSize,
+      "`place Barracks at Mouse on grid` opts into grid placement with no explicit size");
+var sizedGridPlaceSpec = ActionWords.Parse(((RawActionNode)placeProg.Events[0].Body[2].Statement).Words, null);
+Check(sizedGridPlaceSpec.Verb == ActionVerb.PlaceBuilding && sizedGridPlaceSpec.OnGrid &&
+      sizedGridPlaceSpec.HasGridSize && sizedGridPlaceSpec.GridSize == 32,
+      "`place Barracks at Mouse on grid by 32` keeps the explicit grid size");
+var cancelSpec = ActionWords.Parse(((RawActionNode)placeProg.Events[0].Body[3].Statement).Words, null);
+Check(cancelSpec.Verb == ActionVerb.CancelBuild, "`cancel build` parses to ActionVerb.CancelBuild");
+
+var buildProgressProg = parser.Parse(@"when game starts
+  set build progress to 0
+  add 10 to build progress");
+Check(buildProgressProg.Events[0].Body[0].Statement is SetBuildProgressNode setBuildProgressNode &&
+      setBuildProgressNode.Value is NumberValue setBuildProgressValue && setBuildProgressValue.Value == 0,
+      "`set build progress to 0` builds a SetBuildProgressNode");
+Check(buildProgressProg.Events[0].Body[1].Statement is AddBuildProgressNode addBuildProgressNode &&
+      addBuildProgressNode.Amount is NumberValue addBuildProgressValue && addBuildProgressValue.Value == 10,
+      "`add 10 to build progress` builds an AddBuildProgressNode");
+
+// Condition parsing.
+var underConstructionCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  Barracks is under construction").Events[0].Body[0].Words);
+Check(underConstructionCondition.Kind == ConditionKind.UnderConstruction && underConstructionCondition.Thing == "Barracks",
+      "`Barracks is under construction` parses to UnderConstruction");
+
+var enoughCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  enough Minerals for Barracks").Events[0].Body[0].Words);
+Check(enoughCondition.Kind == ConditionKind.EnoughFor && enoughCondition.Name == "Minerals" &&
+      enoughCondition.Thing == "Barracks",
+      "`enough Minerals for Barracks` parses to EnoughFor with canonical Minerals");
+
+var buildingExistsCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  Barracks exists").Events[0].Body[0].Words);
+Check(buildingExistsCondition.Kind == ConditionKind.ThingExists && buildingExistsCondition.Thing == "Barracks",
+      "`Barracks exists` keeps using ThingExists");
+
+var progressCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  build progress is higher than 100").Events[0].Body[0].Words);
+Check(progressCondition.Kind == ConditionKind.Higher && progressCondition.Owner == "my" &&
+      progressCondition.Name == "BuildProgress" &&
+      progressCondition.Right is NumberValue progressRight && progressRight.Value == 100,
+      "`build progress is higher than 100` reads the mirrored BuildProgress local");
+
+// Zero-regression spot checks: the new branches must not steal existing lines.
+var legacyConstructionProg = parser.Parse(@"when game starts
+  set Score to 0
+  add 1 to Score
+  add 50 to Minerals");
+Check(legacyConstructionProg.Events[0].Body[0].Statement is SetNode legacySet && legacySet.Target.Name == "Score",
+      "`set Score to 0` still builds a SetNode");
+Check(legacyConstructionProg.Events[0].Body[1].Statement is AddNode legacyAdd && legacyAdd.Target.Name == "Score",
+      "`add 1 to Score` still targets Score");
+Check(legacyConstructionProg.Events[0].Body[2].Statement is AddNode legacyMinerals && legacyMinerals.Target.Name == "Minerals",
+      "`add 50 to Minerals` still targets Minerals");
+Check(TriggerClassifier.Classify(parser.Parse("when Barracks is selected\n  set X to 1\n").Events[0]).Kind == TriggerKind.Selected,
+      "`when Barracks is selected` still classifies to Selected");
+
+// Construction state + mirrored local.
+var buildVars = new EventVariables();
+var builds = new ConstructionManager();
+var barracksActor = new FakeActor("Barracks");
+builds.RegisterPlaced(barracksActor, "Barracks", buildVars);
+builds.SetProgress(buildVars, barracksActor, 50);
+Check(builds.ProgressOf(barracksActor) == 50 && builds.IsUnderConstruction(barracksActor),
+      "RegisterPlaced + SetProgress tracks 50% construction");
+Check(buildVars.GetLocal(barracksActor, "BuildProgress").AsNumber() == 50,
+      "construction progress mirrors into the my BuildProgress local");
+builds.AddProgress(buildVars, barracksActor, -100);
+Check(builds.ProgressOf(barracksActor) == 0, "AddProgress clamps construction progress at 0");
+
+// Completion fires once, then stays quiet.
+var completionWorld = new FakeWorld();
+completionWorld.AddActor(barracksActor);
+var completionEngine = FreshEngine(completionWorld);
+completionEngine.AddSheet(new GlobalHost(), parser.Parse(
+    "when construction completes\n  set Completed to Completed + 1\n"));
+completionEngine.Construction.RegisterPlaced(barracksActor, "Barracks", completionEngine.Variables);
+completionEngine.Construction.SetProgress(completionEngine.Variables, barracksActor, 100);
+completionEngine.Tick(1);
+Check(completionEngine.Variables.GetGlobal("Completed").AsNumber() == 1,
+      "`when construction completes` fires when progress reaches 100");
+completionEngine.Tick(2);
+Check(completionEngine.Variables.GetGlobal("Completed").AsNumber() == 1,
+      "completion does not refire while progress stays at 100");
+
+// Cancel removes state + mirrored local; destruction removes state.
+var cancelVars = new EventVariables();
+var cancelManager = new ConstructionManager();
+var cancelActor = new FakeActor("Barracks");
+cancelManager.RegisterPlaced(cancelActor, "Barracks", cancelVars);
+cancelManager.SetProgress(cancelVars, cancelActor, 30);
+Check(cancelManager.Cancel(cancelVars, cancelActor), "Cancel reports that the building was under construction");
+Check(!cancelManager.IsUnderConstruction(cancelActor) && !cancelVars.HasLocal(cancelActor, "BuildProgress"),
+      "Cancel clears construction state and the mirrored BuildProgress local");
+
+var destroyedManager = new ConstructionManager();
+var destroyedActor = new FakeActor("Barracks");
+destroyedManager.RegisterPlaced(destroyedActor, "Barracks", buildVars);
+destroyedManager.Destroyed(buildVars, destroyedActor);
+Check(!destroyedManager.IsUnderConstruction(destroyedActor) &&
+      !buildVars.HasLocal(destroyedActor, "BuildProgress"),
+      "Destroyed clears construction state and the mirrored local");
+
+// Engine-level placed signals and the `me` form.
+var placedEngine = FreshEngine(new FakeWorld());
+placedEngine.AddSheet(new GlobalHost(), parser.Parse(
+    "when Barracks is placed\n  set Placed to Placed + 1\n"));
+placedEngine.Tick(0);
+var placedActor = new FakeActor("Barracks");
+placedEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.BuildingPlaced, Name = "Barracks", Other = placedActor });
+placedEngine.Tick(1);
+Check(placedEngine.Variables.GetGlobal("Placed").AsNumber() == 1,
+      "`when Barracks is placed` fires on a BuildingPlaced broadcast");
+
+var mePlacedEngine = FreshEngine(new FakeWorld());
+var mePlacedA = new FakeActor("Barracks");
+var mePlacedB = new FakeActor("Barracks");
+mePlacedEngine.AddSheet(mePlacedA, parser.Parse("when me is placed\n  set my Placed to 1\n"));
+mePlacedEngine.AddSheet(mePlacedB, parser.Parse("when me is placed\n  set my Placed to 1\n"));
+mePlacedEngine.Tick(0);
+mePlacedEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.BuildingPlaced, Name = "Barracks", Other = mePlacedA });
+mePlacedEngine.Tick(1);
+Check(mePlacedEngine.Variables.GetLocal(mePlacedA, "Placed").AsNumber() == 1 &&
+      mePlacedEngine.Variables.GetLocal(mePlacedB, "Placed").IsNone(),
+      "`when me is placed` fires only for the placed actor's own sheet");
+
+// `enough Minerals for <building>` is data-driven.
+var enoughEngine = FreshEngine(new FakeWorld());
+enoughEngine.AddSheet(new GlobalHost(), parser.Parse(@"when every 1 seconds
+  enough Minerals for Barracks
+  set Enough to Enough + 1"));
+enoughEngine.Tick(1);
+Check(enoughEngine.Variables.GetGlobal("Enough").AsNumber() == 1,
+      "`enough Minerals for Barracks` passes when the building declares no cost");
+enoughEngine.Variables.SetGlobal("BarracksCost", ValueBox.OfNumber(150));
+enoughEngine.Variables.SetGlobal("Minerals", ValueBox.OfNumber(100));
+enoughEngine.Tick(2);
+Check(enoughEngine.Variables.GetGlobal("Enough").AsNumber() == 1,
+      "`enough Minerals for Barracks` blocks while Minerals are short");
+enoughEngine.Variables.SetGlobal("Minerals", ValueBox.OfNumber(150));
+enoughEngine.Tick(3);
+Check(enoughEngine.Variables.GetGlobal("Enough").AsNumber() == 2,
+      "`enough Minerals for Barracks` passes once the cost is covered");
+
+// `<building> is under construction` flips after RegisterPlaced.
+var underWorld = new FakeWorld();
+var underActor = new FakeActor("Barracks");
+underWorld.AddActor(underActor);
+var underEngine = FreshEngine(underWorld);
+underEngine.AddSheet(underActor, parser.Parse("when me appears\n  set my Ready to 1\n"));
+underEngine.AddSheet(new GlobalHost(), parser.Parse(@"when every 1 seconds
+  Barracks is under construction
+  set Under to Under + 1"));
+underEngine.Tick(1);
+Check(underEngine.Variables.GetGlobal("Under").IsNone(),
+      "`Barracks is under construction` blocks before placement");
+underEngine.Construction.RegisterPlaced(underActor, "Barracks", underEngine.Variables);
+underEngine.Tick(2);
+Check(underEngine.Variables.GetGlobal("Under").AsNumber() == 1,
+      "`Barracks is under construction` passes after placement");
+
+// `build progress is higher than <n>` and the set/add dispatch.
+var progressEngine = FreshEngine(new FakeWorld());
+var progressActor = new FakeActor("Barracks");
+progressEngine.AddSheet(progressActor, parser.Parse(@"when every 1 seconds
+  build progress is higher than 40
+  set my High to High + 1"));
+progressEngine.Construction.RegisterPlaced(progressActor, "Barracks", progressEngine.Variables);
+progressEngine.Construction.SetProgress(progressEngine.Variables, progressActor, 50);
+progressEngine.Tick(1);
+Check(progressEngine.Variables.GetLocal(progressActor, "High").AsNumber() == 1,
+      "`build progress is higher than 40` passes at 50");
+progressEngine.Construction.SetProgress(progressEngine.Variables, progressActor, 20);
+progressEngine.Tick(2);
+Check(progressEngine.Variables.GetLocal(progressActor, "High").AsNumber() == 1,
+      "`build progress is higher than 40` blocks at 20");
+
+var dispatchEngine = FreshEngine(new FakeWorld());
+var dispatchActor = new FakeActor("Barracks");
+dispatchEngine.AddSheet(dispatchActor, parser.Parse(@"when me appears
+  set build progress to 50
+  add 10 to build progress"));
+dispatchEngine.Construction.RegisterPlaced(dispatchActor, "Barracks", dispatchEngine.Variables);
+dispatchEngine.Tick(0);
+Check(dispatchEngine.Construction.ProgressOf(dispatchActor) == 60,
+      "`set build progress` and `add to build progress` dispatch to the ConstructionManager");
+
+// Grid helpers.
+Check(ConstructionManager.SnapToGrid(0, 64) == 32 && ConstructionManager.SnapToGrid(63, 64) == 32 &&
+      ConstructionManager.SnapToGrid(65, 64) == 96,
+      "SnapToGrid returns cell centres");
+Check(ConstructionManager.CellOf(63, 0, 64) == (0, 0) && ConstructionManager.CellOf(64, 129, 64) == (1, 2),
+      "CellOf floors world positions into cells");
+
+var gridVars = new EventVariables();
+var grid = new ConstructionManager();
+var gridA = new FakeActor("Barracks");
+Check(grid.TryReserveCells(gridA, "Barracks", gridVars, 0, 0, 64),
+      "a grid placement reserves an empty cell");
+var gridB = new FakeActor("Barracks");
+Check(!grid.TryReserveCells(gridB, "Barracks", gridVars, 1, 1, 64),
+      "a second building cannot claim the same cell");
+
+var footVars = new EventVariables();
+footVars.SetGlobal("BarracksGridWidth", ValueBox.OfNumber(2));
+footVars.SetGlobal("BarracksGridDepth", ValueBox.OfNumber(2));
+var footGrid = new ConstructionManager();
+var footA = new FakeActor("Barracks");
+Check(footGrid.TryReserveCells(footA, "Barracks", footVars, 0, 0, 64),
+      "a 2x2 building reserves its whole footprint");
+var footInside = new FakeActor("Turret");
+Check(!footGrid.TryReserveCells(footInside, "Turret", footVars, 0, 0, 64) &&
+      !footGrid.TryReserveCells(footInside, "Turret", footVars, 64, 64, 64),
+      "the footprint blocks its anchor and diagonal cells");
+var footOutside = new FakeActor("Turret");
+Check(footGrid.TryReserveCells(footOutside, "Turret", footVars, 128, 64, 64),
+      "a cell just outside the footprint is still free");
+footGrid.ReleaseCells(footA);
+var footReuse = new FakeActor("Turret");
+Check(footGrid.TryReserveCells(footReuse, "Turret", footVars, 0, 0, 64),
+      "ReleaseCells frees the footprint for a later placement");
+
+var cancelGrid = new ConstructionManager();
+var cancelGridActor = new FakeActor("Barracks");
+cancelGrid.RegisterPlaced(cancelGridActor, "Barracks", gridVars);
+Check(cancelGrid.TryReserveCells(cancelGridActor, "Barracks", gridVars, 0, 0, 64),
+      "cancel test reserves a cell");
+cancelGrid.Cancel(gridVars, cancelGridActor);
+var cancelGridReuse = new FakeActor("Turret");
+Check(cancelGrid.TryReserveCells(cancelGridReuse, "Turret", gridVars, 0, 0, 64),
+      "Cancel frees the grid cell");
+
+var gridSizeVars = new EventVariables();
+Check(ConstructionManager.ResolveGridSize(gridSizeVars, false, 0) == ConstructionManager.DefaultGridSize,
+      "an unset BuildGridSize falls back to 64 for on-grid placement");
+gridSizeVars.SetGlobal("BuildGridSize", ValueBox.OfNumber(32));
+Check(ConstructionManager.ResolveGridSize(gridSizeVars, false, 0) == 32,
+      "BuildGridSize sets the default cell size");
+Check(ConstructionManager.ResolveGridSize(gridSizeVars, true, 16) == 16,
+      "an explicit `on grid by <n>` overrides BuildGridSize");
+
+string placeHint = null;
+var badPlaceSpec = ActionWords.Parse(
+    parser.Parse("when game starts\n  place Barracks\n").Events[0].Body[0].Words,
+    message => placeHint = message);
+Check(badPlaceSpec.Verb == ActionVerb.Unknown && placeHint != null &&
+      placeHint.Contains("place", StringComparison.OrdinalIgnoreCase),
+      "`place` without `at <target>` stays a friendly unknown action");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

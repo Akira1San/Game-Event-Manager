@@ -60,6 +60,9 @@ namespace Game
         // Prefab / scene spawning (Task 17 Part D)
         SpawnPrefab,
         SpawnScene,
+        // RTS construction (Task 18 Part C)
+        PlaceBuilding,
+        CancelBuild,
     }
 
     public class ActionSpec
@@ -87,6 +90,12 @@ namespace Game
         public ValueNode TweenValue;
         public double Duration;
         public TweenEasing Easing = TweenEasing.Linear;
+        /// <summary><c>place &lt;building&gt; at &lt;target&gt; on grid</c>: snap to a cell
+        /// and reserve its footprint. Free-form placement leaves this false.</summary>
+        public bool OnGrid;
+        /// <summary>Explicit grid cell size from a trailing <c>by &lt;n&gt;</c>.</summary>
+        public double GridSize;
+        public bool HasGridSize;
     }
 
     public static class ActionWords
@@ -393,6 +402,43 @@ namespace Game
                         return Finish(spec, ActionVerb.Spawn, words, 4);
                     }
                     return Unknown(spec, words, "\u201Cspawn\u201D looks like this: \u201Cspawn Bullet at me\u201D or \u201Cspawn prefab \"Hero\" at SpawnPoint\u201D or \u201Cspawn scene \"HeroScene\" at SpawnPoint\u201D", warn);
+                case "place":
+                {
+                    // `place Barracks at Mouse` / `place Barracks at Mouse on grid [by 32]`
+                    if (words.Count >= 4 && IsThing(words[1]) && words[2].Text == "at" && IsThing(words[3]))
+                    {
+                        spec.Thing = words[1].Text;
+                        spec.To = words[3].Text;
+                        int index = 4;
+                        if (words.Count >= index + 2 && words[index].Text == "on" && words[index + 1].Text == "grid")
+                        {
+                            spec.OnGrid = true;
+                            index += 2;
+                            if (words.Count >= index + 2 && words[index].Text == "by" && words[index + 1].Type == TokenType.Number)
+                            {
+                                spec.GridSize = words[index + 1].Number;
+                                spec.HasGridSize = true;
+                                index += 2;
+                            }
+                        }
+                        return Finish(spec, ActionVerb.PlaceBuilding, words, index);
+                    }
+                    return Unknown(spec, words, "\u201Cplace\u201D looks like this: \u201Cplace Barracks at Mouse\u201D or \u201Cplace Barracks at Mouse on grid by 64\u201D", warn);
+                }
+                case "cancel":
+                {
+                    if (words.Count >= 2 && words[1].Text == "build")
+                    {
+                        int index = 2;
+                        if (words.Count >= 3 && IsThing(words[2]))
+                        {
+                            spec.Thing = words[2].Text;
+                            index = 3;
+                        }
+                        return Finish(spec, ActionVerb.CancelBuild, words, index);
+                    }
+                    return Unknown(spec, words, "\u201Ccancel\u201D looks like this: \u201Ccancel build\u201D", warn);
+                }
                 case "set":
                 {
                     if (words.Count >= 5 && words[1].Text == "light" && words[2].Text == "intensity" && words[3].Text == "to")

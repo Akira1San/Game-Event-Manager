@@ -133,6 +133,8 @@ namespace Game
         public IEventWorld World = new DefaultEventWorld();
         /// <summary>RTS selection + control groups (Task 18 Part A).</summary>
         public Selection Selection;
+        /// <summary>RTS construction state, progress and grid occupancy (Task 18 Part C).</summary>
+        public ConstructionManager Construction = new ConstructionManager();
         public double Time;
         /// <summary>Bridge flag: poll `touches` from world contacts (distance mode / both mode).</summary>
         public bool PollTouches;
@@ -445,6 +447,9 @@ namespace Game
             // Control group keys are global input: raise ControlGroupPressed on the enter
             // edge before the push queues are drained so the event runs this same tick.
             Selection.PollControlGroupKeys(World);
+            // Construction completions are pushed before the drain below, so a
+            // `when construction completes` event runs this same tick.
+            Construction.Tick(this);
             var snapshot = sheets.ToArray();
             foreach (var sheet in snapshot)
             {
@@ -522,6 +527,13 @@ namespace Game
             return kind == TriggerKind.Touches || kind == TriggerKind.Overlaps;
         }
 
+        private static bool IsBuildingKind(TriggerKind kind)
+        {
+            return kind == TriggerKind.BuildingPlaced ||
+                   kind == TriggerKind.ConstructionCompleted ||
+                   kind == TriggerKind.BuildingDestroyed;
+        }
+
         private Dictionary<string, int> BagOf(object owner)
         {
             if (!bags.TryGetValue(owner, out var bag))
@@ -542,6 +554,14 @@ namespace Game
             // filter it to the sheet's own actor. A named form (`when Marine is selected`)
             // matches on the signal name below.
             if (descriptor.Kind == TriggerKind.Selected || descriptor.Kind == TriggerKind.Deselected)
+            {
+                return descriptor.RequireName == "me"
+                    ? ReferenceEquals(signal.Other, sheet.Actor)
+                    : signal.Name == descriptor.RequireName;
+            }
+            // Building signals are broadcast with the template name in `Name` and the
+            // placed actor in `Other`; `when me is placed` belongs to that actor's sheet.
+            if (IsBuildingKind(descriptor.Kind))
             {
                 return descriptor.RequireName == "me"
                     ? ReferenceEquals(signal.Other, sheet.Actor)
@@ -720,6 +740,16 @@ namespace Game
                 else if (statement is SetControlGroupNode setControlGroup)
                 {
                     ExecuteSetControlGroup(context, setControlGroup);
+                }
+                else if (statement is SetBuildProgressNode setBuildProgress)
+                {
+                    Construction.SetProgress(context.Variables, context.Me,
+                        context.Evaluate(setBuildProgress.Value).AsNumber());
+                }
+                else if (statement is AddBuildProgressNode addBuildProgress)
+                {
+                    Construction.AddProgress(context.Variables, context.Me,
+                        context.Evaluate(addBuildProgress.Amount).AsNumber());
                 }
                 else if (statement is PlayStepSoundNode step)
                 {

@@ -52,6 +52,10 @@ namespace Game
         ControlGroupHeld,
         // RTS resource economy (Task 18 Part B)
         ResourceChanges,
+        // RTS construction & base building (Task 18 Part C)
+        BuildingPlaced,
+        ConstructionCompleted,
+        BuildingDestroyed,
     }
 
     public class TriggerDescriptor
@@ -100,6 +104,22 @@ namespace Game
                 return new TriggerDescriptor
                 {
                     Kind = TriggerKind.Deselected,
+                    RequireName = Join(trigger, 0, words.Length - 2),
+                };
+            // RTS construction (Task 18 Part C). These sit before the generic key shape so
+            // `when Barracks is placed` is not read as a key called "Barracks".
+            if (words.Length >= 3 && words[words.Length - 2] == "is" && words[words.Length - 1] == "placed")
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.BuildingPlaced,
+                    RequireName = Join(trigger, 0, words.Length - 2),
+                };
+            if (words.Length == 2 && words[0] == "construction" && words[1] == "completes")
+                return new TriggerDescriptor { Kind = TriggerKind.ConstructionCompleted };
+            if (words.Length >= 3 && words[words.Length - 2] == "is" && words[words.Length - 1] == "destroyed")
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.BuildingDestroyed,
                     RequireName = Join(trigger, 0, words.Length - 2),
                 };
             if (words.Length == 2 && words[0] == "selection" && words[1] == "changes")

@@ -129,4 +129,18 @@ namespace Game
     {
         public int Group = -1;
     }
+
+    /// <summary><c>set build progress to &lt;n&gt;</c>: sets the acting building's
+    /// construction progress (0–100) on <see cref="ConstructionManager"/>.</summary>
+    public class SetBuildProgressNode : StatementNode
+    {
+        public ValueNode Value = new NumberValue();
+    }
+
+    /// <summary><c>add &lt;n&gt; to build progress</c>: advances the acting building's
+    /// construction progress, clamping at 0.</summary>
+    public class AddBuildProgressNode : StatementNode
+    {
+        public ValueNode Amount = new NumberValue();
+    }
 }

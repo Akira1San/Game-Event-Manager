@@ -32,6 +32,9 @@ namespace Game
         MyControlGroupAssigned,
         // RTS resource economy (Task 18 Part B)
         CanAfford,
+        // RTS construction & base building (Task 18 Part C)
+        UnderConstruction,
+        EnoughFor,
     }
 
     public class ConditionNode
@@ -182,6 +185,28 @@ namespace Game
                 return node;
             }
 
+            // ---- RTS construction & base building (Task 18 Part C) ----
+            // `enough Minerals for Barracks` — one resource against a data-driven cost.
+            if (texts.Length >= 4 && texts[0] == "enough")
+            {
+                int forIndex = IndexOf(texts, "for");
+                if (forIndex > 1 && forIndex + 1 < texts.Length)
+                {
+                    node.Kind = ConditionKind.EnoughFor;
+                    node.Name = ResourceManager.CanonicalOrName(JoinTexts(texts, 1, forIndex));
+                    node.Thing = JoinTexts(texts, forIndex + 1, texts.Length);
+                    return node;
+                }
+            }
+            // `Barracks is under construction` — must precede the generic `is` handling.
+            if (texts.Length >= 4 && texts[texts.Length - 3] == "is" &&
+                texts[texts.Length - 2] == "under" && texts[texts.Length - 1] == "construction")
+            {
+                node.Kind = ConditionKind.UnderConstruction;
+                node.Thing = JoinTexts(texts, 0, texts.Length - 3);
+                return node;
+            }
+
             int isIndex = IndexOf(texts, "is");
             if (isIndex > 0)
             {
@@ -191,7 +216,18 @@ namespace Game
                 {
                     node.Kind = higher ? ConditionKind.Higher : ConditionKind.Lower;
                     if (!TrySetResourceSubject(node, texts, isIndex))
-                        SetSubject(node, tokens, texts, isIndex);
+                    {
+                        // `build progress is higher than 50` reads the mirrored local.
+                        if (JoinTexts(texts, 0, isIndex) == "build progress")
+                        {
+                            node.Owner = "my";
+                            node.Name = "BuildProgress";
+                        }
+                        else
+                        {
+                            SetSubject(node, tokens, texts, isIndex);
+                        }
+                    }
                     int opIndex = higher ? Array.IndexOf(texts, "higher", isIndex) : Array.IndexOf(texts, "lower", isIndex);
                     node.Right = ValueFromSpan(tokens, texts, opIndex + 2);
                     return node;
@@ -384,6 +420,20 @@ namespace Game
                 }
                 case ConditionKind.CanAfford:
                     return ResourceManager.CanAfford(context.Variables, node.Thing);
+                case ConditionKind.UnderConstruction:
+                {
+                    object actor = node.Thing == "me"
+                        ? context.Me
+                        : context.Runtime.FindNamedActor(node.Thing);
+                    return context.Runtime.Construction.IsUnderConstruction(actor);
+                }
+                case ConditionKind.EnoughFor:
+                {
+                    // A building with no cost variable is always covered.
+                    if (!ResourceManager.TryCost(context.Variables, node.Thing, node.Name, out double cost))
+                        return true;
+                    return ResourceManager.ReadNumber(context.Variables, node.Name) >= cost;
+                }
                 default:
                     return false;
             }

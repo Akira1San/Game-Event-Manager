@@ -46,6 +46,13 @@ namespace Game
             FindLocals(host)[name] = ValueBox.Copy(value);
         }
 
+        /// <summary>Removes one per-object variable (used when construction state ends).</summary>
+        public void RemoveLocal(object host, string name)
+        {
+            if (locals.TryGetValue(host, out var bucket))
+                bucket.Remove(name);
+        }
+
         public bool HasLocal(object host, string name)
         {
             Dictionary<string, ValueBox> bucket;

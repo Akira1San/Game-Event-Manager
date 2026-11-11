@@ -272,38 +272,60 @@ when Score changes   # keep HUD in sync
   set text of MineralLabel to Minerals
 ```
 
-### 3. Base Building & Construction
+### 3. Base Building & Construction ✅ Implemented
 
 **New triggers:**
-- `when <building> is placed`
+- `when <building> is placed` (also `when me is placed`)
 - `when construction completes`
-- `when <building> is destroyed`
+- `when <building> is destroyed` (also `when me is destroyed`)
 
 **New actions:**
-- `place <building> at <target>`
+- `place <building> at <target>` — free-form placement (default)
+- `place <building> at <target> on grid [by <n>]` — opt-in grid placement
 - `cancel build`
 - `set build progress to <n>`
+- `add <n> to build progress`
 
 **New conditions:**
 - `<building> exists`
 - `<building> is under construction`
 - `enough Minerals for <building>`
+- `build progress is higher than <n>` (supporting form for the mirrored progress local)
+
+**Placement:**
+- Free-form is the default: the spawned clone keeps the target's position/rotation.
+- `on grid` snaps the X/Z position to cell centres and reserves the building's footprint. Cell size comes from `BuildGridSize` (default `64`); footprint size comes from `<Building>GridWidth` × `<Building>GridDepth` (both default `1`, minimum `1`). An `on grid by <n>` suffix overrides `BuildGridSize` for that call.
+- `<target>` can be any actor or `Mouse` (the world point under the cursor).
+- Occupied cells reject the placement; `cancel build` and destruction release the reserved cells.
+
+**Runtime behaviour:**
+- `place` spawns the building template's clone, registers it with `ConstructionManager`, and raises `when <building> is placed` / `when me is placed`.
+- `set build progress to <n>` and `add <n> to build progress` clamp to 0–100 and mirror the value into the building's `BuildProgress` local, which is the value `build progress is higher than <n>` reads.
+- `when construction completes` fires once when progress reaches `100`. Completion is idempotent: it does not refire while progress stays at `100`.
+- `cancel build` stops construction, clears progress, and frees the grid cell without raising `when <building> is destroyed`. Destroying a registered building does raise that trigger and clears its state.
+- `<building> is under construction` is true from placement until completion or cancellation.
+- `enough <resource> for <building>` reuses the data-driven cost globals (`BarracksCost`, `BarracksGasCost`, `BarracksSupplyCost`, …). A building that declares no cost is always affordable.
 
 **Example pattern:**
 ```
-# Placing a Barracks
+# Place a Barracks on the global sheet
 when Q is pressed
-  unless Minerals is lower than 150
+  unless enough Minerals for Barracks
   deduct 150 from Minerals
-  place Barracks at Mouse
+  place Barracks at Mouse on grid
   set build progress to 0
 
-when Barracks is placed
-  every 0.5 seconds
-    add 10 to build progress
-    unless build progress is higher than 100
-  when build progress is higher than 100
-    show text "Barracks ready!"
+# On the Barracks sheet
+when me is placed
+  loop anim "building"
+
+when every 0.5 seconds
+  unless build progress is higher than 99
+  add 10 to build progress
+
+when construction completes
+  loop anim "idle"
+  show text "Barracks ready!"
 ```
 
 ### 4. Production Queues & Unit Training
@@ -436,8 +458,8 @@ Per-actor ordered list of pending commands with priorities (move, attack, build,
 ### C. Resource Manager (`ResourceManager.cs`)
 Global singleton tracking Minerals, Gas, Supply. Emits change events.
 
-### D. Construction Manager (`ConstructionManager.cs`)
-Building placement validation, build-time timers, construction completion events.
+### D. Construction Manager (`ConstructionManager.cs`) ✅ Implemented
+Building placement validation, build-time progress, construction completion events, and optional grid occupancy. Free-form placement is the default; `on grid` snaps to cell centres and reserves `<Building>GridWidth` × `<Building>GridDepth` cells using `BuildGridSize` (default `64`). Build progress is clamped to 0–100, mirrored into each building's `BuildProgress` local, and completion is raised once per build.
 
 ### E. Fog of War Manager (`FogOfWarManager.cs`)
 Visibility grid per player, reveal/hide operations, unit vision updates.
@@ -579,10 +601,10 @@ when Minerals becomes 0
 - Can-afford condition
 
 ### Phase 3 — Building & Production (Week 2-3)
-- Construction placement with `place <building>`
-- Build progress timer
-- Unit training queue at buildings
-- Spawn unit at building on complete
+- ✅ Construction placement with `place <building>` (free-form default, `on grid` opt-in)
+- ✅ Build progress and completion events
+- Unit training queue at buildings (not yet — Task 18 Part D)
+- Spawn unit at building on complete (not yet — Task 18 Part D)
 
 ### Phase 4 — Orders & Attack-Move (Week 3-4)
 - Order queue per unit
@@ -613,7 +635,7 @@ when Minerals becomes 0
 
 ## Open Questions
 
-1. Grid-based vs. free-form unit placement for buildings?
+1. ~~Grid-based vs. free-form unit placement for buildings?~~ **Resolved:** free-form is the default; `place … on grid [by <n>]` opts into grid snapping with `BuildGridSize` (default `64`) and per-building `<Building>GridWidth` / `<Building>GridDepth` footprints.
 2. How many players (1v1, FFA, teams)?
 3. Supply cap mechanics — hard limit or soft warning?
 4. Fog of war: explored areas stay visible or revert to fog?

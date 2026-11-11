@@ -651,6 +651,20 @@ namespace Game
                     object target = ResolveThing(context, spec.Thing);
                     if (target is Actor actor)
                     {
+                        // Raise BuildingDestroyed only for actors placed as buildings, so
+                        // `destroy Explosion` / `destroy other` stay ordinary destructions.
+                        bool wasBuilding = context.Runtime.Construction.IsBuilding(actor);
+                        string building = context.Runtime.Construction.BuildingOf(actor);
+                        context.Runtime.Construction.Destroyed(context.Variables, actor);
+                        if (wasBuilding && !string.IsNullOrEmpty(building))
+                        {
+                            context.Runtime.RaisePushAll(new PushSignal
+                            {
+                                Kind = TriggerKind.BuildingDestroyed,
+                                Name = building,
+                                Other = actor,
+                            });
+                        }
                         for (int i = Moves.Count - 1; i >= 0; i--)
                             if (Moves[i].Subject == actor || Moves[i].Target == actor)
                                 Moves.RemoveAt(i);
@@ -662,6 +676,12 @@ namespace Game
                 }
                 case ActionVerb.Spawn:
                     Spawn(context, spec);
+                    break;
+                case ActionVerb.PlaceBuilding:
+                    Place(context, spec);
+                    break;
+                case ActionVerb.CancelBuild:
+                    CancelBuild(context, spec);
                     break;
                 case ActionVerb.SpawnPrefab:
                     SpawnPrefab(context, spec);
@@ -1181,13 +1201,23 @@ namespace Game
 
         private static void Spawn(EventContext context, ActionSpec spec)
         {
-            Actor template = Level.FindActor(spec.Thing);
+            Actor clone = SpawnClone(context, spec.Thing, spec.To);
+            if (clone != null)
+                EventsManager.Instance?.AttachSpawnedActor(clone);
+        }
+
+        /// <summary>Clones the template actor named <paramref name="templateName"/> and places
+        /// it at <paramref name="at"/>. Returns null (after warning once) when the template is
+        /// missing. Callers attach the clone's event sheet when they want it.</summary>
+        private static Actor SpawnClone(EventContext context, string templateName, string at)
+        {
+            Actor template = Level.FindActor(templateName);
             if (template == null)
             {
-                WarnOnce($"To spawn \"{spec.Thing}\" first place an actor with that name in the scene (hidden if you like — it stages the clones).");
-                return;
+                WarnOnce($"To spawn \"{templateName}\" first place an actor with that name in the scene (hidden if you like — it stages the clones).");
+                return null;
             }
-            Actor spawnAt = ResolveThing(context, spec.To) as Actor;
+            Actor spawnAt = ResolveThing(context, at) as Actor;
             var clone = template.Clone();
             clone.IsActive = true;
             if (spawnAt != null)
@@ -1196,7 +1226,146 @@ namespace Game
                 clone.Orientation = spawnAt.Orientation;
             }
             Level.SpawnActor(clone);
+            return clone;
+        }
+
+        /// <summary><c>place &lt;building&gt; at &lt;target&gt;</c> — spawn a building clone,
+        /// optionally snapped to a grid cell. Free-form placement keeps the target's exact
+        /// position; <c>on grid</c> snaps X/Z to cell centres and reserves the footprint.</summary>
+        private static void Place(EventContext context, ActionSpec spec)
+        {
+            Actor template = Level.FindActor(spec.Thing);
+            if (template == null)
+            {
+                WarnOnce($"To place \"{spec.Thing}\" first place an actor with that name in the scene (hidden if you like — it stages the clones).");
+                return;
+            }
+
+            Vector3 position = ResolvePlacePosition(context, spec.To, out Quaternion orientation);
+            var clone = template.Clone();
+            clone.IsActive = true;
+            clone.Position = position;
+            clone.Orientation = orientation;
+
+            if (spec.OnGrid)
+            {
+                double size = ConstructionManager.ResolveGridSize(context.Variables, spec.HasGridSize, spec.GridSize);
+                var snapped = new Vector3(
+                    (float)ConstructionManager.SnapToGrid(position.X, size),
+                    position.Y,
+                    (float)ConstructionManager.SnapToGrid(position.Z, size));
+                if (!context.Runtime.Construction.TryReserveCells(clone, spec.Thing, context.Variables,
+                        snapped.X, snapped.Z, size))
+                {
+                    FlaxEngine.Object.Destroy(clone);
+                    WarnOnce($"That grid cell is already occupied, so \u201C{spec.Thing}\u201D was not placed.");
+                    return;
+                }
+                clone.Position = snapped;
+            }
+
+            Level.SpawnActor(clone);
             EventsManager.Instance?.AttachSpawnedActor(clone);
+            context.Runtime.Construction.RegisterPlaced(clone, spec.Thing, context.Variables);
+            PlayConstructionAnimation(clone);
+            context.Runtime.RaisePushAll(new PushSignal
+            {
+                Kind = TriggerKind.BuildingPlaced,
+                Name = spec.Thing,
+                Other = clone,
+            });
+        }
+
+        /// <summary>Where a <c>place</c> target points: <c>Mouse</c> uses the cursor ray (nearest
+        /// collider, else the y = 0 ground plane); actors use their position and orientation.</summary>
+        private static Vector3 ResolvePlacePosition(EventContext context, string target, out Quaternion orientation)
+        {
+            orientation = Quaternion.Identity;
+            if (string.Equals(target, "Mouse", StringComparison.OrdinalIgnoreCase))
+            {
+                if (FlaxWorld.TryGetMouseRay(Input.MousePosition, out Ray ray))
+                {
+                    if (Physics.LineCastAll(ray.Position, ray.Position + ray.Direction * 10000f, out var hits, ~0u, true))
+                    {
+                        float nearestDistance = float.MaxValue;
+                        PhysicsColliderActor nearest = null;
+                        foreach (var hit in hits)
+                        {
+                            if (hit.Collider != null && hit.Distance < nearestDistance)
+                            {
+                                nearestDistance = hit.Distance;
+                                nearest = hit.Collider;
+                            }
+                        }
+                        if (nearest != null)
+                            return ray.Position + ray.Direction * nearestDistance;
+                    }
+                    // No collider: intersect the cursor ray with the y = 0 ground plane.
+                    if (ray.Direction.Y < -0.0001f)
+                    {
+                        float along = -ray.Position.Y / ray.Direction.Y;
+                        if (along > 0)
+                            return ray.Position + ray.Direction * along;
+                    }
+                }
+                WarnOnce("I couldn't work out where the mouse is pointing, so the building was placed at the origin.");
+                return Vector3.Zero;
+            }
+
+            if (ResolveThing(context, target) is Actor actor)
+            {
+                orientation = actor.Orientation;
+                return actor.Position;
+            }
+
+            WarnOnce($"I couldn't find \u201C{target}\u201D to place the building at.");
+            if (context.Me is Actor me)
+            {
+                orientation = me.Orientation;
+                return me.Position;
+            }
+            return Vector3.Zero;
+        }
+
+        /// <summary>Best-effort construction animation: plays the clone's scene animation when it
+        /// has a <see cref="SceneAnimationPlayer"/>. Missing players/clips are cosmetic and silent.</summary>
+        private static void PlayConstructionAnimation(Actor clone)
+        {
+            try
+            {
+                SceneAnimationPlayer player = clone as SceneAnimationPlayer ?? clone.FindActor<SceneAnimationPlayer>();
+                if (player != null && player.Animation != null)
+                    player.Play();
+            }
+            catch
+            {
+                // Cosmetic only: never let an animation problem break placement.
+            }
+        }
+
+        /// <summary><c>cancel build</c> — stops construction on <c>me</c> or a named building,
+        /// frees its grid cells and destroys the actor silently (no BuildingDestroyed signal).</summary>
+        private static void CancelBuild(EventContext context, ActionSpec spec)
+        {
+            Actor target = spec.Thing.Length > 0
+                ? ResolveThing(context, spec.Thing) as Actor
+                : context.Me as Actor;
+            if (target == null)
+            {
+                WarnOnce("I couldn't find the building to cancel.");
+                return;
+            }
+            if (!context.Runtime.Construction.Cancel(context.Variables, target))
+            {
+                WarnOnce($"\u201C{target.Name}\u201D isn't under construction, so there is nothing to cancel.");
+                return;
+            }
+            for (int i = Moves.Count - 1; i >= 0; i--)
+                if (Moves[i].Subject == target || Moves[i].Target == target)
+                    Moves.RemoveAt(i);
+            ClearActor(target);
+            context.Runtime.Selection.Forget(target);
+            FlaxEngine.Object.Destroy(target, 0f);
         }
 
         private static void SpawnPrefab(EventContext context, ActionSpec spec)

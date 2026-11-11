@@ -33,13 +33,13 @@ zero breaking changes to existing `.events` files.
   `increase Supply Max by <n>`
 - StarCraft minerals/gas/supply; Red Alert ore/gems/power; Homeworld RUs (resource units)
 
-### Part C — Construction & Base Building (`ConstructionManager.cs`) [ ]
+### Part C — Construction & Base Building (`ConstructionManager.cs`) [x]
 - New triggers: `when <building> is placed`, `when construction completes`,
   `when <building> is destroyed`
 - New actions: `place <building> at <target>`, `cancel build`, `set build progress to <n>`
 - New conditions: `<building> exists`, `<building> is under construction`,
   `enough Minerals for <building>`
-- Grid-based vs free-form placement (see Open Questions)
+- Free-form placement by default; opt-in `place … on grid` snaps to cells and reserves footprints
 - Red Alert-style base construction; StarCraft-style building placement; Homeworld shipyard/subsystems
 
 ### Part D — Production Queues & Unit Training [ ]
@@ -144,7 +144,7 @@ attack-move, and fog of war.
 
 ## Open Questions (carried from Docs/rts-event-manager-support.md)
 
-1. Grid-based vs. free-form unit placement for buildings?
+1. ~~Grid-based vs. free-form unit placement for buildings?~~ → Both: free-form by default, `on grid` opt-in via `place … on grid`; grid cell size from `BuildGridSize`.
 2. How many players (1v1, FFA, teams)?
 3. Supply cap mechanics — hard limit or soft warning?
 4. Fog of war: explored areas stay visible or revert to fog?

@@ -172,7 +172,9 @@ namespace Game
             return 0;
         }
 
-        private static bool TryCost(EventVariables variables, string building, string resource, out double cost)
+        /// <summary>The declared cost of one resource for a building, if a cost variable
+        /// exists. Used by <c>enough Minerals for Barracks</c> as well as affordability.</summary>
+        public static bool TryCost(EventVariables variables, string building, string resource, out double cost)
         {
             cost = 0;
             // `<Building>Cost` is the friendly universal minerals form; every resource

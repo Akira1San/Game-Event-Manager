@@ -453,6 +453,7 @@ namespace Game
             FlaxActions.ClearSession();
             _components.Clear();
             Runtime.Selection.Reset();
+            Runtime.Construction.Reset();
             Runtime.RemoveAllSheets();
         }
 

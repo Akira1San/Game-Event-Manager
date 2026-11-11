@@ -61,6 +61,9 @@ namespace Game
             new WordEntry { Kind = "trigger", Word = "when Supply Used becomes <n>", Example = "when Supply Used becomes 10" },
             new WordEntry { Kind = "trigger", Word = "when resources change", Example = "when resources change" },
             new WordEntry { Kind = "trigger", Word = "when ResourcesChange", Example = "when ResourcesChange", AltShape = "when resources change" },
+            new WordEntry { Kind = "trigger", Word = "when <building> is placed", Example = "when Barracks is placed" },
+            new WordEntry { Kind = "trigger", Word = "when construction completes", Example = "when construction completes" },
+            new WordEntry { Kind = "trigger", Word = "when <building> is destroyed", Example = "when Barracks is destroyed" },
 
             new WordEntry { Kind = "condition", Word = "<var> is <value>", Example = "Score is 3" },
             new WordEntry { Kind = "condition", Word = "<var> is not <value>", Example = "my health is lower than 1" },
@@ -86,6 +89,9 @@ namespace Game
             new WordEntry { Kind = "condition", Word = "Minerals is higher than <n>", Example = "Minerals is higher than 50" },
             new WordEntry { Kind = "condition", Word = "Supply Used is lower than Supply Max", Example = "Supply Used is lower than Supply Max" },
             new WordEntry { Kind = "condition", Word = "can afford <building>", Example = "can afford Barracks" },
+            new WordEntry { Kind = "condition", Word = "<building> is under construction", Example = "Barracks is under construction" },
+            new WordEntry { Kind = "condition", Word = "enough Minerals for <building>", Example = "enough Minerals for Barracks" },
+            new WordEntry { Kind = "condition", Word = "build progress is higher than <n>", Example = "build progress is higher than 100" },
 
             new WordEntry { Kind = "action", Word = "move", Example = "move forward speed 5" },
             new WordEntry { Kind = "action", Word = "turn", Example = "turn left degrees 90" },
@@ -104,6 +110,12 @@ namespace Game
             new WordEntry { Kind = "action", Word = "make", Example = "make me solid" },
             new WordEntry { Kind = "action", Word = "destroy", Example = "destroy me" },
             new WordEntry { Kind = "action", Word = "spawn", Example = "spawn Coin at SpawnPoint" },
+            new WordEntry { Kind = "action", Word = "place", Example = "place Barracks at Mouse" },
+            new WordEntry { Kind = "action", Word = "place", Example = "place Barracks at Mouse on grid" },
+            new WordEntry { Kind = "action", Word = "place", Example = "place Barracks at Mouse on grid by 32" },
+            new WordEntry { Kind = "action", Word = "cancel", Example = "cancel build" },
+            new WordEntry { Kind = "action", Word = "set build progress to <n>", Example = "set build progress to 0" },
+            new WordEntry { Kind = "action", Word = "add <n> to build progress", Example = "add 10 to build progress" },
             new WordEntry { Kind = "action", Word = "play", Example = "play sound \"hit.wav\"" },
             new WordEntry { Kind = "action", Word = "play", Example = "play anim \"dragon_fire\"" },
             new WordEntry { Kind = "action", Word = "play", Example = "play particle \"smoke\"" },
@@ -166,6 +178,7 @@ namespace Game
         public static readonly string[] ConditionMarks =
         {
             "is", "has", "becomes", "changes", "exists", "does", "near", "chance", "afford",
+            "enough", "under",
         };
 
         public static readonly string[] Suggestables = BuildSuggestables();

@@ -416,6 +416,20 @@ namespace Game
             if (words.Count > 2 && words[1].Type == TokenType.Word && words[1].Text == "text" &&
                 words[2].Type == TokenType.Word && words[2].Text == "of")
                 return ParseSetText(line);
+            // `set build progress to <n>` — RTS construction progress (Task 18 Part C).
+            if (words.Count >= 3 && words[1].Type == TokenType.Word && words[1].Text == "build" &&
+                words[2].Type == TokenType.Word && words[2].Text == "progress")
+            {
+                if (words.Count >= 5 && words[3].Type == TokenType.Word && words[3].Text == "to")
+                {
+                    var buildNode = new SetBuildProgressNode { Line = line.Line };
+                    int idx = 4;
+                    buildNode.Value = ReadValue(words, ref idx, line.Line);
+                    CheckEndOfLine(words, idx, line.Line, "set build progress to <n>");
+                    return buildNode;
+                }
+                throw new ParseException("`set build progress` looks like this: `set build progress to 0`", line.Line);
+            }
             // `set my control group to <n>` — RTS control group assignment (Task 18 Part A).
             if (words.Count >= 3 && words[1].Type == TokenType.Word && words[1].Text == "my" &&
                 words[2].Type == TokenType.Word && words[2].Text == "control")
@@ -580,9 +594,30 @@ namespace Game
             return node;
         }
 
-        private AddNode ParseAdd(BodyLineNode line)
+        private StatementNode ParseAdd(BodyLineNode line)
         {
             var words = line.Words;
+            // `add <n> to build progress` — RTS construction progress (Task 18 Part C).
+            // Only the exact trailing words `build progress` switch modes, so normal
+            // `add 1 to Score` / `add 50 to Minerals` stay untouched.
+            if (words.Count >= 2 && words[words.Count - 2].Type == TokenType.Word &&
+                words[words.Count - 2].Text == "build" &&
+                words[words.Count - 1].Type == TokenType.Word && words[words.Count - 1].Text == "progress")
+            {
+                if (words.Count >= 5 && words[words.Count - 3].Type == TokenType.Word &&
+                    words[words.Count - 3].Text == "to")
+                {
+                    var buildNode = new AddBuildProgressNode { Line = line.Line };
+                    int buildIndex = 1;
+                    buildNode.Amount = ReadValue(words, ref buildIndex, line.Line);
+                    if (buildNode.Amount is MathValue)
+                        throw new ParseException("`add` takes one plain value — do the math in a `set` line instead", line.Line);
+                    if (buildIndex != words.Count - 3)
+                        throw new ParseException("`add` to build progress looks like this: `add 10 to build progress`", line.Line);
+                    return buildNode;
+                }
+                throw new ParseException("`add` to build progress looks like this: `add 10 to build progress`", line.Line);
+            }
             var node = new AddNode { Line = line.Line };
             int index = 1;
             node.Amount = ReadValue(words, ref index, line.Line);
