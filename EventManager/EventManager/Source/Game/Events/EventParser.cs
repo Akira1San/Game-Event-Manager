@@ -692,6 +692,14 @@ namespace Game
         private StatementNode ParseAdd(BodyLineNode line)
         {
             var words = line.Words;
+            // `add scene "HUD"` is an action word (additive scene load), not the
+            // `add <value> to <variable>` statement — hand it to the action parser.
+            if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "scene")
+            {
+                var raw = new RawActionNode { Line = line.Line };
+                raw.Words.AddRange(words);
+                return raw;
+            }
             // `add <n> to build progress` — RTS construction progress (Task 18 Part C).
             // Only the exact trailing words `build progress` switch modes, so normal
             // `add 1 to Score` / `add 50 to Minerals` stay untouched.

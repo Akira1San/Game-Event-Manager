@@ -331,6 +331,8 @@ like GDevelop, so the editor teaches the vocabulary passively.
 | `hide text` | `hide text` | removes the HUD text |
 | `restart scene` | `restart scene` | loads the current scene again (also resets the spawned things) |
 | `load scene "<name>"` | `load scene "Level1"` | replaces the current scene (BGE "Set Scene" / GDevelop go-to-scene) |
+| `add scene "<name>"` | `add scene "HUD"` | loads the scene **on top of** the current one (overlay/UI): nothing already in the level moves, and the overlay's actors get their sheets plus `when scene starts` |
+| `unload scene "<name>"` | `unload scene "HUD"` | removes one additive scene (closes the overlay); never unloads the last scene |
 | `quit game` | `quit game` | closes the game |
 
 **Target qualifiers:** any target position/actor can carry **`nearest <thing>`** to pick the closest
@@ -530,6 +532,8 @@ also GDevelop's go-to-scene. Same rules as everywhere else apply:
   The words never draw anything â€” they click, show, hide and fill them, like any other actor.
 - **A menu scene + a `Menu.events` global sheet = a working menu.** Menus come and go by
   `load scene`; in-game UI (HUD, panels) is just actors that `show`/`hide`.
+
+Overlays that live in their own scene use `add scene "<name>"` and close with `unload scene "<name>"`; `load scene` wipes every scene, overlays included.
 
 ```text
 # ------ Menu.events (global sheet, lives in the Menu scene) ------

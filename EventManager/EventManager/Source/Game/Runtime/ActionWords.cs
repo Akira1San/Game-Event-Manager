@@ -62,6 +62,9 @@ namespace Game
         // Prefab / scene spawning (Task 17 Part D)
         SpawnPrefab,
         SpawnScene,
+        // Scene lifecycle (TASK_FIX_SCENES Parts B/C)
+        AddScene,
+        UnloadScene,
         // RTS construction (Task 18 Part C)
         PlaceBuilding,
         CancelBuild,
@@ -612,6 +615,24 @@ namespace Game
             {
                 spec.Thing = words[2].Text;
                 return Finish(spec, ActionVerb.LoadScene, words, 3);
+            }
+            if (words.Count >= 2 && words[0].Text == "add" && words[1].Text == "scene")
+            {
+                if (words.Count >= 3 && words[2].Type == TokenType.Str)
+                {
+                    spec.Thing = words[2].Text;
+                    return Finish(spec, ActionVerb.AddScene, words, 3);
+                }
+                return Unknown(spec, words, "\u201Cadd scene\u201D needs the scene name in quotes, like \u201Cadd scene \"HUD\"\u201D", warn);
+            }
+            if (words.Count >= 2 && words[0].Text == "unload" && words[1].Text == "scene")
+            {
+                if (words.Count >= 3 && words[2].Type == TokenType.Str)
+                {
+                    spec.Thing = words[2].Text;
+                    return Finish(spec, ActionVerb.UnloadScene, words, 3);
+                }
+                return Unknown(spec, words, "\u201Cunload scene\u201D needs the scene name in quotes, like \u201Cunload scene \"HUD\"\u201D", warn);
             }
             if (words.Count >= 2 && words[0].Text == "quit" && words[1].Text == "game")
                 return Finish(spec, ActionVerb.QuitGame, words, 2);

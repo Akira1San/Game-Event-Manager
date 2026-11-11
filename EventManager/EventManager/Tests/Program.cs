@@ -2743,6 +2743,26 @@ when 1 is pressed
     Check(numberedClone.Verb == ActionVerb.Spawn && numberedClone.To == "SpawnPoint 2",
         "`spawn Coin at SpawnPoint 2` keeps the numbered spot");
 
+    // Scene lifecycle words (TASK_FIX_SCENES Parts B/C).
+    var addSceneSpec = ActionWords.Parse(RawWords(actionParser, "when W is pressed\n  add scene \"HUD\""), null);
+    Check(addSceneSpec.Verb == ActionVerb.AddScene && addSceneSpec.Thing == "HUD",
+        "`add scene \"HUD\"` parses to AddScene");
+    var unloadSceneSpec = ActionWords.Parse(RawWords(actionParser, "when W is pressed\n  unload scene \"HUD\""), null);
+    Check(unloadSceneSpec.Verb == ActionVerb.UnloadScene && unloadSceneSpec.Thing == "HUD",
+        "`unload scene \"HUD\"` parses to UnloadScene");
+    Check(WordRegistry.All.Any(e => e.Word == "add" && e.Example == "add scene \"HUD\""),
+        "registry documents `add scene \"HUD\"`");
+    Check(WordRegistry.All.Any(e => e.Word == "unload" && e.Example == "unload scene \"HUD\""),
+        "registry documents `unload scene \"HUD\"`");
+    actionHint = "";
+    var unquotedAddScene = ActionWords.Parse(LooseWords("add", "scene", "HUD"), GrabHint);
+    Check(unquotedAddScene.Verb == ActionVerb.Unknown && actionHint.Contains("add scene"),
+        "an unquoted `add scene` explains the shape");
+    actionHint = "";
+    var unquotedUnloadScene = ActionWords.Parse(LooseWords("unload", "scene", "HUD"), GrabHint);
+    Check(unquotedUnloadScene.Verb == ActionVerb.Unknown && actionHint.Contains("unload scene"),
+        "an unquoted `unload scene` explains the shape");
+
     // Written key names -> Flax's KeyboardKeys names. A name we don't know must not fall back
     // to another key: that bug made every arrow/digit report a held Space.
     Check(ActionWords.EngineKeyName("Space") == "Spacebar", "`Space` maps to Flax's `Spacebar` key");

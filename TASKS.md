@@ -615,6 +615,7 @@ Add:
 - [x] Name-clash handling: repeat prefab spawns get unique Flax-style names (`Hero`, `Hero 2`, … via `SpawnNames.Unique`), and every spawned actor carries a `my spawnedFrom` marker (template / prefab / scene name) that also backs the sheet-attach fallback for renamed instances. `when me appears` fires on each clone.
 - [x] `spawn prefab` / `spawn scene` added to `WordRegistry`; `keywords.html` + `DESIGN.md` §5 updated (`my spawnedFrom`, additive `spawn scene`). Tests: 15 new pure checks (parser + registry + unique naming + marker) → **669/669 green**; module build 0 errors (2 pre-existing Task 13 XML warnings).
 - [x] Verify (editor): hero selection scene → spawn chosen hero at spawn point; weapon/attachment meshes parent correctly. — Done in `scenes/HeroSelectTest.scene`: keys 1/2/3 spawn `Hero.prefab` at `SpawnPoint 1/2/3` (hero + weapon child both run `when me appears`), pressing 1 twice gives `Hero` + `Hero 2` while `my spawnedFrom` still reads `Hero`. Found & fixed two real bugs on the way: `spawn ... at <spot>` only accepted a one-word spot (Flax's `SpawnPoint 1` was unusable), and the bridge's key lookup tried `"SpaceBar"` for every key, so unknown names (arrows, `D1`–`D9`, `Left Shift`) all reported a held Space — number keys never fired while one Space press fired every key trigger.
+- [x] `add scene "<name>"` / `unload scene "<name>"` + shared scene resolver (`TASK_FIX_SCENES.md` Parts A–C): `TryFindSceneId` now backs `load`/`add`/`unload`/`spawn scene`; `add scene` loads on top with a duplicate guard and pushes `when scene starts` to just the new scene's sheets; `unload scene` removes one scene and refuses to unload the last. Registry + parser + tests + `DESIGN.md`/`keywords.html` updated → **726/726 green**, module build 0 errors. Editor verify pending for the overlay flow.
 
 ---
 
@@ -1080,6 +1081,27 @@ Goal: pre-made `.events` templates with per-instance configurable options, so no
 - Template files declare their parameters (e.g. a comment header or a `Template:` marker) so the M3 editor window can surface a parameter grid automatically. Parked until Task 14 (editor window) — before then, parameters are set by editing the inspector grid manually.
 
 ---
+
+## Task 20 — `else` / `otherwise` blocks `[ ]`
+
+Goal: branch inside a `when` body, so one key can toggle something (open/close a scene overlay,
+pause/unpause, hover on/off) instead of needing two triggers and a shared flag. The
+one-variable toggle is impossible today: two events on the same key both pass their `unless`
+gate, because the first event writes the flag before the second event's gate is evaluated.
+
+- [ ] Parser: `otherwise` (alias `else`) opens a block at the same 2-space indent as the
+  `if`/`unless` line it pairs with; the lines under it run only when that condition is false.
+  Keep the flat one-level body (no extra indentation) so the existing indentation rule holds.
+- [ ] Parser error when `otherwise` has no condition line directly above it:
+  "put an `if`/`unless` line right above `otherwise`".
+- [ ] Runtime: `RunBody` keeps one gate per condition block (entered at the condition line,
+  closed at `otherwise` / end of body) instead of the single running gate, so several
+  if/otherwise pairs can follow each other in one body.
+- [ ] Registry + `keywords.html` + `DESIGN.md` §5 rows for `otherwise`; tests: true branch runs
+  the guarded lines, false branch runs the `otherwise` lines, two pairs in one body don't leak
+  gates, and `otherwise` without a condition errors.
+- [ ] Editor verify: one Escape toggles `add scene` / `unload scene` of a UI overlay open and
+  closed with a single flag.
 
 ## Session Log (append one line after each session)
 see - Session Log.md

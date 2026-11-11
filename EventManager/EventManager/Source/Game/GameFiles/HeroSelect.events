@@ -9,3 +9,15 @@ when 2 is pressed
 when 3 is pressed
   spawn prefab "Hero" at SpawnPoint 3
   print "spawn hero B"
+
+when Escape is pressed
+  unless OverlayOpen is 1
+  add scene "escape_scene_overlay"
+  set OverlayOpen to 1
+  print "overlay added"
+
+when Q is pressed
+  unless OverlayOpen is 0
+  unload scene "escape_scene_overlay"
+  set OverlayOpen to 0
+  print "overlay removed"

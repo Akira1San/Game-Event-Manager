@@ -731,6 +731,12 @@ namespace Game
                 case ActionVerb.SpawnScene:
                     SpawnScene(context, spec);
                     break;
+                case ActionVerb.AddScene:
+                    AddScene(context, spec);
+                    break;
+                case ActionVerb.UnloadScene:
+                    UnloadScene(context, spec);
+                    break;
                 case ActionVerb.PlaySound:
                     PlaySound(context, spec);
                     break;
@@ -827,11 +833,8 @@ namespace Game
                     break;
                 }
                 case ActionVerb.LoadScene:
-                {
-                    if (!LoadSceneByName(spec.Thing))
-                        WarnOnce($"I couldn't find a scene named \u201C{spec.Thing}\u201D. Scenes: {SceneNames()}.");
+                    LoadSceneByName(spec.Thing);
                     break;
-                }
                 case ActionVerb.QuitGame:
                     Debug.LogWarning("QuitGame action triggered — calling Engine.Exit");
                     Engine.Exit(0, FatalErrorType.None);
@@ -1525,66 +1528,25 @@ namespace Game
             return null;
         }
 
-        /// <summary>Finds an imported <see cref="SceneAsset"/> by name, ignoring folder,
-        /// extension and case.</summary>
-        private static SceneAsset LoadSceneAsset(string name)
-        {
-            if (string.IsNullOrEmpty(name))
-                return null;
-            SceneAsset sceneAsset = null;
-            if (name.Contains("/") || name.Contains("\\") || name.EndsWith(".scene", StringComparison.OrdinalIgnoreCase))
-                sceneAsset = Content.Load<SceneAsset>(name);
-            if (sceneAsset != null)
-                return sceneAsset;
-            foreach (var id in Content.GetAllAssetsByType(typeof(Scene)))
-            {
-                if (!Content.GetAssetInfo(id, out AssetInfo info))
-                    continue;
-                if (System.IO.Path.GetFileNameWithoutExtension(info.Path).Equals(name, StringComparison.OrdinalIgnoreCase))
-                    return Content.Load<SceneAsset>(info.Path);
-            }
-            return null;
-        }
-
         private static void SpawnScene(EventContext context, ActionSpec spec)
         {
-            SceneAsset sceneAsset = LoadSceneAsset(spec.Thing);
-            if (sceneAsset == null)
+            if (!TryFindSceneId(spec.Thing, out Guid id))
             {
-                WarnOnce($"Couldn't load scene \u201C{spec.Thing}\u201D. Place it in Content or use a full asset path.");
+                WarnOnce($"I couldn't find a scene named \u201C{spec.Thing}\u201D. Scenes: {SceneNames()}.");
                 return;
             }
 
             // One instance per scene name: loading the same scene twice would leave two
             // scenes with the same name, so say so instead of moving the one already there.
-            string wanted = System.IO.Path.GetFileNameWithoutExtension(spec.Thing);
-            foreach (var scene in Level.Scenes)
+            if (SceneLoadedAs(spec.Thing, id) != null)
             {
-                if (scene != null && scene.Name.Equals(wanted, StringComparison.OrdinalIgnoreCase))
-                {
-                    WarnOnce($"The scene \u201C{spec.Thing}\u201D is already loaded, so there is no new copy to place.");
-                    return;
-                }
+                WarnOnce($"The scene \u201C{spec.Thing}\u201D is already loaded, so there is no new copy to place.");
+                return;
             }
 
             // Level.LoadScene is ADDITIVE: it keeps every loaded scene and adds this one.
             // (Only `load scene` / `restart scene` unload the others first.)
-            var before = new HashSet<Guid>();
-            foreach (var scene in Level.Scenes)
-                if (scene != null)
-                    before.Add(scene.ID);
-            Level.LoadScene(sceneAsset.ID);
-
-            // Find the scene we just added (diff the loaded set), falling back to the asset id.
-            Scene loaded = null;
-            foreach (var scene in Level.Scenes)
-                if (scene != null && !before.Contains(scene.ID))
-                {
-                    loaded = scene;
-                    break;
-                }
-            if (loaded == null)
-                loaded = Level.FindScene(sceneAsset.ID);
+            Scene loaded = LoadSceneAdditive(id);
             if (loaded == null)
             {
                 WarnOnce($"I couldn't find the scene \u201C{spec.Thing}\u201D after loading it, so its actors stay at their authored positions.");
@@ -1604,10 +1566,7 @@ namespace Game
 
             // Fresh actors were not swept at scene start: mark and attach their sheets now, so
             // the hero (and a weapon child) runs its own `when me appears`.
-            foreach (Actor child in loaded.Children)
-                MarkSpawnedTree(context.Runtime, child, spec.Thing);
-            foreach (Actor child in loaded.Children)
-                EventsManager.Instance?.AttachSpawnedTree(child);
+            FinishLoadedScene(context, loaded, spec.Thing, sceneStarts: true);
         }
 
         /// <summary>Tags an instanced scene's whole actor tree with `my spawnedFrom`.</summary>
@@ -2418,73 +2377,197 @@ namespace Game
             return string.Join(", ", names);
         }
 
-        /// <summary>Loads a scene asset by its name (folder, extension and case ignored), so
-        /// <c>load scene "Level1"</c> can switch to any scene in the project.</summary>
+        /// <summary>Replaces every loaded scene with one scene. Kept synchronous on purpose:
+        /// <c>Level.ChangeSceneAsync</c> is background work, which would move `when scene
+        /// starts` (and the actor sheets it triggers) to a later frame.</summary>
         private static void ReplaceScene(Guid sceneId)
         {
             // Unload all currently loaded scenes so the new one replaces them
             foreach (var scene in Level.Scenes)
-                if (scene != null)
-                    Level.UnloadScene(scene.ID);
+            {
+                if (scene == null)
+                    continue;
+                if (!Level.UnloadScene(scene.ID))
+                    Debug.LogWarning($"I couldn't unload the scene \u201C{scene.Name}\u201D while switching scenes.");
+            }
             Level.LoadScene(sceneId);
         }
 
-        private static bool LoadSceneByName(string name)
+        /// <summary>Resolves a scene name to its asset id, ignoring folder, extension and case:
+        /// loaded scenes first, then the imported content database, then raw <c>.scene</c> files.
+        /// Every scene word shares it, so they all resolve and report names the same way.</summary>
+        private static bool TryFindSceneId(string name, out Guid id)
         {
+            id = Guid.Empty;
             if (string.IsNullOrEmpty(name))
                 return false;
 
-            // 1. Check currently loaded scenes (in memory)
+            // 1. Already loaded (in memory).
             foreach (var scene in Level.Scenes)
                 if (scene != null && scene.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
                 {
-                    ReplaceScene(scene.ID);
+                    id = scene.ID;
                     return true;
                 }
 
-            // 2. Check imported content database
-            var scenePaths = new List<string>();
-            foreach (var id in Content.GetAllAssetsByType(typeof(Scene)))
+            // 2. Imported content database.
+            foreach (var assetId in Content.GetAllAssetsByType(typeof(Scene)))
             {
-                if (!Content.GetAssetInfo(id, out AssetInfo info))
+                if (!Content.GetAssetInfo(assetId, out AssetInfo info))
                     continue;
-                scenePaths.Add(info.Path);
                 if (System.IO.Path.GetFileNameWithoutExtension(info.Path).Equals(name, StringComparison.OrdinalIgnoreCase))
                 {
-                    ReplaceScene(id);
+                    id = assetId;
                     return true;
                 }
             }
 
-            // 3. Fallback: scan raw .scene files on disk (Content folder)
+            // 3. Raw .scene files the content database hasn't indexed.
             string contentDir = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "Content");
             if (System.IO.Directory.Exists(contentDir))
             {
                 foreach (var file in System.IO.Directory.GetFiles(contentDir, "*.scene", System.IO.SearchOption.AllDirectories))
                 {
-                    if (System.IO.Path.GetFileNameWithoutExtension(file).Equals(name, StringComparison.OrdinalIgnoreCase))
+                    if (!System.IO.Path.GetFileNameWithoutExtension(file).Equals(name, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    string contentPath = "Content/" + file.Substring(contentDir.Length + 1).Replace('\\', '/');
+                    var sceneAsset = Content.Load<SceneAsset>(contentPath, 0);
+                    if (sceneAsset != null)
                     {
-                        scenePaths.Add(file);
-                        try
-                        {
-                            string contentPath = "Content/" + file.Substring(contentDir.Length + 1).Replace('\\', '/');
-                            var sceneAsset = Content.Load<SceneAsset>(contentPath, 0);
-                            if (sceneAsset != null)
-                            {
-                                ReplaceScene(sceneAsset.ID);
-                                return true;
-                            }
-                        }
-                        catch
-                        {
-                            // Content.Load<SceneAsset>(string) or SceneAsset.ID may not exist in this Flax version
-                        }
+                        id = sceneAsset.ID;
+                        return true;
                     }
                 }
             }
-
-            Debug.LogWarning($"I couldn't find a scene named \u201C{name}\u201D. Scenes: {SceneNames()}. Scene asset paths: {string.Join(", ", scenePaths)}.");
             return false;
+        }
+
+        private static bool LoadSceneByName(string name)
+        {
+            if (!TryFindSceneId(name, out Guid id))
+            {
+                WarnOnce($"I couldn't find a scene named \u201C{name}\u201D. Scenes: {SceneNames()}.");
+                return false;
+            }
+            ReplaceScene(id);
+            return true;
+        }
+
+        /// <summary><c>add scene "HUD"</c> — loads a scene <b>on top of</b> the current one and
+        /// leaves everything already in the level where it is. The overlay word (`load scene`
+        /// is the replace one).</summary>
+        private static void AddScene(EventContext context, ActionSpec spec)
+        {
+            if (!TryFindSceneId(spec.Thing, out Guid id))
+            {
+                WarnOnce($"I couldn't find a scene named \u201C{spec.Thing}\u201D. Scenes: {SceneNames()}.");
+                return;
+            }
+            if (SceneLoadedAs(spec.Thing, id) != null)
+            {
+                WarnOnce($"The scene \u201C{spec.Thing}\u201D is already loaded \u2014 unload scene \u201C{spec.Thing}\u201D first to add a fresh copy.");
+                return;
+            }
+            Scene loaded = LoadSceneAdditive(id);
+            if (loaded == null)
+            {
+                WarnOnce($"I loaded \u201C{spec.Thing}\u201D but couldn't find the new scene, so its events won't run.");
+                return;
+            }
+            FinishLoadedScene(context, loaded, spec.Thing, sceneStarts: true);
+        }
+
+        /// <summary><c>unload scene "HUD"</c> — removes one loaded scene (close an overlay).
+        /// Never unloads the last scene: that would leave an empty world.</summary>
+        private static void UnloadScene(EventContext context, ActionSpec spec)
+        {
+            Debug.LogWarning($"Event sheet: unloading “{spec.Thing}” — currently loaded: {LoadedSceneNames()}.");
+            // A scene's internal root name can differ from its file name (a copied scene keeps
+            // the old root name), so resolve the asset id too and match either.
+            TryFindSceneId(spec.Thing, out Guid targetId);
+            Scene target = SceneLoadedAs(spec.Thing, targetId);
+            if (target == null)
+            {
+                WarnOnce($"I couldn't find a loaded scene named \u201C{spec.Thing}\u201D to unload. Loaded scenes: {LoadedSceneNames()}.");
+                return;
+            }
+            if (Level.Scenes.Length <= 1)
+            {
+                WarnOnce($"\u201C{spec.Thing}\u201D is the only loaded scene \u2014 unloading it would leave nothing to play. Use load scene to switch instead.");
+                return;
+            }
+            if (!Level.UnloadScene(target))
+            {
+                WarnOnce($"I couldn't unload the scene \u201C{spec.Thing}\u201D.");
+                return;
+            }
+            Debug.LogWarning($"Event sheet: unloaded scene \u201C{target.Name}\u201D. Still loaded: {LoadedSceneNames()}.");
+        }
+
+        /// <summary>The loaded scene matching a name (or an asset id when one is given), or null.</summary>
+        private static Scene SceneLoadedAs(string name, Guid id)
+        {
+            string wanted = System.IO.Path.GetFileNameWithoutExtension(name ?? "");
+            foreach (var scene in Level.Scenes)
+            {
+                if (scene == null)
+                    continue;
+                if (id != Guid.Empty && scene.ID == id)
+                    return scene;
+                if (scene.Name.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+                    scene.Name.Equals(wanted, StringComparison.OrdinalIgnoreCase))
+                    return scene;
+            }
+            return null;
+        }
+
+        /// <summary>Loads a scene on top of the loaded ones and returns the new scene, matched by
+        /// diffing the loaded set (falling back to the asset id).</summary>
+        private static Scene LoadSceneAdditive(Guid id)
+        {
+            var before = new HashSet<Guid>();
+            foreach (var scene in Level.Scenes)
+                if (scene != null)
+                    before.Add(scene.ID);
+            Level.LoadScene(id);   // additive: keeps every loaded scene
+            foreach (var scene in Level.Scenes)
+                if (scene != null && !before.Contains(scene.ID))
+                    return scene;
+            return Level.FindScene(id);
+        }
+
+        /// <summary>Gives a freshly loaded scene's actors their event sheets and their
+        /// `my spawnedFrom` marker, and (when asked) pushes `when scene starts` to just those
+        /// sheets — the manager's own scene-start pass already ran for the old scenes.</summary>
+        private static void FinishLoadedScene(EventContext context, Scene scene, string source, bool sceneStarts)
+        {
+            var actors = new List<object>();
+            foreach (Actor child in scene.Children)
+            {
+                MarkSpawnedTree(context.Runtime, child, source);
+                EventsManager.Instance?.AttachSpawnedTree(child);
+                CollectTree(child, actors);
+            }
+            if (sceneStarts)
+                context.Runtime.SceneStartedFor(actors);
+        }
+
+        private static void CollectTree(Actor actor, List<object> actors)
+        {
+            if (actor == null)
+                return;
+            actors.Add(actor);
+            foreach (Actor child in actor.Children)
+                CollectTree(child, actors);
+        }
+
+        private static string LoadedSceneNames()
+        {
+            var names = new List<string>();
+            foreach (var scene in Level.Scenes)
+                if (scene != null)
+                    names.Add(scene.Name);
+            return names.Count == 0 ? "(none)" : string.Join(", ", names);
         }
 
         private static string SceneNames()

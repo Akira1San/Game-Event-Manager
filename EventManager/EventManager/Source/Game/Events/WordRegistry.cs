@@ -176,6 +176,8 @@ namespace Game
             new WordEntry { Kind = "action", Word = "drop", Example = "drop Sword" },
             new WordEntry { Kind = "action", Word = "restart", Example = "restart scene" },
             new WordEntry { Kind = "action", Word = "load", Example = "load scene \"Level1\"" },
+            new WordEntry { Kind = "action", Word = "add", Example = "add scene \"HUD\"" },
+            new WordEntry { Kind = "action", Word = "unload", Example = "unload scene \"HUD\"" },
             new WordEntry { Kind = "action", Word = "quit", Example = "quit game" },
             new WordEntry { Kind = "action", Word = "print", Example = "print \"W is held\"" },
             new WordEntry { Kind = "action", Word = "debug", Example = "debug \"health = \" + my health" },

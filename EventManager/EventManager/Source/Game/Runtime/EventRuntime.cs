@@ -280,6 +280,22 @@ namespace Game
                 sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.SceneStart });
         }
 
+        /// <summary>Pushes <c>when scene starts</c> to the sheets of the actors that just arrived
+        /// with a newly loaded scene (`add scene`), without re-running it for the level that was
+        /// already playing.</summary>
+        public void SceneStartedFor(IEnumerable<object> actors)
+        {
+            var wanted = new HashSet<object>();
+            foreach (var actor in actors)
+                if (actor != null)
+                    wanted.Add(actor);
+            if (wanted.Count == 0)
+                return;
+            foreach (var sheet in sheets)
+                if (wanted.Contains(sheet.Actor))
+                    sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.SceneStart });
+        }
+
         public void RaisePush(object actor, PushSignal signal)
         {
             foreach (var sheet in sheets)
