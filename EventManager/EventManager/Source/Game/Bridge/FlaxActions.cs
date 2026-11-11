@@ -34,7 +34,7 @@ namespace Game
     public static readonly List<OngoingMove> Moves = new List<OngoingMove>();
     /// <summary>In-flight moving platforms, ping-ponging along a world axis. Advanced each
     /// tick in <see cref="Step"/> and applied through each subject's <see cref="PhysicsMoveMode"/>.</summary>
-    public static readonly List<OngoingPlatform> Platforms = new List<OngoingPlatform>();
+    public static readonly List<PhysicsMovement.OngoingPlatform> Platforms = new List<PhysicsMovement.OngoingPlatform>();
     /// <summary>Actors a <c>move</c> word ran for this tick (transient: cleared at the start of
     /// each <c>Step</c>, so <c>me is moving</c> is true only while motion is actually happening).</summary>
     public static readonly HashSet<Actor> MovedThisTick = new HashSet<Actor>();
@@ -296,7 +296,7 @@ namespace Game
             // so there is no drift across legs.
             for (int i = Platforms.Count - 1; i >= 0; i--)
             {
-                OngoingPlatform platform = Platforms[i];
+                PhysicsMovement.OngoingPlatform platform = Platforms[i];
                 Actor actor = platform.Subject as Actor;
                 if (actor == null || actor.Scene == null)
                 {
@@ -1835,7 +1835,7 @@ namespace Game
                 if (ReferenceEquals(Platforms[i].Subject, subject))
                     Platforms.RemoveAt(i);
 
-            Platforms.Add(new OngoingPlatform
+            Platforms.Add(new PhysicsMovement.OngoingPlatform
             {
                 Subject = subject,
                 Axis = spec.Dir,
