@@ -2706,6 +2706,83 @@ when 1 is pressed
     Check(rsEngine.Variables.GetGlobal("MyState").AsText() == "chase", "`my state` reads \"chase\" after `set state chase`");
 
     // ------------------------------------------------------------------
+    // Task 17 Part D: Prefab / scene spawning
+    // ------------------------------------------------------------------
+
+    // Registry documents the prefab/scene spawn shapes (autocomplete + docs-on-hover).
+    Check(WordRegistry.All.Any(e => e.Word == "spawn" && e.Example == "spawn prefab \"Hero\" at SpawnPoint"),
+        "registry documents `spawn prefab \"<name>\" at <spot>`");
+    Check(WordRegistry.All.Any(e => e.Word == "spawn" && e.Example == "spawn scene \"HeroScene\" at SpawnPoint"),
+        "registry documents `spawn scene \"<name>\" at <spot>`");
+
+    var spawnPrefabSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  spawn prefab ""Hero"" at SpawnPoint"), null);
+    Check(spawnPrefabSpec.Verb == ActionVerb.SpawnPrefab && spawnPrefabSpec.Thing == "Hero" &&
+          spawnPrefabSpec.To == "SpawnPoint",
+        "`spawn prefab \"Hero\" at SpawnPoint` parses to SpawnPrefab at the spot");
+
+    var spawnSceneSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  spawn scene ""HeroScene"" at SpawnPoint"), null);
+    Check(spawnSceneSpec.Verb == ActionVerb.SpawnScene && spawnSceneSpec.Thing == "HeroScene" &&
+          spawnSceneSpec.To == "SpawnPoint",
+        "`spawn scene \"HeroScene\" at SpawnPoint` parses to SpawnScene at the spot");
+
+    var spawnCloneRegression = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  spawn Coin at SpawnPoint"), null);
+    Check(spawnCloneRegression.Verb == ActionVerb.Spawn && spawnCloneRegression.Thing == "Coin",
+        "`spawn Coin at SpawnPoint` still parses as a plain template clone");
+
+    actionHint = "";
+    var unquotedPrefab = ActionWords.Parse(LooseWords("spawn", "prefab", "Hero", "at", "SpawnPoint"), GrabHint);
+    Check(unquotedPrefab.Verb == ActionVerb.Unknown && actionHint.Contains("spawn prefab"),
+        "an unquoted `spawn prefab` explains the shape");
+
+    // Unique names: a second identical spawn becomes "Hero 2", never another "Hero".
+    var takenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    string firstName = SpawnNames.Unique("Hero", takenNames.Contains);
+    takenNames.Add(firstName);
+    string secondName = SpawnNames.Unique("Hero", takenNames.Contains);
+    takenNames.Add(secondName);
+    string thirdName = SpawnNames.Unique("Hero", takenNames.Contains);
+    Check(firstName == "Hero" && secondName == "Hero 2" && thirdName == "Hero 3",
+        "spawned instances keep the asset name, then count up (Hero, Hero 2, Hero 3)");
+    Check(SpawnNames.Unique("", _ => false) == "Spawned", "an unnamed spawn falls back to \"Spawned\"");
+    Check(SpawnNames.Unique("Hero", name => name.Equals("hero", StringComparison.OrdinalIgnoreCase)) == "Hero 2",
+        "the taken-name check is whatever the caller provides (case-insensitive in the bridge)");
+
+    // `my spawnedFrom` reads what produced the actor.
+    var spawnedFromRead = parser.Parse("when me appears\n  set X to my spawnedFrom\n");
+    Check(spawnedFromRead.Events.Count == 1, "`my spawnedFrom` parses as a value");
+    var spawnedFromSet = (SetNode)spawnedFromRead.Events[0].Body[0].Statement!;
+    Check(spawnedFromSet.Value is VariableValue sfv && sfv.Owner == "my" && sfv.Name == "spawnedFrom",
+        "`my spawnedFrom` parses as a `my` variable read of `spawnedFrom`");
+
+    var sfWorld = new FakeWorld();
+    var sfActor = new FakeActor("Hero 2");
+    sfWorld.AddActor(sfActor);
+    var sfEngine = FreshEngine(sfWorld);
+    sfEngine.MarkSpawned(sfActor, "Hero");
+    sfEngine.AddSheet(sfActor, parser.Parse(@"when me appears
+  set Origin to my spawnedFrom
+  set SfState to 1"));
+    sfEngine.Tick(0);
+    Check(sfEngine.Variables.GetGlobal("SfState").AsNumber() == 1,
+        "a spawned instance's `when me appears` still fires (its sheet attaches and runs)");
+    Check(sfEngine.Variables.GetGlobal("Origin").AsText() == "Hero",
+        "`my spawnedFrom` reads the prefab name on a renamed instance (\"Hero 2\" -> \"Hero\")");
+
+    var sfWorld2 = new FakeWorld();
+    var sfPlain = new FakeActor("Door");
+    sfWorld2.AddActor(sfPlain);
+    var sfEngine2 = FreshEngine(sfWorld2);
+    sfEngine2.AddSheet(sfPlain, parser.Parse("when me appears\n  set Origin to my spawnedFrom"));
+    sfEngine2.Tick(0);
+    Check(sfEngine2.Variables.GetGlobal("Origin").AsText() == "",
+        "`my spawnedFrom` is empty for an actor that was placed in the scene");
+    sfEngine.RemoveActorSheet(sfActor);
+    Check(sfEngine.SpawnedFrom(sfActor) == "", "removing an actor's sheet forgets its spawn source");
+
+    // ------------------------------------------------------------------
     // Task 18 Part A: RTS selection & control groups
     // ------------------------------------------------------------------
 

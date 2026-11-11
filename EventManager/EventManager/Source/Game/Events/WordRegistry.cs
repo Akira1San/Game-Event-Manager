@@ -110,6 +110,8 @@ namespace Game
             new WordEntry { Kind = "action", Word = "make", Example = "make me solid" },
             new WordEntry { Kind = "action", Word = "destroy", Example = "destroy me" },
             new WordEntry { Kind = "action", Word = "spawn", Example = "spawn Coin at SpawnPoint" },
+            new WordEntry { Kind = "action", Word = "spawn", Example = "spawn prefab \"Hero\" at SpawnPoint" },
+            new WordEntry { Kind = "action", Word = "spawn", Example = "spawn scene \"HeroScene\" at SpawnPoint" },
             new WordEntry { Kind = "action", Word = "place", Example = "place Barracks at Mouse" },
             new WordEntry { Kind = "action", Word = "place", Example = "place Barracks at Mouse on grid" },
             new WordEntry { Kind = "action", Word = "place", Example = "place Barracks at Mouse on grid by 32" },

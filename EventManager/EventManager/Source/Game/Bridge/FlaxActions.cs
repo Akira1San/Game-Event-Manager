@@ -1226,6 +1226,9 @@ namespace Game
                 clone.Orientation = spawnAt.Orientation;
             }
             Level.SpawnActor(clone);
+            // `my spawnedFrom` names the template, and the sheet fallback can use it when a
+            // cloned actor's own name has no matching .events file.
+            context.Runtime.MarkSpawned(clone, templateName);
             return clone;
         }
 
@@ -1370,79 +1373,170 @@ namespace Game
 
         private static void SpawnPrefab(EventContext context, ActionSpec spec)
         {
-            Prefab prefab = null;
-            if (spec.Thing.Contains("/") || spec.Thing.Contains("\\") || spec.Thing.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
-                prefab = Content.Load<Prefab>(spec.Thing);
+            Prefab prefab = LoadPrefabAsset(spec.Thing);
             if (prefab == null)
             {
-                foreach (var id in Content.GetAllAssetsByType(typeof(Prefab)))
-                {
-                    if (!Content.GetAssetInfo(id, out AssetInfo info))
-                        continue;
-                    var name = System.IO.Path.GetFileNameWithoutExtension(info.Path);
-                    if (name.Equals(spec.Thing, StringComparison.OrdinalIgnoreCase))
-                    {
-                        prefab = Content.Load<Prefab>(info.Path);
-                        break;
-                    }
-                }
-            }
-            if (prefab == null)
-            {
-                WarnOnce($"Couldn't load prefab \"{spec.Thing}\". Place it in Content or use a full asset path.");
+                WarnOnce($"Couldn't load prefab \u201C{spec.Thing}\u201D. Place it in Content or use a full asset path.");
                 return;
             }
             Actor spawnAt = ResolveThing(context, spec.To) as Actor;
+            if (spawnAt == null)
+                WarnOnce($"I couldn't find the spot \u201C{spec.To}\u201D, so \u201C{spec.Thing}\u201D spawned at the origin.");
             Vector3 position = spawnAt != null ? spawnAt.Position : Vector3.Zero;
             Quaternion rotation = spawnAt != null ? spawnAt.Orientation : Quaternion.Identity;
             var instance = PrefabManager.SpawnPrefab(prefab, position, rotation);
             if (instance == null)
             {
-                WarnOnce($"Failed to spawn prefab \"{spec.Thing}\".");
+                WarnOnce($"Failed to spawn prefab \u201C{spec.Thing}\u201D.");
                 return;
             }
-            EventsManager.Instance?.AttachSpawnedActor(instance);
+            SpawnedInstance(context, instance, spec.Thing);
+        }
+
+        /// <summary>Finishes a prefab spawn: remember the asset name (`my spawnedFrom`), give
+        /// every actor in the prefab its event sheet (so attachments run `when me appears`),
+        /// then give the root a name that does not collide with another spawn.</summary>
+        private static void SpawnedInstance(EventContext context, Actor instance, string source)
+        {
+            context.Runtime.MarkSpawned(instance, source);
+            EventsManager.Instance?.AttachSpawnedTree(instance);
+            UniqueInstanceName(context, instance);
+        }
+
+        /// <summary>Renames a spawned root to the first free name ("Hero", "Hero 2", …) so
+        /// several copies of one prefab stay individually targetable. The sheet has already
+        /// been attached under the source name, so messages/name lookups keep working.</summary>
+        private static void UniqueInstanceName(EventContext context, Actor instance)
+        {
+            if (instance == null)
+                return;
+            var taken = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (object obj in context.Runtime.World.Actors())
+            {
+                if (!(obj is Actor actor) || actor == null || ReferenceEquals(actor, instance))
+                    continue;
+                if (!string.IsNullOrEmpty(actor.Name))
+                    taken.Add(actor.Name);
+            }
+            string unique = SpawnNames.Unique(instance.Name, name => taken.Contains(name));
+            if (!string.Equals(unique, instance.Name, StringComparison.Ordinal))
+                instance.Name = unique;
+        }
+
+        /// <summary>Finds an imported <see cref="Prefab"/> by name, ignoring folder, extension
+        /// and case (the same rules as `play sound`).</summary>
+        private static Prefab LoadPrefabAsset(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return null;
+            Prefab prefab = null;
+            if (name.Contains("/") || name.Contains("\\") || name.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+                prefab = Content.Load<Prefab>(name);
+            if (prefab != null)
+                return prefab;
+            foreach (var id in Content.GetAllAssetsByType(typeof(Prefab)))
+            {
+                if (!Content.GetAssetInfo(id, out AssetInfo info))
+                    continue;
+                if (System.IO.Path.GetFileNameWithoutExtension(info.Path).Equals(name, StringComparison.OrdinalIgnoreCase))
+                    return Content.Load<Prefab>(info.Path);
+            }
+            return null;
+        }
+
+        /// <summary>Finds an imported <see cref="SceneAsset"/> by name, ignoring folder,
+        /// extension and case.</summary>
+        private static SceneAsset LoadSceneAsset(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return null;
+            SceneAsset sceneAsset = null;
+            if (name.Contains("/") || name.Contains("\\") || name.EndsWith(".scene", StringComparison.OrdinalIgnoreCase))
+                sceneAsset = Content.Load<SceneAsset>(name);
+            if (sceneAsset != null)
+                return sceneAsset;
+            foreach (var id in Content.GetAllAssetsByType(typeof(Scene)))
+            {
+                if (!Content.GetAssetInfo(id, out AssetInfo info))
+                    continue;
+                if (System.IO.Path.GetFileNameWithoutExtension(info.Path).Equals(name, StringComparison.OrdinalIgnoreCase))
+                    return Content.Load<SceneAsset>(info.Path);
+            }
+            return null;
         }
 
         private static void SpawnScene(EventContext context, ActionSpec spec)
         {
-            SceneAsset sceneAsset = null;
-            if (spec.Thing.Contains("/") || spec.Thing.Contains("\\") || spec.Thing.EndsWith(".scene", StringComparison.OrdinalIgnoreCase))
-                sceneAsset = Content.Load<SceneAsset>(spec.Thing);
+            SceneAsset sceneAsset = LoadSceneAsset(spec.Thing);
             if (sceneAsset == null)
             {
-                foreach (var id in Content.GetAllAssetsByType(typeof(Scene)))
-                {
-                    if (!Content.GetAssetInfo(id, out AssetInfo info))
-                        continue;
-                    if (System.IO.Path.GetFileNameWithoutExtension(info.Path).Equals(spec.Thing, StringComparison.OrdinalIgnoreCase))
-                    {
-                        sceneAsset = Content.Load<SceneAsset>(info.Path);
-                        break;
-                    }
-                }
-            }
-            if (sceneAsset == null)
-            {
-                WarnOnce($"Couldn't load scene \"{spec.Thing}\". Place it in Content or use a full asset path.");
+                WarnOnce($"Couldn't load scene \u201C{spec.Thing}\u201D. Place it in Content or use a full asset path.");
                 return;
             }
-            // Load the scene (replaces all currently loaded scenes, same as load scene).
+
+            // One instance per scene name: loading the same scene twice would leave two
+            // scenes with the same name, so say so instead of moving the one already there.
+            string wanted = System.IO.Path.GetFileNameWithoutExtension(spec.Thing);
+            foreach (var scene in Level.Scenes)
+            {
+                if (scene != null && scene.Name.Equals(wanted, StringComparison.OrdinalIgnoreCase))
+                {
+                    WarnOnce($"The scene \u201C{spec.Thing}\u201D is already loaded, so there is no new copy to place.");
+                    return;
+                }
+            }
+
+            // Level.LoadScene is ADDITIVE: it keeps every loaded scene and adds this one.
+            // (Only `load scene` / `restart scene` unload the others first.)
+            var before = new HashSet<Guid>();
+            foreach (var scene in Level.Scenes)
+                if (scene != null)
+                    before.Add(scene.ID);
             Level.LoadScene(sceneAsset.ID);
+
+            // Find the scene we just added (diff the loaded set), falling back to the asset id.
+            Scene loaded = null;
+            foreach (var scene in Level.Scenes)
+                if (scene != null && !before.Contains(scene.ID))
+                {
+                    loaded = scene;
+                    break;
+                }
+            if (loaded == null)
+                loaded = Level.FindScene(sceneAsset.ID);
+            if (loaded == null)
+            {
+                WarnOnce($"I couldn't find the scene \u201C{spec.Thing}\u201D after loading it, so its actors stay at their authored positions.");
+                return;
+            }
+
+            // Move ONLY this scene's root actors to the spot, relative to where the scene
+            // was authored — never the actors that were already in the level.
             Actor spawnAt = ResolveThing(context, spec.To) as Actor;
             if (spawnAt != null)
             {
-                // Move every actor from the newly loaded scene to the spawn position.
-                Vector3 offset = spawnAt.Position;
-                foreach (var obj in context.Runtime.World.Actors())
-                {
-                    if (!(obj is Actor actor))
-                        continue;
-                    if (actor == spawnAt)
-                        continue;
-                    actor.Position = offset;
-                }
+                Vector3 delta = spawnAt.Position - loaded.Position;
+                foreach (Actor child in loaded.Children)
+                    if (child != null)
+                        child.Position += delta;
             }
+
+            // Fresh actors were not swept at scene start: mark and attach their sheets now, so
+            // the hero (and a weapon child) runs its own `when me appears`.
+            foreach (Actor child in loaded.Children)
+                MarkSpawnedTree(context.Runtime, child, spec.Thing);
+            foreach (Actor child in loaded.Children)
+                EventsManager.Instance?.AttachSpawnedTree(child);
+        }
+
+        /// <summary>Tags an instanced scene's whole actor tree with `my spawnedFrom`.</summary>
+        private static void MarkSpawnedTree(EventRuntime runtime, Actor actor, string source)
+        {
+            if (actor == null)
+                return;
+            runtime.MarkSpawned(actor, source);
+            foreach (Actor child in actor.Children)
+                MarkSpawnedTree(runtime, child, source);
         }
 
         private static void ShowHudText(string text)

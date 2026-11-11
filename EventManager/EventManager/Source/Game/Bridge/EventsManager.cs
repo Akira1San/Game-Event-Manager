@@ -386,7 +386,28 @@ namespace Game
                 RegisterSheet(component);
                 return;
             }
-            AttachByName(actor, actor.Name);
+            // Name first, then the spawn source: a renamed prefab instance ("Hero 2") must
+            // still pick up Hero.events, which is what `spawn prefab "Hero"` marked on it.
+            string source = actor.Name;
+            if (ProgramNamed(source) == null)
+            {
+                string spawnedFrom = Runtime.SpawnedFrom(actor);
+                if (!string.IsNullOrEmpty(spawnedFrom) && ProgramNamed(spawnedFrom) != null)
+                    source = spawnedFrom;
+            }
+            AttachByName(actor, source);
+        }
+
+        /// <summary>Runtime spawns with a hierarchy (a prefab or a freshly instanced scene):
+        /// every actor in the tree gets its sheet, so a weapon/attachment child runs its own
+        /// <c>when me appears</c> even though it was never swept at scene start.</summary>
+        public void AttachSpawnedTree(Actor actor)
+        {
+            if (actor == null)
+                return;
+            AttachSpawnedActor(actor);
+            foreach (Actor child in actor.Children)
+                AttachSpawnedTree(child);
         }
 
         private EventFileResult ProgramNamed(string sourceName)

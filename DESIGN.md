@@ -308,7 +308,9 @@ like GDevelop, so the editor teaches the vocabulary passively.
 | `push <target> direction <dir> strength <n>` | `push other up strength 10` | follows the target's move mode: impulse (dynamic), swept (kinematic), collide-and-slide (character), else a transform nudge |
 | `make <target> unmovable` | `make me solid` | physics toggle |
 | `destroy <me/other/thing>` | `destroy me` | |
-| `spawn <thing> at <thing>` | `spawn Coin at SpawnPoint` | thing must be a prefab or scene-named object |
+| `spawn <thing> at <thing>` | `spawn Coin at SpawnPoint` | clones an actor already placed in the scene (the template stays put, hidden if you like) |
+| `spawn prefab "<name>" at <thing>` | `spawn prefab "Hero" at SpawnPoint` | instantiates an imported `.prefab`; name ignores folder/extension/case; copies get unique names (`Hero`, `Hero 2`, …) and every actor inside runs its own `when me appears` |
+| `spawn scene "<name>" at <thing>` | `spawn scene "HeroScene" at SpawnPoint` | loads a `.scene` **on top of** the current scene (additive) and moves only that scene's root actors to the spot — existing actors never move |
 | `play sound "<file>"` | `play sound "hit.wav"` | clip **name** only: `"hit"`, `"hit.wav"`, `"sounds/hit"` are the same imported clip |
 | `stop sound` | `stop sound` | stops this object's playing clips (from a global sheet: every clip) |
 | `set <var> to <value>` | `set Score to 0` | |
@@ -346,6 +348,12 @@ move forward speed random 2 to 4
 
 **Spawn rotation:** a spawned copy inherits `me`'s rotation, so a bullet spawned at `me` with
 `move forward` flies the exact direction you happened to be facing when it was spawned.
+
+**Spawn sources:** every spawned actor remembers what produced it — the template name for
+`spawn <thing>`, the asset name for `spawn prefab "<name>"`, the scene name for
+`spawn scene "<name>"` — and `my spawnedFrom` reads it (empty for an actor placed by hand).
+Repeat prefab spawns get numbered names (`Hero`, `Hero 2`, …) so each copy stays individually
+targetable; the sheet keeps the asset name, so `send message` and name lookups still reach it.
 
 Runtime knobs are okay as a single **speed/value** word â€” no math expressions, no nesting math.
 `Score + 1` is *only* legal inside `set Score to Score + 1` (one-op form: `+ - * /`).

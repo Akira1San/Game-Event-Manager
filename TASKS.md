@@ -606,14 +606,15 @@ Goal: per-actor state machines so one `.events` file can encode multiple behavio
 
 ---
 
-### Part D — Prefab / scene spawning (new task)
+### Part D — Prefab / scene spawning `[x]`
 Goal: **spawn actors from prefab assets and scene files**, not just clone in-scene actors.
 Currently `spawn <thing> at <spot>` only clones actors already placed in the current scene.
 Add:
-- [ ] `spawn prefab "<name>" at <spot>` — load a `PrefabAsset` by name/path and instantiate it at `<spot>`.
-- [ ] `spawn scene "<name>" at <spot>` — load a `.scene` file as a scene asset and instance its root actors at `<spot>`.
-- [ ] Name-clash handling: spawned instances need unique names or a `my spawnedFrom` marker so `when me appears` fires on clones.
-- [ ] Verify: hero selection scene → spawn chosen hero at spawn point; weapon/attachment meshes parent correctly.
+- [x] `spawn prefab "<name>" at <spot>` — load a `PrefabAsset` by name/path and instantiate it at `<spot>`. Name lookup ignores folder/extension/case (`LoadPrefabAsset`, same rules as `play sound`); the instance lands at the spot's position/rotation and `AttachSpawnedTree` gives every actor in the prefab its sheet, so attachment children run `when me appears`.
+- [x] `spawn scene "<name>" at <spot>` — load a `.scene` file as a scene asset and instance its root actors at `<spot>`. Fixed the old bug: `Level.LoadScene` is **additive**, and only the newly added scene's root actors are offset to the spot (previously every actor in the world was moved). New scene actors are marked and attached immediately.
+- [x] Name-clash handling: repeat prefab spawns get unique Flax-style names (`Hero`, `Hero 2`, … via `SpawnNames.Unique`), and every spawned actor carries a `my spawnedFrom` marker (template / prefab / scene name) that also backs the sheet-attach fallback for renamed instances. `when me appears` fires on each clone.
+- [x] `spawn prefab` / `spawn scene` added to `WordRegistry`; `keywords.html` + `DESIGN.md` §5 updated (`my spawnedFrom`, additive `spawn scene`). Tests: 15 new pure checks (parser + registry + unique naming + marker) → **669/669 green**; module build 0 errors (2 pre-existing Task 13 XML warnings).
+- [ ] Verify (editor): hero selection scene → spawn chosen hero at spawn point; weapon/attachment meshes parent correctly.
 
 ---
 

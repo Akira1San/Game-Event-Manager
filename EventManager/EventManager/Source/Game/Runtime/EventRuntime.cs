@@ -49,6 +49,10 @@ namespace Game
                     var sheet = Runtime.FindSheetFor(Me);
                     return ValueBox.OfText(sheet == null ? "default" : sheet.CurrentState);
                 }
+                // `my spawnedFrom` reads the prefab/scene/template that produced this actor.
+                // Empty for actors that were placed in the scene by hand.
+                if (variable.Owner == "my" && variable.Name == "spawnedFrom")
+                    return ValueBox.OfText(Runtime.SpawnedFrom(Me));
                 if (variable.Owner == "my" || variable.Owner == "me")
                     return ReadMy(variable.Name);
                 if (variable.Owner == "other")
@@ -165,6 +169,8 @@ namespace Game
 
         private readonly List<SheetInstance> sheets = new List<SheetInstance>();
         private readonly HashSet<string> warnedLines = new HashSet<string>();
+        /// <summary>actor -> the prefab / scene / template that spawned it (`my spawnedFrom`).</summary>
+        private readonly Dictionary<object, string> spawnSources = new Dictionary<object, string>();
         private readonly Dictionary<object, Dictionary<string, int>> bags = new Dictionary<object, Dictionary<string, int>>();
         /// <summary>wearer -> set of item names currently equipped on that wearer.</summary>
         private readonly Dictionary<object, HashSet<string>> equipped = new Dictionary<object, HashSet<string>>();
@@ -247,6 +253,7 @@ namespace Game
         public void RemoveAllSheets()
         {
             sheets.Clear();
+            spawnSources.Clear();
         }
 
         public void RemoveActorSheet(object actor)
@@ -258,6 +265,7 @@ namespace Game
             }
             if (equipped.TryGetValue(actor, out var _))
                 equipped.Remove(actor);
+            spawnSources.Remove(actor);
         }
 
         public void SessionStarted()
@@ -337,6 +345,24 @@ namespace Game
             foreach (var sheet in sheets)
                 if (sheet.ActorName == toName)
                     sheet.PushQueue.Enqueue(signal);
+        }
+
+        /// <summary>Remembers what produced a spawned actor, so `my spawnedFrom` can name it
+        /// and the bridge can find the right .events file when the instance was renamed.</summary>
+        public void MarkSpawned(object actor, string source)
+        {
+            if (actor == null || string.IsNullOrEmpty(source))
+                return;
+            spawnSources[actor] = source;
+        }
+
+        /// <summary>The prefab / scene / template that spawned this actor, or "" for an
+        /// actor that was authored into the scene.</summary>
+        public string SpawnedFrom(object actor)
+        {
+            if (actor == null)
+                return "";
+            return spawnSources.TryGetValue(actor, out string source) ? source : "";
         }
 
         public object FindNamedActor(string name)
