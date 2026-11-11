@@ -75,6 +75,28 @@ namespace Game
                             return ValueBox.OfNumber(0);
                     }
                 }
+                case FormatValue format:
+                {
+                    // `format "Health: {0}/{1}"` — numbered placeholders filled from the args.
+                    var text = new System.Text.StringBuilder(format.Template.Length);
+                    for (int i = 0; i < format.Template.Length; i++)
+                    {
+                        char c = format.Template[i];
+                        if (c == '{')
+                        {
+                            int end = format.Template.IndexOf('}', i + 1);
+                            if (end > i + 1 && int.TryParse(format.Template.Substring(i + 1, end - i - 1), out int argIndex) &&
+                                argIndex >= 0 && argIndex < format.Args.Count)
+                            {
+                                text.Append(Evaluate(format.Args[argIndex], resolve).AsText());
+                                i = end;
+                                continue;
+                            }
+                        }
+                        text.Append(c);
+                    }
+                    return ValueBox.OfText(text.ToString());
+                }
                 default:
                     return new ValueBox();
             }

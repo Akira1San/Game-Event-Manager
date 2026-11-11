@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Globalization;
 
 namespace Game
@@ -39,6 +40,16 @@ namespace Game
         public ValueNode Left = new NumberValue();
         public char Op;
         public ValueNode Right = new NumberValue();
+    }
+
+    /// <summary>
+    /// <c>format "Health: {0}/{1}"</c> — a template whose <c>{0}</c>, <c>{1}</c>, ...
+    /// placeholders are filled from <see cref="Args"/>. Used by <c>bind ... format</c>.
+    /// </summary>
+    public class FormatValue : ValueNode
+    {
+        public string Template = "";
+        public List<ValueNode> Args = new List<ValueNode>();
     }
 
     public static class WordDistance
@@ -88,6 +99,8 @@ namespace Game
                     return $"random {Describe(r.Min)} to {Describe(r.Max)}";
                 case MathValue m:
                     return $"{Describe(m.Left)} {m.Op} {Describe(m.Right)}";
+                case FormatValue f:
+                    return $"format \"{f.Template}\"";
                 default:
                     return "a value";
             }

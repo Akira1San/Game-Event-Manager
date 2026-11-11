@@ -33,6 +33,12 @@ namespace Game
                     file.Events.Add(ParseEvent());
                     continue;
                 }
+                if (t.Type == TokenType.Word && t.Text == "bind")
+                {
+                    // `bind` is sugar: it expands into ordinary `when <var> changes` events here.
+                    file.Events.AddRange(ParseBind());
+                    continue;
+                }
                 if (t.Type == TokenType.Indent || t.Type == TokenType.Dedent)
                     throw new ParseException("this line is indented, but nothing above it was a `when` to belong to", t.Line);
                 if (t.Type == TokenType.Number)
@@ -214,6 +220,93 @@ namespace Game
             return new ParseException(message, indentToken.Line);
         }
 
+        /// <summary>
+        /// <c>bind &lt;label&gt; to &lt;variable&gt;</c>, <c>bind progress of &lt;thing&gt; to &lt;variable&gt;</c>,
+        /// plus <c>and &lt;variable&gt;</c> and <c>format "&lt;template&gt;"</c>. Returns the ordinary
+        /// change events the line stands for (see <see cref="Bindings.Expand"/>).
+        /// </summary>
+        private List<EventNode> ParseBind()
+        {
+            var bindToken = tokens[pos];
+            pos++;
+            var words = new List<Token>();
+            while (pos < tokens.Count &&
+                   (tokens[pos].Type == TokenType.Word || tokens[pos].Type == TokenType.Number || tokens[pos].Type == TokenType.Str))
+                words.Add(tokens[pos++]);
+            if (pos < tokens.Count && tokens[pos].Type == TokenType.NewLine)
+                pos++;
+            if (pos < tokens.Count && tokens[pos].Type == TokenType.Indent)
+                throw new ParseException("`bind` makes its own event, so nothing is indented under it — write `bind ScoreLabel to Score` on its own line", bindToken.Line);
+
+            var spec = new BindSpec { Line = bindToken.Line };
+            int index = 0;
+            if (index < words.Count && words[index].Type == TokenType.Word &&
+                (words[index].Text == "text" || words[index].Text == "progress"))
+            {
+                spec.Kind = words[index].Text == "progress" ? BindKind.Progress : BindKind.Text;
+                index++;
+            }
+            if (index < words.Count && words[index].Type == TokenType.Word && words[index].Text == "of")
+                index++;
+            if (index >= words.Count || words[index].Type != TokenType.Word)
+                throw new ParseException("`bind` needs a control to keep in sync, like `bind ScoreLabel to Score`", bindToken.Line);
+            spec.Thing = words[index].Text;
+            index++;
+            if (index >= words.Count || words[index].Type != TokenType.Word || words[index].Text != "to")
+                throw new ParseException("a `bind` line joins the control and a variable with `to` — `bind ScoreLabel to Score`", bindToken.Line);
+            index++;
+            spec.Variables.Add(ReadVariable(words, ref index, bindToken.Line, "`bind`"));
+            while (index < words.Count && words[index].Type == TokenType.Word && words[index].Text == "and")
+            {
+                index++;
+                spec.Variables.Add(ReadVariable(words, ref index, bindToken.Line, "`bind`"));
+            }
+            if (index < words.Count)
+            {
+                if (words[index].Type != TokenType.Word || words[index].Text != "format")
+                    throw new ParseException("after the variable, `bind` only takes `and <variable>` or `format \"<template>\"`", words[index].Line);
+                index++;
+                if (index >= words.Count || words[index].Type != TokenType.Str)
+                    throw new ParseException("`format` needs the template in quotes, like `bind HealthLabel to Health format \"Health: {0}\"`", bindToken.Line);
+                if (spec.Kind == BindKind.Progress)
+                    throw new ParseException("a progress bar can't use `format` — it takes a number from one variable", words[index].Line);
+                spec.HasTemplate = true;
+                spec.Template = words[index].Text;
+                index++;
+                CheckEndOfLine(words, index, bindToken.Line, "bind <label> to <variable> format \"<template>\"");
+                CheckTemplateArguments(spec, bindToken.Line);
+            }
+            else if (spec.Variables.Count > 1)
+            {
+                throw new ParseException("binding several variables needs a `format` template — like `bind HealthLabel to Health and MaxHealth format \"Health: {0}/{1}\"`", bindToken.Line);
+            }
+            return Bindings.Expand(spec);
+        }
+
+        /// <summary>Every <c>{n}</c> placeholder needs a variable to fill it.</summary>
+        private static void CheckTemplateArguments(BindSpec spec, int line)
+        {
+            for (int i = 0; i < spec.Template.Length; i++)
+            {
+                if (spec.Template[i] != '{')
+                    continue;
+                int end = spec.Template.IndexOf('}', i + 1);
+                if (end < 0)
+                    break;
+                string inner = spec.Template.Substring(i + 1, end - i - 1);
+                if (!int.TryParse(inner, out int argIndex))
+                {
+                    i = end;
+                    continue;
+                }
+                if (argIndex < 0 || argIndex >= spec.Variables.Count)
+                    throw new ParseException(
+                        $"the template placeholder {{{inner}}} has no variable — this `bind` has {spec.Variables.Count} variable{(spec.Variables.Count == 1 ? "" : "s")} (they fill {{0}}, {{1}}, ... in order)",
+                        line);
+                i = end;
+            }
+        }
+
         private BodyLineNode ParseBodyLine()
         {
             var line = new BodyLineNode { Line = tokens[pos].Line };
@@ -236,6 +329,8 @@ namespace Game
             }
             if (first.Text == "when")
                 throw new ParseException("events stack one after another — a `when` never sits inside another event", first.Line);
+            if (first.Text == "bind")
+                throw new ParseException("`bind` makes its own event, so it sits on its own line — like `bind ScoreLabel to Score` — not indented under a `when`", first.Line);
             if (first.Text == "unless")
             {
                 line.IsCondition = true;

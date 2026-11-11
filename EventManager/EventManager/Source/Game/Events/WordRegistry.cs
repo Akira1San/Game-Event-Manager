@@ -93,6 +93,10 @@ namespace Game
             new WordEntry { Kind = "condition", Word = "enough Minerals for <building>", Example = "enough Minerals for Barracks" },
             new WordEntry { Kind = "condition", Word = "build progress is higher than <n>", Example = "build progress is higher than 100" },
 
+            new WordEntry { Kind = "directive", Word = "bind <label> to <variable>", Example = "bind ScoreLabel to Score" },
+            new WordEntry { Kind = "directive", Word = "bind progress of <thing> to <variable>", Example = "bind progress of HealthBar to Health" },
+            new WordEntry { Kind = "directive", Word = "bind <label> to <variable> format \"<template>\"", Example = "bind HealthLabel to Health and MaxHealth format \"Health: {0}/{1}\"" },
+
             new WordEntry { Kind = "action", Word = "move", Example = "move forward speed 5" },
             new WordEntry { Kind = "action", Word = "turn", Example = "turn left degrees 90" },
             new WordEntry { Kind = "action", Word = "goto", Example = "goto Player" },
@@ -198,7 +202,7 @@ namespace Game
         {
             var words = new List<string>
             {
-                "when", "unless", "and", "not", "my", "me", "other", "to", "state",
+                "when", "unless", "and", "not", "my", "me", "other", "to", "state", "bind",
             };
             foreach (var word in ActionWords)
                 words.Add(word);

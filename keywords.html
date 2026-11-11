@@ -62,6 +62,7 @@
   <a href="#triggers">Triggers</a>
   <a href="#conditions">Conditions</a>
   <a href="#actions">Actions</a>
+  <a href="#binding">Binding</a>
   <a href="#animation">Animation</a>
   <a href="#structural">Structural</a>
   <a href="#values">Values</a>
@@ -224,6 +225,22 @@
         <tr><td><span class="kw">quit</span></td><td><span class="kw">quit game</span></td><td><span class="example">quit game</span></td></tr>
         <tr><td><span class="kw">print</span></td><td><span class="kw">print "W is held"</span> / <span class="kw">print W is held</span></td><td><span class="example">print "W is held"</span><br><span class="example">print W is held</span><br><span class="alt">prints text to the editor console via Debug.LogWarning</span></td></tr>
         <tr><td><span class="kw">debug</span></td><td><span class="kw">debug "health = " + my health</span> / <span class="kw">debug Score changed</span></td><td><span class="example">debug Score changed</span><br><span class="alt">alias for print — prints to the editor console</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="binding">
+    <h2>Data binding — <code>bind</code></h2>
+    <p><code>bind</code> sits on its own line, outside a <code>when</code>. It is sugar: at parse time it becomes an ordinary <code>when &lt;variable&gt; changes</code> event whose body is <code>set text of</code> / <code>set progress of</code>, so the control follows the variable from then on.</p>
+
+    <table>
+      <thead>
+        <tr><th style="width:34%">Syntax</th><th style="width:34%">Example</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="kw">bind</span> <span class="placeholder">&lt;label&gt;</span> <span class="kw">to</span> <span class="placeholder">&lt;variable&gt;</span></td><td><span class="example">bind ScoreLabel to Score</span></td><td><span class="alt">writes the variable's value into the Label / Button text whenever it changes · <code>my health</code> binds a per-object variable</span></td></tr>
+        <tr><td><span class="kw">bind progress of</span> <span class="placeholder">&lt;thing&gt;</span> <span class="kw">to</span> <span class="placeholder">&lt;variable&gt;</span></td><td><span class="example">bind progress of HealthBar to Health</span></td><td><span class="alt">fills a ProgressBar instead of setting text · accepts 0–1 or 0–100</span></td></tr>
+        <tr><td><span class="kw">bind</span> <span class="placeholder">&lt;label&gt;</span> <span class="kw">to</span> <span class="placeholder">&lt;variable&gt;</span> [<span class="kw">and</span> <span class="placeholder">&lt;variable&gt;</span>…] <span class="kw">format</span> <span class="placeholder">"&lt;template&gt;"</span></td><td><span class="example">bind HealthLabel to Health and MaxHealth format "Health: {0}/{1}"</span></td><td><span class="alt">placeholders <code>{0}</code>, <code>{1}</code>, … fill from the listed variables in order · the label repaints when any of them changes</span></td></tr>
       </tbody>
     </table>
   </section>

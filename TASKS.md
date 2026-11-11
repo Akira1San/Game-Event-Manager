@@ -799,10 +799,10 @@ Goal: extend UI support beyond Labels to Buttons, Images, ProgressBars, TextBoxe
 - [x] Unit test: focus moves between buttons with arrow keys; `when focused` triggers fire.
 
 ### Part F — Data-binding syntactic sugar
-- [ ] Word registry: `bind <label> to <variable>` (auto `when <variable> changes → set text of <label> to <variable>`), `bind <progress> to <variable>` (auto `when <variable> changes → set progress of <progress> to <variable>`).
-- [ ] Format: `bind <label> to <variable> format "<template>"` (e.g. `"Health: {0}/{1}"` with `Health` and `MaxHealth`).
-- [ ] Parser: expands to equivalent `when changes` + `set text/progress` blocks at parse time.
-- [ ] Unit test: `bind ScoreLabel to Score` generates correct trigger/action pair.
+- [x] Word registry: `bind <label> to <variable>` (auto `when <variable> changes → set text of <label> to <variable>`), `bind progress of <thing> to <variable>` (auto `when <variable> changes → set progress of <thing> to <variable>`).
+- [x] Format: `bind <label> to <variable> format "<template>"` (e.g. `"Health: {0}/{1}"` with `Health` and `MaxHealth`, written `bind HealthLabel to Health and MaxHealth format "Health: {0}/{1}"`).
+- [x] Parser: expands to equivalent `when changes` + `set text/progress` blocks at parse time.
+- [x] Unit test: `bind ScoreLabel to Score` generates correct trigger/action pair.
 
 ### Part G — Integration example
 - [ ] Write `InventoryUI.events`: grid of item slots (Image + Label), drag-drop via `when dragged`/`when dropped` (parked), tooltip on hover.

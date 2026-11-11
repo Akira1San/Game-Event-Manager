@@ -317,7 +317,9 @@ foreach (var entry in WordRegistry.All)
         continue;
     string source = entry.Kind == "trigger"
         ? entry.Example + "\n  show me\n"
-        : "when me appears\n  " + entry.Example + "\n";
+        : entry.Kind == "directive"
+            ? entry.Example + "\n"
+            : "when me appears\n  " + entry.Example + "\n";
     try
     {
         parser.Parse(source);
@@ -3568,6 +3570,90 @@ when NameBox submits
     focusEngine.Tick(2);
     Check(focusEngine.Variables.GetGlobal("MenuFocus").AsNumber() == 0,
         "`when <thing> loses focus` fires when focus leaves the control");
+
+// ------------------------------------------------------------------
+// Task 15 Part F: Data-binding syntactic sugar
+// ------------------------------------------------------------------
+
+Check(WordRegistry.All.Any(e => e.Kind == "directive" && e.Word == "bind <label> to <variable>") &&
+      WordRegistry.All.Any(e => e.Kind == "directive" && e.Word == "bind progress of <thing> to <variable>"),
+    "registry documents both `bind` forms");
+
+// `bind <label> to <variable>` expands at parse time into one change event.
+var bindProgram = parser.Parse("bind ScoreLabel to Score\n");
+Check(bindProgram.Events.Count == 1, "`bind ScoreLabel to Score` expands to one event");
+var bindDesc = TriggerClassifier.Classify(bindProgram.Events[0]);
+Check(bindDesc.Kind == TriggerKind.WatchChanges && bindDesc.WatchName == "Score" && bindDesc.WatchOwner.Length == 0,
+    "the expanded bind trigger is `when Score changes`");
+var bindStatement = bindProgram.Events[0].Body[0].Statement as SetTextNode;
+Check(bindStatement != null && bindStatement.Target == "ScoreLabel" &&
+      bindStatement.Value is VariableValue bindVariable && bindVariable.Name == "Score",
+    "the expanded bind body is `set text of ScoreLabel to Score`");
+
+// `bind progress of <thing> to <variable>` fills a ProgressBar instead.
+var bindProgressProgram = parser.Parse("bind progress of HealthBar to Health\n");
+var bindProgressStatement = bindProgressProgram.Events[0].Body[0].Statement as SetProgressNode;
+Check(bindProgressProgram.Events.Count == 1 && bindProgressStatement != null &&
+      bindProgressStatement.Thing == "HealthBar" &&
+      bindProgressStatement.Value is VariableValue bindProgressVariable && bindProgressVariable.Name == "Health",
+    "`bind progress of HealthBar to Health` expands to `when Health changes -> set progress of HealthBar`");
+
+// A per-object variable binds through `my`.
+var bindMineProgram = parser.Parse("bind InfoLabel to my health\n");
+var bindMineDesc = TriggerClassifier.Classify(bindMineProgram.Events[0]);
+Check(bindMineDesc.Kind == TriggerKind.WatchChanges && bindMineDesc.WatchOwner == "my" && bindMineDesc.WatchName == "health",
+    "`bind InfoLabel to my health` watches the sheet's own variable");
+
+// `format` watches every listed variable and fills the numbered placeholders.
+var bindFormatProgram = parser.Parse("bind HealthLabel to Health and MaxHealth format \"Health: {0}/{1}\"\n");
+Check(bindFormatProgram.Events.Count == 2,
+    "a formatted bind watching two variables expands to one change event per variable");
+var bindFormatStatement = bindFormatProgram.Events[0].Body[0].Statement as SetTextNode;
+Check(bindFormatStatement != null && bindFormatStatement.Target == "HealthLabel" &&
+      bindFormatStatement.Value is FormatValue bindFormat &&
+      bindFormat.Template == "Health: {0}/{1}" && bindFormat.Args.Count == 2,
+    "the formatted bind body keeps the template and both variables");
+var bindSecondDesc = TriggerClassifier.Classify(bindFormatProgram.Events[1]);
+Check(bindSecondDesc.Kind == TriggerKind.WatchChanges && bindSecondDesc.WatchName == "MaxHealth",
+    "the second formatted bind event watches the second variable");
+
+ExpectParseError("bind ScoreLabel\n", "control", "`bind` without `to` is a friendly error");
+ExpectParseError("bind ScoreLabel to 5\n", "variable", "`bind` needs a variable, not a number");
+ExpectParseError("bind ScoreLabel to Score and MaxHealth\n", "format",
+    "binding several variables without a format template is a friendly error");
+ExpectParseError("bind HealthLabel to Health format \"Health: {1}\"\n", "placeholder",
+    "a template placeholder with no variable is a friendly error");
+ExpectParseError("bind progress of HealthBar to Health format \"{0}\"\n", "progress bar",
+    "a progress bar bind rejects `format`");
+ExpectParseError("when game starts\n  bind ScoreLabel to Score\n", "own line",
+    "an indented `bind` explains that it makes its own event");
+
+// Runtime: the expanded events paint the control from the live variable.
+var bindActor = new FakeActor("ScoreLabel");
+var bindWorld = new FakeWorld();
+bindWorld.AddActor(bindActor);
+var bindEngine = FreshEngine(bindWorld);
+var bindTexts = new Dictionary<string, string>();
+var bindProgressValues = new Dictionary<string, double>();
+bindEngine.OnSetText = (context, thing, value) => bindTexts[thing] = value.AsText();
+bindEngine.OnSetProgress = (context, thing, value) => bindProgressValues[thing] = value.AsNumber();
+bindEngine.AddSheet(bindActor, parser.Parse(
+    "bind ScoreLabel to Score\n" +
+    "bind progress of HealthBar to Health\n" +
+    "bind HealthLabel to Health and MaxHealth format \"Health: {0}/{1}\"\n"));
+bindEngine.Tick(0);
+Check(bindTexts.Count == 0 && bindProgressValues.Count == 0,
+    "a bind does not paint on the first tick (it starts from the change baseline)");
+bindEngine.Variables.SetGlobal("Score", ValueBox.OfNumber(7));
+bindEngine.Variables.SetGlobal("Health", ValueBox.OfNumber(50));
+bindEngine.Variables.SetGlobal("MaxHealth", ValueBox.OfNumber(100));
+bindEngine.Tick(1);
+Check(bindTexts.TryGetValue("ScoreLabel", out string bindScoreText) && bindScoreText == "7",
+    "a text bind writes the changed variable into its label");
+Check(bindProgressValues.TryGetValue("HealthBar", out double bindHealthFill) && bindHealthFill == 50,
+    "a progress bind fills its bar from the changed variable");
+Check(bindTexts.TryGetValue("HealthLabel", out string bindHealthText) && bindHealthText == "Health: 50/100",
+    "a formatted bind fills every placeholder");
 
 // ------------------------------------------------------------------
 // Task 18 Part C: construction & base building
