@@ -1432,7 +1432,46 @@ namespace Game
                 WarnOnce($"Failed to spawn prefab \u201C{spec.Thing}\u201D.");
                 return;
             }
+            string spot = spawnAt == null
+                ? $"no spot found for \u201C{spec.To}\u201D"
+                : $"spot \u201C{spawnAt.Name}\u201D at {spawnAt.Position}";
+            Debug.LogWarning($"Event sheet: spawned prefab \u201C{spec.Thing}\u201D as \u201C{instance.Name}\u201D at {instance.Position} ({spot}) in scene \u201C{(instance.Scene == null ? "?" : instance.Scene.Name)}\u201D — {DescribeSpawn(instance)}.");
             SpawnedInstance(context, instance, spec.Thing);
+        }
+
+        /// <summary>Counts the actors and visible models in a spawned tree, so a spawn that
+        /// works but stays invisible says so instead of leaving you hunting the viewport.</summary>
+        private static string DescribeSpawn(Actor root)
+        {
+            int actors = 0;
+            int models = 0;
+            var empty = new List<string>();
+            void Walk(Actor node)
+            {
+                if (node == null)
+                    return;
+                actors++;
+                if (node is StaticModel staticModel)
+                {
+                    models++;
+                    if (staticModel.Model == null)
+                        empty.Add(staticModel.Name + " (no Model)");
+                }
+                else if (node is AnimatedModel animated)
+                {
+                    models++;
+                    if (animated.SkinnedModel == null)
+                        empty.Add(animated.Name + " (no Skinned Model)");
+                }
+                foreach (Actor child in node.Children)
+                    Walk(child);
+            }
+            Walk(root);
+            if (models == 0)
+                return $"{actors} actor(s) but NO StaticModel/AnimatedModel inside — the prefab has nothing visible to show";
+            if (empty.Count > 0)
+                return $"{actors} actor(s), {models} model(s) but these have no mesh assigned: {string.Join(", ", empty)}";
+            return $"{actors} actor(s), {models} model(s)";
         }
 
         /// <summary>Finishes a prefab spawn: remember the asset name (`my spawnedFrom`), give

@@ -118,6 +118,60 @@ namespace Game
             return c >= '0' && c <= '9' ? "D" + c : name;
         }
 
+        /// <summary>
+        /// Flax's own <c>KeyboardKeys</c> names, which differ from the words people write:
+        /// <c>Space</c> is <c>Spacebar</c>, <c>1</c> is <c>Alpha1</c>, <c>Up</c> is
+        /// <c>ArrowUp</c>, and there is one <c>Shift</c>/<c>Control</c>/<c>Alt</c> per side.
+        /// Each alias names exactly one key: a name we don't know must fail, never fall back
+        /// to a different key (that used to make every arrow/digit read as a held Space).
+        /// </summary>
+        private static readonly Dictionary<string, string> KeyEngineNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "Space", "Spacebar" },
+            { "Enter", "Return" },
+            { "Return", "Return" },
+            { "Up", "ArrowUp" },
+            { "Down", "ArrowDown" },
+            { "Left", "ArrowLeft" },
+            { "Right", "ArrowRight" },
+            { "Shift", "Shift" },
+            { "Left Shift", "Shift" },
+            { "Right Shift", "Shift" },
+            { "LeftShift", "Shift" },
+            { "RightShift", "Shift" },
+            { "Ctrl", "Control" },
+            { "Control", "Control" },
+            { "Left Ctrl", "Control" },
+            { "Right Ctrl", "Control" },
+            { "LeftCtrl", "Control" },
+            { "RightCtrl", "Control" },
+            { "Alt", "Alt" },
+            { "Left Alt", "Alt" },
+            { "Right Alt", "Alt" },
+            { "LeftAlt", "Alt" },
+            { "RightAlt", "Alt" },
+        };
+
+        /// <summary>The engine name to look a written key up with, or the trimmed name when it
+        /// already is an engine name (A–Z, Tab, Escape, Backspace).</summary>
+        public static string EngineKeyName(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return null;
+            string trimmed = name.Trim();
+            if (KeyEngineNames.TryGetValue(trimmed, out string alias))
+                return alias;
+            string compact = trimmed.Replace(" ", "");
+            if (KeyEngineNames.TryGetValue(compact, out alias))
+                return alias;
+            // 0–9, and the `D1` form NormalizeKeyName produces, are Flax's `Alpha1`.
+            if (compact.Length == 1 && compact[0] >= '0' && compact[0] <= '9')
+                return "Alpha" + compact;
+            if (compact.Length == 2 && (compact[0] == 'D' || compact[0] == 'd') && compact[1] >= '0' && compact[1] <= '9')
+                return "Alpha" + compact[1];
+            return trimmed;
+        }
+
         private static string[] BuildKeyNames()
         {
             var names = new List<string>();
@@ -380,31 +434,43 @@ namespace Game
                 case "spawn":
                     if (words.Count >= 2 && words[1].Text == "prefab")
                     {
-                        // `spawn prefab "Hero" at SpawnPoint`
-                        if (words.Count >= 5 && words[2].Type == TokenType.Str && words[3].Text == "at" && IsThing(words[4]))
+                        // `spawn prefab "Hero" at SpawnPoint` / `... at SpawnPoint 1`
+                        if (words.Count >= 5 && words[2].Type == TokenType.Str && words[3].Text == "at")
                         {
-                            spec.Thing = words[2].Text;
-                            spec.To = words[4].Text;
-                            return Finish(spec, ActionVerb.SpawnPrefab, words, 5);
+                            string prefabSpot = TargetAt(words, 4, out int prefabSpotUsed);
+                            if (prefabSpot != null)
+                            {
+                                spec.Thing = words[2].Text;
+                                spec.To = prefabSpot;
+                                return Finish(spec, ActionVerb.SpawnPrefab, words, 4 + prefabSpotUsed);
+                            }
                         }
                         return Unknown(spec, words, "\u201Cspawn prefab\u201D looks like this: \u201Cspawn prefab \"Hero\" at SpawnPoint\u201D", warn);
                     }
                     if (words.Count >= 2 && words[1].Text == "scene")
                     {
-                        // `spawn scene "HeroScene" at SpawnPoint`
-                        if (words.Count >= 5 && words[2].Type == TokenType.Str && words[3].Text == "at" && IsThing(words[4]))
+                        // `spawn scene "HeroScene" at SpawnPoint` / `... at SpawnPoint 1`
+                        if (words.Count >= 5 && words[2].Type == TokenType.Str && words[3].Text == "at")
                         {
-                            spec.Thing = words[2].Text;
-                            spec.To = words[4].Text;
-                            return Finish(spec, ActionVerb.SpawnScene, words, 5);
+                            string sceneSpot = TargetAt(words, 4, out int sceneSpotUsed);
+                            if (sceneSpot != null)
+                            {
+                                spec.Thing = words[2].Text;
+                                spec.To = sceneSpot;
+                                return Finish(spec, ActionVerb.SpawnScene, words, 4 + sceneSpotUsed);
+                            }
                         }
                         return Unknown(spec, words, "\u201Cspawn scene\u201D looks like this: \u201Cspawn scene \"HeroScene\" at SpawnPoint\u201D", warn);
                     }
-                    if (words.Count >= 4 && IsThing(words[1]) && words[2].Text == "at" && IsThing(words[3]))
+                    if (words.Count >= 4 && IsThing(words[1]) && words[2].Text == "at")
                     {
-                        spec.Thing = words[1].Text;
-                        spec.To = words[3].Text;
-                        return Finish(spec, ActionVerb.Spawn, words, 4);
+                        string cloneSpot = TargetAt(words, 3, out int cloneSpotUsed);
+                        if (cloneSpot != null)
+                        {
+                            spec.Thing = words[1].Text;
+                            spec.To = cloneSpot;
+                            return Finish(spec, ActionVerb.Spawn, words, 3 + cloneSpotUsed);
+                        }
                     }
                     return Unknown(spec, words, "\u201Cspawn\u201D looks like this: \u201Cspawn Bullet at me\u201D or \u201Cspawn prefab \"Hero\" at SpawnPoint\u201D or \u201Cspawn scene \"HeroScene\" at SpawnPoint\u201D", warn);
                 case "place":
@@ -884,6 +950,23 @@ namespace Game
                 return first + " " + words[index + 1].Text;
             }
             return first;
+        }
+
+        /// <summary>Reads the actor name after <c>at</c>: a word (plus a <c>nearest</c>/<c>random</c>
+        /// qualifier), followed by any number words — Flax names duplicates `SpawnPoint 1`, and those
+        /// have to stay one name.</summary>
+        private static string TargetAt(List<Token> words, int index, out int used)
+        {
+            used = 0;
+            string name = ThingAt(words, index, out used);
+            if (name == null)
+                return null;
+            while (index + used < words.Count && words[index + used].Type == TokenType.Number)
+            {
+                name += " " + words[index + used].Text;
+                used++;
+            }
+            return name;
         }
 
         private static bool IsDirection(string word)

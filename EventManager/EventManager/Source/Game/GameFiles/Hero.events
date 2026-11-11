@@ -1,0 +1,7 @@
+when me appears
+  set text of GameText to "Hero appeared"
+  print "Hero appeared"
+
+when H is pressed
+  set text of GameText to my spawnedFrom
+  print "my spawnedFrom read"

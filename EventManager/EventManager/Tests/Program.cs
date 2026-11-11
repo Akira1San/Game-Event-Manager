@@ -2734,6 +2734,39 @@ when 1 is pressed
     Check(spawnCloneRegression.Verb == ActionVerb.Spawn && spawnCloneRegression.Thing == "Coin",
         "`spawn Coin at SpawnPoint` still parses as a plain template clone");
 
+    var numberedPrefab = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  spawn prefab ""Hero"" at SpawnPoint 1"), null);
+    Check(numberedPrefab.Verb == ActionVerb.SpawnPrefab && numberedPrefab.To == "SpawnPoint 1",
+        "`spawn prefab ... at SpawnPoint 1` keeps Flax's numbered actor name whole");
+    var numberedClone = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  spawn Coin at SpawnPoint 2"), null);
+    Check(numberedClone.Verb == ActionVerb.Spawn && numberedClone.To == "SpawnPoint 2",
+        "`spawn Coin at SpawnPoint 2` keeps the numbered spot");
+
+    // Written key names -> Flax's KeyboardKeys names. A name we don't know must not fall back
+    // to another key: that bug made every arrow/digit report a held Space.
+    Check(ActionWords.EngineKeyName("Space") == "Spacebar", "`Space` maps to Flax's `Spacebar` key");
+    Check(ActionWords.EngineKeyName("1") == "Alpha1" && ActionWords.EngineKeyName("D3") == "Alpha3" &&
+          ActionWords.EngineKeyName("0") == "Alpha0",
+        "number keys (`1`, `D3`, `0`) map to Flax's `Alpha1`–`Alpha0`");
+    Check(ActionWords.EngineKeyName("Up") == "ArrowUp" && ActionWords.EngineKeyName("Left") == "ArrowLeft",
+        "arrow words map to Flax's `ArrowUp`/`ArrowLeft`");
+    Check(ActionWords.EngineKeyName("Left Shift") == "Shift" && ActionWords.EngineKeyName("Right Ctrl") == "Control" &&
+          ActionWords.EngineKeyName("Left Alt") == "Alt",
+        "modifier words map to Flax's single `Shift`/`Control`/`Alt` keys");
+    Check(ActionWords.EngineKeyName("Enter") == "Return", "`Enter` maps to Flax's `Return` key");
+    Check(ActionWords.EngineKeyName("Banana") == "Banana",
+        "an unknown key name is left alone instead of falling back to another key");
+
+    // Digit triggers are top-row keys (`D1`), never button presses: `when 1 is pressed` must be
+    // a key trigger so a UI button named "1" cannot swallow it.
+    var digitTrigger = TriggerClassifier.Classify(parser.Parse("when 1 is pressed\n  print \"one\"").Events[0]);
+    Check(digitTrigger.Kind == TriggerKind.KeyPressed && digitTrigger.RequireName == "1" && digitTrigger.Key == "D1",
+        "`when 1 is pressed` is a key press on the top-row 1 key (polled as D1)");
+    var buttonTrigger = TriggerClassifier.Classify(parser.Parse("when PlayButton is pressed\n  print \"go\"").Events[0]);
+    Check(buttonTrigger.Kind == TriggerKind.ButtonPressed && buttonTrigger.RequireName == "PlayButton",
+        "`when PlayButton is pressed` stays a button press");
+
     actionHint = "";
     var unquotedPrefab = ActionWords.Parse(LooseWords("spawn", "prefab", "Hero", "at", "SpawnPoint"), GrabHint);
     Check(unquotedPrefab.Verb == ActionVerb.Unknown && actionHint.Contains("spawn prefab"),

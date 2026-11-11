@@ -1,0 +1,11 @@
+when 1 is pressed
+  spawn prefab "Hero" at SpawnPoint 1
+  print "spawn hero"
+
+when 2 is pressed
+  spawn prefab "Hero" at SpawnPoint 2
+  print "spawn hero again"
+
+when 3 is pressed
+  spawn prefab "Hero" at SpawnPoint 3
+  print "spawn hero B"
