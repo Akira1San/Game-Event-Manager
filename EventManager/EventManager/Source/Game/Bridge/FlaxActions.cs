@@ -28,10 +28,24 @@ namespace Game
         public bool UsesPhysics => Mode != PhysicsMoveMode.Transform;
     }
 
+    /// <summary>A <c>push ... for &lt;n&gt; seconds</c> that is still shoving its target —
+    /// TK4 knockback keeps moving the victim for a beat instead of one frame.</summary>
+    public class OngoingPush
+    {
+        public Actor Target;
+        public string Dir = "";
+        public double Strength = 5;
+        /// <summary>Seconds left; counted down each tick in <see cref="FlaxActions.Step"/>.</summary>
+        public double Remaining;
+    }
+
     public static class FlaxActions
     {
     public static float DeltaTime;
     public static readonly List<OngoingMove> Moves = new List<OngoingMove>();
+    /// <summary>Sustained pushes (<c>push &lt;thing&gt; &lt;dir&gt; strength &lt;n&gt; for &lt;s&gt;
+    /// seconds</c>), applied every tick until their time runs out.</summary>
+    public static readonly List<OngoingPush> Pushes = new List<OngoingPush>();
     /// <summary>In-flight moving platforms, ping-ponging along a world axis. Advanced each
     /// tick in <see cref="Step"/> and applied through each subject's <see cref="PhysicsMoveMode"/>.</summary>
     public static readonly List<PhysicsMovement.OngoingPlatform> Platforms = new List<PhysicsMovement.OngoingPlatform>();
@@ -114,6 +128,7 @@ namespace Game
         public static void ClearSession()
         {
             Moves.Clear();
+            Pushes.Clear();
             Platforms.Clear();
             ActiveSounds.Clear();
             LiveTweens.Clear();
@@ -289,6 +304,21 @@ namespace Game
                         }
                     }
                 }
+            }
+
+            // Sustained pushes: keep shoving for the authored time, so a bullet's knockback
+            // lasts long enough to see instead of a single 1/60 s nudge.
+            for (int i = Pushes.Count - 1; i >= 0; i--)
+            {
+                OngoingPush push = Pushes[i];
+                double remaining = PhysicsMovement.PushRemaining(push.Remaining, DeltaTime);
+                if (push.Target == null || push.Target.Scene == null || remaining <= 0)
+                {
+                    Pushes.RemoveAt(i);
+                    continue;
+                }
+                push.Remaining = remaining;
+                ApplyPush(push.Target, push.Dir, push.Strength);
             }
 
             // Moving platforms: advance each ping-pong sweep and apply the per-tick delta
@@ -556,44 +586,22 @@ namespace Game
                         WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D to push.");
                         break;
                     }
-                    Vector3 direction = DirectionOf(target, spec.Dir);
                     double strength = ResolveNumber(context, spec);
-                    float step = (float)strength * DeltaTime;
-                    switch (ResolvePushMode(target))
+                    ApplyPush(target, spec.Dir, strength);
+                    // `for <n> seconds` keeps shoving on later ticks (TK4 knockback). Without it
+                    // this stays the historical single-tick nudge.
+                    if (spec.Duration > 0)
                     {
-                        case PhysicsPushMode.Impulse:
+                        for (int i = Pushes.Count - 1; i >= 0; i--)
+                            if (Pushes[i].Target == target)
+                                Pushes.RemoveAt(i);
+                        Pushes.Add(new OngoingPush
                         {
-                            RigidBody body = FindBody(target);
-                            if (body != null)
-                            {
-                                body.WakeUp();
-                                body.AddForce(direction * (float)strength, ForceMode.Impulse);
-                            }
-                            else
-                                target.Position = target.Position + direction * step;
-                            break;
-                        }
-                        case PhysicsPushMode.Sweep:
-                        {
-                            RigidBody body = FindBody(target);
-                            if (body != null && IsAncestorOrSelf(body, target))
-                                body.AddMovement(direction * step);
-                            else
-                                target.AddMovement(direction * step);
-                            break;
-                        }
-                        case PhysicsPushMode.Character:
-                        {
-                            CharacterController character = EventSheet.FindCharacterController(target);
-                            if (character != null)
-                                character.Move(direction * step);
-                            else
-                                target.Position = target.Position + direction * step;
-                            break;
-                        }
-                        default:
-                            target.Position = target.Position + direction * step;
-                            break;
+                            Target = target,
+                            Dir = spec.Dir,
+                            Strength = strength,
+                            Remaining = spec.Duration,
+                        });
                     }
                     break;
                 }
@@ -710,6 +718,9 @@ namespace Game
                         for (int i = Moves.Count - 1; i >= 0; i--)
                             if (Moves[i].Subject == actor || Moves[i].Target == actor)
                                 Moves.RemoveAt(i);
+                        for (int i = Pushes.Count - 1; i >= 0; i--)
+                            if (Pushes[i].Target == actor)
+                                Pushes.RemoveAt(i);
                         ClearActor(actor);
                         context.Runtime.Selection.Forget(actor);
                         FlaxEngine.Object.Destroy(actor, 0f);
@@ -1125,6 +1136,9 @@ namespace Game
             for (int i = Moves.Count - 1; i >= 0; i--)
                 if (Moves[i].Subject == subject)
                     Moves.RemoveAt(i);
+            for (int i = Pushes.Count - 1; i >= 0; i--)
+                if (Pushes[i].Target == subject)
+                    Pushes.RemoveAt(i);
             CharacterFallSpeeds.Remove(subject);
 
             RigidBody body = FindBody(subject);
@@ -1134,6 +1148,51 @@ namespace Game
                 body.AngularVelocity = Vector3.Zero;
             }
             subject.Position = position;
+        }
+
+        /// <summary>One tick of <c>push</c> on a target, through whatever body it has: dynamic =
+        /// impulse, kinematic = swept move, CharacterController = collide-and-slide, else a
+        /// transform nudge.</summary>
+        private static void ApplyPush(Actor target, string direction, double strength)
+        {
+            Vector3 dir = DirectionOf(target, direction);
+            float step = (float)strength * DeltaTime;
+            switch (ResolvePushMode(target))
+            {
+                case PhysicsPushMode.Impulse:
+                {
+                    RigidBody body = FindBody(target);
+                    if (body != null)
+                    {
+                        body.WakeUp();
+                        body.AddForce(dir * (float)strength, ForceMode.Impulse);
+                    }
+                    else
+                        target.Position = target.Position + dir * step;
+                    break;
+                }
+                case PhysicsPushMode.Sweep:
+                {
+                    RigidBody body = FindBody(target);
+                    if (body != null && IsAncestorOrSelf(body, target))
+                        body.AddMovement(dir * step);
+                    else
+                        target.AddMovement(dir * step);
+                    break;
+                }
+                case PhysicsPushMode.Character:
+                {
+                    CharacterController character = EventSheet.FindCharacterController(target);
+                    if (character != null)
+                        character.Move(dir * step);
+                    else
+                        target.Position = target.Position + dir * step;
+                    break;
+                }
+                default:
+                    target.Position = target.Position + dir * step;
+                    break;
+            }
         }
 
         /// <summary>
@@ -1246,7 +1305,10 @@ namespace Game
 
         private static void Spawn(EventContext context, ActionSpec spec)
         {
-            Actor clone = SpawnClone(context, spec.Thing, spec.To);
+            // `spawn ... offset <n>` slides the clone along the spot's forward axis; a plain
+            // spawn resolves to 0 and keeps the exact old placement.
+            double offset = spec.AmountNode != null ? context.Evaluate(spec.AmountNode).AsNumber() : 0;
+            Actor clone = SpawnClone(context, spec.Thing, spec.To, offset);
             if (clone != null)
                 EventsManager.Instance?.AttachSpawnedActor(clone);
         }
@@ -1254,7 +1316,7 @@ namespace Game
         /// <summary>Clones the template actor named <paramref name="templateName"/> and places
         /// it at <paramref name="at"/>. Returns null (after warning once) when the template is
         /// missing. Callers attach the clone's event sheet when they want it.</summary>
-        private static Actor SpawnClone(EventContext context, string templateName, string at)
+        private static Actor SpawnClone(EventContext context, string templateName, string at, double offset = 0)
         {
             Actor template = Level.FindActor(templateName);
             if (template == null)
@@ -1269,6 +1331,14 @@ namespace Game
             {
                 clone.Position = spawnAt.Position;
                 clone.Orientation = spawnAt.Orientation;
+                if (offset != 0)
+                {
+                    // Flatten to the ground plane so a bullet never spawns above or below the
+                    // shooter, however the spot is pitched.
+                    Vector3 forward = Vector3.Transform(Vector3.Forward, spawnAt.Orientation);
+                    PhysicsMovement.SpawnOffset(forward.X, forward.Z, offset, out double offsetX, out double offsetZ);
+                    clone.Position += new Vector3((float)offsetX, 0f, (float)offsetZ);
+                }
             }
             Level.SpawnActor(clone);
             // `my spawnedFrom` names the template, and the sheet fallback can use it when a
@@ -2724,20 +2794,23 @@ namespace Game
             }
 
             CameraFollowTarget = target;
-            // Use the default top-down framing (cameraHeight/cameraDepth globals) so
+            // Use the default top-down framing (CameraHeight/CameraDepth globals) so
             // "camera follows Player" always returns to the normal player camera framing,
             // regardless of where the camera was snapped to before (e.g. by camera at).
-            float camHeight = (float)context.Runtime.Variables.GetGlobal("cameraHeight").AsNumber();
-            float camDepth = (float)context.Runtime.Variables.GetGlobal("cameraDepth").AsNumber();
+            float camHeight = (float)context.Runtime.Variables.GetGlobal("CameraHeight").AsNumber();
+            float camDepth = (float)context.Runtime.Variables.GetGlobal("CameraDepth").AsNumber();
             CameraFollowOffset = new Vector3(0f, camHeight, camDepth);
             CameraLookAtTarget = null; // following and aiming don't fight each tick
             CameraAtTarget = null; // following and snapping don't fight each tick
-            // Reset orientation to default top-down so the camera isn't left rotated
+            // Reset the tilt from the CameraPitch global (45° = the oblique framing older
+            // scenes use, 90° = straight down for TK4), so the camera isn't left rotated
             // from a previous "camera looks at".
+            float camPitch = (float)CameraFraming.ClampPitch(
+                context.Runtime.Variables.GetGlobal("CameraPitch").AsNumber());
             Actor followCamera = FlaxWorld.FindCamera();
             if (followCamera != null)
-                followCamera.Orientation = Quaternion.Euler(45.0f, 0.0f, 0.0f);
-            context.Runtime.Variables.SetGlobal("cameraFollow", ValueBox.OfNumber(0));
+                followCamera.Orientation = Quaternion.Euler(camPitch, 0.0f, 0.0f);
+            context.Runtime.Variables.SetGlobal("CameraFollow", ValueBox.OfNumber(0));
         }
 
         /// <summary>Release the camera from any explicit follow target (camera free).</summary>
@@ -2793,9 +2866,13 @@ namespace Game
             CameraFollowTarget = null;
             // Capture the default top-down framing so "camera at" keeps consistent zoom
             // with "camera follows Player" instead of snapping to exact target position.
-            float camHeight = (float)context.Runtime.Variables.GetGlobal("cameraHeight").AsNumber();
-            float camDepth = (float)context.Runtime.Variables.GetGlobal("cameraDepth").AsNumber();
+            float camHeight = (float)context.Runtime.Variables.GetGlobal("CameraHeight").AsNumber();
+            float camDepth = (float)context.Runtime.Variables.GetGlobal("CameraDepth").AsNumber();
             CameraAtOffset = new Vector3(0f, camHeight, camDepth);
+            // Respect CameraPitch here too, so a snapped shot matches the follow framing.
+            float camPitch = (float)CameraFraming.ClampPitch(
+                context.Runtime.Variables.GetGlobal("CameraPitch").AsNumber());
+            camera.Orientation = Quaternion.Euler(camPitch, 0.0f, 0.0f);
         }
 
         /// <summary>

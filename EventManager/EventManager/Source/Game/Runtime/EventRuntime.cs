@@ -25,8 +25,28 @@ namespace Game
         public ValueBox ReadGlobal(string name)
             => ResourceManager.Read(Variables, name);
 
+        /// <summary>
+        /// Reads one of the sheet actor's own variables. A few names are computed rather than
+        /// stored — <c>my bag</c>, <c>my state</c> and <c>my spawnedFrom</c> — and they live here
+        /// so a condition (<c>my spawnedFrom is "Bullet"</c>) sees exactly what an expression
+        /// (<c>set X to my spawnedFrom</c>) sees. They used to be special-cased only in
+        /// <see cref="Resolver"/>, which made every condition on them read an unset variable.
+        /// </summary>
         public ValueBox ReadMy(string name)
-            => Variables.GetLocal(Me, name);
+        {
+            if (Runtime == null)
+                return Variables.GetLocal(Me, name);
+            if (name == "bag")
+                return ValueBox.OfText(Runtime.BagText(Me));
+            if (name == "state")
+            {
+                var sheet = Runtime.FindSheetFor(Me);
+                return ValueBox.OfText(sheet == null ? "default" : sheet.CurrentState);
+            }
+            if (name == "spawnedFrom")
+                return ValueBox.OfText(Runtime.SpawnedFrom(Me));
+            return Variables.GetLocal(Me, name);
+        }
 
         public void WriteGlobal(string name, ValueBox value)
             => Variables.SetGlobal(ResourceManager.CanonicalOrName(name), value);
@@ -40,19 +60,8 @@ namespace Game
         public VariableResolver Resolver()
             => variable =>
             {
-                // `my bag` reads back the bag contents as text: "Sword x2, Potion"
-                if (variable.Owner == "my" && variable.Name == "bag")
-                    return ValueBox.OfText(Runtime.BagText(Me));
-                // `my state` reads the sheet's current state (default "default").
-                if (variable.Owner == "my" && variable.Name == "state")
-                {
-                    var sheet = Runtime.FindSheetFor(Me);
-                    return ValueBox.OfText(sheet == null ? "default" : sheet.CurrentState);
-                }
-                // `my spawnedFrom` reads the prefab/scene/template that produced this actor.
-                // Empty for actors that were placed in the scene by hand.
-                if (variable.Owner == "my" && variable.Name == "spawnedFrom")
-                    return ValueBox.OfText(Runtime.SpawnedFrom(Me));
+                // `my bag` / `my state` / `my spawnedFrom` are computed inside ReadMy, so
+                // values and conditions share one implementation.
                 if (variable.Owner == "my" || variable.Owner == "me")
                     return ReadMy(variable.Name);
                 if (variable.Owner == "other")

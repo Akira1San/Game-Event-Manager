@@ -1,0 +1,22 @@
+# ---------------- TK_Bullet.events (Task 16 Part H) ----------------
+# TK4 bullet: flies along the shooter's facing, knocks the victim back, then dies.
+#
+# The scene's "Bullet" actor is only a template for `spawn Bullet at me`. The runtime marks
+# real copies with `my spawnedFrom`, so the live blocks below are skipped on the template
+# itself — a template that ran its own `destroy me` would vanish after one second.
+
+# 400 cm/s over its 3 s life crosses ~12 m — TK4 shots reach across the screen rather than
+# dying a metre out.
+when every 0 seconds
+  my spawnedFrom is "Bullet"
+  move forward speed 400
+
+when me touches Enemy
+  # `for 0.2 seconds` keeps shoving, so the knockback is visible instead of a single frame.
+  push other back strength 100 for 0.2 seconds
+  send message "hit" to other
+  destroy me
+
+when every 3 seconds
+  my spawnedFrom is "Bullet"
+  destroy me

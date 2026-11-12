@@ -186,6 +186,38 @@ namespace Game
         }
 
         /// <summary>
+        /// How long a <c>push ... for &lt;n&gt; seconds</c> lasts: the authored seconds, or exactly
+        /// one tick when the event omits the qualifier (the historical single nudge).
+        /// </summary>
+        public static double PushDuration(double authoredSeconds, double deltaTime)
+            => authoredSeconds > 0 ? authoredSeconds : Math.Max(0.0, deltaTime);
+
+        /// <summary>Seconds of shove left after this tick; zero means the push is finished.</summary>
+        public static double PushRemaining(double remaining, double deltaTime)
+            => Math.Max(0.0, remaining - Math.Max(0.0, deltaTime));
+
+        /// <summary>
+        /// Where <c>spawn ... offset &lt;n&gt;</c> places a clone: <paramref name="offset"/> units
+        /// along a forward direction flattened onto the ground plane, so a bullet never spawns
+        /// above or below the shooter. A zero offset (or zero-length forward) leaves it exactly
+        /// on the spot.
+        /// </summary>
+        public static void SpawnOffset(
+            double forwardX, double forwardZ, double offset,
+            out double x, out double z)
+        {
+            double length = Math.Sqrt(forwardX * forwardX + forwardZ * forwardZ);
+            if (offset == 0 || length <= 1e-9)
+            {
+                x = 0;
+                z = 0;
+                return;
+            }
+            x = forwardX / length * offset;
+            z = forwardZ / length * offset;
+        }
+
+        /// <summary>
         /// One tick of character motion. The controller's collide-and-slide <c>Move</c> already
         /// respects walls, slopes and step offset; the event language only supplies direction and
         /// speed. Kept pure so the distance math is testable without Flax.

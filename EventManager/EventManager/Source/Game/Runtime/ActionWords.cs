@@ -93,6 +93,8 @@ namespace Game
         public string TweenTarget = "";
         public string TweenColor = "";
         public ValueNode TweenValue;
+        /// <summary>Tween length, or how long a <c>push ... for &lt;n&gt; seconds</c> keeps shoving.
+        /// Zero on a push means the historical single-tick nudge.</summary>
         public double Duration;
         public TweenEasing Easing = TweenEasing.Linear;
         /// <summary><c>place &lt;building&gt; at &lt;target&gt; on grid</c>: snap to a cell
@@ -101,6 +103,11 @@ namespace Game
         /// <summary>Explicit grid cell size from a trailing <c>by &lt;n&gt;</c>.</summary>
         public double GridSize;
         public bool HasGridSize;
+        /// <summary><c>spawn &lt;thing&gt; at &lt;spot&gt; offset &lt;n&gt;</c>: distance along the
+        /// spot's forward axis (flattened to XZ) where the clone appears.</summary>
+        public double SpawnOffset;
+        /// <summary>True when the spawn wrote an <c>offset</c> at all.</summary>
+        public bool HasSpawnOffset;
     }
 
     public static class ActionWords
@@ -153,6 +160,25 @@ namespace Game
             { "Right Alt", "Alt" },
             { "LeftAlt", "Alt" },
             { "RightAlt", "Alt" },
+            // TK4 drives the player with the arrow keys, and people write them as
+            // "Left Arrow" far more often than bare "Left". Every spelling of one arrow
+            // resolves to that arrow; nothing falls back to a different key.
+            { "Left Arrow", "ArrowLeft" },
+            { "LeftArrow", "ArrowLeft" },
+            { "Arrow Left", "ArrowLeft" },
+            { "ArrowLeft", "ArrowLeft" },
+            { "Right Arrow", "ArrowRight" },
+            { "RightArrow", "ArrowRight" },
+            { "Arrow Right", "ArrowRight" },
+            { "ArrowRight", "ArrowRight" },
+            { "Up Arrow", "ArrowUp" },
+            { "UpArrow", "ArrowUp" },
+            { "Arrow Up", "ArrowUp" },
+            { "ArrowUp", "ArrowUp" },
+            { "Down Arrow", "ArrowDown" },
+            { "DownArrow", "ArrowDown" },
+            { "Arrow Down", "ArrowDown" },
+            { "ArrowDown", "ArrowDown" },
         };
 
         /// <summary>The engine name to look a written key up with, or the trimmed name when it
@@ -179,6 +205,13 @@ namespace Game
         {
             var names = new List<string>();
             names.AddRange(new[] { "Space", "Enter", "Escape", "Tab", "Backspace", "Up", "Down", "Left", "Right" });
+            // Both ways of naming an arrow key are scanned (and are valid trigger names), so
+            // `when Left Arrow is held` and `when Arrow Left is held` both reach the same key.
+            names.AddRange(new[]
+            {
+                "Left Arrow", "Right Arrow", "Up Arrow", "Down Arrow",
+                "Arrow Left", "Arrow Right", "Arrow Up", "Arrow Down",
+            });
             names.AddRange(new[] { "Left Shift", "Right Shift", "Left Ctrl", "Right Ctrl", "Left Alt", "Right Alt" });
             names.AddRange(new[] { "Left Mouse", "Right Mouse", "Middle Mouse" });
             for (char letter = 'A'; letter <= 'Z'; letter++)
@@ -377,19 +410,32 @@ namespace Game
                     {
                         spec.Thing = words[1].Text;
                         spec.Dir = words[2].Text;
-                        if (words.Count >= 5 && words[words.Count - 2].Text == "strength")
+                        int pushIndex = 3;
+                        if (words.Count >= pushIndex + 2 && words[pushIndex].Text == "strength")
                         {
-                            spec.AmountNode = ValueNodeAt(words, words.Count - 1);
-                            spec.HasNumber = words[words.Count - 1].Type == TokenType.Number;
+                            spec.AmountNode = ValueNodeAt(words, pushIndex + 1);
+                            spec.HasNumber = words[pushIndex + 1].Type == TokenType.Number;
                             if (spec.HasNumber)
-                                spec.Number = words[words.Count - 1].Number;
-                            return Finish(spec, ActionVerb.Push, words, words.Count);
+                                spec.Number = words[pushIndex + 1].Number;
+                            pushIndex += 2;
                         }
-                        spec.Number = 5;
-                        spec.HasNumber = true;
-                        return Finish(spec, ActionVerb.Push, words, 3);
+                        else
+                        {
+                            spec.Number = 5;
+                            spec.HasNumber = true;
+                        }
+                        // `push other back strength 100 for 0.2 seconds` keeps shoving for that
+                        // long; without it the push is the historical single tick.
+                        if (words.Count >= pushIndex + 3 && words[pushIndex].Text == "for" &&
+                            words[pushIndex + 2].Text == "seconds")
+                        {
+                            if (words[pushIndex + 1].Type == TokenType.Number)
+                                spec.Duration = words[pushIndex + 1].Number;
+                            pushIndex += 3;
+                        }
+                        return Finish(spec, ActionVerb.Push, words, pushIndex);
                     }
-                    return Unknown(spec, words, "\u201Cpush\u201D looks like this: \u201Cpush other up strength 10\u201D", warn);
+                    return Unknown(spec, words, "\u201Cpush\u201D looks like this: \u201Cpush other up strength 10\u201D or \u201Cpush other back strength 100 for 0.2 seconds\u201D", warn);
 
                 case "parent":
                     if (words.Count >= 4 && IsThing(words[1]) && words[2].Text == "to" && IsThing(words[3]))
@@ -472,10 +518,21 @@ namespace Game
                         {
                             spec.Thing = words[1].Text;
                             spec.To = cloneSpot;
-                            return Finish(spec, ActionVerb.Spawn, words, 3 + cloneSpotUsed);
+                            int consumed = 3 + cloneSpotUsed;
+                            // `spawn Bullet at me offset 30`: the clone appears 30 units along
+                            // the spot's own forward axis (TK4's muzzle offset).
+                            if (words.Count >= consumed + 2 && words[consumed].Text == "offset")
+                            {
+                                spec.AmountNode = ValueNodeAt(words, consumed + 1);
+                                spec.HasSpawnOffset = true;
+                                if (words[consumed + 1].Type == TokenType.Number)
+                                    spec.SpawnOffset = words[consumed + 1].Number;
+                                consumed += 2;
+                            }
+                            return Finish(spec, ActionVerb.Spawn, words, consumed);
                         }
                     }
-                    return Unknown(spec, words, "\u201Cspawn\u201D looks like this: \u201Cspawn Bullet at me\u201D or \u201Cspawn prefab \"Hero\" at SpawnPoint\u201D or \u201Cspawn scene \"HeroScene\" at SpawnPoint\u201D", warn);
+                    return Unknown(spec, words, "\u201Cspawn\u201D looks like this: \u201Cspawn Bullet at me\u201D, \u201Cspawn Bullet at me offset 30\u201D, \u201Cspawn prefab \"Hero\" at SpawnPoint\u201D or \u201Cspawn scene \"HeroScene\" at SpawnPoint\u201D", warn);
                 case "place":
                 {
                     // `place Barracks at Mouse` / `place Barracks at Mouse on grid [by 32]`

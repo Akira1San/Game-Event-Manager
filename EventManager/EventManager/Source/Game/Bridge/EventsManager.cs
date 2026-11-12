@@ -175,9 +175,14 @@ namespace Game
             }
             Runtime.SceneStarted();
 
-            Runtime.Variables.SetGlobal("cameraFollow", ValueBox.OfNumber(0));
-            Runtime.Variables.SetGlobal("cameraHeight", ValueBox.OfNumber(260));
-            Runtime.Variables.SetGlobal("cameraDepth", ValueBox.OfNumber(-170));
+            // Camera framing lives in globals so events can author it (variable names start
+            // with a capital letter): `set CameraPitch to 90` before `camera follows me`.
+            Runtime.Variables.SetGlobal("CameraFollow", ValueBox.OfNumber(0));
+            Runtime.Variables.SetGlobal("CameraHeight", ValueBox.OfNumber(260));
+            Runtime.Variables.SetGlobal("CameraDepth", ValueBox.OfNumber(-170));
+            // How far the follow camera tilts down: 45° is the oblique framing existing scenes
+            // use; 90° is straight down (TK4). Centring needs depth = -height / tan(pitch).
+            Runtime.Variables.SetGlobal("CameraPitch", ValueBox.OfNumber(CameraFraming.DefaultPitch));
             Runtime.Variables.SetGlobal("LookAtMouse", ValueBox.OfNumber(0));
         }
 
@@ -510,13 +515,13 @@ namespace Game
             }
 
             // Legacy auto-follow: only if explicitly enabled via events.
-            if (Runtime.Variables.GetGlobal("cameraFollow").AsNumber() <= 0)
+            if (Runtime.Variables.GetGlobal("CameraFollow").AsNumber() <= 0)
                 return;
             var player = Level.FindActor("Player") as Actor;
             if (player == null)
                 return;
-            float height = (float)Runtime.Variables.GetGlobal("cameraHeight").AsNumber();
-            float depth = (float)Runtime.Variables.GetGlobal("cameraDepth").AsNumber();
+            float height = (float)Runtime.Variables.GetGlobal("CameraHeight").AsNumber();
+            float depth = (float)Runtime.Variables.GetGlobal("CameraDepth").AsNumber();
             camera.Position = player.Position + new Vector3(0f, height, depth);
         }
 

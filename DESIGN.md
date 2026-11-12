@@ -328,14 +328,14 @@ when Escape is pressed
 | `goto <thing>` | `goto Player` | navigation: walks there using the baked NavMesh (walls avoided for free); pairs with `arrives at` |
 | `goto there` | `goto there` | point & click: walks to the **last clicked position** (pairs with `when Ground is clicked`) |
 | `camera looks at <thing>` | `camera looks at Chest` | aim the view at any actor |
-| `camera follows <thing>` | `camera follows Player` | keeps them centered while they move; aiming at something else releases the follow |
+| `camera follows <thing>` | `camera follows Player` | keeps them centered while they move; aiming at something else releases the follow. Framing comes from the `CameraHeight` / `CameraDepth` / `CameraPitch` globals — `CameraDepth = -CameraHeight / tan(CameraPitch)` centres the target, and `CameraPitch 90` is straight down (TK4) |
 | `look at <thing>` | `look at Player` | one-shot snap: turn toward the target, once |
 | `face <thing>` | `face Player` | continuous: keeps turning toward the target while it moves (BGE Track To) â€” the turret/chaser word |
 | `teleport me/other to <thing>` | `teleport me to SpawnPoint` | |
-| `push <target> direction <dir> strength <n>` | `push other up strength 10` | follows the target's move mode: impulse (dynamic), swept (kinematic), collide-and-slide (character), else a transform nudge |
+| `push <target> direction <dir> strength <n>` | `push other up strength 10` | follows the target's move mode: impulse (dynamic), swept (kinematic), collide-and-slide (character), else a transform nudge. Add `for <n> seconds` (e.g. `push other back strength 100 for 0.2 seconds`) to keep shoving every tick — that is how TK4 knockback reads; without it the push is one tick |
 | `make <target> unmovable` | `make me solid` | physics toggle |
 | `destroy <me/other/thing>` | `destroy me` | |
-| `spawn <thing> at <thing>` | `spawn Coin at SpawnPoint` | clones an actor already placed in the scene (the template stays put, hidden if you like) |
+| `spawn <thing> at <thing>` | `spawn Coin at SpawnPoint` | clones an actor already placed in the scene (the template stays put, hidden if you like); `offset <n>` (`spawn Bullet at me offset 30`) slides the copy `n` units along the spot's facing, XZ only |
 | `spawn prefab "<name>" at <thing>` | `spawn prefab "Hero" at SpawnPoint` | instantiates an imported `.prefab`; name ignores folder/extension/case; copies get unique names (`Hero`, `Hero 2`, …) and every actor inside runs its own `when me appears` |
 | `spawn scene "<name>" at <thing>` | `spawn scene "HeroScene" at SpawnPoint` | loads a `.scene` **on top of** the current scene (additive) and moves only that scene's root actors to the spot — existing actors never move |
 | `play sound "<file>"` | `play sound "hit.wav"` | clip **name** only: `"hit"`, `"hit.wav"`, `"sounds/hit"` are the same imported clip |

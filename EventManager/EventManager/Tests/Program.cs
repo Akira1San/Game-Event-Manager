@@ -2849,6 +2849,125 @@ when 1 is pressed
     Check(ActionWords.EngineKeyName("Banana") == "Banana",
         "an unknown key name is left alone instead of falling back to another key");
 
+    // ---- Task 16 Part H: TK4 player controls & camera ----
+
+    // Spelled-out arrows are real key names: TK4 steers with the arrow keys, and
+    // `when Left Arrow is held` used to parse into a trigger that could never fire.
+    Check(ActionWords.EngineKeyName("Left Arrow") == "ArrowLeft" &&
+          ActionWords.EngineKeyName("Right Arrow") == "ArrowRight" &&
+          ActionWords.EngineKeyName("Up Arrow") == "ArrowUp" &&
+          ActionWords.EngineKeyName("Down Arrow") == "ArrowDown",
+        "`Left/Right/Up/Down Arrow` map to Flax's Arrow keys");
+    Check(ActionWords.EngineKeyName("Arrow Left") == "ArrowLeft" &&
+          ActionWords.EngineKeyName("LeftArrow") == "ArrowLeft",
+        "every spelling of one arrow resolves to that same arrow");
+    Check(ActionWords.KeyNamesForScanning.Contains("Left Arrow") &&
+          ActionWords.KeyNamesForScanning.Contains("Space") &&
+          ActionWords.KeyNamesForScanning.Contains("Arrow Right"),
+        "the input scan list includes both arrow spellings");
+
+    var heldArrow = TriggerClassifier.Classify(
+        parser.Parse("when Left Arrow is held\n  turn left degrees 4").Events[0]);
+    Check(heldArrow.Kind == TriggerKind.KeyHeld && heldArrow.Key == "Left Arrow",
+        "`when Left Arrow is held` is a polled key-held trigger");
+    var pressedArrow = TriggerClassifier.Classify(
+        parser.Parse("when Up Arrow is pressed\n  print \"go\"").Events[0]);
+    Check(pressedArrow.Kind == TriggerKind.KeyPressed && pressedArrow.RequireName == "Up Arrow",
+        "`when Up Arrow is pressed` is a key press, not a UI button press");
+
+    var arrowWorld = new FakeWorld();
+    var arrowEngine = FreshEngine(arrowWorld);
+    var arrowLog = new List<string>();
+    var arrowSheet = arrowEngine.AddSheet(new FakeActor("Player"),
+        parser.Parse("when Left Arrow is held\n  turn left degrees 4"));
+    arrowEngine.OnRawAction = (context, words) => arrowLog.Add(J(words));
+    arrowWorld.SetHeld("Left Arrow", true);
+    arrowEngine.Tick(0);
+    arrowWorld.SetHeld("Left Arrow", false);
+    arrowEngine.Tick(1);
+    Check(arrowLog.Count == 1 && arrowLog[0].Contains("turn"),
+        "`when Left Arrow is held` fires while the arrow is down, then stops");
+
+    // Spawn offset: the clone appears along the spot's forward axis, XZ only.
+    var offsetSpawn = ActionWords.Parse(
+        RawWords(actionParser, "when Space is pressed\n  spawn Bullet at me offset 30"), null);
+    Check(offsetSpawn.Verb == ActionVerb.Spawn && offsetSpawn.Thing == "Bullet" &&
+          offsetSpawn.To == "me" && offsetSpawn.HasSpawnOffset &&
+          offsetSpawn.AmountNode != null && offsetSpawn.SpawnOffset == 30,
+        "`spawn Bullet at me offset 30` carries the spawn offset");
+    var plainSpawn = ActionWords.Parse(
+        RawWords(actionParser, "when Space is pressed\n  spawn Bullet at me"), null);
+    Check(plainSpawn.Verb == ActionVerb.Spawn && plainSpawn.To == "me" &&
+          !plainSpawn.HasSpawnOffset && plainSpawn.AmountNode == null,
+        "a plain `spawn ... at me` leaves the offset at 0 (old placement)");
+
+    PhysicsMovement.SpawnOffset(0, 1, 30, out double spawnX, out double spawnZ);
+    Check(Math.Abs(spawnX) < 1e-9 && Math.Abs(spawnZ - 30) < 1e-9,
+        "a spawn offset moves the clone forward along the facing");
+    PhysicsMovement.SpawnOffset(1, 0, 30, out spawnX, out spawnZ);
+    Check(Math.Abs(spawnX - 30) < 1e-9 && Math.Abs(spawnZ) < 1e-9,
+        "the spawn offset follows the facing, not a fixed axis");
+    PhysicsMovement.SpawnOffset(0, 0, 30, out spawnX, out spawnZ);
+    Check(spawnX == 0 && spawnZ == 0, "a degenerate facing leaves the clone on the spot");
+    PhysicsMovement.SpawnOffset(0, 1, 0, out spawnX, out spawnZ);
+    Check(spawnX == 0 && spawnZ == 0, "an offset of 0 spawns exactly at the spot");
+
+    // Knockback duration (`push ... for <n> seconds`).
+    var knockPush = ActionWords.Parse(
+        RawWords(actionParser, "when me touches Enemy\n  push other back strength 100 for 0.2 seconds"), null);
+    Check(knockPush.Verb == ActionVerb.Push && knockPush.Dir == "back" &&
+          knockPush.HasNumber && knockPush.Number == 100 &&
+          Math.Abs(knockPush.Duration - 0.2) < 1e-9,
+        "`push other back strength 100 for 0.2 seconds` keeps its strength and duration");
+    var legacyPush = ActionWords.Parse(
+        RawWords(actionParser, "when me touches Enemy\n  push other up strength 10"), null);
+    Check(legacyPush.Verb == ActionVerb.Push && legacyPush.Number == 10 && legacyPush.Duration == 0,
+        "`push` without `for` stays the one-tick shove");
+    var bareKnock = ActionWords.Parse(
+        RawWords(actionParser, "when me touches Enemy\n  push other back for 0.2 seconds"), null);
+    Check(bareKnock.Verb == ActionVerb.Push && bareKnock.HasNumber && bareKnock.Number == 5 &&
+          Math.Abs(bareKnock.Duration - 0.2) < 1e-9,
+        "`push ... for 0.2 seconds` keeps the default strength 5");
+
+    Check(PhysicsMovement.PushDuration(0, 0.016) > 0.0159 &&
+          Math.Abs(PhysicsMovement.PushDuration(0.2, 0.016) - 0.2) < 1e-9,
+        "a push lasts its authored seconds, or exactly one tick when it has none");
+    Check(Math.Abs(PhysicsMovement.PushRemaining(0.2, 0.05) - 0.15) < 1e-9 &&
+          PhysicsMovement.PushRemaining(0.02, 0.05) == 0,
+        "a sustained push runs out of time and never goes negative");
+
+    // Camera framing: centring needs depth = -height / tan(pitch).
+    Check(CameraFraming.ClampPitch(45) == 45 && CameraFraming.ClampPitch(0) == CameraFraming.MinPitch &&
+          CameraFraming.ClampPitch(180) == CameraFraming.MaxPitch,
+        "camera pitch is clamped to a usable top-down range");
+    Check(Math.Abs(CameraFraming.BackOffset(600, 45) - 600) < 1e-6 &&
+          Math.Abs(CameraFraming.CenteredDepth(600, 45) + 600) < 1e-6,
+        "at 45 degrees the camera sits as far back as it is high (target centred)");
+    Check(Math.Abs(CameraFraming.BackOffset(600, 90)) < 1e-9 &&
+          Math.Abs(CameraFraming.CenteredDepth(600, 90)) < 1e-9,
+        "a straight-down view sits directly above the target");
+    Check(Math.Abs(CameraFraming.CenteredDepth(600, 26.56505117707799) + 1200) < 1e-3,
+        "a shallower pitch needs a bigger backward offset");
+    Check(Math.Abs(CameraFraming.CenteredDepth(-5, 45)) < 1e-9,
+        "a negative height cannot flip the camera in front of the target");
+
+    // `my spawnedFrom` is computed, and a condition must read the same value an expression does:
+    // the TK4 bullet gates its flight on it, and a stale (unset) read kept every clone still.
+    var fromWorld = new FakeWorld();
+    var fromEngine = FreshEngine(fromWorld);
+    var fromLog = new List<string>();
+    var spawnedCopy = new FakeActor("Bullet");
+    var sceneTemplate = new FakeActor("BulletTemplate");
+    fromEngine.OnRawAction = (context, words) => fromLog.Add(context.Me == spawnedCopy ? "copy" : "template");
+    var fromProgram = parser.Parse("when every 0 seconds\n  my spawnedFrom is \"Bullet\"\n  move forward speed 80");
+    fromEngine.AddSheet(spawnedCopy, fromProgram);
+    fromEngine.AddSheet(sceneTemplate, fromProgram);
+    fromEngine.MarkSpawned(spawnedCopy, "Bullet");
+    fromEngine.Tick(0);
+    fromEngine.Tick(1);
+    Check(fromLog.Count == 2 && fromLog.TrueForAll(entry => entry == "copy"),
+        "`my spawnedFrom is \"Bullet\"` opens for the spawned copy only (conditions read it like values)");
+
     // Digit triggers are top-row keys (`D1`), never button presses: `when 1 is pressed` must be
     // a key trigger so a UI button named "1" cannot swallow it.
     var digitTrigger = TriggerClassifier.Classify(parser.Parse("when 1 is pressed\n  print \"one\"").Events[0]);
