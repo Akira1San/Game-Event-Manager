@@ -861,6 +861,15 @@ namespace Game
                 }
                 else if (statement is RawActionNode raw)
                 {
+                    // `enemy type "Zombie"` — Task 16 Part D. The typed stats are plain variables,
+                    // so this stays in the engine-independent runtime and needs no engine action.
+                    if (raw.Words.Count >= 3 && raw.Words[0].Text == "enemy" && raw.Words[1].Text == "type")
+                    {
+                        string typeName = raw.Words[2].Text;
+                        if (!EnemyTypes.Apply(context, typeName))
+                            OnRuntimeWarning($"I don't know the enemy type \u201C{typeName}\u201D \u2014 the built-in types are {EnemyTypes.KnownTypeNames()}, and a new type needs its own `<Type><Stat>` variables (see EnemyTypes.events).");
+                        continue;
+                    }
                     if (IsStopThisEvent(raw))
                     {
                         context.Stopped = true;
@@ -1200,6 +1209,11 @@ namespace Game
             var inSight = sheet.InSight[eventIndex];
             var seeing = new List<object>();
             double range = descriptor.Distance;
+            // `when me sees Player by my SightDistance`: the range is the sheet actor's own stat.
+            if (!string.IsNullOrEmpty(descriptor.DistanceVariable))
+                range = Variables.HasLocal(sheet.Actor, descriptor.DistanceVariable)
+                    ? Variables.GetLocal(sheet.Actor, descriptor.DistanceVariable).AsNumber()
+                    : double.MaxValue;
             if (descriptor.Kind == TriggerKind.StopsSeeing && range < 0)
                 range = sheet.LastSeenRange.GetValueOrDefault(descriptor.RequireName, double.MaxValue);
             foreach (object other in World.Actors())

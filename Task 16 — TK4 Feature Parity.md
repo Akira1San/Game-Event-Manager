@@ -67,12 +67,12 @@ Goal: implement remaining Tapan Kaikki 4 (TK4) features not yet covered, achievi
 - [ ] Example: `Player.events` — `when 1 pressed → set weapon to "Pistol"`; `when Left Mouse pressed → unless reloading → spawn Bullet at me → add -1 to ammo Pistol`.
 
 ### Part D — Typed Enemy Definitions
-- [ ] Word registry: `enemy type <name>` (on `when me appears` or component) — applies base stats: speed, sight distance, health, default weapon, hostile flag, explosion death.
-- [ ] Data: `EnemyTypes.events` (or JSON) — e.g., `Zombie: speed 2, sight 10, health 50, weapon "Claws", hostile true`; `Turret: speed 0, sight 15, health 100, weapon "Cannon", hostile true, explosionDeath true`.
-- [ ] Runtime: `EventSheet` on enemy reads `enemy type` and initializes `my Speed`, `my SightDistance`, `my Health`, `my Weapon`, `my Hostile`, `my ExplosionDeath`.
-- [ ] Conditions: `my type is <name>`, `my health is lower than <n>`.
-- [ ] Unit test: spawning `Zombie` vs `Turret` applies different stats; `Turret` doesn't move but shoots.
-- [ ] Example: `Enemy.events` uses `my Speed`, `my SightDistance` instead of hardcoded values.
+- [x] Word registry: `enemy type <name>` (on `when me appears` or component) — applies base stats: speed, sight distance, health, default weapon, hostile flag, explosion death.
+- [x] Data: `EnemyTypes.events` (or JSON) — e.g., `Zombie: speed 2, sight 10, health 50, weapon "Claws", hostile true`; `Turret: speed 0, sight 15, health 100, weapon "Cannon", hostile true, explosionDeath true`.
+- [x] Runtime: `EventSheet` on enemy reads `enemy type` and initializes `my Speed`, `my SightDistance`, `my Health`, `my Weapon`, `my Hostile`, `my ExplosionDeath`.
+- [x] Conditions: `my type is <name>`, `my health is lower than <n>`.
+- [x] Unit test: spawning `Zombie` vs `Turret` applies different stats; `Turret` doesn't move but shoots.
+- [x] Example: `Enemy.events` uses `my Speed`, `my SightDistance` instead of hardcoded values.
 
 ### Part E — TK4 Particle Effects (Footprint, Blood, Gibs)
 - [ ] Integrates with Task 14 (Particle & Light Bridge).

@@ -4397,6 +4397,95 @@ var instantPlat = new PhysicsMovement.OngoingPlatform
 Check(instantPlat.Progress == 1, "a zero-duration platform snaps to progress 1");
 Check(Math.Abs(instantPlat.AxisOffset - 50) < 0.0001, "a zero-duration platform applies the full distance");
 
+// ---- Task 16 Part D: typed enemy definitions ----
+var typeParser = new EventParser();
+var zombieProg = typeParser.Parse(@"when me appears
+  enemy type ""Zombie""
+  my type is Zombie
+  my health is lower than 60
+  set Typed to 1
+");
+Check(zombieProg.Events.Count == 1 && zombieProg.Events[0].Body.Count == 4,
+    "`enemy type \"Zombie\"` parses as a body line");
+Check(zombieProg.Events[0].Body[0].Statement is RawActionNode typeAction &&
+      typeAction.Words[0].Text == "enemy" && typeAction.Words[2].Text == "Zombie",
+    "the `enemy type` line keeps the type name");
+
+var typeRuntime = new EventRuntime();
+var zombieActor = new object();
+typeRuntime.AddSheet(zombieActor, zombieProg);
+typeRuntime.Tick(0);
+Check(typeRuntime.Variables.GetLocal(zombieActor, "Speed").AsNumber() == 2,
+    "Zombie sets my Speed to 2");
+Check(typeRuntime.Variables.GetLocal(zombieActor, "SightDistance").AsNumber() == 10,
+    "Zombie sets my SightDistance to 10");
+Check(typeRuntime.Variables.GetLocal(zombieActor, "Health").AsNumber() == 50,
+    "Zombie sets my Health to 50");
+CheckStrings("Claws", typeRuntime.Variables.GetLocal(zombieActor, "Weapon").AsText(),
+    "Zombie sets my Weapon to \"Claws\"");
+Check(typeRuntime.Variables.GetLocal(zombieActor, "Hostile").AsBoolean(),
+    "Zombie sets my Hostile to true");
+Check(!typeRuntime.Variables.GetLocal(zombieActor, "ExplosionDeath").AsBoolean(),
+    "Zombie death is not an explosion");
+CheckStrings("Zombie", typeRuntime.Variables.GetLocal(zombieActor, "Type").AsText(),
+    "enemy type records my Type");
+Check(typeRuntime.Variables.GetGlobal("Typed").AsNumber() == 1,
+    "`my type is Zombie` and `my health is lower than 60` read the applied stats");
+
+var turretProg = typeParser.Parse("when me appears\n  enemy type \"Turret\"\n");
+var turretRuntime = new EventRuntime();
+var turretActor = new object();
+turretRuntime.AddSheet(turretActor, turretProg);
+turretRuntime.Tick(0);
+Check(turretRuntime.Variables.GetLocal(turretActor, "Speed").AsNumber() == 0,
+    "Turret sets my Speed to 0 (it never moves)");
+Check(turretRuntime.Variables.GetLocal(turretActor, "SightDistance").AsNumber() == 15,
+    "Turret sets my SightDistance to 15");
+Check(turretRuntime.Variables.GetLocal(turretActor, "Health").AsNumber() == 100,
+    "Turret sets my Health to 100");
+CheckStrings("Cannon", turretRuntime.Variables.GetLocal(turretActor, "Weapon").AsText(),
+    "Turret sets my Weapon to \"Cannon\" (it still shoots)");
+Check(turretRuntime.Variables.GetLocal(turretActor, "ExplosionDeath").AsBoolean(),
+    "Turret dies in an explosion");
+
+var overrideRuntime = new EventRuntime();
+overrideRuntime.Variables.SetGlobal("ZombieHealth", ValueBox.OfNumber(80));
+var overrideActor = new object();
+overrideRuntime.AddSheet(overrideActor, zombieProg);
+overrideRuntime.Tick(0);
+Check(overrideRuntime.Variables.GetLocal(overrideActor, "Health").AsNumber() == 80,
+    "a ZombieHealth variable overrides the built-in health");
+
+var unknownRuntime = new EventRuntime();
+string unknownWarning = "";
+unknownRuntime.OnRuntimeWarning = message => unknownWarning = message;
+var unknownActor = new object();
+unknownRuntime.AddSheet(unknownActor, typeParser.Parse("when me appears\n  enemy type \"Ghost\"\n"));
+unknownRuntime.Tick(0);
+Check(unknownWarning.Contains("Ghost"), "an unknown enemy type warns instead of inventing stats");
+Check(!unknownRuntime.Variables.HasLocal(unknownActor, "Type"),
+    "an unknown enemy type writes nothing");
+
+// A data file (EnemyTypes.events) is read before any sheet runs, so a type is complete on
+// its first `me appears` — the engine bridge calls EnemyTypes.LoadData on load/reload.
+EnemyTypes.LoadData(typeParser.Parse("when game starts\n  set ZombieSpeed to 120\n  set ZombieSightDistance to 250\n"));
+var dataRuntime = new EventRuntime();
+var dataActor = new object();
+dataRuntime.AddSheet(dataActor, zombieProg);
+dataRuntime.Tick(0);
+Check(dataRuntime.Variables.GetLocal(dataActor, "Speed").AsNumber() == 120,
+    "EnemyTypes.events tunes Zombie Speed before the sheet runs");
+Check(dataRuntime.Variables.GetLocal(dataActor, "SightDistance").AsNumber() == 250,
+    "EnemyTypes.events tunes Zombie SightDistance before the sheet runs");
+Check(dataRuntime.Variables.GetLocal(dataActor, "Health").AsNumber() == 50,
+    "a stat left out of the data file keeps its built-in value");
+EnemyTypes.LoadData(null);
+
+var sightProg = typeParser.Parse("when me sees Player by my SightDistance\n  set Spotted to 1\n");
+var sightDescriptor = TriggerClassifier.Classify(sightProg.Events[0]);
+Check(sightDescriptor.Kind == TriggerKind.Sees && sightDescriptor.DistanceVariable == "SightDistance",
+    "`when me sees Player by my SightDistance` reads a per-enemy range");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

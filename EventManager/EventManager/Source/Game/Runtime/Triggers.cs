@@ -67,6 +67,9 @@ namespace Game
         /// touched actor's collider must carry (matched in addition to, or instead of, a name).</summary>
         public string RequireMaterial = "";
         public double Distance;
+        /// <summary>For `by my SightDistance`: the sheet actor's own variable to read the
+        /// range from each poll (typed-enemy stats, Task 16 Part D).</summary>
+        public string DistanceVariable = "";
         public double Seconds;
         public string WatchOwner = "";
         public string WatchName = "";
@@ -84,6 +87,8 @@ namespace Game
             var words = new string[trigger.Count];
             for (int i = 0; i < trigger.Count; i++)
                 words[i] = trigger[i].Type == TokenType.Word ? trigger[i].Text : trigger[i].Text;
+
+
 
             if (words.Length >= 2 && words[0] == "every")
                 return EveryDescriptor(trigger, ev);
@@ -314,6 +319,7 @@ namespace Game
                 descriptor.Kind = TriggerKind.Sees;
                 descriptor.RequireName = words[2];
                 descriptor.Distance = DistanceBy(trigger);
+                descriptor.DistanceVariable = DistanceNameBy(trigger);
                 return descriptor;
             }
             if (words.Length >= 4 && words[1] == "stops" && words[2] == "seeing")
@@ -321,6 +327,7 @@ namespace Game
                 descriptor.Kind = TriggerKind.StopsSeeing;
                 descriptor.RequireName = words[3];
                 descriptor.Distance = DistanceBy(trigger);
+                descriptor.DistanceVariable = DistanceNameBy(trigger);
                 return descriptor;
             }
             if (words.Length >= 3 && words[1] == "gets")
@@ -351,6 +358,24 @@ namespace Game
                 return descriptor;
             }
             return new TriggerDescriptor { Kind = TriggerKind.Unknown };
+        }
+
+        /// <summary>
+        /// `by my SightDistance` — a range held in the sheet actor's own variable. A plain
+        /// `by 12` stays a fixed distance (<see cref="DistanceBy"/> reads it); this only
+        /// answers the variable form, so typed enemies sight as far as their type says.
+        /// </summary>
+        private static string DistanceNameBy(List<Token> trigger)
+        {
+            for (int i = trigger.Count - 2; i >= 0; i--)
+            {
+                if (trigger[i].Type != TokenType.Word || trigger[i].Text != "by")
+                    continue;
+                if (trigger[i + 1].Type == TokenType.Word && trigger[i + 1].Text == "my" && i + 2 < trigger.Count)
+                    return trigger[i + 2].Text;
+                return "";
+            }
+            return "";
         }
 
         private static double DistanceBy(List<Token> trigger)

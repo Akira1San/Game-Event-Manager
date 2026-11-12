@@ -162,6 +162,9 @@ namespace Game
             }
             var programs = EventFiles.LoadAll(_gameFilesFolder);
             _programs = programs;
+            // Typed enemy stats come from the data file, read before any sheet runs so an
+            // enemy's `me appears` never sees half a type (Task 16 Part D).
+            EnemyTypes.LoadData(ProgramNamed("EnemyTypes")?.File);
             RememberSignatures(programs);
             SweepComponents();
             AttachPrograms(programs, startedNow: true);
@@ -230,6 +233,7 @@ namespace Game
         private void ApplyReload(List<EventFileResult> programs)
         {
             _programs = programs;
+            EnemyTypes.LoadData(ProgramNamed("EnemyTypes")?.File);
             _shownErrors.Clear();
             _missingShown.Clear();
             var byName = new Dictionary<string, EventFileResult>();

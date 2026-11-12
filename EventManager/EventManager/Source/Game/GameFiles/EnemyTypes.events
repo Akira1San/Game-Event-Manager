@@ -1,0 +1,29 @@
+# ---------------- EnemyTypes.events (Task 16 Part D: typed enemy data) ----------------
+# Typed enemy definitions, data-driven. `enemy type "Zombie"` copies a type's stats onto the
+# enemy's own variables (my Speed, my SightDistance, my Health, my Weapon, my Hostile,
+# my ExplosionDeath, my Type), so an enemy sheet never hard-codes them.
+#
+# HOW IT LOADS: the file is read when the game loads events (and on hot reload), by name —
+# EnemyTypes.events — before any actor's `when me appears` runs, so a type is complete on the
+# first tick. Attaching it to a sheet is optional; the `when game starts` block below keeps it
+# valid as a normal event file.
+#
+# UNITS: the built-in defaults are TK4's metres (Zombie speed 2, sight 10). This project's TK
+# scenes are authored in centimetres (the player moves 45-200, the camera sits at 600), so the
+# table below scales a Zombie to 100 cm/s and 200 cm of sight — otherwise the enemy would be
+# blind at 10 cm and never chase. Change a type here, not in code.
+
+when game starts
+  set ZombieSpeed to 100
+  set ZombieSightDistance to 200
+  set ZombieHealth to 50
+  set ZombieWeapon to "Claws"
+  set ZombieHostile to true
+  set ZombieExplosionDeath to false
+
+  set TurretSpeed to 0
+  set TurretSightDistance to 15
+  set TurretHealth to 100
+  set TurretWeapon to "Cannon"
+  set TurretHostile to true
+  set TurretExplosionDeath to true

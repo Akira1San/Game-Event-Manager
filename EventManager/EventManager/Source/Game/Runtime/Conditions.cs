@@ -16,6 +16,8 @@ namespace Game
         Chance,
         Near,
         Moving,
+        // Typed enemies (Task 16 Part D)
+        MyTypeIs,
         HasTag,
         BagHas,
         ParticlePlaying,
@@ -82,6 +84,16 @@ namespace Game
             if (texts.Length == 3 && texts[0] == "me" && texts[1] == "is" && texts[2] == "moving")
             {
                 node.Kind = ConditionKind.Moving;
+                return node;
+            }
+
+            // `my type is Zombie` / `my type is "Zombie"` — the name `enemy type` recorded.
+            // A bare word names the type rather than a variable, so this sits before the
+            // generic `<var> is <value>` handling.
+            if (texts.Length == 4 && texts[0] == "my" && texts[1] == "type" && texts[2] == "is")
+            {
+                node.Kind = ConditionKind.MyTypeIs;
+                node.Name = tokens[3].Text;
                 return node;
             }
 
@@ -340,6 +352,9 @@ namespace Game
                 }
                 case ConditionKind.Moving:
                     return context.World.IsMoving(context.Me);
+                case ConditionKind.MyTypeIs:
+                    return string.Equals(context.ReadMy("Type").AsText(), node.Name,
+                        StringComparison.OrdinalIgnoreCase);
                 case ConditionKind.ParticlePlaying:
                     return context.World.IsParticlePlaying(context.Me, node.Thing);
                 case ConditionKind.ButtonPressed:

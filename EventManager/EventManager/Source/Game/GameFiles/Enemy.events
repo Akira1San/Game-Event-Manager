@@ -1,16 +1,21 @@
 # ---------------- Enemy.events (patrol -> chase -> attack) ----------------
+# Typed enemy (Task 16 Part D): the type supplies every base stat as a `my` variable —
+# Speed, SightDistance, Health, Weapon, Hostile, ExplosionDeath — so nothing below
+# hard-codes them. See EnemyTypes.events for the data table (Zombie, Turret, your own).
 when me appears
+  enemy type "Zombie"
   set my mode to "patrol"
-  set my health to 100
   print "Enemy: patrol start"
   goto random Waypoint speed 100 facing forward             # pathfinds around walls automatically
   # loop anim "Walk"   # simple mesh — no animation
 
 when me arrives at Waypoint
+  my Speed is higher than 0                  # a rooted type (Turret) never wanders
   wait random 0.5 to 2 seconds
   goto random Waypoint speed 100
 
-when me sees Player by 200                   # one-shot the moment the player is spotted
+when me sees Player by my SightDistance      # one-shot the moment the player is spotted,
+  my Speed is higher than 0                  # as far as this type's eyes reach
   set my mode to "chase"
   print "Enemy: chase start"
   # loop anim "Run"   # simple mesh — no animation
@@ -18,6 +23,7 @@ when me sees Player by 200                   # one-shot the moment the player is
 
 when every 0.2 seconds                     # chase keeps re-targeting the moving player
   my mode is "chase"
+  my Speed is higher than 0
   goto Player speed 100 facing forward
 
 when me stops seeing Player                # went out of sight — resume patrol
@@ -26,6 +32,7 @@ when me stops seeing Player                # went out of sight — resume patrol
 
 when me is near Player by 1.5
   my mode is "chase"
+  my Hostile is true                         # only hostile types attack
   print "Enemy: attack — sending hurt to Player"
   play anim "Attack"
   send message "hurt" to Player
