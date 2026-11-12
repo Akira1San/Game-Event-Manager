@@ -319,7 +319,9 @@ foreach (var entry in WordRegistry.All)
         ? entry.Example + "\n  show me\n"
         : entry.Kind == "directive"
             ? entry.Example + "\n"
-            : "when me appears\n  " + entry.Example + "\n";
+            : entry.Kind == "structural"
+                ? "when me appears\n  my score is 0\n  " + entry.Example + "\n"
+                : "when me appears\n  " + entry.Example + "\n";
     try
     {
         parser.Parse(source);
@@ -754,6 +756,75 @@ var gateSheet2 = gateEngine2.AddSheet(new FakeActor("Robot"), gateProgram2);
 gateEngine2.Variables.SetLocal(gateSheet2.Actor, "mode", ValueBox.OfText("chase"));
 gateEngine2.Tick(10);
 Check(gateEngine2.Variables.GetGlobal("Order").AsText() == "!", "bare condition lines gate like `unless` lines (matching = run)");
+
+// Task 20: `otherwise` / `else` blocks
+var elseProgram = parser.Parse(@"when me overlaps Bomb
+  if Flag is true
+  set Log to Log + ""T""
+  otherwise
+  set Log to Log + ""F""");
+Check(elseProgram.Events[0].Body[0].IsCondition && !elseProgram.Events[0].Body[0].IsOtherwise,
+      "an `if` line is a condition line with no statement");
+Check(elseProgram.Events[0].Body[2].IsOtherwise && elseProgram.Events[0].Body[2].Statement == null,
+      "`otherwise` opens a block (no statement of its own)");
+var elseAlias = parser.Parse("when me overlaps Bomb\n  if Flag is true\n  set Log to Log + \"T\"\n  else\n  set Log to Log + \"F\"\n");
+Check(elseAlias.Events[0].Body[2].IsOtherwise, "`else` is accepted as an alias for `otherwise`");
+
+var elseEngine = FreshEngine(new FakeWorld());
+var elseSheet = elseEngine.AddSheet(new FakeActor("Gate"), elseProgram);
+var elseBomb = new FakeActor("Bomb");
+elseEngine.Variables.SetGlobal("Flag", ValueBox.OfBoolean(true));
+elseEngine.PushContact(TriggerKind.Overlaps, elseSheet.Actor, elseBomb);
+elseEngine.Tick(0);
+Check(elseEngine.Variables.GetGlobal("Log").AsText() == "T",
+      "the guarded lines run and the `otherwise` lines are skipped when the condition is true");
+elseEngine.Variables.SetGlobal("Flag", ValueBox.OfBoolean(false));
+elseEngine.PushContact(TriggerKind.Overlaps, elseSheet.Actor, elseBomb);
+elseEngine.Tick(1);
+Check(elseEngine.Variables.GetGlobal("Log").AsText() == "TF",
+      "the `otherwise` lines run when the condition is false");
+
+var pairsEngine = FreshEngine(new FakeWorld());
+var pairsSheet = pairsEngine.AddSheet(new FakeActor("Pairs"), parser.Parse(@"when me overlaps Bomb
+  if A is true
+  set Log to Log + ""A""
+  otherwise
+  set Log to Log + ""a""
+  if B is true
+  set Log to Log + ""B""
+  otherwise
+  set Log to Log + ""b"""));
+pairsEngine.Variables.SetGlobal("A", ValueBox.OfBoolean(true));
+pairsEngine.Variables.SetGlobal("B", ValueBox.OfBoolean(false));
+pairsEngine.PushContact(TriggerKind.Overlaps, pairsSheet.Actor, elseBomb);
+pairsEngine.Tick(0);
+Check(pairsEngine.Variables.GetGlobal("Log").AsText() == "Ab",
+      "two if/otherwise pairs in one body each use their own condition's gate");
+pairsEngine.Variables.SetGlobal("A", ValueBox.OfBoolean(false));
+pairsEngine.Variables.SetGlobal("B", ValueBox.OfBoolean(true));
+pairsEngine.PushContact(TriggerKind.Overlaps, pairsSheet.Actor, elseBomb);
+pairsEngine.Tick(1);
+Check(pairsEngine.Variables.GetGlobal("Log").AsText() == "AbaB",
+      "a second pair does not inherit the first pair's gate");
+
+var elseWaitEngine = FreshEngine(new FakeWorld());
+var elseWaitSheet = elseWaitEngine.AddSheet(new FakeActor("Waiter"), parser.Parse(@"when me overlaps Bomb
+  if Flag is true
+  wait 1 second
+  set Log to Log + ""T""
+  otherwise
+  set Log to Log + ""F"""));
+elseWaitEngine.Variables.SetGlobal("Flag", ValueBox.OfBoolean(true));
+elseWaitEngine.PushContact(TriggerKind.Overlaps, elseWaitSheet.Actor, elseBomb);
+elseWaitEngine.Tick(0);
+elseWaitEngine.Tick(1);
+Check(elseWaitEngine.Variables.GetGlobal("Log").AsText() == "T",
+      "a wait inside an `if` block resumes knowing the condition was true (no `otherwise` leak)");
+
+ExpectParseError("when me appears\n  otherwise\n  hide me\n", "right above `otherwise`",
+      "`otherwise` with no condition line above it is a friendly error");
+ExpectParseError("when me appears\n  if Score is 0\n  hide me\n  otherwise\n  show me\n  otherwise\n  hide me\n",
+      "right above `otherwise`", "a second `otherwise` for the same condition is a friendly error");
 
 var stopWorld = new FakeWorld();
 var stopEngine = FreshEngine(stopWorld);

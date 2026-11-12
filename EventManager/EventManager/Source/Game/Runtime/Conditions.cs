@@ -58,7 +58,7 @@ namespace Game
         {
             var node = new ConditionNode();
             int start = 0;
-            if (words[0].Type == TokenType.Word && words[0].Text == "unless")
+            if (words[0].Type == TokenType.Word && (words[0].Text == "unless" || words[0].Text == "if"))
                 start = 1;
             var tokens = new List<Token>();
             for (int i = start; i < words.Count; i++)

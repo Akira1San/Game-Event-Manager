@@ -208,6 +208,8 @@ Everything else in Section 5 (move, destroy, touches, â€¦) is *word entries*
 |---|---|---|
 | `when` | starts an event â€” must be first word | `when W is pressed` |
 | `unless` | adds a condition line | `unless me is dead` |
+| `if` | the same condition line, read positively | `if my health is lower than 1` |
+| `otherwise` / `else` | runs the lines below when the condition above was false | `otherwise` |
 | `and` | joins conditions on one line | `when other touches me and other is a Player` |
 | `not` | negative inside a condition | `unless me is not near Door` |
 | `set` / `to` | assign a variable | `set Score to Score + 1` |
@@ -231,7 +233,18 @@ when other touches me and lives is higher than 0
 ```
 
 An `unless` line gates every action **below it**, until the next `unless` line. That way you can
-protect part of an event without making a new one.
+protect part of an event without making a new one. `if <condition>` is that same line read the
+positive way, and `otherwise` (alias `else`) opens the block that runs when the condition directly
+above it was false — same 2-space indent, no second condition needed. Two `if`/`otherwise` pairs
+can follow each other in one body; each pair re-gates from its own condition line.
+
+```
+when Escape is pressed
+  if my Paused is true
+  set my Paused to false
+  otherwise
+  set my Paused to true
+```
 
 ### Friendly errors (hard rules)
 
@@ -290,6 +303,20 @@ like GDevelop, so the editor teaches the vocabulary passively.
 | `chance <n>%` | `chance 20%` |
 | `<thing> is/has tag <tag>` | `other has tag Enemy` |
 | `my bag has <thing>` | `my bag has Sword` |
+
+**Branching inside a body.** `if <condition>` is a condition line like `unless`; `otherwise`
+(alias `else`) runs when the condition directly above it was false. Both stay at the same 2-space
+indent as the condition line, and one key can toggle state without a second event:
+
+```
+when Escape is pressed
+  if my Paused is true
+  set my Paused to false
+  unload scene "PausePanel"
+  otherwise
+  set my Paused to true
+  add scene "PausePanel"
+```
 
 ### Actions
 

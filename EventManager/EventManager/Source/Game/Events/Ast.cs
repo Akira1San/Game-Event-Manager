@@ -21,6 +21,8 @@ namespace Game
         public int Line;
         public List<Token> Words = new List<Token>();
         public bool IsCondition;
+        /// <summary><c>otherwise</c>/<c>else</c>: runs when the condition line above it was false.</summary>
+        public bool IsOtherwise;
         public StatementNode Statement;
     }
 

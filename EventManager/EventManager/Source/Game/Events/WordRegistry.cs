@@ -181,6 +181,8 @@ namespace Game
             new WordEntry { Kind = "action", Word = "quit", Example = "quit game" },
             new WordEntry { Kind = "action", Word = "print", Example = "print \"W is held\"" },
             new WordEntry { Kind = "action", Word = "debug", Example = "debug \"health = \" + my health" },
+            new WordEntry { Kind = "structural", Word = "if", Example = "if Score is 0" },
+            new WordEntry { Kind = "structural", Word = "otherwise", Example = "otherwise" },
         };
 
         public static readonly string[] ActionWords = BuildActionWords();
@@ -206,7 +208,7 @@ namespace Game
         {
             var words = new List<string>
             {
-                "when", "unless", "and", "not", "my", "me", "other", "to", "state", "bind",
+                "when", "unless", "if", "otherwise", "else", "and", "not", "my", "me", "other", "to", "state", "bind",
             };
             foreach (var word in ActionWords)
                 words.Add(word);

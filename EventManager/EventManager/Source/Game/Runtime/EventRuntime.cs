@@ -83,6 +83,9 @@ namespace Game
         public EventContext Context;
         public int LineIndex;
         public bool Gate;
+        /// <summary>The gate of the condition block the wait sits in, so a later
+        /// <c>otherwise</c> still knows whether that condition was true.</summary>
+        public bool ConditionGate;
         public double ResumeAt;
     }
 
@@ -508,7 +511,7 @@ namespace Game
                 foreach (var pending in pendingSnapshot)
                 {
                     if (pending.ResumeAt <= Time)
-                        RunBody(pending.Sheet, pending.Event, pending.Context, pending.LineIndex, pending.Gate);
+                        RunBody(pending.Sheet, pending.Event, pending.Context, pending.LineIndex, pending.Gate, pending.ConditionGate);
                     else
                         sheet.Waiting.Add(pending);
                 }
@@ -708,9 +711,11 @@ namespace Game
             RunBody(sheet, ev, context, 0, true);
         }
 
-        private void RunBody(SheetInstance sheet, EventNode ev, EventContext context, int startLine, bool startGate)
+        private void RunBody(SheetInstance sheet, EventNode ev, EventContext context, int startLine, bool startGate, bool startConditionGate = false)
         {
             bool gate = startGate;
+            // Gate of the nearest condition line, so `otherwise` can invert exactly that block.
+            bool conditionGate = startConditionGate;
             for (int i = startLine; i < ev.Body.Count; i++)
             {
                 var line = ev.Body[i];
@@ -722,6 +727,12 @@ namespace Game
                     bool result = Conditions.Evaluate(node, context);
                     bool inverted = line.Words[0].Type == TokenType.Word && line.Words[0].Text == "unless";
                     gate = inverted ? !result : result;
+                    conditionGate = gate;
+                    continue;
+                }
+                if (line.IsOtherwise)
+                {
+                    gate = !conditionGate;
                     continue;
                 }
                 if (!gate)
@@ -815,6 +826,7 @@ namespace Game
                                 Context = context,
                                 LineIndex = i + 1,
                                 Gate = gate,
+                                ConditionGate = conditionGate,
                                 ResumeAt = Time + seconds,
                             });
                             return;

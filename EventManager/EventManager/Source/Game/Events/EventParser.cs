@@ -204,7 +204,7 @@ namespace Game
                 }
                 if (t.Type == TokenType.Indent)
                     throw TooDeep(t);
-                ev.Body.Add(ParseBodyLine());
+                ev.Body.Add(ParseBodyLine(ev.Body));
             }
             return ev;
         }
@@ -319,6 +319,34 @@ namespace Game
             return line;
         }
 
+        private BodyLineNode ParseBodyLine(List<BodyLineNode> body)
+        {
+            var line = ParseBodyLine();
+            if (line.IsOtherwise)
+                ValidateOtherwise(body, line);
+            return line;
+        }
+
+        /// <summary><c>otherwise</c> pairs with the nearest condition line above it, and each
+        /// condition gets at most one <c>otherwise</c>.</summary>
+        private static void ValidateOtherwise(List<BodyLineNode> body, BodyLineNode line)
+        {
+            int lastCondition = -1;
+            bool alreadyPaired = false;
+            for (int i = body.Count - 1; i >= 0; i--)
+            {
+                if (body[i].IsCondition)
+                {
+                    lastCondition = i;
+                    break;
+                }
+                if (body[i].IsOtherwise)
+                    alreadyPaired = true;
+            }
+            if (lastCondition < 0 || alreadyPaired)
+                throw new ParseException("put an `if`/`unless` line right above `otherwise`", line.Line);
+        }
+
         private void Classify(BodyLineNode line)
         {
             var first = line.Words[0];
@@ -331,6 +359,18 @@ namespace Game
                 throw new ParseException("events stack one after another — a `when` never sits inside another event", first.Line);
             if (first.Text == "bind")
                 throw new ParseException("`bind` makes its own event, so it sits on its own line — like `bind ScoreLabel to Score` — not indented under a `when`", first.Line);
+            if (first.Text == "if")
+            {
+                line.IsCondition = true;
+                return;
+            }
+            if (first.Text == "otherwise" || first.Text == "else")
+            {
+                if (line.Words.Count > 1)
+                    throw new ParseException("`otherwise` stands alone on its line — it opens the block that runs when the condition above it is false", first.Line);
+                line.IsOtherwise = true;
+                return;
+            }
             if (first.Text == "unless")
             {
                 line.IsCondition = true;

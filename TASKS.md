@@ -1082,26 +1082,37 @@ Goal: pre-made `.events` templates with per-instance configurable options, so no
 
 ---
 
-## Task 20 — `else` / `otherwise` blocks `[ ]`
+## Task 20 — `else` / `otherwise` blocks `[~]`
 
 Goal: branch inside a `when` body, so one key can toggle something (open/close a scene overlay,
 pause/unpause, hover on/off) instead of needing two triggers and a shared flag. The
 one-variable toggle is impossible today: two events on the same key both pass their `unless`
 gate, because the first event writes the flag before the second event's gate is evaluated.
 
-- [ ] Parser: `otherwise` (alias `else`) opens a block at the same 2-space indent as the
+- [x] Parser: `otherwise` (alias `else`) opens a block at the same 2-space indent as the
   `if`/`unless` line it pairs with; the lines under it run only when that condition is false.
   Keep the flat one-level body (no extra indentation) so the existing indentation rule holds.
-- [ ] Parser error when `otherwise` has no condition line directly above it:
+- [x] Parser error when `otherwise` has no condition line directly above it:
   "put an `if`/`unless` line right above `otherwise`".
-- [ ] Runtime: `RunBody` keeps one gate per condition block (entered at the condition line,
+- [x] Runtime: `RunBody` keeps one gate per condition block (entered at the condition line,
   closed at `otherwise` / end of body) instead of the single running gate, so several
   if/otherwise pairs can follow each other in one body.
-- [ ] Registry + `keywords.html` + `DESIGN.md` §5 rows for `otherwise`; tests: true branch runs
+- [x] Registry + `keywords.html` + `DESIGN.md` §5 rows for `otherwise`; tests: true branch runs
   the guarded lines, false branch runs the `otherwise` lines, two pairs in one body don't leak
   gates, and `otherwise` without a condition errors.
 - [ ] Editor verify: one Escape toggles `add scene` / `unload scene` of a UI overlay open and
   closed with a single flag.
+
+**Landed 2026-11-12 (code complete):** `BodyLineNode.IsOtherwise`; `Classify` accepts
+`otherwise`/`else` (bare line only — extra words are a friendly error) and `if` as a condition
+line; `EventParser.ValidateOtherwise` pairs each `otherwise` with the nearest condition line
+above it and rejects a second `otherwise` for the same condition. `RunBody` now tracks the
+condition block's gate (`conditionGate`) beside the running gate, so `otherwise` flips exactly
+that block and several pairs in one body stay independent; `PendingRun.ConditionGate` carries it
+across a `wait`. `Conditions.Parse` skips a leading `if` (so `if` lines actually evaluate —
+keywords.html promised them, the parser only knew `unless`). Registry rows (`if`, `otherwise`,
+structural) + near-miss suggestions, keywords.html structural table, DESIGN §4/§5. 9 new checks.
+Editor verify (Escape toggling an overlay) still awaits your run.
 
 ## Session Log (append one line after each session)
 see - Session Log.md

@@ -142,7 +142,7 @@
 
   <section id="conditions">
     <h2>Conditions — <code>unless</code> / <code>if</code> lines inside <code>when</code> blocks</h2>
-    <p>Condition marks: <span class="kw">is</span> <span class="kw">has</span> <span class="kw">becomes</span> <span class="kw">changes</span> <span class="kw">exists</span> <span class="kw">does</span> <span class="kw">near</span> <span class="kw">chance</span> <span class="kw">afford</span> <span class="kw">enough</span> <span class="kw">under</span>. Use <code>unless</code> to gate on a condition (runs only while true). Conditions are re-checked each tick for polled events.</p>
+    <p>Condition marks: <span class="kw">is</span> <span class="kw">has</span> <span class="kw">becomes</span> <span class="kw">changes</span> <span class="kw">exists</span> <span class="kw">does</span> <span class="kw">near</span> <span class="kw">chance</span> <span class="kw">afford</span> <span class="kw">enough</span> <span class="kw">under</span>. Use <code>unless</code> to gate on a condition (runs only while true), or <code>if</code> for the same line read positively. <code>otherwise</code> (alias <code>else</code>) opens a block that runs when the condition line right above it was false; it sits at the same 2-space indent, and a body may hold several <code>if</code>/<code>otherwise</code> pairs. Conditions are re-checked each tick for polled events.</p>
 
     <table>
       <thead>
@@ -175,7 +175,7 @@
 
   <section id="actions">
     <h2>Actions — verbs inside <code>when</code> bodies</h2>
-    <p>Action lines are the indented lines under a <code>when</code> (or after <code>unless</code>). Multiple actions in one block run top-to-bottom, in order.</p>
+    <p>Action lines are the indented lines under a <code>when</code> (or after <code>unless</code> / <code>if</code>, and after <code>otherwise</code>). Multiple actions in one block run top-to-bottom, in order.</p>
 
     <table>
       <thead>
@@ -336,6 +336,8 @@
       <tbody>
         <tr><td><span class="badge badge-structural">when</span></td><td>Starts a new event block (trigger line)</td><td><span class="example">when W is held</span></td></tr>
         <tr><td><span class="badge badge-structural">unless</span></td><td>Gates the following action lines on a condition</td><td><span class="example">unless my health is lower than 1</span></td></tr>
+        <tr><td><span class="badge badge-structural">if</span></td><td>The same condition line, read positively</td><td><span class="example">if my health is lower than 1</span></td></tr>
+        <tr><td><span class="badge badge-structural">otherwise</span> / <span class="badge badge-structural">else</span></td><td>Runs the lines below when the condition line right above it was false — same 2-space indent, no extra level</td><td><span class="example">otherwise</span></td></tr>
         <tr><td><span class="badge badge-structural">and</span></td><td>Joins multiple conditions (inline trailing)</td><td><span class="example">when me overlaps Enemy and other is a Player</span></td></tr>
         <tr><td><span class="badge badge-structural">not</span></td><td>Negates a condition (<code>is not</code>, <code>becomes not</code>, <code>does not exist</code>)</td><td><span class="example">Score is not 0</span></td></tr>
         <tr><td><span class="badge badge-structural">my</span></td><td>Marks a per-actor variable (<code>my health</code>) vs global (<code>Score</code>)</td><td><span class="example">set my health to 0</span></td></tr>
@@ -476,7 +478,7 @@
       <h3>How a <code>.events</code> file works</h3>
       <ol>
         <li>Each <code>when …</code> line starts an event block. Its trigger words are classified into a trigger kind.</li>
-        <li>Indented lines under it (2 spaces) are the body: <code>unless</code> conditions gate the actions; raw verb lines run in order.</li>
+        <li>Indented lines under it (2 spaces) are the body: <code>unless</code> / <code>if</code> conditions gate the actions, <code>otherwise</code> flips the condition above it; raw verb lines run in order.</li>
         <li>Actor name matching is exact &amp; case-sensitive — <code>TestPlayer.events</code> attaches to an actor named <code>TestPlayer</code>.</li>
         <li><code>near</code> is a <b>condition</b>, not a trigger — it must sit inside a <code>when every N seconds</span> block.</li>
         <li>Polled triggers (<code>every</code>, <code>held</code>, <code>becomes</code>, <code>changes</code>) run each tick; pushed triggers (<code>pressed</code>, <code>clicked</code>, <code>hovered</code>) fire on edges.</li>
