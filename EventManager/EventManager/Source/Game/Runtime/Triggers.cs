@@ -114,8 +114,12 @@ namespace Game
                     Kind = TriggerKind.BuildingPlaced,
                     RequireName = Join(trigger, 0, words.Length - 2),
                 };
-            if (words.Length == 2 && words[0] == "construction" && words[1] == "completes")
-                return new TriggerDescriptor { Kind = TriggerKind.ConstructionCompleted };
+            if (words.Length >= 2 && words[words.Length - 2] == "construction" && words[words.Length - 1] == "completes")
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.ConstructionCompleted,
+                    RequireName = Join(trigger, 0, words.Length - 2),
+                };
             if (words.Length >= 3 && words[words.Length - 2] == "is" && words[words.Length - 1] == "destroyed")
                 return new TriggerDescriptor
                 {

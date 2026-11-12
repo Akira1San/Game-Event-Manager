@@ -3956,6 +3956,14 @@ var constructionDesc = TriggerClassifier.Classify(parser.Parse("when constructio
 Check(constructionDesc.Kind == TriggerKind.ConstructionCompleted && constructionDesc.RequireName.Length == 0,
       "`when construction completes` classifies to ConstructionCompleted with no require name");
 
+var myConstructionDesc = TriggerClassifier.Classify(parser.Parse("when my construction completes\n  set Done to 1\n").Events[0]);
+Check(myConstructionDesc.Kind == TriggerKind.ConstructionCompleted && myConstructionDesc.RequireName == "my",
+      "`when my construction completes` classifies with RequireName \"my\"");
+
+var namedConstructionDesc = TriggerClassifier.Classify(parser.Parse("when Barracks construction completes\n  set Done to 1\n").Events[0]);
+Check(namedConstructionDesc.Kind == TriggerKind.ConstructionCompleted && namedConstructionDesc.RequireName == "Barracks",
+      "`when Barracks construction completes` classifies with the building name");
+
 var buildingDestroyedDesc = TriggerClassifier.Classify(parser.Parse("when Barracks is destroyed\n  set Gone to 1\n").Events[0]);
 Check(buildingDestroyedDesc.Kind == TriggerKind.BuildingDestroyed && buildingDestroyedDesc.RequireName == "Barracks",
       "`when Barracks is destroyed` classifies to BuildingDestroyed with RequireName \"Barracks\"");
@@ -3989,6 +3997,21 @@ Check(buildProgressProg.Events[0].Body[0].Statement is SetBuildProgressNode setB
 Check(buildProgressProg.Events[0].Body[1].Statement is AddBuildProgressNode addBuildProgressNode &&
       addBuildProgressNode.Amount is NumberValue addBuildProgressValue && addBuildProgressValue.Value == 10,
       "`add 10 to build progress` builds an AddBuildProgressNode");
+
+var namedBuildProgressProg = parser.Parse(@"when game starts
+  set build progress of Barracks to 25
+  add 5 to build progress of Barracks");
+Check(namedBuildProgressProg.Events[0].Body[0].Statement is SetBuildProgressNode namedSetBuildProgress &&
+      namedSetBuildProgress.Thing == "Barracks" && namedSetBuildProgress.Value is NumberValue namedSetValue &&
+      namedSetValue.Value == 25,
+      "`set build progress of Barracks to 25` keeps the named target");
+Check(namedBuildProgressProg.Events[0].Body[1].Statement is AddBuildProgressNode namedAddBuildProgress &&
+      namedAddBuildProgress.Thing == "Barracks" && namedAddBuildProgress.Amount is NumberValue namedAddValue &&
+      namedAddValue.Value == 5,
+      "`add 5 to build progress of Barracks` keeps the named target");
+Check(((SetBuildProgressNode)buildProgressProg.Events[0].Body[0].Statement).Thing.Length == 0 &&
+      ((AddBuildProgressNode)buildProgressProg.Events[0].Body[1].Statement).Thing.Length == 0,
+      "the legacy progress forms still target the acting building");
 
 // Condition parsing.
 var underConstructionCondition = Conditions.Parse(
@@ -4055,6 +4078,41 @@ Check(completionEngine.Variables.GetGlobal("Completed").AsNumber() == 1,
 completionEngine.Tick(2);
 Check(completionEngine.Variables.GetGlobal("Completed").AsNumber() == 1,
       "completion does not refire while progress stays at 100");
+
+// `when my construction completes` filters the broadcast to the sheet's own building.
+var ownCompletionWorld = new FakeWorld();
+var ownCompletionA = new FakeActor("Barracks");
+var ownCompletionB = new FakeActor("Factory");
+ownCompletionWorld.AddActor(ownCompletionA);
+ownCompletionWorld.AddActor(ownCompletionB);
+var ownCompletionEngine = FreshEngine(ownCompletionWorld);
+ownCompletionEngine.AddSheet(ownCompletionA, parser.Parse("when my construction completes\n  set my Done to my Done + 1"));
+ownCompletionEngine.AddSheet(ownCompletionB, parser.Parse("when my construction completes\n  set my Done to my Done + 1"));
+ownCompletionEngine.Construction.RegisterPlaced(ownCompletionA, "Barracks", ownCompletionEngine.Variables);
+ownCompletionEngine.Construction.RegisterPlaced(ownCompletionB, "Factory", ownCompletionEngine.Variables);
+ownCompletionEngine.Construction.SetProgress(ownCompletionEngine.Variables, ownCompletionA, 100);
+ownCompletionEngine.Construction.SetProgress(ownCompletionEngine.Variables, ownCompletionB, 100);
+ownCompletionEngine.Tick(1);
+Check(ownCompletionEngine.Variables.GetLocal(ownCompletionA, "Done").AsNumber() == 1 &&
+      ownCompletionEngine.Variables.GetLocal(ownCompletionB, "Done").AsNumber() == 1,
+      "`when my construction completes` fires once on each building's own sheet");
+
+// `when <building> construction completes` filters by template name.
+var namedCompletionWorld = new FakeWorld();
+var namedCompletionBarracks = new FakeActor("Barracks");
+var namedCompletionFactory = new FakeActor("Factory");
+namedCompletionWorld.AddActor(namedCompletionBarracks);
+namedCompletionWorld.AddActor(namedCompletionFactory);
+var namedCompletionEngine = FreshEngine(namedCompletionWorld);
+namedCompletionEngine.AddSheet(new GlobalHost(), parser.Parse(
+    "when Barracks construction completes\n  set BarracksDone to BarracksDone + 1\n"));
+namedCompletionEngine.Construction.RegisterPlaced(namedCompletionBarracks, "Barracks", namedCompletionEngine.Variables);
+namedCompletionEngine.Construction.RegisterPlaced(namedCompletionFactory, "Factory", namedCompletionEngine.Variables);
+namedCompletionEngine.Construction.SetProgress(namedCompletionEngine.Variables, namedCompletionBarracks, 100);
+namedCompletionEngine.Construction.SetProgress(namedCompletionEngine.Variables, namedCompletionFactory, 100);
+namedCompletionEngine.Tick(1);
+Check(namedCompletionEngine.Variables.GetGlobal("BarracksDone").AsNumber() == 1,
+      "`when Barracks construction completes` ignores a different building's completion");
 
 // Cancel removes state + mirrored local; destruction removes state.
 var cancelVars = new EventVariables();
@@ -4157,6 +4215,37 @@ dispatchEngine.Construction.RegisterPlaced(dispatchActor, "Barracks", dispatchEn
 dispatchEngine.Tick(0);
 Check(dispatchEngine.Construction.ProgressOf(dispatchActor) == 60,
       "`set build progress` and `add to build progress` dispatch to the ConstructionManager");
+
+// The named forms let a global sheet drive a specific building.
+var namedDispatchWorld = new FakeWorld();
+var namedDispatchActor = new FakeActor("Barracks");
+namedDispatchWorld.AddActor(namedDispatchActor);
+var namedDispatchEngine = FreshEngine(namedDispatchWorld);
+namedDispatchEngine.AddSheet(namedDispatchActor, parser.Parse("when me appears\n  set my Ready to 1"));
+namedDispatchEngine.AddSheet(new GlobalHost(), parser.Parse(@"when every 1 seconds
+  set build progress of Barracks to 25
+  add 5 to build progress of Barracks"));
+namedDispatchEngine.Construction.RegisterPlaced(namedDispatchActor, "Barracks", namedDispatchEngine.Variables);
+namedDispatchEngine.Tick(1);
+Check(namedDispatchEngine.Construction.ProgressOf(namedDispatchActor) == 30 &&
+      namedDispatchEngine.Variables.GetLocal(namedDispatchActor, "BuildProgress").AsNumber() == 30,
+      "`set/add build progress of Barracks` from a global sheet targets that building");
+
+// Without an acting building and no named target, warn once instead of silently doing nothing.
+var missingProgressEngine = FreshEngine(new FakeWorld());
+int progressWarnings = 0;
+missingProgressEngine.OnRuntimeWarning = message =>
+{
+    if (message.Contains("acting building", StringComparison.OrdinalIgnoreCase))
+        progressWarnings++;
+};
+missingProgressEngine.AddSheet(new GlobalHost(), parser.Parse(@"when every 1 seconds
+  set build progress to 10
+  add 5 to build progress"));
+missingProgressEngine.Tick(1);
+missingProgressEngine.Tick(2);
+Check(progressWarnings == 1,
+      "a build-progress line with no acting building warns once");
 
 // Grid helpers.
 Check(ConstructionManager.SnapToGrid(0, 64) == 32 && ConstructionManager.SnapToGrid(63, 64) == 32 &&

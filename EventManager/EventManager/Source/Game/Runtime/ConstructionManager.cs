@@ -84,8 +84,9 @@ namespace Game
 
         /// <summary>
         /// Stops construction on <paramref name="actor"/> and frees its grid footprint.
-        /// Returns true when it was actually under construction. Cancelling is not
-        /// destruction, so the caller does not raise <c>BuildingDestroyed</c>.
+        /// Returns true when it was actually under construction. This does not raise
+        /// <c>BuildingDestroyed</c>; the bridge removes the placed actor silently, so
+        /// "cancelled" and "destroyed" stay distinct events.
         /// </summary>
         public bool Cancel(object actor)
         {

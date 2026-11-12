@@ -63,6 +63,8 @@ namespace Game
             new WordEntry { Kind = "trigger", Word = "when ResourcesChange", Example = "when ResourcesChange", AltShape = "when resources change" },
             new WordEntry { Kind = "trigger", Word = "when <building> is placed", Example = "when Barracks is placed" },
             new WordEntry { Kind = "trigger", Word = "when construction completes", Example = "when construction completes" },
+            new WordEntry { Kind = "trigger", Word = "when <building> construction completes", Example = "when Barracks construction completes" },
+            new WordEntry { Kind = "trigger", Word = "when my construction completes", Example = "when my construction completes" },
             new WordEntry { Kind = "trigger", Word = "when <building> is destroyed", Example = "when Barracks is destroyed" },
 
             new WordEntry { Kind = "condition", Word = "<var> is <value>", Example = "Score is 3" },
@@ -123,7 +125,9 @@ namespace Game
             new WordEntry { Kind = "action", Word = "place", Example = "place Barracks at Mouse on grid by 32" },
             new WordEntry { Kind = "action", Word = "cancel", Example = "cancel build" },
             new WordEntry { Kind = "action", Word = "set build progress to <n>", Example = "set build progress to 0" },
+            new WordEntry { Kind = "action", Word = "set build progress of <building> to <n>", Example = "set build progress of Barracks to 0" },
             new WordEntry { Kind = "action", Word = "add <n> to build progress", Example = "add 10 to build progress" },
+            new WordEntry { Kind = "action", Word = "add <n> to build progress of <building>", Example = "add 10 to build progress of Barracks" },
             new WordEntry { Kind = "action", Word = "play", Example = "play sound \"hit.wav\"" },
             new WordEntry { Kind = "action", Word = "play", Example = "play anim \"dragon_fire\"" },
             new WordEntry { Kind = "action", Word = "play", Example = "play particle \"smoke\"" },

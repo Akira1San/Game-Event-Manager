@@ -617,7 +617,7 @@ namespace Game
             // placed actor in `Other`; `when me is placed` belongs to that actor's sheet.
             if (IsBuildingKind(descriptor.Kind))
             {
-                return descriptor.RequireName == "me"
+                return descriptor.RequireName == "me" || descriptor.RequireName == "my"
                     ? ReferenceEquals(signal.Other, sheet.Actor)
                     : signal.Name == descriptor.RequireName;
             }
@@ -652,6 +652,30 @@ namespace Game
             if (descriptor.RequireMaterial.Length > 0 && signal.Material == descriptor.RequireMaterial && ExtraConditionsMatch(descriptor, sheet, signal.Other))
                 return true;
             return false;
+        }
+
+        /// <summary>Resolves the optional <c>of &lt;building&gt;</c> target for a build-progress
+        /// statement. No target means the acting sheet's actor.</summary>
+        private object ResolveBuildProgressTarget(EventContext context, string thing)
+        {
+            if (string.IsNullOrEmpty(thing) || thing == "me")
+                return context.Me is GlobalHost ? null : context.Me;
+            if (thing == "other")
+                return context.Other is GlobalHost ? null : context.Other;
+            object found = FindNamedActor(thing);
+            return found is GlobalHost ? null : found;
+        }
+
+        /// <summary>Warns once per sheet when a build-progress line has no resolvable building.</summary>
+        private void WarnBuildProgressTarget(EventContext context, string thing)
+        {
+            string key = "build-progress:" + (string.IsNullOrEmpty(thing) ? "me" : thing);
+            if (context.Sheet != null && !context.Sheet.StepWarned.Add(key))
+                return;
+            if (string.IsNullOrEmpty(thing))
+                OnRuntimeWarning("`set build progress` / `add to build progress` need an acting building — on a global sheet use `of <building>`.");
+            else
+                OnRuntimeWarning($"I couldn't find the building \"{thing}\" to change build progress.");
         }
 
         private bool ExtraConditionsMatch(TriggerDescriptor descriptor, SheetInstance sheet, object other)
@@ -815,13 +839,21 @@ namespace Game
                 }
                 else if (statement is SetBuildProgressNode setBuildProgress)
                 {
-                    Construction.SetProgress(context.Variables, context.Me,
-                        context.Evaluate(setBuildProgress.Value).AsNumber());
+                    object target = ResolveBuildProgressTarget(context, setBuildProgress.Thing);
+                    if (target == null)
+                        WarnBuildProgressTarget(context, setBuildProgress.Thing);
+                    else
+                        Construction.SetProgress(context.Variables, target,
+                            context.Evaluate(setBuildProgress.Value).AsNumber());
                 }
                 else if (statement is AddBuildProgressNode addBuildProgress)
                 {
-                    Construction.AddProgress(context.Variables, context.Me,
-                        context.Evaluate(addBuildProgress.Amount).AsNumber());
+                    object target = ResolveBuildProgressTarget(context, addBuildProgress.Thing);
+                    if (target == null)
+                        WarnBuildProgressTarget(context, addBuildProgress.Thing);
+                    else
+                        Construction.AddProgress(context.Variables, target,
+                            context.Evaluate(addBuildProgress.Amount).AsNumber());
                 }
                 else if (statement is PlayStepSoundNode step)
                 {

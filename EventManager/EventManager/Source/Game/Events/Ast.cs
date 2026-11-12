@@ -133,16 +133,20 @@ namespace Game
     }
 
     /// <summary><c>set build progress to &lt;n&gt;</c>: sets the acting building's
-    /// construction progress (0–100) on <see cref="ConstructionManager"/>.</summary>
+    /// construction progress (0–100) on <see cref="ConstructionManager"/>. The
+    /// optional <c>of &lt;building&gt;</c> form targets a named actor.</summary>
     public class SetBuildProgressNode : StatementNode
     {
+        public string Thing = "";
         public ValueNode Value = new NumberValue();
     }
 
     /// <summary><c>add &lt;n&gt; to build progress</c>: advances the acting building's
-    /// construction progress, clamping at 0.</summary>
+    /// construction progress, clamping at 0. The optional <c>of &lt;building&gt;</c>
+    /// form targets a named actor.</summary>
     public class AddBuildProgressNode : StatementNode
     {
+        public string Thing = "";
         public ValueNode Amount = new NumberValue();
     }
 }

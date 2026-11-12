@@ -551,7 +551,8 @@ namespace Game
             if (words.Count > 2 && words[1].Type == TokenType.Word && words[1].Text == "text" &&
                 words[2].Type == TokenType.Word && words[2].Text == "of")
                 return ParseSetText(line);
-            // `set build progress to <n>` — RTS construction progress (Task 18 Part C).
+            // `set build progress to <n>` / `set build progress of <building> to <n>`
+            // — RTS construction progress (Task 18 Part C).
             if (words.Count >= 3 && words[1].Type == TokenType.Word && words[1].Text == "build" &&
                 words[2].Type == TokenType.Word && words[2].Text == "progress")
             {
@@ -563,7 +564,33 @@ namespace Game
                     CheckEndOfLine(words, idx, line.Line, "set build progress to <n>");
                     return buildNode;
                 }
-                throw new ParseException("`set build progress` looks like this: `set build progress to 0`", line.Line);
+                if (words.Count >= 7 && words[3].Type == TokenType.Word && words[3].Text == "of")
+                {
+                    int progressToIndex = -1;
+                    for (int i = 4; i < words.Count; i++)
+                    {
+                        if (words[i].Type == TokenType.Word && words[i].Text == "to")
+                        {
+                            progressToIndex = i;
+                            break;
+                        }
+                    }
+                    if (progressToIndex > 4)
+                    {
+                        var buildNode = new SetBuildProgressNode
+                        {
+                            Line = line.Line,
+                            Thing = JoinWords(words, 4, progressToIndex),
+                        };
+                        int idx = progressToIndex + 1;
+                        buildNode.Value = ReadValue(words, ref idx, line.Line);
+                        CheckEndOfLine(words, idx, line.Line, "set build progress of <building> to <n>");
+                        return buildNode;
+                    }
+                }
+                throw new ParseException(
+                    "`set build progress` looks like this: `set build progress to 0` or `set build progress of Barracks to 0`",
+                    line.Line);
             }
             // `set my control group to <n>` — RTS control group assignment (Task 18 Part A).
             if (words.Count >= 3 && words[1].Type == TokenType.Word && words[1].Text == "my" &&
@@ -739,6 +766,41 @@ namespace Game
                 var raw = new RawActionNode { Line = line.Line };
                 raw.Words.AddRange(words);
                 return raw;
+            }
+            // `add <n> to build progress of <building>` — named RTS construction
+            // progress (Task 18 Part C follow-up). Detected before the trailing-word
+            // form so a building name after `of` is not read as a variable.
+            if (words.Count >= 2)
+            {
+                int namedTo = -1;
+                for (int i = 2; i < words.Count; i++)
+                {
+                    if (words[i].Type == TokenType.Word && words[i].Text == "to")
+                    {
+                        namedTo = i;
+                        break;
+                    }
+                }
+                if (namedTo > 1 && namedTo + 4 < words.Count &&
+                    words[namedTo + 1].Type == TokenType.Word && words[namedTo + 1].Text == "build" &&
+                    words[namedTo + 2].Type == TokenType.Word && words[namedTo + 2].Text == "progress" &&
+                    words[namedTo + 3].Type == TokenType.Word && words[namedTo + 3].Text == "of")
+                {
+                    var namedNode = new AddBuildProgressNode
+                    {
+                        Line = line.Line,
+                        Thing = JoinWords(words, namedTo + 4, words.Count),
+                    };
+                    int namedIndex = 1;
+                    namedNode.Amount = ReadValue(words, ref namedIndex, line.Line);
+                    if (namedNode.Amount is MathValue)
+                        throw new ParseException("`add` takes one plain value — do the math in a `set` line instead", line.Line);
+                    if (namedIndex != namedTo)
+                        throw new ParseException(
+                            "`add` to build progress looks like this: `add 10 to build progress` or `add 10 to build progress of Barracks`",
+                            line.Line);
+                    return namedNode;
+                }
             }
             // `add <n> to build progress` — RTS construction progress (Task 18 Part C).
             // Only the exact trailing words `build progress` switch modes, so normal

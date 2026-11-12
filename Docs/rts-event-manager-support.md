@@ -276,15 +276,15 @@ when Score changes   # keep HUD in sync
 
 **New triggers:**
 - `when <building> is placed` (also `when me is placed`)
-- `when construction completes`
+- `when construction completes` (also `when my construction completes` / `when <building> construction completes`)
 - `when <building> is destroyed` (also `when me is destroyed`)
 
 **New actions:**
 - `place <building> at <target>` — free-form placement (default)
 - `place <building> at <target> on grid [by <n>]` — opt-in grid placement
 - `cancel build`
-- `set build progress to <n>`
-- `add <n> to build progress`
+- `set build progress to <n>` / `set build progress of <building> to <n>`
+- `add <n> to build progress` / `add <n> to build progress of <building>`
 
 **New conditions:**
 - `<building> exists`
@@ -300,9 +300,9 @@ when Score changes   # keep HUD in sync
 
 **Runtime behaviour:**
 - `place` spawns the building template's clone, registers it with `ConstructionManager`, and raises `when <building> is placed` / `when me is placed`.
-- `set build progress to <n>` and `add <n> to build progress` clamp to 0–100 and mirror the value into the building's `BuildProgress` local, which is the value `build progress is higher than <n>` reads.
-- `when construction completes` fires once when progress reaches `100`. Completion is idempotent: it does not refire while progress stays at `100`.
-- `cancel build` stops construction, clears progress, and frees the grid cell without raising `when <building> is destroyed`. Destroying a registered building does raise that trigger and clears its state.
+- `set build progress to <n>` and `add <n> to build progress` clamp to 0–100 and mirror the value into the building's `BuildProgress` local, which is the value `build progress is higher than <n>` reads. Without `of`, they act on the sheet's own actor; use `set build progress of <building> to <n>` / `add <n> to build progress of <building>` from a global sheet. A line with no acting building and no `of` warns once instead of silently doing nothing.
+- `when construction completes` fires once per completed building; `when my construction completes` filters to the sheet's own building, and `when <building> construction completes` filters to a building template. Completion is idempotent: it does not refire while progress stays at `100`.
+- `cancel build` stops construction, clears progress, and frees the grid cell without raising `when <building> is destroyed`; the bridge removes the placed actor silently. Destroying a registered building raises that trigger and clears its state.
 - `<building> is under construction` is true from placement until completion or cancellation.
 - `enough <resource> for <building>` reuses the data-driven cost globals (`BarracksCost`, `BarracksGasCost`, `BarracksSupplyCost`, …). A building that declares no cost is always affordable.
 
@@ -313,7 +313,6 @@ when Q is pressed
   unless enough Minerals for Barracks
   deduct 150 from Minerals
   place Barracks at Mouse on grid
-  set build progress to 0
 
 # On the Barracks sheet
 when me is placed
@@ -323,7 +322,7 @@ when every 0.5 seconds
   unless build progress is higher than 99
   add 10 to build progress
 
-when construction completes
+when my construction completes
   loop anim "idle"
   show text "Barracks ready!"
 ```

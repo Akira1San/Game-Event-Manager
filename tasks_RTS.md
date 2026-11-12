@@ -42,6 +42,12 @@ zero breaking changes to existing `.events` files.
 - Free-form placement by default; opt-in `place … on grid` snaps to cells and reserves footprints
 - Red Alert-style base construction; StarCraft-style building placement; Homeworld shipyard/subsystems
 
+#### Part C follow-ups (from code review — not blocking) [x]
+- [x] `set build progress to <n>` / `add <n> to build progress` only act on `context.Me`, so they silently no-op on a global sheet. Add an optional named form (`set build progress of <building> to <n>`, `add <n> to build progress of <building>`) and/or warn once when there is no acting actor.
+- [x] `when construction completes` has an empty `RequireName`, so it fires on every sheet for any building completion. Add a per-building form (`when my construction completes` / named) or document that a building's own sheet must ignore completions for other buildings.
+- [x] Clarify the `ConstructionManager.Cancel` comment/docs: cancel destroys the placed actor silently (no `BuildingDestroyed` signal); "cancelling is not destruction" refers only to the missing signal.
+- Not planned: automatic cost deduction on `place` (authors gate with `enough` / `can afford` and `deduct` explicitly), and `GetBuildProgress` on `IEventWorld` (Part H scope).
+
 ### Part D — Production Queues & Unit Training [ ]
 - New triggers: `when <building> finishes training <unit>`,
   `when <building> starts producing <unit>`, `when production queue is empty`
