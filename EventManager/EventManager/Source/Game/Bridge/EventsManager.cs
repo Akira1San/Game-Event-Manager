@@ -495,9 +495,11 @@ namespace Game
             UpdateButtons();
             UpdateTextControls();
             UpdateFocus();
-            UpdateCameraFollow();
             UpdatePlayerLookAtMouse();
             Runtime.Tick(Time.GameTime);
+            // Follow last: the tick is what moves the player (`move forward` lands immediately),
+            // so a camera snapped before it trailed the subject by one frame and shimmered.
+            UpdateCameraFollow();
         }
 
         private void UpdateCameraFollow()

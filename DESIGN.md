@@ -233,7 +233,9 @@ when other touches me and lives is higher than 0
 ```
 
 An `unless` line gates every action **below it**, until the next `unless` line. That way you can
-protect part of an event without making a new one. `if <condition>` is that same line read the
+protect part of an event without making a new one. Two or more condition lines written one under
+another are a single block and must **all** pass (they stack with `and`: `unless Shift is held` then
+`my Stamina is higher than 0` runs only while both hold). `if <condition>` is that same line read the
 positive way, and `otherwise` (alias `else`) opens the block that runs when the condition directly
 above it was false — same 2-space indent, no second condition needed. Two `if`/`otherwise` pairs
 can follow each other in one body; each pair re-gates from its own condition line.

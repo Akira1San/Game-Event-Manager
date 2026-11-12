@@ -2951,6 +2951,50 @@ when 1 is pressed
     Check(Math.Abs(CameraFraming.CenteredDepth(-5, 45)) < 1e-9,
         "a negative height cannot flip the camera in front of the target");
 
+    // The TK4 sprint sheet leans on the walk/sprint branches being mutually exclusive: whether a
+    // body line like `Left Shift is held` gates correctly decides if Shift does anything at all.
+    var sprGateWorld = new FakeWorld();
+    var sprGateEngine = FreshEngine(sprGateWorld);
+    var sprGateLog = new List<string>();
+    var sprGateActor = new FakeActor("SprintGate");
+    sprGateEngine.AddSheet(sprGateActor, parser.Parse(
+        "when Up Arrow is held\n  unless Left Shift is held\n  move forward speed 45\n" +
+        "when Up Arrow is held\n  Left Shift is held\n  my Stamina is higher than 0\n  move forward speed 90\n" +
+        "when Up Arrow is held\n  Left Shift is held\n  my Stamina is 0\n  move forward speed 45"));
+    sprGateEngine.Variables.SetLocal(sprGateActor, "Stamina", ValueBox.OfNumber(100));
+    sprGateEngine.OnRawAction = (context, words) => sprGateLog.Add(J(words));
+    sprGateWorld.SetHeld("Up Arrow", true);
+    sprGateEngine.Tick(0);
+    Check(sprGateLog.Count == 1 && sprGateLog[0].Contains("45"),
+        "walking: only the walk branch runs while Shift is up");
+    sprGateLog.Clear();
+    sprGateWorld.SetHeld("Left Shift", true);
+    sprGateEngine.Tick(1);
+    Check(sprGateLog.Count == 1 && sprGateLog[0].Contains("90"),
+        "`Left Shift is held` as a body condition switches the sheet to the sprint branch");
+    sprGateLog.Clear();
+    sprGateEngine.Variables.SetLocal(sprGateActor, "Stamina", ValueBox.OfNumber(0));
+    sprGateEngine.Tick(2);
+    Check(sprGateLog.Count == 1 && sprGateLog[0].Contains("45"),
+        "an empty stamina bar drops a sprinting player back to walk pace (never a standstill)");
+
+    // Two conditions in one block stack with AND: the lower one used to overwrite the upper
+    // one, so a sprint block gated on `Left Shift is held` ran on stamina alone.
+    var andWorld = new FakeWorld();
+    var andEngine = FreshEngine(andWorld);
+    var andLog = new List<string>();
+    andEngine.AddSheet(new FakeActor("AndPair"), parser.Parse(
+        "when every 1 seconds\n  A is held\n  B is held\n  print \"both\""));
+    andEngine.OnRawAction = (context, words) => andLog.Add(J(words));
+    andWorld.SetHeld("A", true);
+    andEngine.Tick(1);
+    Check(andLog.Count == 0, "one true condition does not open a two-condition block");
+    andWorld.SetHeld("B", true);
+    andEngine.Tick(2);
+    Check(andLog.Count == 1, "stacked conditions run the block once both are true");
+    Check(parser.Parse("when every 1 seconds\n  A is held\n  B is held\n  print \"both\"\n  otherwise\n  print \"not both\"") != null,
+        "`otherwise` still pairs with the nearest condition of a stacked block");
+
     // `my spawnedFrom` is computed, and a condition must read the same value an expression does:
     // the TK4 bullet gates its flight on it, and a stale (unset) read kept every clone still.
     var fromWorld = new FakeWorld();

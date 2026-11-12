@@ -1,6 +1,7 @@
 # ---------------- Enemy.events (patrol -> chase -> attack) ----------------
 when me appears
   set my mode to "patrol"
+  set my health to 100
   print "Enemy: patrol start"
   goto random Waypoint speed 100 facing forward             # pathfinds around walls automatically
   # loop anim "Walk"   # simple mesh — no animation
@@ -28,6 +29,17 @@ when me is near Player by 1.5
   print "Enemy: attack — sending hurt to Player"
   play anim "Attack"
   send message "hurt" to Player
+
+# ---- taking a bullet: every shot costs 10 of the enemy's 100 hit points ----
+when message "hit" arrives
+  add -10 to my health
+  print "Enemy: hit for 10"
+
+# A hit can never undershoot (100 - 10 lands exactly on 0), but other damage can — keep the
+# bar honest with a clamped watch instead of a condition-shaped trigger.
+when my health changes
+  if my health is lower than 0
+  set my health to 0
 
 # ---- taking damage (D2 loop) ----
 when message "damage" arrives

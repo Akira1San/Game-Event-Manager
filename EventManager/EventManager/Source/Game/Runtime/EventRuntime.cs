@@ -725,6 +725,10 @@ namespace Game
             bool gate = startGate;
             // Gate of the nearest condition line, so `otherwise` can invert exactly that block.
             bool conditionGate = startConditionGate;
+            // Conditions written one under another are one block and must all pass, so they
+            // stack with AND. A statement or an `otherwise` closes the run, and the next
+            // condition opens a fresh block (the pairs in a body stay independent).
+            bool stacking = false;
             for (int i = startLine; i < ev.Body.Count; i++)
             {
                 var line = ev.Body[i];
@@ -735,17 +739,23 @@ namespace Game
                         WarnUnknownCondition(sheet, line);
                     bool result = Conditions.Evaluate(node, context);
                     bool inverted = line.Words[0].Type == TokenType.Word && line.Words[0].Text == "unless";
-                    gate = inverted ? !result : result;
-                    conditionGate = gate;
+                    conditionGate = inverted ? !result : result;
+                    gate = stacking ? gate && conditionGate : conditionGate;
+                    stacking = true;
                     continue;
                 }
                 if (line.IsOtherwise)
                 {
                     gate = !conditionGate;
+                    stacking = false;
                     continue;
                 }
                 if (!gate)
+                {
+                    stacking = false;
                     continue;
+                }
+                stacking = false;
                 var statement = line.Statement;
                 if (statement is SetNode set)
                 {

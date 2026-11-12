@@ -1,17 +1,23 @@
 # ---------------- TK_Player.events (Task 16 Part H) ----------------
 # TK4-faithful player controls: the arrows steer (tank controls), Space fires along the
-# facing, and the camera sits straight above the player.
+# facing, Shift sprints while stamina lasts, and the camera sits straight above the player.
 #
 # SETUP (editor):
 #   1. Player actor -> EventSheet component -> Event File = TK_Player.
 #   2. One EventsManager on a permanent scene-root actor (never on a spawned template).
 #   3. A "Bullet" actor in the scene is the spawn template for `spawn Bullet at me`
 #      (inactive/hidden is fine — clones are activated when spawned).
-#   4. Import a shot clip into Content/sounds (e.g. shot.wav). Until then
+#   4. A UICanvas holding the HPLabel control, so the hit points are on screen.
+#   5. Import a shot clip into Content/sounds (e.g. shot.wav). Until then
 #      `play sound "shot"` warns once and carries on.
+
+# Keep the on-screen hit points in sync with `my Health` out of `my MaxHealth`.
+bind HPLabel to my Health and my MaxHealth format "HP: {0}/{1}"
 
 when me appears
   set my Health to 100
+  set my MaxHealth to 100
+  set my Stamina to 100
   set my Invulnerable to false
   # TK4 framing: straight down and centred on the player.
   # A top-down view is centred when CameraDepth = -CameraHeight / tan(CameraPitch),
@@ -20,7 +26,7 @@ when me appears
   set CameraDepth to 0
   set CameraPitch to 90
   camera follows me
-  print "TK4 controls: arrows steer, Space fires"
+  print "TK4 controls: arrows steer, Shift sprints, Space fires"
 
 # --- rotation: instant yaw, 4 degrees per tick (240 deg/s at 60 fps) ---
 when Left Arrow is held
@@ -29,12 +35,54 @@ when Left Arrow is held
 when Right Arrow is held
   turn right degrees 4
 
-# --- driving: forward/back along the current facing ---
+# --- driving: walk pace, sprint pace while Shift is held and stamina remains, and the
+#     walk pace again once the bar is empty (so running dry never roots the player) ---
 when Up Arrow is held
+  unless Left Shift is held
+  move forward speed 45
+
+when Up Arrow is held
+  Left Shift is held
+  my Stamina is higher than 0
+  move forward speed 200
+
+when Up Arrow is held
+  Left Shift is held
+  my Stamina is 0
   move forward speed 45
 
 when Down Arrow is held
+  unless Left Shift is held
   move backward speed 30
+
+when Down Arrow is held
+  Left Shift is held
+  my Stamina is higher than 0
+  move backward speed 60
+
+when Down Arrow is held
+  Left Shift is held
+  my Stamina is 0
+  move backward speed 30
+
+# --- stamina: 5 per 0.1 s while sprinting (100 -> 2 s of sprint), 4 per 0.25 s back when
+#     Shift is released (full bar in ~6 s). Clamped so it can't run past either end. ---
+when every 0.1 seconds
+  Left Shift is held
+  my Stamina is higher than 0
+  add -5 to my Stamina
+
+when every 0.25 seconds
+  unless Left Shift is held
+  my Stamina is lower than 100
+  add 4 to my Stamina
+
+# Clamp with a watch + `if` lines: a comparison is a condition, not a trigger shape.
+when my Stamina changes
+  if my Stamina is higher than 100
+  set my Stamina to 100
+  if my Stamina is lower than 0
+  set my Stamina to 0
 
 # --- fire: the clone inherits my facing, offset clear of my body ---
 when Space is pressed
@@ -42,8 +90,10 @@ when Space is pressed
   play sound "shot"
 
 # --- hurt / invulnerability (TK4 blinks for a second after a hit) ---
+# An enemy hit costs 10 of the 100 hit points shown on screen.
 when message "hurt" arrives
   unless my Invulnerable is true
+  add -10 to my Health
   add -1 to Lives
   set my Invulnerable to true
   play sound "hurt.wav"
@@ -51,3 +101,7 @@ when message "hurt" arrives
   wait 1 second
   show me
   set my Invulnerable to false
+
+when my Health changes
+  if my Health is lower than 0
+  set my Health to 0
