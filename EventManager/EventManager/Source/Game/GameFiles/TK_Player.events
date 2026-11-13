@@ -19,6 +19,9 @@ when me appears
   set my MaxHealth to 100
   set my Stamina to 100
   set my Invulnerable to false
+  set weapon to "Pistol"
+  set ammo Pistol to 12
+  set ammo Shotgun to 8
   # TK4 framing: straight down and centred on the player.
   # A top-down view is centred when CameraDepth = -CameraHeight / tan(CameraPitch),
   # and tan(90) is infinite, so a straight-down camera needs no backward offset.
@@ -26,7 +29,7 @@ when me appears
   set CameraDepth to 0
   set CameraPitch to 90
   camera follows me
-  print "TK4 controls: arrows steer, Shift sprints, Space fires"
+  print "TK4 controls: arrows steer, Shift sprints, Space fires, 1/2 swap weapon, R reloads"
 
 # --- rotation: instant yaw, 4 degrees per tick (240 deg/s at 60 fps) ---
 when Left Arrow is held
@@ -39,7 +42,7 @@ when Right Arrow is held
 #     walk pace again once the bar is empty (so running dry never roots the player) ---
 when Up Arrow is held
   unless Left Shift is held
-  move forward speed 45
+  move forward speed 60
 
 when Up Arrow is held
   Left Shift is held
@@ -53,7 +56,7 @@ when Up Arrow is held
 
 when Down Arrow is held
   unless Left Shift is held
-  move backward speed 30
+  move backward speed 50
 
 when Down Arrow is held
   Left Shift is held
@@ -84,9 +87,30 @@ when my Stamina changes
   if my Stamina is lower than 0
   set my Stamina to 0
 
+# --- weapon & ammo (Task 16 Part C) ---
+# `set weapon to "Pistol"` stores the name in `my Weapon`; `spawn Bullet` then clones that
+# weapon's bullet type from WeaponData.events and `play sound` names the shot. Ammo lives in
+# `my <Weapon>Ammo` — `my Weapon` as the ammo name means "whatever I hold right now", so the
+# same fire block serves every weapon.
+when 1 is pressed
+  set weapon to "Pistol"
+
+when 2 is pressed
+  set weapon to "Shotgun"
+
+when R is pressed
+  unless reloading
+  reload
+
+when reload completes
+  print "TK4: reload done"
+
 # --- fire: the clone inherits my facing, offset clear of my body ---
 when Space is pressed
+  unless reloading
+  unless ammo my Weapon is 0
   spawn Bullet at me offset 30
+  add -1 to ammo my Weapon
   play sound "shot"
 
 # --- hurt / invulnerability (TK4 blinks for a second after a hit) ---

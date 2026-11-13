@@ -128,6 +128,9 @@ namespace Game
         /// <summary>Ids of the sounds each hearing trigger already answered, so one gunshot
         /// fires `when me hears` once instead of every tick while it is still on the bus.</summary>
         public HashSet<int>[] Heard = new HashSet<int>[0];
+        /// <summary>Reloads finished so far, per `when reload completes` event, so a sheet that
+        /// polls sees each completion exactly once.</summary>
+        public int[] ReloadSeen = new int[0];
         /// <summary>Last distance at which <c>sees name</c> established sight; reused by a
         /// distance-less <c>stops seeing name</c>.</summary>
         public Dictionary<string, double> LastSeenRange = new Dictionary<string, double>();
@@ -158,6 +161,8 @@ namespace Game
         public Wanderer Wander = new Wanderer();
         /// <summary>Recent sounds that `when me hears` / `me hears` poll (Task 16 Part B).</summary>
         public SoundBus Sounds = new SoundBus();
+        /// <summary>Per-actor reload timers behind `reload` / `reloading` (Task 16 Part C).</summary>
+        public WeaponClock Weapons = new WeaponClock();
         public double Time;
         /// <summary>Bridge flag: poll `touches` from world contacts (distance mode / both mode).</summary>
         public bool PollTouches;
@@ -256,6 +261,7 @@ namespace Game
             sheet.PolledContacts = new HashSet<object>[count];
             sheet.InSight = new HashSet<object>[count];
             sheet.Heard = new HashSet<int>[count];
+            sheet.ReloadSeen = new int[count];
             sheet.Triggers.Clear();
             sheet.CurrentState = "default";
             sheet.LastState = "default";
@@ -871,6 +877,29 @@ namespace Game
                 {
                     ExecutePlayStepSound(context, step);
                 }
+                else if (statement is SetWeaponNode setWeapon)
+                {
+                    ExecuteSetWeapon(context, setWeapon);
+                }
+                else if (statement is SetAmmoNode setAmmo)
+                {
+                    string weapon = ResolveWeaponName(context, setAmmo.Weapon, setAmmo.WeaponVariable, "set ammo");
+                    if (weapon.Length > 0)
+                        WeaponData.WriteAmmo(context, weapon, context.Evaluate(setAmmo.Value).AsNumber());
+                }
+                else if (statement is AddAmmoNode addAmmo)
+                {
+                    string weapon = ResolveWeaponName(context, addAmmo.Weapon, addAmmo.WeaponVariable, "add to ammo");
+                    if (weapon.Length > 0)
+                    {
+                        double held = WeaponData.ReadAmmo(context, weapon);
+                        WeaponData.WriteAmmo(context, weapon, held + context.Evaluate(addAmmo.Amount).AsNumber());
+                    }
+                }
+                else if (statement is ReloadNode reload)
+                {
+                    ExecuteReload(context, reload);
+                }
                 else if (statement is RawActionNode raw)
                 {
                     // `enemy type "Zombie"` — Task 16 Part D. The typed stats are plain variables,
@@ -942,6 +971,61 @@ namespace Game
                 context.WriteMy(set.Target.Name, value);
             else
                 context.WriteGlobal(set.Target.Name, value);
+        }
+
+        /// <summary>
+        /// <c>set weapon to &lt;name&gt;</c> / <c>weapon &lt;name&gt;</c> — Task 16 Part C. The name is
+        /// stored in <c>my Weapon</c>; switching drops a reload in progress so the new weapon
+        /// starts ready. An unknown name is still recorded (the sheet may define it later) but
+        /// warns once, like `enemy type`.
+        /// </summary>
+        private void ExecuteSetWeapon(EventContext context, SetWeaponNode node)
+        {
+            string name = context.Evaluate(node.Value).AsText();
+            if (string.IsNullOrEmpty(name))
+            {
+                OnRuntimeWarning("`set weapon` needs a weapon name, like `set weapon to \"Pistol\"`.");
+                return;
+            }
+            string canonical = WeaponData.CanonicalFor(context.Variables, name);
+            if (canonical == null)
+                OnRuntimeWarning($"I don't know the weapon \u201C{name}\u201D \u2014 the built-in weapons are {WeaponData.KnownNames()}, and a new one needs its own `<Weapon><Field>` variables (see WeaponData.events).");
+            Weapons.Cancel(context.Me);
+            context.WriteMy(WeaponData.CurrentWeaponVariable, ValueBox.OfText(canonical ?? name));
+        }
+
+        /// <summary>
+        /// <c>reload</c> — starts the current weapon's reload timer. The timer is what makes
+        /// `reloading` true and later raises `when reload completes`.
+        /// </summary>
+        private void ExecuteReload(EventContext context, ReloadNode node)
+        {
+            // A bare `reload` reloads whatever is held; `reload Shotgun` names one.
+            string weapon = string.IsNullOrEmpty(node.Weapon) && string.IsNullOrEmpty(node.WeaponVariable)
+                ? context.ReadMy(WeaponData.CurrentWeaponVariable).AsText()
+                : ResolveWeaponName(context, node.Weapon, node.WeaponVariable, "reload");
+            double seconds = WeaponClock.DefaultReload;
+            if (weapon.Length > 0 && WeaponData.TryGet(context.Variables, weapon, out WeaponStats stats))
+                seconds = stats.Reload;
+            else if (weapon.Length > 0)
+                OnRuntimeWarning($"I don't know the weapon \u201C{weapon}\u201D, so `reload` uses {WeaponClock.DefaultReload} seconds.");
+            Weapons.Start(context.Me, seconds, Time);
+        }
+
+        /// <summary>
+        /// The weapon an ammo line names. A blank name means `my Weapon` (whatever is held), and
+        /// a sheet that has not set one gets a warning instead of silently writing `Ammo`.
+        /// </summary>
+        private string ResolveWeaponName(EventContext context, string weapon, string variable, string line)
+        {
+            if (!string.IsNullOrEmpty(variable))
+                weapon = context.ReadMy(variable).AsText();
+            if (string.IsNullOrEmpty(weapon))
+            {
+                OnRuntimeWarning($"`{line}` needs a weapon \u2014 set one first with `set weapon to \"Pistol\"`.");
+                return "";
+            }
+            return weapon;
         }
 
         private void ExecuteSetState(EventContext context, SetStateNode setState)
@@ -1202,6 +1286,15 @@ namespace Game
                 case TriggerKind.Hears:
                     PollHearing(sheet, eventIndex, descriptor);
                     break;
+                case TriggerKind.ReloadComplete:
+                {
+                    int completed = Weapons.Completion(sheet.Actor, Time);
+                    if (completed <= sheet.ReloadSeen[eventIndex])
+                        break;
+                    sheet.ReloadSeen[eventIndex] = completed;
+                    RunEvent(sheet, eventIndex, null);
+                    break;
+                }
                 case TriggerKind.Near:
                     PollNear(sheet, eventIndex, descriptor);
                     break;

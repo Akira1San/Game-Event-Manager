@@ -34,6 +34,8 @@ namespace Game
         StopsSeeing,
         // Hearing (Task 16 Part B)
         Hears,
+        // Weapons & ammo (Task 16 Part C)
+        ReloadComplete,
         Equipped,
         Unequipped,
         Dropped,
@@ -99,6 +101,9 @@ namespace Game
                 {
                     Kind = words[words.Length - 1] == "up" ? TriggerKind.WheelScrollUp : TriggerKind.WheelScrollDown,
                 };
+            // `when reload completes` — the current weapon's reload timer ran out (Task 16 Part C).
+            if (words.Length >= 2 && words[0] == "reload" && words[1] == "completes")
+                return new TriggerDescriptor { Kind = TriggerKind.ReloadComplete };
             // RTS selection (Task 18 Part A). Call these before the generic key shape:
             // `when Marine is selected` would otherwise read as the key "Marine" being held.
             if (words.Length >= 3 && words[words.Length - 2] == "is" && words[words.Length - 1] == "selected")

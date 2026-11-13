@@ -175,6 +175,9 @@ namespace Game
             // Typed enemy stats come from the data file, read before any sheet runs so an
             // enemy's `me appears` never sees half a type (Task 16 Part D).
             EnemyTypes.LoadData(ProgramNamed("EnemyTypes")?.File);
+            // Weapon stats come from the data file too, so `spawn Bullet` already knows the
+            // current weapon's bullet type on the first shot (Task 16 Part C).
+            WeaponData.LoadData(ProgramNamed("WeaponData")?.File);
             RememberSignatures(programs);
             SweepComponents();
             AttachPrograms(programs, startedNow: true);
@@ -244,6 +247,7 @@ namespace Game
         {
             _programs = programs;
             EnemyTypes.LoadData(ProgramNamed("EnemyTypes")?.File);
+            WeaponData.LoadData(ProgramNamed("WeaponData")?.File);
             _shownErrors.Clear();
             _missingShown.Clear();
             var byName = new Dictionary<string, EventFileResult>();

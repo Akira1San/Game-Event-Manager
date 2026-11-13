@@ -50,6 +50,7 @@ namespace Game
             new WordEntry { Kind = "trigger", Word = "when message \"<name>\" arrives", Example = "when message \"die\" arrives" },
             new WordEntry { Kind = "trigger", Word = "when anim \"<name>\" ends", Example = "when anim \"dragon_fire\" ends" },
             new WordEntry { Kind = "trigger", Word = "when particle \"<name>\" ends", Example = "when particle \"explosion\" ends" },
+            new WordEntry { Kind = "trigger", Word = "when reload completes", Example = "when reload completes" },
             new WordEntry { Kind = "trigger", Word = "when tween <thing> ends", Example = "when tween PausePanel ends" },
             new WordEntry { Kind = "trigger", Word = "when state is <thing>", Example = "when state is chase" },
             new WordEntry { Kind = "trigger", Word = "when <thing> is selected", Example = "when me is selected" },
@@ -90,6 +91,9 @@ namespace Game
             new WordEntry { Kind = "condition", Word = "slider <thing> is <value>", Example = "slider HealthBar is 50" },
             new WordEntry { Kind = "condition", Word = "particle \"<name>\" is playing", Example = "particle \"smoke\" is playing" },
             new WordEntry { Kind = "condition", Word = "my type is <name>", Example = "my type is Zombie" },
+            new WordEntry { Kind = "condition", Word = "weapon is <name>", Example = "weapon is Shotgun" },
+            new WordEntry { Kind = "condition", Word = "ammo <name> is <value>", Example = "ammo Pistol is 0" },
+            new WordEntry { Kind = "condition", Word = "reloading", Example = "reloading", AltShape = "me is reloading" },
             new WordEntry { Kind = "condition", Word = "my health is lower than <n>", Example = "my health is lower than 25" },
             new WordEntry { Kind = "condition", Word = "me is selected", Example = "me is selected" },
             new WordEntry { Kind = "condition", Word = "selection count is <n>", Example = "selection count is 2" },
@@ -108,6 +112,11 @@ namespace Game
             new WordEntry { Kind = "action", Word = "move", Example = "move forward speed 5" },
             new WordEntry { Kind = "action", Word = "wander", Example = "wander speed 5", AltShape = "wander speed 5 duration 2" },
             new WordEntry { Kind = "action", Word = "still", Example = "still" },
+            new WordEntry { Kind = "action", Word = "weapon", Example = "weapon \"Shotgun\"", AltShape = "set weapon to \"Pistol\"" },
+            new WordEntry { Kind = "action", Word = "reload", Example = "reload" },
+            new WordEntry { Kind = "action", Word = "set", Example = "set weapon to \"Pistol\"" },
+            new WordEntry { Kind = "action", Word = "set", Example = "set ammo Pistol to 12" },
+            new WordEntry { Kind = "action", Word = "add", Example = "add -1 to ammo Pistol" },
             new WordEntry { Kind = "action", Word = "turn", Example = "turn left degrees 90" },
             new WordEntry { Kind = "action", Word = "goto", Example = "goto Player" },
             new WordEntry { Kind = "action", Word = "goto", Example = "goto there" },
@@ -208,6 +217,8 @@ namespace Game
             "enough", "under",
             // `me hears "gunshot" by 12` has no `is` to mark it, so the verb itself is the mark.
             "hears",
+            // `reloading` on its own line is a condition too.
+            "reloading",
         };
 
         public static readonly string[] Suggestables = BuildSuggestables();

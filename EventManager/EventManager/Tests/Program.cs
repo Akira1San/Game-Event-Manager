@@ -4646,6 +4646,193 @@ hearEngine.Sounds.Emit("gunshot", hearShooter, 4, 0, 0, SoundBus.DefaultRadius, 
 Check(Conditions.Evaluate(hearCondition, hearContext),
     "`me hears` is true while the gunshot is still recent");
 
+// ---- Task 16 Part C: weapon & ammo data system ----
+var weaponParser = new EventParser();
+var parsedSetWeapon = weaponParser.Parse("when me appears\n  set weapon to \"Pistol\"\n");
+Check(parsedSetWeapon.Events[0].Body[0].Statement is SetWeaponNode,
+    "`set weapon to \"Pistol\"` parses as a weapon assignment");
+var parsedWeaponShort = weaponParser.Parse("when me appears\n  weapon \"Shotgun\"\n");
+Check(parsedWeaponShort.Events[0].Body[0].Statement is SetWeaponNode,
+    "`weapon \"Shotgun\"` is the short form of the same action");
+var parsedWeaponConditionLine = weaponParser.Parse("when me appears\n  weapon is Pistol\n");
+Check(parsedWeaponConditionLine.Events[0].Body[0].IsCondition,
+    "`weapon is Pistol` stays a condition line, not an action");
+var parsedSetAmmo = weaponParser.Parse("when me appears\n  set ammo Pistol to 7\n");
+Check(parsedSetAmmo.Events[0].Body[0].Statement is SetAmmoNode parsedSetAmmoNode &&
+      parsedSetAmmoNode.Weapon == "Pistol",
+    "`set ammo Pistol to 7` targets that weapon's count");
+var parsedAddAmmo = weaponParser.Parse("when me appears\n  add -1 to ammo Pistol\n");
+Check(parsedAddAmmo.Events[0].Body[0].Statement is AddAmmoNode parsedAddAmmoNode &&
+      parsedAddAmmoNode.Weapon == "Pistol",
+    "`add -1 to ammo Pistol` is the shot cost");
+var parsedAddCurrentAmmo = weaponParser.Parse("when me appears\n  add -1 to ammo my Weapon\n");
+Check(parsedAddCurrentAmmo.Events[0].Body[0].Statement is AddAmmoNode parsedCurrentAmmoNode &&
+      parsedCurrentAmmoNode.WeaponVariable == "Weapon",
+    "`add -1 to ammo my Weapon` spends the held weapon's ammo");
+var parsedReload = weaponParser.Parse("when me appears\n  reload\n");
+Check(parsedReload.Events[0].Body[0].Statement is ReloadNode, "`reload` parses as its own action");
+var reloadDescriptor = TriggerClassifier.Classify(
+    weaponParser.Parse("when reload completes\n  print \"done\"\n").Events[0]);
+Check(reloadDescriptor.Kind == TriggerKind.ReloadComplete,
+    "`when reload completes` classifies to ReloadComplete");
+
+var weaponCondition = Conditions.Parse(
+    weaponParser.Parse("when me appears\n  weapon is Pistol\n").Events[0].Body[0].Words);
+Check(weaponCondition.Kind == ConditionKind.WeaponIs && weaponCondition.Name == "Pistol",
+    "`weapon is Pistol` parses as a weapon condition");
+var ammoConditionNode = Conditions.Parse(
+    weaponParser.Parse("when me appears\n  ammo Pistol is 3\n").Events[0].Body[0].Words);
+Check(ammoConditionNode.Kind == ConditionKind.AmmoIs && ammoConditionNode.Thing == "Pistol" &&
+      ammoConditionNode.Right != null,
+    "`ammo Pistol is 3` parses as an ammo condition");
+var heldAmmoConditionNode = Conditions.Parse(
+    weaponParser.Parse("when me appears\n  unless ammo my Weapon is 0\n").Events[0].Body[0].Words);
+Check(heldAmmoConditionNode.Kind == ConditionKind.AmmoIs && heldAmmoConditionNode.Key == "Weapon",
+    "`ammo my Weapon is 0` reads the held weapon's count");
+var reloadingNode = Conditions.Parse(
+    weaponParser.Parse("when me appears\n  reloading\n").Events[0].Body[0].Words);
+Check(reloadingNode.Kind == ConditionKind.Reloading, "`reloading` parses as a condition");
+
+// The sheet side: `set weapon` writes my Weapon, the shot spends one round, the data supplies
+// the starting count, and `spawn Bullet` reads the held weapon's bullet type.
+var gunWorld = new FakeWorld();
+var gunEngine = FreshEngine(gunWorld);
+var gunner = new FakeActor("Player");
+gunEngine.AddSheet(gunner, weaponParser.Parse(@"when me appears
+  set weapon to ""Pistol""
+when Space is pressed
+  unless reloading
+  unless ammo my Weapon is 0
+  add -1 to ammo my Weapon
+"));
+gunEngine.Tick(0);
+CheckStrings("Pistol", gunEngine.Variables.GetLocal(gunner, "Weapon").AsText(),
+    "`set weapon to \"Pistol\"` records my Weapon");
+var gunContext = new EventContext
+{
+    Variables = gunEngine.Variables,
+    World = gunWorld,
+    Me = gunner,
+    Runtime = gunEngine,
+};
+Check(WeaponData.ReadAmmo(gunContext, "Pistol") == 12,
+    "an unfired weapon starts with the data's ammo");
+Check(Conditions.Evaluate(weaponCondition, gunContext), "`weapon is Pistol` reads my Weapon");
+gunEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "Space" });
+gunEngine.Tick(1);
+Check(gunEngine.Variables.GetLocal(gunner, "PistolAmmo").AsNumber() == 11,
+    "one shot spends one round of ammo");
+var ammoNowNode = Conditions.Parse(
+    weaponParser.Parse("when me appears\n  ammo Pistol is 11\n").Events[0].Body[0].Words);
+Check(Conditions.Evaluate(ammoNowNode, gunContext), "`ammo Pistol is 11` reads the spent count");
+
+var heldPistol = WeaponData.ForActor(gunContext);
+CheckStrings("Bullet", heldPistol.Bullet, "the held Pistol spawns the Bullet template");
+gunEngine.Variables.SetLocal(gunner, "Weapon", ValueBox.OfText("Shotgun"));
+var heldShotgun = WeaponData.ForActor(gunContext);
+CheckStrings("ShotgunPellet", heldShotgun.Bullet, "switching weapons changes the bullet type");
+
+// `reload` starts a timer, `reloading` suspends shooting, and the completion fires once.
+var reloadGunWorld = new FakeWorld();
+var reloadGunEngine = FreshEngine(reloadGunWorld);
+var reloadGunner = new FakeActor("Player");
+reloadGunEngine.AddSheet(reloadGunner, weaponParser.Parse(@"when me appears
+  set weapon to ""Pistol""
+when R is pressed
+  reload
+when reload completes
+  add 1 to my Reloads
+when Space is pressed
+  unless reloading
+  add 1 to my Shots
+"));
+reloadGunEngine.Tick(0);
+reloadGunEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "Space" });
+reloadGunEngine.Tick(0.5);
+Check(reloadGunEngine.Variables.GetLocal(reloadGunner, "Shots").AsNumber() == 1,
+    "a weapon that is not reloading fires");
+reloadGunEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "R" });
+reloadGunEngine.Tick(1);
+Check(reloadGunEngine.Weapons.IsReloading(reloadGunner, 1), "`reload` starts the weapon's timer");
+reloadGunEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "Space" });
+reloadGunEngine.Tick(1.5);
+Check(reloadGunEngine.Variables.GetLocal(reloadGunner, "Shots").AsNumber() == 1,
+    "`unless reloading` suspends shooting during the reload");
+reloadGunEngine.Tick(2.3);
+Check(reloadGunEngine.Variables.GetLocal(reloadGunner, "Reloads").AsNumber() == 1,
+    "`when reload completes` fires once the timer runs out");
+reloadGunEngine.Tick(2.6);
+Check(reloadGunEngine.Variables.GetLocal(reloadGunner, "Reloads").AsNumber() == 1,
+    "a finished reload does not fire again on later ticks");
+
+var clock = new WeaponClock();
+var clockActor = new object();
+clock.Start(clockActor, 0, 5);
+Check(!clock.IsReloading(clockActor, 5) && clock.Completion(clockActor, 5) == 1,
+    "a zero-second reload completes on the spot");
+var cancelClock = new WeaponClock();
+var cancelledActor = new object();
+cancelClock.Start(cancelledActor, 3, 0);
+cancelClock.Cancel(cancelledActor);
+Check(!cancelClock.IsReloading(cancelledActor, 1) && cancelClock.Completion(cancelledActor, 4) == 0,
+    "switching weapons cancels a reload without completing it");
+
+// Ammo can be set outright, and never runs below zero.
+var emptyWorld = new FakeWorld();
+var emptyGunEngine = FreshEngine(emptyWorld);
+var emptyGunner = new FakeActor("Player");
+emptyGunEngine.AddSheet(emptyGunner, weaponParser.Parse(@"when me appears
+  set weapon to ""Pistol""
+  set ammo Pistol to 0
+when R is pressed
+  add -1 to ammo Pistol
+"));
+emptyGunEngine.Tick(0);
+Check(emptyGunEngine.Variables.GetLocal(emptyGunner, "PistolAmmo").AsNumber() == 0,
+    "`set ammo Pistol to 0` writes the actor's count");
+emptyGunEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "R" });
+emptyGunEngine.Tick(1);
+Check(emptyGunEngine.Variables.GetLocal(emptyGunner, "PistolAmmo").AsNumber() == 0,
+    "spending ammo past empty clamps at 0");
+
+// A name nobody defined warns, but is still recorded so the sheet keeps working.
+var unknownGunEngine = FreshEngine(new FakeWorld());
+string unknownGunWarning = "";
+unknownGunEngine.OnRuntimeWarning = message => unknownGunWarning = message;
+var unknownGunner = new FakeActor("Player");
+unknownGunEngine.AddSheet(unknownGunner, weaponParser.Parse("when me appears\n  set weapon to \"Banana\"\n"));
+unknownGunEngine.Tick(0);
+Check(unknownGunWarning.Contains("Banana"), "an unknown weapon warns instead of inventing stats");
+CheckStrings("Banana", unknownGunEngine.Variables.GetLocal(unknownGunner, "Weapon").AsText(),
+    "the unknown weapon name is still recorded");
+
+// WeaponData.events is read before any sheet runs, so a table edit takes effect on the first shot.
+WeaponData.LoadData(weaponParser.Parse(
+    "when game starts\n  set PistolBullet to \"Rocket\"\n  set PistolReload to 0.4\n"));
+WeaponData.TryGet(null, "Pistol", out WeaponStats tunedPistol);
+CheckStrings("Rocket", tunedPistol.Bullet, "WeaponData.events tunes a weapon's bullet type");
+Check(Math.Abs(tunedPistol.Reload - 0.4) < 0.0001 && tunedPistol.Damage == 10,
+    "a field left out of the data file keeps its built-in value");
+WeaponData.LoadData(weaponParser.Parse(
+    "when game starts\n  set SMGBullet to \"Bullet\"\n  set SMGReload to 0.6\n"));
+WeaponData.TryGet(null, "SMG", out WeaponStats tunedSmg);
+Check(tunedSmg != null && tunedSmg.Bullet == "Bullet" && Math.Abs(tunedSmg.Reload - 0.6) < 0.0001,
+    "a weapon that exists only as data variables is a valid weapon");
+WeaponData.LoadData(null);
+
+// The shipped data file and player sheet parse, and the table loads into real stats.
+var weaponDataEvents = weaponParser.Parse(File.ReadAllText("Source/Game/GameFiles/WeaponData.events"));
+Check(weaponDataEvents.Events.Count == 1 && weaponDataEvents.Events[0].Body.Count == 50,
+    "WeaponData.events parses (five weapons, ten fields each)");
+WeaponData.LoadData(weaponDataEvents);
+WeaponData.TryGet(null, "Pistol", out WeaponStats filePistol);
+Check(filePistol != null && filePistol.Ammo == 12 && Math.Abs(filePistol.Reload - 1.2) < 0.0001 &&
+      filePistol.Bullet == "Bullet",
+    "the shipped WeaponData.events defines the Pistol");
+WeaponData.LoadData(null);
+var tkPlayerEvents = weaponParser.Parse(File.ReadAllText("Source/Game/GameFiles/TK_Player.events"));
+Check(tkPlayerEvents.Events.Count > 0, "TK_Player.events parses (weapon swap, reload, ammo-gated fire)");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

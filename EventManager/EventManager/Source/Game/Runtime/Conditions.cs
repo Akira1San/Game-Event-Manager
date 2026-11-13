@@ -20,6 +20,10 @@ namespace Game
         Hears,
         // Typed enemies (Task 16 Part D)
         MyTypeIs,
+        // Weapons & ammo (Task 16 Part C)
+        WeaponIs,
+        AmmoIs,
+        Reloading,
         // Wander / still modes (Task 16 Part A)
         Wandering,
         Still,
@@ -119,6 +123,40 @@ namespace Game
                 (texts[2] == "wandering" || texts[2] == "still"))
             {
                 node.Kind = texts[2] == "wandering" ? ConditionKind.Wandering : ConditionKind.Still;
+                return node;
+            }
+
+            // ---- weapons & ammo (Task 16 Part C) ----
+            // `reloading` / `me is reloading`: true until the current reload timer runs out.
+            if ((texts.Length == 1 && texts[0] == "reloading") ||
+                (texts.Length == 3 && texts[0] == "me" && texts[1] == "is" && texts[2] == "reloading"))
+            {
+                node.Kind = ConditionKind.Reloading;
+                return node;
+            }
+            // `weapon is Pistol` — reads `my Weapon`, which `set weapon to` wrote. Sits before
+            // the generic `<var> is <value>` shape so `weapon` is never a global variable.
+            if (texts.Length == 3 && texts[0] == "weapon" && texts[1] == "is")
+            {
+                node.Kind = ConditionKind.WeaponIs;
+                node.Name = tokens[2].Text;
+                return node;
+            }
+            // `ammo Pistol is 0` / `ammo my Weapon is 0` — that weapon's ammo count on the acting
+            // actor (`my <variable>` reads the name from the variable, e.g. the current weapon).
+            if (texts.Length >= 5 && texts[0] == "ammo" && (texts[1] == "my" || texts[1] == "me") &&
+                texts[3] == "is")
+            {
+                node.Kind = ConditionKind.AmmoIs;
+                node.Key = texts[2];
+                node.Right = ValueFrom(tokens, texts, 4);
+                return node;
+            }
+            if (texts.Length >= 4 && texts[0] == "ammo" && texts[2] == "is")
+            {
+                node.Kind = ConditionKind.AmmoIs;
+                node.Thing = tokens[1].Text;
+                node.Right = ValueFrom(tokens, texts, 3);
                 return node;
             }
 
@@ -382,9 +420,22 @@ namespace Game
                            context.Runtime.Sounds.IsAudible(node.Thing, context.Me, context.World, node.Distance);
                 case ConditionKind.MyTypeIs:
                     return string.Equals(context.ReadMy("Type").AsText(), node.Name,
-                        StringComparison.OrdinalIgnoreCase);
-                case ConditionKind.Wandering:
+                        StringComparison.OrdinalIgnoreCase);                case ConditionKind.Wandering:
                     return context.Runtime != null && context.Runtime.Wander.IsWandering(context.Me);
+                case ConditionKind.WeaponIs:
+                    return string.Equals(context.ReadMy(WeaponData.CurrentWeaponVariable).AsText(), node.Name,
+                        StringComparison.OrdinalIgnoreCase);
+                case ConditionKind.AmmoIs:
+                {
+                    if (node.Right == null)
+                        return false;
+                    string weapon = node.Key.Length > 0 ? context.ReadMy(node.Key).AsText() : node.Thing;
+                    double held = WeaponData.ReadAmmo(context, weapon);
+                    double wanted = ValueEvaluator.Evaluate(node.Right, ContextResolver(context)).AsNumber();
+                    return Math.Abs(held - wanted) < 0.0001;
+                }
+                case ConditionKind.Reloading:
+                    return context.Runtime != null && context.Runtime.Weapons.IsReloading(context.Me, context.Runtime.Time);
                 case ConditionKind.Still:
                     return context.Runtime != null && context.Runtime.Wander.IsStill(context.Me);
                 case ConditionKind.ParticlePlaying:

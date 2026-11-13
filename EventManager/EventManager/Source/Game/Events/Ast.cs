@@ -149,4 +149,38 @@ namespace Game
         public string Thing = "";
         public ValueNode Amount = new NumberValue();
     }
+
+    /// <summary><c>set weapon to &lt;name&gt;</c> / <c>weapon &lt;name&gt;</c> — records the
+    /// actor's current weapon in <c>my Weapon</c> (Task 16 Part C).</summary>
+    public class SetWeaponNode : StatementNode
+    {
+        public ValueNode Value = new TextValue();
+    }
+
+    /// <summary><c>set ammo &lt;weapon&gt; to &lt;n&gt;</c> — writes that weapon's ammo count on
+    /// the acting actor, clamped at 0. <see cref="WeaponVariable"/> reads the name from a
+    /// variable instead (<c>set ammo my Weapon to 30</c>).</summary>
+    public class SetAmmoNode : StatementNode
+    {
+        public string Weapon = "";
+        public string WeaponVariable = "";
+        public ValueNode Value = new NumberValue();
+    }
+
+    /// <summary><c>add &lt;n&gt; to ammo &lt;weapon&gt;</c> — the shot cost, e.g.
+    /// <c>add -1 to ammo Pistol</c>; clamps at 0 so a trigger-happy sheet can't go negative.</summary>
+    public class AddAmmoNode : StatementNode
+    {
+        public string Weapon = "";
+        public string WeaponVariable = "";
+        public ValueNode Amount = new NumberValue();
+    }
+
+    /// <summary><c>reload</c> — starts the current weapon's reload timer; <c>reloading</c> is
+    /// true until it finishes and <c>when reload completes</c> fires once.</summary>
+    public class ReloadNode : StatementNode
+    {
+        public string Weapon = "";
+        public string WeaponVariable = "";
+    }
 }

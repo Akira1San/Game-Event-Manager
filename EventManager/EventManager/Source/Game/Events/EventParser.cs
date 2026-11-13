@@ -376,6 +376,40 @@ namespace Game
                 line.IsCondition = true;
                 return;
             }
+            // Weapon words (Task 16 Part C). `reload` is an action, and `weapon <name>` sets the
+            // current weapon — while `weapon is Pistol` is the condition of the same shape, so
+            // the check happens here, before the action-verb branch below.
+            if (first.Text == "reload")
+            {
+                var reloadNode = new ReloadNode { Line = line.Line };
+                int reloadIndex = 1;
+                if (reloadIndex < line.Words.Count)
+                {
+                    if (!TryReadWeaponName(line.Words, ref reloadIndex, out string reloadWeapon, out string reloadVariable))
+                        throw new ParseException("`reload` stands alone, or names a weapon like `reload Shotgun`", first.Line);
+                    reloadNode.Weapon = reloadWeapon;
+                    reloadNode.WeaponVariable = reloadVariable;
+                }
+                CheckEndOfLine(line.Words, reloadIndex, line.Line, "reload");
+                line.Statement = reloadNode;
+                return;
+            }
+            if (first.Text == "weapon")
+            {
+                if (line.Words.Count >= 2 && line.Words[1].Type == TokenType.Word && line.Words[1].Text == "is")
+                {
+                    line.IsCondition = true;
+                    return;
+                }
+                if (line.Words.Count < 2)
+                    throw new ParseException("`weapon` needs a name, like `weapon \"Shotgun\"` — or use `weapon is Shotgun` as a condition", first.Line);
+                var weaponNode = new SetWeaponNode { Line = line.Line };
+                int weaponIndex = 1;
+                weaponNode.Value = ReadValue(line.Words, ref weaponIndex, line.Line);
+                CheckEndOfLine(line.Words, weaponIndex, line.Line, "weapon \"Shotgun\"");
+                line.Statement = weaponNode;
+                return;
+            }
             // Action verbs take priority over condition marks, so `print W is held`
             // isn't misclassified as a condition just because `is` is a condition mark.
             if (Array.IndexOf(WordRegistry.ActionWords, first.Text) >= 0)
@@ -607,6 +641,34 @@ namespace Game
                 }
                 throw new ParseException("`set my control group` looks like this: `set my control group to 1`", line.Line);
             }
+            // `set weapon to "Pistol"` — Task 16 Part C. This is the current weapon, not a
+            // global variable called "weapon", so it gets its own statement.
+            if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "weapon")
+            {
+                if (words.Count < 4 || words[2].Type != TokenType.Word || words[2].Text != "to")
+                    throw new ParseException("`set weapon` looks like this: `set weapon to \"Pistol\"`", line.Line);
+                var weaponNode = new SetWeaponNode { Line = line.Line };
+                int weaponIndex = 3;
+                weaponNode.Value = ReadValue(words, ref weaponIndex, line.Line);
+                CheckEndOfLine(words, weaponIndex, line.Line, "set weapon to \"Pistol\"");
+                return weaponNode;
+            }
+            // `set ammo Pistol to 12` — that weapon's ammo count on the acting actor.
+            if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "ammo")
+            {
+                var ammoNode = new SetAmmoNode { Line = line.Line };
+                int ammoIndex = 2;
+                if (!TryReadWeaponName(words, ref ammoIndex, out string ammoWeapon, out string ammoVariable) ||
+                    ammoIndex >= words.Count || words[ammoIndex].Type != TokenType.Word ||
+                    words[ammoIndex].Text != "to")
+                    throw new ParseException("`set ammo` looks like this: `set ammo Pistol to 12`", line.Line);
+                ammoNode.Weapon = ammoWeapon;
+                ammoNode.WeaponVariable = ammoVariable;
+                ammoIndex++;
+                ammoNode.Value = ReadValue(words, ref ammoIndex, line.Line);
+                CheckEndOfLine(words, ammoIndex, line.Line, "set ammo Pistol to 12");
+                return ammoNode;
+            }
             // `set light intensity/color/range to <value>` — handled as a raw action word.
             if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "light")
             {
@@ -767,6 +829,37 @@ namespace Game
                 raw.Words.AddRange(words);
                 return raw;
             }
+            // `add -1 to ammo Pistol` — the shot cost (Task 16 Part C). Detected before the
+            // generic `add` shape so `ammo <weapon>` is not read as a variable called "ammo".
+            {
+                int ammoTo = -1;
+                for (int i = 2; i < words.Count; i++)
+                {
+                    if (words[i].Type == TokenType.Word && words[i].Text == "to")
+                    {
+                        ammoTo = i;
+                        break;
+                    }
+                }
+                if (ammoTo > 1 && ammoTo + 1 < words.Count && words[ammoTo + 1].Type == TokenType.Word &&
+                    words[ammoTo + 1].Text == "ammo")
+                {
+                    var ammoNode = new AddAmmoNode { Line = line.Line };
+                    int ammoIndex = 1;
+                    ammoNode.Amount = ReadValue(words, ref ammoIndex, line.Line);
+                    if (ammoNode.Amount is MathValue)
+                        throw new ParseException("`add` takes one plain value — do the math in a `set` line instead", line.Line);
+                    if (ammoIndex != ammoTo)
+                        throw new ParseException("`add` to ammo looks like this: `add -1 to ammo Pistol`", line.Line);
+                    ammoIndex = ammoTo + 2;
+                    if (!TryReadWeaponName(words, ref ammoIndex, out string ammoWeapon, out string ammoVariable))
+                        throw new ParseException("`add` to ammo names a weapon, like `add -1 to ammo Pistol`", line.Line);
+                    ammoNode.Weapon = ammoWeapon;
+                    ammoNode.WeaponVariable = ammoVariable;
+                    CheckEndOfLine(words, ammoIndex, line.Line, "add -1 to ammo Pistol");
+                    return ammoNode;
+                }
+            }
             // `add <n> to build progress of <building>` — named RTS construction
             // progress (Task 18 Part C follow-up). Detected before the trailing-word
             // form so a building name after `of` is not read as a variable.
@@ -892,6 +985,36 @@ namespace Game
             node.Amount = ReadValue(words, ref index, line.Line);
             CheckEndOfLine(words, index, line.Line, $"increase Supply Max by <amount>");
             return node;
+        }
+
+        /// <summary>
+        /// Reads the weapon an ammo line targets: a plain name (`Pistol`), or `my Weapon` to mean
+        /// whatever the actor holds right now.
+        /// </summary>
+        private static bool TryReadWeaponName(List<Token> words, ref int index, out string weapon, out string variable)
+        {
+            weapon = "";
+            variable = "";
+            if (index >= words.Count)
+                return false;
+            if (words[index].Type == TokenType.Word &&
+                (words[index].Text == "my" || words[index].Text == "me"))
+            {
+                if (index + 1 >= words.Count || words[index + 1].Type != TokenType.Word)
+                    return false;
+                variable = words[index + 1].Text;
+                index += 2;
+                return true;
+            }
+            if (words[index].Type == TokenType.Word && words[index].Text == "to")
+                return false;
+            if (words[index].Type == TokenType.Word || words[index].Type == TokenType.Str)
+            {
+                weapon = words[index].Text;
+                index++;
+                return true;
+            }
+            return false;
         }
 
         /// <summary>Joins a run of words back into one name (used for multiword resources).</summary>

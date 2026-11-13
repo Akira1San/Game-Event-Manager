@@ -1,0 +1,90 @@
+# ---------------- WeaponData.events (Task 16 Part C: weapon & ammo data) ----------------
+# Weapon definitions, data-driven. `set weapon to "Pistol"` stores the name in `my Weapon`;
+# `spawn Bullet` then clones that weapon's bullet type, and `reload` uses its reload time.
+# The ammo count is the actor's own `<Weapon>Ammo` variable, so two players holding the same
+# pistol keep separate counts: `set ammo Pistol to 30` / `add -1 to ammo Pistol`.
+#
+# HOW IT LOADS: the file is read when the game loads events (and on hot reload), by name —
+# WeaponData.events — before any actor's `when me appears` runs, so a weapon is complete on
+# the first tick. Attaching it to a sheet is optional; the `when game starts` block below
+# keeps it valid as a normal event file.
+#
+# BULLET TEMPLATES: `<Weapon>Bullet` names a scene actor that stages the clones, exactly like
+# `spawn Bullet` does. The TK4Controls scene only ships a hidden `Bullet`, so a weapon whose
+# template is missing (ShotgunPellet, UziBullet, Rocket, Grenade) warns once when it fires —
+# add a hidden actor with that name to the scene when you start using it.
+#
+# FIELDS (per weapon, one variable each — the weapon name plus the field):
+#   <Weapon>Bullet        actor template `spawn Bullet` clones while it is held
+#   <Weapon>Damage        damage per hit (read by Part C.5 bullet code)
+#   <Weapon>FireRate      seconds between shots
+#   <Weapon>Spread        pellet spread angle in degrees (Part C.5)
+#   <Weapon>Multiplier    pellets per shot (Part C.5)
+#   <Weapon>Reload        seconds a `reload` takes
+#   <Weapon>Sound         sound name emitted when it shoots
+#   <Weapon>Smoke         particle played at the muzzle (Part C.5)
+#   <Weapon>AmmoPerShot   ammo one shot spends
+#   <Weapon>Ammo          ammo a fresh actor starts with
+#
+# Built-in defaults (code): Pistol, Shotgun, Uzi, Rocket, Grenade. Anything set here wins.
+
+when game starts
+  # --- Pistol: TK4's starting sidearm ---
+  set PistolBullet to "Bullet"
+  set PistolDamage to 10
+  set PistolFireRate to 0.25
+  set PistolSpread to 0
+  set PistolMultiplier to 1
+  set PistolReload to 1.2
+  set PistolSound to "gunshot"
+  set PistolSmoke to "muzzle"
+  set PistolAmmoPerShot to 1
+  set PistolAmmo to 12
+
+  # --- Shotgun: a wide spray, slow to reload ---
+  set ShotgunBullet to "ShotgunPellet"
+  set ShotgunDamage to 6
+  set ShotgunFireRate to 0.8
+  set ShotgunSpread to 12
+  set ShotgunMultiplier to 6
+  set ShotgunReload to 2
+  set ShotgunSound to "shotgun"
+  set ShotgunSmoke to "muzzle"
+  set ShotgunAmmoPerShot to 1
+  set ShotgunAmmo to 8
+
+  # --- Uzi: fast fire, short reload, little spread ---
+  set UziBullet to "UziBullet"
+  set UziDamage to 5
+  set UziFireRate to 0.08
+  set UziSpread to 4
+  set UziMultiplier to 1
+  set UziReload to 1
+  set UziSound to "uzi"
+  set UziSmoke to "muzzle"
+  set UziAmmoPerShot to 1
+  set UziAmmo to 40
+
+  # --- Rocket: slow, heavy, explodes (Part C.5) ---
+  set RocketBullet to "Rocket"
+  set RocketDamage to 60
+  set RocketFireRate to 1.2
+  set RocketSpread to 0
+  set RocketMultiplier to 1
+  set RocketReload to 2.5
+  set RocketSound to "rocket"
+  set RocketSmoke to "smoke"
+  set RocketAmmoPerShot to 1
+  set RocketAmmo to 4
+
+  # --- Grenade: lobbed, heavy, explodes (Part C.5) ---
+  set GrenadeBullet to "Grenade"
+  set GrenadeDamage to 50
+  set GrenadeFireRate to 1.5
+  set GrenadeSpread to 0
+  set GrenadeMultiplier to 1
+  set GrenadeReload to 2.5
+  set GrenadeSound to "throw"
+  set GrenadeSmoke to "smoke"
+  set GrenadeAmmoPerShot to 1
+  set GrenadeAmmo to 3

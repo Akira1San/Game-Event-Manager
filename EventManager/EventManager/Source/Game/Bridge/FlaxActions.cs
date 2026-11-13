@@ -1473,13 +1473,27 @@ namespace Game
             // `spawn ... offset <n>` slides the clone along the spot's forward axis; a plain
             // spawn resolves to 0 and keeps the exact old placement.
             double offset = spec.AmountNode != null ? context.Evaluate(spec.AmountNode).AsNumber() : 0;
-            Actor clone = SpawnClone(context, spec.Thing, spec.To, offset);
+            // `spawn Bullet` fires whatever the sheet currently holds (Task 16 Part C): the
+            // weapon data's bullet type replaces the generic template name, so a Shotgun's
+            // clone is its pellet actor while an empty-handed sheet still clones "Bullet".
+            string template = spec.Thing;
+            WeaponStats weapon = null;
+            if (AssetNames.Key(template) == "bullet")
+            {
+                weapon = WeaponData.ForActor(context);
+                if (weapon != null && !string.IsNullOrEmpty(weapon.Bullet))
+                    template = weapon.Bullet;
+            }
+            Actor clone = SpawnClone(context, template, spec.To, offset);
             if (clone == null)
                 return;
             EventsManager.Instance?.AttachSpawnedActor(clone);
             // A shot or a blast is heard the moment it appears (Task 16 Part B): enemies react to
-            // gunfire without the shooter's sheet having to remember a `play sound` line.
-            string spawnedSound = SpawnSoundName(spec.Thing);
+            // gunfire without the shooter's sheet having to remember a `play sound` line. The
+            // weapon's own sound name wins when it has one, so a shotgun doesn't sound like a pistol.
+            string spawnedSound = weapon != null && !string.IsNullOrEmpty(weapon.Sound)
+                ? weapon.Sound
+                : SpawnSoundName(template);
             if (spawnedSound != null)
                 EmitSound(spawnedSound, clone.Position, context.Me as Actor ?? clone);
         }

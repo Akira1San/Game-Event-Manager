@@ -58,13 +58,13 @@ Goal: implement remaining Tapan Kaikki 4 (TK4) features not yet covered, achievi
 - [x] Example: `Enemy.events` adds `when me hears "gunshot" by SightDistance → set my mode to "chase" → move toward sound`.
 
 ### Part C — Weapon & Ammo Data System
-- [ ] Word registry: `weapon <name>` (set current weapon), `ammo <name>` (current ammo count), `reload` (start reload), `when reload completes`.
-- [ ] Data: weapon definitions in `WeaponData.events` (or JSON) — bullet type, fire rate, spread, multiplier, reload time, sound, smoke, ammo per shot.
-- [ ] Actions: `set weapon to <name>`, `add <n> to ammo <name>`, `set ammo <name> to <n>`.
-- [ ] Conditions: `ammo <name> is <value>`, `weapon is <name>`, `reloading`.
-- [ ] Runtime: `FlaxActions` resolves weapon data; `spawn Bullet` uses current weapon's bullet type; reload timer suspends shooting.
-- [ ] Unit test: weapon switch changes bullet type; reload blocks fire; ammo decrements per shot.
-- [ ] Example: `Player.events` — `when 1 pressed → set weapon to "Pistol"`; `when Left Mouse pressed → unless reloading → spawn Bullet at me → add -1 to ammo Pistol`.
+- [x] Word registry: `weapon <name>` (set current weapon), `ammo <name>` (current ammo count), `reload` (start reload), `when reload completes`.
+- [x] Data: weapon definitions in `WeaponData.events` (or JSON) — bullet type, fire rate, spread, multiplier, reload time, sound, smoke, ammo per shot.
+- [x] Actions: `set weapon to <name>`, `add <n> to ammo <name>`, `set ammo <name> to <n>`.
+- [x] Conditions: `ammo <name> is <value>`, `weapon is <name>`, `reloading`.
+- [x] Runtime: `FlaxActions` resolves weapon data; `spawn Bullet` uses current weapon's bullet type; reload timer suspends shooting.
+- [x] Unit test: weapon switch changes bullet type; reload blocks fire; ammo decrements per shot.
+- [x] Example: `TK_Player.events` (the TK4 player sheet — `Player.events` is the adventure/click-to-move sheet, so the gun lives with the other TK4 controls) — `when 1 is pressed → set weapon to "Pistol"`, `when 2 is pressed → set weapon to "Shotgun"`, `when R is pressed → reload`, `when Space is pressed → unless reloading → unless ammo my Weapon is 0 → spawn Bullet at me offset 30 → add -1 to ammo my Weapon`.
 
 ### Part C.5 — Weapon Variants & Wall Impact (TK4: Uzi, Shotgun, Rockets, Grenades)
 Goal: different weapons behave differently — shotgun fires multiple pellets with spread, Uzi fires fast with little spread, rockets/grenades explode on wall impact, bullets bounce or stop on walls. TK4 `CBullet.cpp` drives this per bullet type: speed, angleAdd (spread), bulletAmount (pellets per shot), power (damage), pushPower (knockback), bounceType, time (lifetime), slow (deceleration), collisionTrigger (walls stop it), effect (particle on hit). Depends on Task 16 Part C (weapon/ammo data) and Task 16 Part E (particles).
