@@ -716,7 +716,11 @@ namespace Game
                     }
                     if (!Navigation.FindPath(me.Position, target.Position, out Vector3[] path) || path == null || path.Length == 0)
                     {
-                        WarnOnce($"No NavMesh path from \u201C{me.Name}\u201D to \u201C{target.Name}\u201D — bake a NavMesh for this level first.");
+                        // Off the navmesh (pushed, or spawned there): walk a tick toward the
+                        // closest navigable point so a later `goto` can path again, instead of
+                        // warning once and freezing the chase forever.
+                        if (!StepOntoNavMesh(context, me, spec.Number))
+                            WarnOnce($"No NavMesh path from \u201C{me.Name}\u201D to \u201C{target.Name}\u201D — bake a NavMesh for this level first.");
                         break;
                     }
                     Remember(new OngoingMove
@@ -1071,6 +1075,26 @@ namespace Game
         }
 
         /// <summary>
+        /// Walks one tick toward the closest point on the navmesh when the actor is stranded off
+        /// it (the usual result of being pushed into geometry). Returns false when there is
+        /// nothing to fix, so the caller can report the real path failure.
+        /// </summary>
+        private static bool StepOntoNavMesh(EventContext context, Actor actor, double speed)
+        {
+            if (actor == null || !Navigation.FindClosestPoint(actor.Position, out Vector3 onMesh))
+                return false;
+            Vector3 off = onMesh - actor.Position;
+            off.Y = 0f;
+            if (off.Length <= WanderNavMeshLeash)
+                return false;
+            var sheet = context.Sheet;
+            PhysicsMoveMode mode = ResolveMoveMode(actor, sheet != null && sheet.UsePhysicsMovement);
+            MoveSubject(actor, Vector3.Normalize(off), speed > 0 ? speed : 5, mode);
+            MovedThisTick.Add(actor);
+            return true;
+        }
+
+        /// <summary>
         /// `wander`: walk each wandering actor one tick along its current random heading. The
         /// heading and its 20-60 tick life live in <see cref="Wanderer"/> so the timing is
         /// testable; this only turns degrees into a world direction.
@@ -1088,13 +1112,77 @@ namespace Game
                 runtime.Wander.Advance(actor, DeltaTime);
                 if (!runtime.Wander.TryGetLeg(actor, out WanderLeg leg))
                     continue;
-                double radians = leg.AngleDegrees * Math.PI / 180.0;
-                var direction = new Vector3((float)Math.Sin(radians), 0f, (float)Math.Cos(radians));
+                Vector3 direction = WanderHeading(actor, leg);
+
+                // A wall in front ends the leg instead of walking through it: transform moves
+                // ignore colliders, and a body shoved inside geometry also loses line of sight
+                // (the ray starts in the wall), which reads as "the zombie can't see me".
+                double step = leg.Speed * DeltaTime + WanderProbe;
+                if (WanderBlocked(actor, direction, (float)step))
+                {
+                    // New heading next tick, plus a turn in place so it doesn't moonwalk.
+                    leg.AngleDegrees = Wanderer.RandomAngle();
+                    actor.LookAt(actor.Position + WanderDirection(leg));
+                    continue;
+                }
+
                 var sheet = runtime.FindSheetFor(actor);
                 PhysicsMoveMode mode = ResolveMoveMode(actor, sheet != null && sheet.UsePhysicsMovement);
                 MovedThisTick.Add(actor);
                 MoveSubject(actor, direction, leg.Speed, mode);
+                // Wander walks the way `goto ... facing forward` does: the body turns to face
+                // the heading it is walking, so a shambling zombie never slides sideways.
+                actor.LookAt(actor.Position + direction);
             }
+        }
+
+        /// <summary>How far a wanderer may drift off the baked navmesh before it is steered
+        /// back. Small gaps are height/edge noise; a big one means the walk left the walkable
+        /// area, where `goto` can no longer path and the enemy effectively gets lost.</summary>
+        private const float WanderNavMeshLeash = 50f;
+
+        /// <summary>Extra distance probed ahead of a wander step, so it stops before the wall.</summary>
+        private const float WanderProbe = 8f;
+
+        /// <summary>The world heading for one wander leg.</summary>
+        private static Vector3 WanderDirection(WanderLeg leg)
+        {
+            double radians = leg.AngleDegrees * Math.PI / 180.0;
+            return new Vector3((float)Math.Sin(radians), 0f, (float)Math.Cos(radians));
+        }
+
+        /// <summary>
+        /// The leg's heading, unless the actor has drifted off the navmesh — then the closest
+        /// navigable point becomes the heading, so a wanderer walks itself back onto the mesh
+        /// (and can chase again) instead of wandering further away.
+        /// </summary>
+        private static Vector3 WanderHeading(Actor actor, WanderLeg leg)
+        {
+            Vector3 forward = WanderDirection(leg);
+            if (!Navigation.FindClosestPoint(actor.Position, out Vector3 onMesh))
+                return forward; // no navmesh in this level: plain straight-line wandering
+            Vector3 off = onMesh - actor.Position;
+            off.Y = 0f;
+            if (off.Length <= WanderNavMeshLeash)
+                return forward;
+            return Vector3.Normalize(off);
+        }
+
+        /// <summary>True when something that is not this actor (a wall, a prop) sits within
+        /// <paramref name="distance"/> along <paramref name="heading"/>.</summary>
+        private static bool WanderBlocked(Actor actor, Vector3 heading, float distance)
+        {
+            if (!Physics.LineCastAll(actor.Position, actor.Position + heading * distance, out var hits, ~0u, true))
+                return false;
+            foreach (var hit in hits)
+            {
+                var hitActor = hit.Collider as Actor;
+                if (hitActor == null)
+                    return true; // geometry without an actor (a collider child, terrain, ...)
+                if (!ReferenceEquals(hitActor, actor) && !IsAncestorOrSelf(actor, hitActor))
+                    return true;
+            }
+            return false;
         }
 
         private static void MoveSubject(Actor subject, Vector3 direction, double speed, PhysicsMoveMode mode)

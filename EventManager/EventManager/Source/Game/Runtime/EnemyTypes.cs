@@ -80,9 +80,9 @@ namespace Game
             new Dictionary<string, Dictionary<string, ValueBox>>(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>
-        /// Reads `<Type><Stat>` assignments out of a data file, e.g.
-        /// `when game starts` → `set ZombieSightDistance to 200`. Called once per load/reload by
-        /// the bridge; pass null to forget the previous table.
+        /// Reads <c>&lt;Type&gt;&lt;Stat&gt;</c> assignments out of a data file, e.g.
+        /// <c>when game starts</c> → <c>set ZombieSightDistance to 200</c>. Called once per
+        /// load/reload by the bridge; pass null to forget the previous table.
         /// </summary>
         public static void LoadData(ProgramFile file)
         {
