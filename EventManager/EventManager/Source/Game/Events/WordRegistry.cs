@@ -38,6 +38,7 @@ namespace Game
             new WordEntry { Kind = "trigger", Word = "when me arrives at <thing>", Example = "when me arrives at Waypoint" },
             new WordEntry { Kind = "trigger", Word = "when me sees <thing> by <dist>", Example = "when me sees Player by 8", AltShape = "when me sees <thing> by my SightDistance" },
             new WordEntry { Kind = "trigger", Word = "when me stops seeing <thing>", Example = "when me stops seeing Player", AltShape = "when me stops seeing <thing> by <dist>" },
+            new WordEntry { Kind = "trigger", Word = "when me hears \"<name>\" by <dist>", Example = "when me hears \"gunshot\" by 12", AltShape = "when me hears \"<name>\" by my SightDistance" },
             new WordEntry { Kind = "trigger", Word = "when me gets equipped", Example = "when me gets equipped" },
             new WordEntry { Kind = "trigger", Word = "when me gets unequipped", Example = "when me gets unequipped" },
             new WordEntry { Kind = "trigger", Word = "when me gets dropped", Example = "when me gets dropped" },
@@ -72,6 +73,7 @@ namespace Game
             new WordEntry { Kind = "condition", Word = "<thing> exists", Example = "Key exists", AltShape = "<thing> does not exist" },
             new WordEntry { Kind = "condition", Word = "me is near <thing> by <dist>", Example = "me is near Player by 2" },
             new WordEntry { Kind = "condition", Word = "me is moving", Example = "me is moving" },
+            new WordEntry { Kind = "condition", Word = "me hears \"<name>\" by <dist>", Example = "me hears \"gunshot\" by 12" },
             new WordEntry { Kind = "condition", Word = "me is wandering", Example = "me is wandering" },
             new WordEntry { Kind = "condition", Word = "me is still", Example = "me is still" },
             new WordEntry { Kind = "condition", Word = "me touches <material> and <condition>", Example = "me touches Grass and me is moving" },
@@ -204,6 +206,8 @@ namespace Game
         {
             "is", "has", "becomes", "changes", "exists", "does", "near", "chance", "afford",
             "enough", "under",
+            // `me hears "gunshot" by 12` has no `is` to mark it, so the verb itself is the mark.
+            "hears",
         };
 
         public static readonly string[] Suggestables = BuildSuggestables();

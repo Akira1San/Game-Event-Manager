@@ -125,6 +125,9 @@ namespace Game
         public HashSet<object>[] PolledContacts = new HashSet<object>[0];
         /// <summary>Actors currently in sight for each polled sight trigger (enter/falling edge state).</summary>
         public HashSet<object>[] InSight = new HashSet<object>[0];
+        /// <summary>Ids of the sounds each hearing trigger already answered, so one gunshot
+        /// fires `when me hears` once instead of every tick while it is still on the bus.</summary>
+        public HashSet<int>[] Heard = new HashSet<int>[0];
         /// <summary>Last distance at which <c>sees name</c> established sight; reused by a
         /// distance-less <c>stops seeing name</c>.</summary>
         public Dictionary<string, double> LastSeenRange = new Dictionary<string, double>();
@@ -153,6 +156,8 @@ namespace Game
         public ConstructionManager Construction = new ConstructionManager();
         /// <summary>Random-angle wander legs and still mode per actor (Task 16 Part A).</summary>
         public Wanderer Wander = new Wanderer();
+        /// <summary>Recent sounds that `when me hears` / `me hears` poll (Task 16 Part B).</summary>
+        public SoundBus Sounds = new SoundBus();
         public double Time;
         /// <summary>Bridge flag: poll `touches` from world contacts (distance mode / both mode).</summary>
         public bool PollTouches;
@@ -250,6 +255,7 @@ namespace Game
             sheet.Contacts = new HashSet<object>[count];
             sheet.PolledContacts = new HashSet<object>[count];
             sheet.InSight = new HashSet<object>[count];
+            sheet.Heard = new HashSet<int>[count];
             sheet.Triggers.Clear();
             sheet.CurrentState = "default";
             sheet.LastState = "default";
@@ -260,6 +266,7 @@ namespace Game
                 sheet.Contacts[i] = new HashSet<object>();
                 sheet.PolledContacts[i] = new HashSet<object>();
                 sheet.InSight[i] = new HashSet<object>();
+                sheet.Heard[i] = new HashSet<int>();
                 sheet.Triggers.Add(TriggerClassifier.Classify(program.Events[i]));
             }
         }
@@ -500,6 +507,9 @@ namespace Game
         public void Tick(double time)
         {
             Time = time;
+            // Sounds are momentary: drop the ones older than the bus's memory before this tick's
+            // actions can add new ones, so a shot fired now is heard now and not a minute later.
+            Sounds.Expire(Time);
             // Control group keys are global input: raise ControlGroupPressed on the enter
             // edge before the push queues are drained so the event runs this same tick.
             Selection.PollControlGroupKeys(World);
@@ -1189,6 +1199,9 @@ namespace Game
                 case TriggerKind.StopsSeeing:
                     PollSight(sheet, eventIndex, descriptor);
                     break;
+                case TriggerKind.Hears:
+                    PollHearing(sheet, eventIndex, descriptor);
+                    break;
                 case TriggerKind.Near:
                     PollNear(sheet, eventIndex, descriptor);
                     break;
@@ -1262,6 +1275,39 @@ namespace Game
             foreach (object other in seeing)
                 if (!inSight.Contains(other))
                     inSight.Add(other); // (re)sighted — arms a future exit edge
+        }
+
+        /// <summary>
+        /// <c>when me hears &lt;sound&gt; by &lt;dist&gt;</c> — Task 16 Part B. Sounds come off the
+        /// <see cref="SoundBus"/>, so the same tick can serve several sheets. Each sound fires a
+        /// trigger once: its id is remembered in <see cref="SheetInstance.Heard"/>, and forgotten
+        /// when the sound falls off the bus. The sound's source actor arrives as `other`, which is
+        /// what makes `goto other` walk toward the shot.
+        /// </summary>
+        private void PollHearing(SheetInstance sheet, int eventIndex, TriggerDescriptor descriptor)
+        {
+            var heard = sheet.Heard[eventIndex];
+            var live = new HashSet<int>();
+            foreach (HeardSound sound in Sounds.Recent)
+                live.Add(sound.Id);
+            heard.RemoveWhere(id => !live.Contains(id));
+
+            // `by <dist>` narrows the sound's own radius; `by my Hearing` reads the actor's stat.
+            double range = descriptor.Distance;
+            if (!string.IsNullOrEmpty(descriptor.DistanceVariable))
+                range = Variables.HasLocal(sheet.Actor, descriptor.DistanceVariable)
+                    ? Variables.GetLocal(sheet.Actor, descriptor.DistanceVariable).AsNumber()
+                    : 0;
+
+            foreach (HeardSound sound in Sounds.Audible(descriptor.RequireName, sheet.Actor, World, range))
+            {
+                if (heard.Contains(sound.Id))
+                    continue;
+                if (sheet.FiredThisTick[eventIndex])
+                    return; // one hearing per tick — the next sound is still on the bus tomorrow
+                heard.Add(sound.Id);
+                RunEvent(sheet, eventIndex, sound.Source);
+            }
         }
 
         /// <summary>Enter-edge distance contact: fires once per pair, again only after separation.</summary>

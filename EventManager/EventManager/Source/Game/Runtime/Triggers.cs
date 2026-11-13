@@ -32,6 +32,8 @@ namespace Game
         Arrives,
         Sees,
         StopsSeeing,
+        // Hearing (Task 16 Part B)
+        Hears,
         Equipped,
         Unequipped,
         Dropped,
@@ -312,6 +314,16 @@ namespace Game
             {
                 descriptor.Kind = TriggerKind.Arrives;
                 descriptor.RequireName = Join(trigger, 3, words.Length);
+                return descriptor;
+            }
+            // `when me hears "gunshot" by 12` — a sound on the bus (Task 16 Part B). The name is
+            // a quoted sound and `by` is optional: without it the sound's own radius decides.
+            if (words.Length >= 3 && words[1] == "hears")
+            {
+                descriptor.Kind = TriggerKind.Hears;
+                descriptor.RequireName = trigger[2].Text;
+                descriptor.Distance = DistanceBy(trigger);
+                descriptor.DistanceVariable = DistanceNameBy(trigger);
                 return descriptor;
             }
             if (words.Length >= 3 && words[1] == "sees")

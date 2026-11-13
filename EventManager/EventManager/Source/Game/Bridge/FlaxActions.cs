@@ -1474,8 +1474,28 @@ namespace Game
             // spawn resolves to 0 and keeps the exact old placement.
             double offset = spec.AmountNode != null ? context.Evaluate(spec.AmountNode).AsNumber() : 0;
             Actor clone = SpawnClone(context, spec.Thing, spec.To, offset);
-            if (clone != null)
-                EventsManager.Instance?.AttachSpawnedActor(clone);
+            if (clone == null)
+                return;
+            EventsManager.Instance?.AttachSpawnedActor(clone);
+            // A shot or a blast is heard the moment it appears (Task 16 Part B): enemies react to
+            // gunfire without the shooter's sheet having to remember a `play sound` line.
+            string spawnedSound = SpawnSoundName(spec.Thing);
+            if (spawnedSound != null)
+                EmitSound(spawnedSound, clone.Position, context.Me as Actor ?? clone);
+        }
+
+        /// <summary>The noise a spawned thing makes as it appears, or null for a quiet one.</summary>
+        private static string SpawnSoundName(string templateName)
+        {
+            switch (AssetNames.Key(templateName))
+            {
+                case "bullet":
+                    return "gunshot";
+                case "explosion":
+                    return "explosion";
+                default:
+                    return null;
+            }
         }
 
         /// <summary>Clones the template actor named <paramref name="templateName"/> and places
@@ -2195,6 +2215,18 @@ namespace Game
             audio.Play();
             ActiveSounds.Add((me, audio));
             FlaxEngine.Object.Destroy(audio, clip.Length);
+            // The clip is a world event too, so `when me hears "shot" by 12` can answer it.
+            EmitSound(AssetNames.Key(spec.Thing), audio.Position, me);
+        }
+
+        /// <summary>
+        /// Puts a sound on the event bus for `when me hears` / `me hears` (Task 16 Part B).
+        /// <paramref name="source"/> is the actor the noise came from — it becomes `other` in the
+        /// listening sheet — and may be null for a sound with no body.
+        /// </summary>
+        public static void EmitSound(string name, Vector3 position, Actor source, double radius = SoundBus.DefaultRadius)
+        {
+            EventsManager.Instance?.EmitSound(name, position, radius, source);
         }
 
         /// <summary><c>play particle "&lt;name&gt;"</c>: plays the actor's <see cref="ParticleEffect"/>

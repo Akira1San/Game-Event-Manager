@@ -101,6 +101,16 @@ namespace Game
             Runtime.RaisePush(actor, new PushSignal { Kind = TriggerKind.ParticleEnd, Name = particleName });
         }
 
+        /// <summary>
+        /// Records a noise for the hearing system (Task 16 Part B). The bus keeps it for a fraction
+        /// of a second and <see cref="EventRuntime.Tick"/> expires it, so `when me hears` sees the
+        /// sounds made this frame and nothing stale.
+        /// </summary>
+        public void EmitSound(string name, Vector3 position, double radius, Actor source)
+        {
+            Runtime.Sounds.Emit(name, source, position.X, position.Y, position.Z, radius, Time.GameTime);
+        }
+
         /// <summary>A tween finished — broadcast <c>when tween &lt;thing&gt; ends</c>. Broadcast
         /// (not just the subject's sheet) so a named listener on the Game sheet also hears it.</summary>
         public void HandleTweenEnd(Actor actor, string tweenName)
@@ -484,6 +494,7 @@ namespace Game
             _components.Clear();
             Runtime.Selection.Reset();
             Runtime.Construction.Reset();
+            Runtime.Sounds.Clear();
             Runtime.RemoveAllSheets();
         }
 

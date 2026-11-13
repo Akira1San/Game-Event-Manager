@@ -23,6 +23,12 @@ namespace Game
         string MaterialOf(object actor);
         /// <summary>True when nothing (walls included) blocks the straight line from <paramref name="from"/> to <paramref name="to"/>.</summary>
         bool HasLineOfSight(object from, object to);
+        /// <summary>Horizontal (XZ) distance from an actor to a world point. Sound positions have
+        /// no actor, so `when me hears` measures to the point instead of to a body.</summary>
+        double DistanceToPoint(object from, double x, double z);
+        /// <summary>True when nothing solid blocks the line from <paramref name="from"/> to a world
+        /// point — sound occlusion (a gunshot does not travel through a wall).</summary>
+        bool HasLineOfSightToPoint(object from, double x, double z);
         /// <summary>Finds a live scene actor by name (waypoints, goto targets, ...), or null.</summary>
         object FindActor(string name);
         /// <summary>Every live actor a contact poll may consider (active only, no templates).</summary>
@@ -98,6 +104,16 @@ namespace Game
         }
 
         public bool HasLineOfSight(object from, object to)
+        {
+            return true;
+        }
+
+        public double DistanceToPoint(object from, double x, double z)
+        {
+            return double.MaxValue;
+        }
+
+        public bool HasLineOfSightToPoint(object from, double x, double z)
         {
             return true;
         }

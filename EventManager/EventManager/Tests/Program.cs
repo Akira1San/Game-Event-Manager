@@ -4562,6 +4562,90 @@ wanderRuntime.Wander.SetStill(wanderContextActor);
 Check(Conditions.Evaluate(stillNode, wanderContext),
     "`me is still` is true after `still`");
 
+// ---- Task 16 Part B: hearing / sound reaction ----
+var hearParser = new EventParser();
+var hearDescriptor = TriggerClassifier.Classify(hearParser.Parse("when me hears \"gunshot\" by 12\n  set my mode to \"chase\"\n").Events[0]);
+Check(hearDescriptor.Kind == TriggerKind.Hears && hearDescriptor.RequireName == "gunshot" &&
+      hearDescriptor.Distance == 12,
+    "`when me hears \"gunshot\" by 12` classifies to Hears with the sound name and range");
+var hearStatDescriptor = TriggerClassifier.Classify(hearParser.Parse("when me hears \"gunshot\" by my SightDistance\n  set my mode to \"chase\"\n").Events[0]);
+Check(hearStatDescriptor.Kind == TriggerKind.Hears && hearStatDescriptor.Distance == -1 &&
+      hearStatDescriptor.DistanceVariable == "SightDistance",
+    "`by my SightDistance` reads the listener's own variable as its hearing range");
+var hearCondition = Conditions.Parse(hearParser.Parse("when me appears\n  me hears \"gunshot\" by 12\n").Events[0].Body[0].Words);
+Check(hearCondition.Kind == ConditionKind.Hears && hearCondition.Thing == "gunshot" &&
+      hearCondition.Distance == 12,
+    "`me hears \"gunshot\" by 12` parses as a polled hearing condition");
+
+// The bus: a sound carries as far as its radius (or the listener's `by`), and walls stop it.
+var busWorld = new FakeWorld();
+var busListener = new FakeActor("Guard");
+var busGunman = new FakeActor("Player");
+busWorld.AddActor(busListener);
+busWorld.AddActor(busGunman);
+busWorld.SetPosition(busListener, 0, 0);
+var bus = new SoundBus();
+bus.Emit("gunshot", busGunman, 10, 0, 0, SoundBus.DefaultRadius, 0);
+Check(bus.IsAudible("gunshot", busListener, busWorld, 12),
+    "a gunshot 10 units away is heard with `by 12`");
+Check(!bus.IsAudible("gunshot", busListener, busWorld, 5),
+    "`by 5` keeps that same gunshot out of range");
+Check(!bus.IsAudible("footsteps", busListener, busWorld, 12),
+    "a differently named sound is not what `hears \"gunshot\"` answers");
+Check(!bus.IsAudible("gunshot", busGunman, busWorld, 12),
+    "the shooter does not hear its own gunshot");
+busWorld.SetPointBlocked(busListener, 10, 0, true);
+Check(!bus.IsAudible("gunshot", busListener, busWorld, 12),
+    "a wall between the listener and the shot blocks the sound");
+busWorld.SetPointBlocked(busListener, 10, 0, false);
+bus.Expire(SoundBus.Memory + 0.1);
+Check(!bus.IsAudible("gunshot", busListener, busWorld, 12),
+    "a sound stops being audible once it has expired");
+
+// Inside the runtime: one gunshot fires the trigger once, behind a wall it never fires.
+var hearWorld = new FakeWorld();
+var hearEnemy = new FakeActor("Shooter");
+var hearShooter = new FakeActor("Player");
+hearWorld.AddActor(hearEnemy);
+hearWorld.AddActor(hearShooter);
+hearWorld.SetPosition(hearEnemy, 0, 0);
+var hearEngine = FreshEngine(hearWorld);
+hearEngine.AddSheet(hearEnemy, hearParser.Parse("when me hears \"gunshot\" by 12\n  add 1 to my Alerts\n"));
+hearEngine.Tick(0);
+Check(hearEngine.Variables.GetLocal(hearEnemy, "Alerts").AsNumber() == 0,
+    "silence raises no hearing trigger");
+hearEngine.Sounds.Emit("gunshot", hearShooter, 10, 0, 0, SoundBus.DefaultRadius, 1);
+hearEngine.Tick(1);
+Check(hearEngine.Variables.GetLocal(hearEnemy, "Alerts").AsNumber() == 1,
+    "a gunshot within range and in line of sight fires `when me hears`");
+hearEngine.Tick(1.1);
+Check(hearEngine.Variables.GetLocal(hearEnemy, "Alerts").AsNumber() == 1,
+    "the same gunshot does not fire again while it is still on the bus");
+hearEngine.Sounds.Emit("gunshot", hearShooter, 10, 0, 0, SoundBus.DefaultRadius, 2);
+hearEngine.Tick(2);
+Check(hearEngine.Variables.GetLocal(hearEnemy, "Alerts").AsNumber() == 2,
+    "a second gunshot fires again (a sound is an event, not a state)");
+hearWorld.SetPointBlocked(hearEnemy, 10, 0, true);
+hearEngine.Sounds.Emit("gunshot", hearShooter, 10, 0, 0, SoundBus.DefaultRadius, 3);
+hearEngine.Tick(3);
+Check(hearEngine.Variables.GetLocal(hearEnemy, "Alerts").AsNumber() == 2,
+    "a gunshot behind a wall raises no hearing trigger");
+
+// The condition reads the same bus, so it stays true while the sound is recent.
+hearWorld.SetPointBlocked(hearEnemy, 10, 0, false);
+hearEngine.Sounds.Clear();
+var hearContext = new EventContext
+{
+    Variables = hearEngine.Variables,
+    World = hearWorld,
+    Me = hearEnemy,
+    Runtime = hearEngine,
+};
+Check(!Conditions.Evaluate(hearCondition, hearContext), "`me hears` is false in silence");
+hearEngine.Sounds.Emit("gunshot", hearShooter, 4, 0, 0, SoundBus.DefaultRadius, 4);
+Check(Conditions.Evaluate(hearCondition, hearContext),
+    "`me hears` is true while the gunshot is still recent");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
@@ -4707,6 +4791,24 @@ class FakeWorld : IEventWorld
             moving.Remove(actor);
     }
 
+    private readonly Dictionary<object, (double X, double Z)> positions = new Dictionary<object, (double X, double Z)>();
+    private readonly HashSet<(object, double, double)> blockedPoints = new HashSet<(object, double, double)>();
+
+    /// <summary>Places an actor on the ground plane, so point distances (sound positions) work.</summary>
+    public void SetPosition(object actor, double x, double z)
+    {
+        positions[actor] = (x, z);
+    }
+
+    /// <summary>Blocks (a wall) the straight line from an actor to a world point.</summary>
+    public void SetPointBlocked(object from, double x, double z, bool on)
+    {
+        if (on)
+            blockedPoints.Add((from, x, z));
+        else
+            blockedPoints.Remove((from, x, z));
+    }
+
     public bool IsKeyHeld(string key)
     {
         return held.Contains(key);
@@ -4839,6 +4941,21 @@ class FakeWorld : IEventWorld
     public bool HasLineOfSight(object from, object to)
     {
         return !blocking.Contains((from, to)) && !blocking.Contains((to, from));
+    }
+
+    /// <summary>An actor with no recorded position is infinitely far away, so it hears nothing.</summary>
+    public double DistanceToPoint(object from, double x, double z)
+    {
+        if (!positions.TryGetValue(from, out var spot))
+            return double.MaxValue;
+        double dx = spot.X - x;
+        double dz = spot.Z - z;
+        return Math.Sqrt(dx * dx + dz * dz);
+    }
+
+    public bool HasLineOfSightToPoint(object from, double x, double z)
+    {
+        return !blockedPoints.Contains((from, x, z));
     }
 
     private readonly HashSet<(object, object)> blocking = new HashSet<(object, object)>();

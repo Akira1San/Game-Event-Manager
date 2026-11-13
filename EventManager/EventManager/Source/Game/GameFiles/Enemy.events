@@ -21,6 +21,15 @@ when me sees Player by my SightDistance      # one-shot the moment the player is
   # loop anim "Run"   # simple mesh — no animation
   goto Player speed 100 facing forward
 
+# ---- hearing (Task 16 Part B): a gunshot it can hear brings it running ----
+# `other` is where the noise came from, so `goto other` walks toward the shot even while the
+# shooter is still out of sight. A wall between the two muffles it — no trigger.
+when me hears "gunshot" by my SightDistance
+  my Hostile is true                         # only hostile types investigate shots
+  set my mode to "chase"
+  print "Enemy: heard a gunshot"
+  goto other speed 100 facing forward
+
 when every 0.2 seconds                     # chase keeps re-targeting the moving player
   my mode is "chase"
   my Speed is higher than 0

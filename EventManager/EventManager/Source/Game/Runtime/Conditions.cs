@@ -16,6 +16,8 @@ namespace Game
         Chance,
         Near,
         Moving,
+        // Hearing (Task 16 Part B)
+        Hears,
         // Typed enemies (Task 16 Part D)
         MyTypeIs,
         // Wander / still modes (Task 16 Part A)
@@ -87,6 +89,18 @@ namespace Game
             if (texts.Length == 3 && texts[0] == "me" && texts[1] == "is" && texts[2] == "moving")
             {
                 node.Kind = ConditionKind.Moving;
+                return node;
+            }
+
+            // `me hears "gunshot" by 12` — Task 16 Part B. `by` is optional: without it the
+            // sound's own radius decides how far it carries.
+            if (texts.Length >= 3 && texts[0] == "me" && texts[1] == "hears")
+            {
+                node.Kind = ConditionKind.Hears;
+                node.Thing = tokens[2].Text;
+                for (int i = 3; i < tokens.Count - 1; i++)
+                    if (tokens[i].Text == "by" && tokens[i + 1].Type == TokenType.Number)
+                        node.Distance = tokens[i + 1].Number;
                 return node;
             }
 
@@ -363,6 +377,9 @@ namespace Game
                 }
                 case ConditionKind.Moving:
                     return context.World.IsMoving(context.Me);
+                case ConditionKind.Hears:
+                    return context.Runtime != null && context.Me != null &&
+                           context.Runtime.Sounds.IsAudible(node.Thing, context.Me, context.World, node.Distance);
                 case ConditionKind.MyTypeIs:
                     return string.Equals(context.ReadMy("Type").AsText(), node.Name,
                         StringComparison.OrdinalIgnoreCase);

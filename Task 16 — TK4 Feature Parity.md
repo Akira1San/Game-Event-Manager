@@ -50,12 +50,12 @@ Goal: implement remaining Tapan Kaikki 4 (TK4) features not yet covered, achievi
 - [x] Example: `Zombie.events` uses `wander`; `Turret.events` uses `still` + `face Player`.
 
 ### Part B — Hearing / Sound Reaction System
-- [ ] Word registry: trigger `when me hears <sound> by <dist>` (edge: fires once when sound enters range + LOS), condition `me hears <sound> by <dist>` (polled).
-- [ ] Sound event bus: `FlaxActions.EmitSound(soundName, position, volume, hearableRadius)` called by `play sound`, `spawn Bullet`, explosions; `EventsManager` tracks recent sounds per frame.
-- [ ] `IEventWorld.HasLineOfSight` reused for occlusion (sound doesn't travel through walls).
-- [ ] Enemy reaction: `when me hears "gunshot" by 12 → set my mode to "chase" → move toward sound position`.
-- [ ] Unit test: gunshot at position → enemy within range + LOS gets `Hears` trigger; behind wall → no trigger.
-- [ ] Example: `Enemy.events` adds `when me hears "gunshot" by SightDistance → set my mode to "chase" → move toward sound`.
+- [x] Word registry: trigger `when me hears <sound> by <dist>` (edge: fires once when sound enters range + LOS), condition `me hears <sound> by <dist>` (polled).
+- [x] Sound event bus: `FlaxActions.EmitSound(soundName, position, volume, hearableRadius)` called by `play sound`, `spawn Bullet`, explosions; `EventsManager` tracks recent sounds per frame.
+- [x] `IEventWorld.HasLineOfSight` reused for occlusion (sound doesn't travel through walls).
+- [x] Enemy reaction: `when me hears "gunshot" by 12 → set my mode to "chase" → move toward sound position`.
+- [x] Unit test: gunshot at position → enemy within range + LOS gets `Hears` trigger; behind wall → no trigger.
+- [x] Example: `Enemy.events` adds `when me hears "gunshot" by SightDistance → set my mode to "chase" → move toward sound`.
 
 ### Part C — Weapon & Ammo Data System
 - [ ] Word registry: `weapon <name>` (set current weapon), `ammo <name>` (current ammo count), `reload` (start reload), `when reload completes`.

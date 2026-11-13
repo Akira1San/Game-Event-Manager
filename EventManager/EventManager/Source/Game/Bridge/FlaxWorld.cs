@@ -274,6 +274,36 @@ namespace Game
             return true;
         }
 
+        public double DistanceToPoint(object from, double x, double z)
+        {
+            var actor = from as Actor;
+            if (actor == null || !actor)
+                return double.MaxValue;
+            double dx = actor.Position.X - x;
+            double dz = actor.Position.Z - z;
+            return Math.Sqrt(dx * dx + dz * dz);
+        }
+
+        public bool HasLineOfSightToPoint(object from, double x, double z)
+        {
+            var actor = from as Actor;
+            if (actor == null || !actor || !actor.IsActive)
+                return false;
+            // Sound travels at the listener's height, so a low wall still blocks it.
+            var target = new Vector3((float)x, actor.Position.Y, (float)z);
+            if (!Physics.LineCastAll(actor.Position, target, out var hits, ~0u, true))
+                return true; // nothing in the way
+            foreach (var hit in hits)
+            {
+                var hitActor = hit.Collider as Actor;
+                if (hitActor == null)
+                    return false; // hit geometry without an actor — blocks the sound
+                if (!ReferenceEquals(hitActor, actor))
+                    return false; // a wall, a crate, anything else: the shot is muffled
+            }
+            return true;
+        }
+
         public object FindActor(string name)
         {
             return Level.FindActor(name);
