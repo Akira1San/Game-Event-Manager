@@ -157,6 +157,8 @@ namespace Game
         public Selection Selection;
         /// <summary>RTS construction state, progress and grid occupancy (Task 18 Part C).</summary>
         public ConstructionManager Construction = new ConstructionManager();
+        /// <summary>RTS production queues and training timers (Task 18 Part D).</summary>
+        public ProductionManager Production = new ProductionManager();
         /// <summary>Random-angle wander legs and still mode per actor (Task 16 Part A).</summary>
         public Wanderer Wander = new Wanderer();
         /// <summary>Recent sounds that `when me hears` / `me hears` poll (Task 16 Part B).</summary>
@@ -519,6 +521,9 @@ namespace Game
             // Control group keys are global input: raise ControlGroupPressed on the enter
             // edge before the push queues are drained so the event runs this same tick.
             Selection.PollControlGroupKeys(World);
+            // Production completions are pushed before the drain below, so a
+            // `when <building> finishes training <unit>` event runs this same tick.
+            Production.Tick(this, Time);
             // Construction completions are pushed before the drain below, so a
             // `when construction completes` event runs this same tick.
             Construction.Tick(this);
@@ -606,6 +611,13 @@ namespace Game
                    kind == TriggerKind.BuildingDestroyed;
         }
 
+        private static bool IsProductionKind(TriggerKind kind)
+        {
+            return kind == TriggerKind.TrainingStarted ||
+                   kind == TriggerKind.TrainingFinished ||
+                   kind == TriggerKind.ProductionQueueEmpty;
+        }
+
         private Dictionary<string, int> BagOf(object owner)
         {
             if (!bags.TryGetValue(owner, out var bag))
@@ -638,6 +650,27 @@ namespace Game
                 return descriptor.RequireName == "me" || descriptor.RequireName == "my"
                     ? ReferenceEquals(signal.Other, sheet.Actor)
                     : signal.Name == descriptor.RequireName;
+            }
+            // Production signals carry the unit in `Name`, the building actor in `Other`
+            // and the building template in `Material`. The trigger names both parts.
+            if (IsProductionKind(descriptor.Kind))
+            {
+                if (descriptor.Kind == TriggerKind.ProductionQueueEmpty)
+                {
+                    if (descriptor.RequireName.Length == 0)
+                        return true;
+                    return descriptor.RequireName == "me" || descriptor.RequireName == "my"
+                        ? ReferenceEquals(signal.Other, sheet.Actor)
+                        : signal.Name == descriptor.RequireName;
+                }
+                if (descriptor.RequireUnit.Length > 0 &&
+                    !string.Equals(signal.Name, descriptor.RequireUnit, StringComparison.OrdinalIgnoreCase))
+                    return false;
+                if (descriptor.RequireName.Length == 0)
+                    return true;
+                if (descriptor.RequireName == "me" || descriptor.RequireName == "my")
+                    return ReferenceEquals(signal.Other, sheet.Actor);
+                return signal.Material == descriptor.RequireName || NameOf(signal.Other) == descriptor.RequireName;
             }
             // `when other touches me` / `when other overlaps me` means "any toucher".
             if (descriptor.RequireName == "me" && IsContactKind(descriptor.Kind))
@@ -694,6 +727,25 @@ namespace Game
                 OnRuntimeWarning("`set build progress` / `add to build progress` need an acting building — on a global sheet use `of <building>`.");
             else
                 OnRuntimeWarning($"I couldn't find the building \"{thing}\" to change build progress.");
+        }
+
+        /// <summary>Warns once per sheet when `set build time` has no resolvable building.</summary>
+        private void WarnBuildTimeTarget(EventContext context, string thing)
+        {
+            string key = "build-time:" + (string.IsNullOrEmpty(thing) ? "me" : thing);
+            if (context.Sheet != null && !context.Sheet.StepWarned.Add(key))
+                return;
+            if (string.IsNullOrEmpty(thing))
+                OnRuntimeWarning("`set build time` needs an acting building — on a global sheet use `of <building>`.");
+            else
+                OnRuntimeWarning($"I couldn't find the building \"{thing}\" to change build time.");
+        }
+
+        /// <summary>The template name stored for a placed building, falling back to the actor name.</summary>
+        private string BuildingNameOf(object actor)
+        {
+            string name = Construction.BuildingOf(actor);
+            return string.IsNullOrEmpty(name) ? NameOf(actor) : name;
         }
 
         private bool ExtraConditionsMatch(TriggerDescriptor descriptor, SheetInstance sheet, object other)
@@ -872,6 +924,15 @@ namespace Game
                     else
                         Construction.AddProgress(context.Variables, target,
                             context.Evaluate(addBuildProgress.Amount).AsNumber());
+                }
+                else if (statement is SetBuildTimeNode setBuildTime)
+                {
+                    object target = ResolveBuildProgressTarget(context, setBuildTime.Thing);
+                    if (target == null)
+                        WarnBuildTimeTarget(context, setBuildTime.Thing);
+                    else
+                        Production.SetBuildTime(context.Variables, target, BuildingNameOf(target),
+                            context.Evaluate(setBuildTime.Value).AsNumber());
                 }
                 else if (statement is PlayStepSoundNode step)
                 {

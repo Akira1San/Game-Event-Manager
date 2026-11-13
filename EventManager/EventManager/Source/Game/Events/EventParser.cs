@@ -588,6 +588,9 @@ namespace Game
             // `set build progress to <n>` / `set build progress of <building> to <n>`
             // — RTS construction progress (Task 18 Part C).
             if (words.Count >= 3 && words[1].Type == TokenType.Word && words[1].Text == "build" &&
+                words[2].Type == TokenType.Word && words[2].Text == "time")
+                return ParseSetBuildTime(line);
+            if (words.Count >= 3 && words[1].Type == TokenType.Word && words[1].Text == "build" &&
                 words[2].Type == TokenType.Word && words[2].Text == "progress")
             {
                 if (words.Count >= 5 && words[3].Type == TokenType.Word && words[3].Text == "to")
@@ -787,6 +790,46 @@ namespace Game
             CheckEndOfLine(words, index, line.Line, node.Target.Owner.Length == 0
                 ? $"set {node.Target.Name} to <value>"
                 : $"set my {node.Target.Name} to <value>");
+            return node;
+        }
+
+        /// <summary><c>set build time to &lt;n&gt; [seconds]</c> and the optional
+        /// <c>set build time of &lt;building&gt; to &lt;n&gt; [seconds]</c> — RTS
+        /// production timing (Task 18 Part D).</summary>
+        private StatementNode ParseSetBuildTime(BodyLineNode line)
+        {
+            var words = line.Words;
+            int toIndex = -1;
+            for (int i = 3; i < words.Count; i++)
+            {
+                if (words[i].Type == TokenType.Word && words[i].Text == "to")
+                {
+                    toIndex = i;
+                    break;
+                }
+            }
+            if (toIndex < 3 || toIndex == 4 || toIndex + 1 >= words.Count)
+                throw new ParseException(
+                    "`set build time` looks like this: `set build time to 10 seconds` or `set build time of Barracks to 10 seconds`",
+                    line.Line);
+
+            var node = new SetBuildTimeNode { Line = line.Line };
+            if (toIndex > 4)
+            {
+                if (words[3].Type != TokenType.Word || words[3].Text != "of")
+                    throw new ParseException(
+                        "`set build time` looks like this: `set build time to 10 seconds` or `set build time of Barracks to 10 seconds`",
+                        line.Line);
+                node.Thing = JoinWords(words, 4, toIndex);
+            }
+
+            int index = toIndex + 1;
+            node.Value = ReadValue(words, ref index, line.Line);
+            if (index < words.Count && words[index].Type == TokenType.Word && words[index].Text == "seconds")
+                index++;
+            CheckEndOfLine(words, index, line.Line, node.Thing.Length == 0
+                ? "set build time to 10 seconds"
+                : $"set build time of {node.Thing} to 10 seconds");
             return node;
         }
 

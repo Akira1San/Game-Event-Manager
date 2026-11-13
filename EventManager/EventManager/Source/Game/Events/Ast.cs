@@ -150,6 +150,15 @@ namespace Game
         public ValueNode Amount = new NumberValue();
     }
 
+    /// <summary><c>set build time to &lt;n&gt; seconds</c>: changes the acting building's
+    /// current training time and the default for later orders. The optional
+    /// <c>of &lt;building&gt;</c> form targets a named actor.</summary>
+    public class SetBuildTimeNode : StatementNode
+    {
+        public string Thing = "";
+        public ValueNode Value = new NumberValue();
+    }
+
     /// <summary><c>set weapon to &lt;name&gt;</c> / <c>weapon &lt;name&gt;</c> — records the
     /// actor's current weapon in <c>my Weapon</c> (Task 16 Part C).</summary>
     public class SetWeaponNode : StatementNode

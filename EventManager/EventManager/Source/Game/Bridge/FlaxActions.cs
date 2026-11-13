@@ -746,6 +746,7 @@ namespace Game
                         bool wasBuilding = context.Runtime.Construction.IsBuilding(actor);
                         string building = context.Runtime.Construction.BuildingOf(actor);
                         context.Runtime.Construction.Destroyed(context.Variables, actor);
+                        context.Runtime.Production.Destroyed(actor);
                         if (wasBuilding && !string.IsNullOrEmpty(building))
                         {
                             context.Runtime.RaisePushAll(new PushSignal
@@ -775,6 +776,12 @@ namespace Game
                     break;
                 case ActionVerb.CancelBuild:
                     CancelBuild(context, spec);
+                    break;
+                case ActionVerb.Train:
+                    Train(context, spec);
+                    break;
+                case ActionVerb.CancelTraining:
+                    CancelTraining(context, spec);
                     break;
                 case ActionVerb.SpawnPrefab:
                     SpawnPrefab(context, spec);
@@ -1682,7 +1689,52 @@ namespace Game
                     Moves.RemoveAt(i);
             ClearActor(target);
             context.Runtime.Selection.Forget(target);
+            context.Runtime.Production.Destroyed(target);
             FlaxEngine.Object.Destroy(target, 0f);
+        }
+
+        /// <summary><c>train &lt;unit&gt; at &lt;building&gt;</c> — adds a unit to that
+        /// building's production queue. A missing <c>at</c> target means the acting building.</summary>
+        private static void Train(EventContext context, ActionSpec spec)
+        {
+            Actor building = ResolveProductionBuilding(context, spec.To);
+            if (building == null)
+            {
+                WarnOnce(string.IsNullOrEmpty(spec.To)
+                    ? "\u201Ctrain\u201D needs a production building \u2014 run it on the building's sheet or write \u201Ctrain Marine at Barracks\u201D."
+                    : $"I couldn't find the building \u201C{spec.To}\u201D to train \u201C{spec.Thing}\u201D at.");
+                return;
+            }
+
+            string buildingName = context.Runtime.Construction.BuildingOf(building);
+            if (string.IsNullOrEmpty(buildingName))
+                buildingName = building.Name;
+            context.Runtime.Production.Enqueue(context.Variables, context.Runtime, building,
+                buildingName, spec.Thing);
+        }
+
+        /// <summary><c>cancel training &lt;unit&gt;</c> — removes that unit from the acting
+        /// building's queue (or a named building's queue with <c>at &lt;building&gt;</c>).</summary>
+        private static void CancelTraining(EventContext context, ActionSpec spec)
+        {
+            Actor building = ResolveProductionBuilding(context, spec.To);
+            if (building == null)
+            {
+                WarnOnce(string.IsNullOrEmpty(spec.To)
+                    ? "\u201Ccancel training\u201D needs a production building \u2014 run it on the building's sheet or write \u201Ccancel training Marine at Barracks\u201D."
+                    : $"I couldn't find the building \u201C{spec.To}\u201D to cancel training at.");
+                return;
+            }
+            if (!context.Runtime.Production.Cancel(context.Runtime, building, spec.Thing))
+                WarnOnce($"\u201C{building.Name}\u201D has no \u201C{spec.Thing}\u201D in its production queue.");
+        }
+
+        /// <summary>The building a production action names, falling back to the acting actor.</summary>
+        private static Actor ResolveProductionBuilding(EventContext context, string thing)
+        {
+            if (!string.IsNullOrEmpty(thing))
+                return ResolveThing(context, thing) as Actor;
+            return context.Me as Actor;
         }
 
         private static void SpawnPrefab(EventContext context, ActionSpec spec)

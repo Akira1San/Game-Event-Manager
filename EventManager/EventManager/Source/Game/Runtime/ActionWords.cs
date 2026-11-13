@@ -68,6 +68,9 @@ namespace Game
         // RTS construction (Task 18 Part C)
         PlaceBuilding,
         CancelBuild,
+        // RTS production queues & unit training (Task 18 Part D)
+        Train,
+        CancelTraining,
         // Random-angle wander and still mode (Task 16 Part A)
         Wander,
         Still,
@@ -566,6 +569,28 @@ namespace Game
                         }
                     }
                     return Unknown(spec, words, "\u201Cspawn\u201D looks like this: \u201Cspawn Bullet at me\u201D, \u201Cspawn Bullet at me offset 30\u201D, \u201Cspawn prefab \"Hero\" at SpawnPoint\u201D or \u201Cspawn scene \"HeroScene\" at SpawnPoint\u201D", warn);
+                case "train":
+                {
+                    // `train Marine at Barracks` — add a unit to that building's queue.
+                    // `train Marine` queues on the acting building (on its own sheet).
+                    string unit = ThingAt(words, 1, out int unitUsed);
+                    if (unit != null)
+                    {
+                        spec.Thing = unit;
+                        int index = 1 + unitUsed;
+                        if (words.Count >= index + 2 && words[index].Text == "at")
+                        {
+                            string building = TargetAt(words, index + 1, out int buildingUsed);
+                            if (building != null)
+                            {
+                                spec.To = building;
+                                index += 1 + buildingUsed;
+                            }
+                        }
+                        return Finish(spec, ActionVerb.Train, words, index);
+                    }
+                    return Unknown(spec, words, "\u201Ctrain\u201D looks like this: \u201Ctrain Marine at Barracks\u201D", warn);
+                }
                 case "place":
                 {
                     // `place Barracks at Mouse` / `place Barracks at Mouse on grid [by 32]`
@@ -591,6 +616,25 @@ namespace Game
                 }
                 case "cancel":
                 {
+                    if (words.Count >= 3 && words[1].Text == "training")
+                    {
+                        string unit = ThingAt(words, 2, out int unitUsed);
+                        if (unit != null)
+                        {
+                            spec.Thing = unit;
+                            int index = 2 + unitUsed;
+                            if (words.Count >= index + 2 && words[index].Text == "at")
+                            {
+                                string building = TargetAt(words, index + 1, out int buildingUsed);
+                                if (building != null)
+                                {
+                                    spec.To = building;
+                                    index += 1 + buildingUsed;
+                                }
+                            }
+                            return Finish(spec, ActionVerb.CancelTraining, words, index);
+                        }
+                    }
                     if (words.Count >= 2 && words[1].Text == "build")
                     {
                         int index = 2;
@@ -601,7 +645,7 @@ namespace Game
                         }
                         return Finish(spec, ActionVerb.CancelBuild, words, index);
                     }
-                    return Unknown(spec, words, "\u201Ccancel\u201D looks like this: \u201Ccancel build\u201D", warn);
+                    return Unknown(spec, words, "\u201Ccancel\u201D looks like this: \u201Ccancel build\u201D or \u201Ccancel training Marine\u201D", warn);
                 }
                 case "set":
                 {

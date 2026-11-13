@@ -1,0 +1,282 @@
+using System;
+using System.Collections.Generic;
+
+namespace Game
+{
+    /// <summary>One unit in a building's training queue.</summary>
+    public class ProductionOrder
+    {
+        public string Unit = "";
+        /// <summary>Seconds the unit takes to train; <c>set build time</c> can change it.</summary>
+        public double Duration;
+        public double Elapsed;
+    }
+
+    /// <summary>The training queue of one building, oldest order first.</summary>
+    public class ProductionQueue
+    {
+        public string Building = "";
+        public readonly List<ProductionOrder> Items = new List<ProductionOrder>();
+        /// <summary>An explicit <c>set build time</c> for future orders, or null to use data.</summary>
+        public double? DefaultDuration;
+
+        public bool IsEmpty => Items.Count == 0;
+        public ProductionOrder Current => Items.Count > 0 ? Items[0] : null;
+    }
+
+    /// <summary>
+    /// RTS production queues (Task 18 Part D): a per-building training queue, the start/finish
+    /// edges, and the empty-queue edge. Pure logic with no Flax types, so the event runtime and
+    /// the tests drive it directly.
+    /// </summary>
+    public class ProductionManager
+    {
+        /// <summary>Seconds a unit takes when no build-time variable says otherwise.</summary>
+        public const double DefaultBuildTime = 5.0;
+
+        /// <summary>Global that overrides <see cref="DefaultBuildTime"/> for every unit.</summary>
+        public const string DefaultBuildTimeVariable = "ProductionBuildTime";
+
+        private readonly Dictionary<object, ProductionQueue> _queues = new Dictionary<object, ProductionQueue>();
+        private double _lastTime;
+        private bool _hasTime;
+
+        /// <summary>True when this actor has ever been used as a production building, even
+        /// after its queue drained. That is what <c>me has build queue</c> reports.</summary>
+        public bool HasQueue(object building)
+        {
+            return building != null && _queues.ContainsKey(building);
+        }
+
+        public int QueueCount(object building)
+        {
+            return building != null && _queues.TryGetValue(building, out ProductionQueue queue) ? queue.Items.Count : 0;
+        }
+
+        /// <summary>True when nothing is being trained. A building that never trained anything
+        /// also counts as idle; <see cref="HasQueue"/> distinguishes the two.</summary>
+        public bool IsIdle(object building)
+        {
+            return building == null || !_queues.TryGetValue(building, out ProductionQueue queue) || queue.IsEmpty;
+        }
+
+        public string CurrentUnit(object building)
+        {
+            return building != null && _queues.TryGetValue(building, out ProductionQueue queue) && queue.Current != null
+                ? queue.Current.Unit
+                : "";
+        }
+
+        /// <summary>Seconds the current order still needs, or 0 when the queue is empty.</summary>
+        public double RemainingOf(object building)
+        {
+            if (building == null || !_queues.TryGetValue(building, out ProductionQueue queue) || queue.Current == null)
+                return 0;
+            return Math.Max(0, queue.Current.Duration - queue.Current.Elapsed);
+        }
+
+        /// <summary>
+        /// Adds <paramref name="unit"/> to the building's queue. Starting a unit that was idle
+        /// raises <c>TrainingStarted</c> immediately; the completion edge comes from
+        /// <see cref="Tick"/>.
+        /// </summary>
+        public void Enqueue(EventVariables variables, EventRuntime runtime, object building,
+                            string buildingName, string unit)
+        {
+            if (building == null || string.IsNullOrEmpty(unit))
+                return;
+
+            ProductionQueue queue = EnsureQueue(building, buildingName);
+            double duration = queue.DefaultDuration ?? ResolveBuildTime(variables, unit, queue.Building);
+            queue.Items.Add(new ProductionOrder { Unit = unit, Duration = Math.Max(0, duration) });
+            if (queue.Items.Count == 1)
+                RaiseStarted(runtime, building, queue, unit);
+        }
+
+        /// <summary>
+        /// <c>set build time to &lt;n&gt; seconds</c>: changes the current unit's remaining time
+        /// and the default for later orders. With no queue yet the value still sticks, so a
+        /// building can be tuned before its first <c>train</c>.
+        /// </summary>
+        public void SetBuildTime(EventVariables variables, object building, string buildingName, double seconds)
+        {
+            if (building == null)
+                return;
+            ProductionQueue queue = EnsureQueue(building, buildingName);
+            seconds = Math.Max(0, seconds);
+            queue.DefaultDuration = seconds;
+            if (queue.Current != null)
+                queue.Current.Duration = seconds;
+        }
+
+        /// <summary>
+        /// Cancels the matching order (case-insensitive unit name; an empty name means the
+        /// current order). Cancelling the active unit starts the next one or raises
+        /// <c>ProductionQueueEmpty</c> when that was the last order.
+        /// </summary>
+        public bool Cancel(EventRuntime runtime, object building, string unit)
+        {
+            if (building == null || !_queues.TryGetValue(building, out ProductionQueue queue) || queue.IsEmpty)
+                return false;
+
+            int index = 0;
+            if (!string.IsNullOrEmpty(unit))
+            {
+                index = -1;
+                for (int i = 0; i < queue.Items.Count; i++)
+                {
+                    if (string.Equals(queue.Items[i].Unit, unit, StringComparison.OrdinalIgnoreCase))
+                    {
+                        index = i;
+                        break;
+                    }
+                }
+                if (index < 0)
+                    return false;
+            }
+
+            queue.Items.RemoveAt(index);
+            if (index != 0)
+                return true;
+
+            if (queue.Items.Count > 0)
+                RaiseStarted(runtime, building, queue, queue.Items[0].Unit);
+            else
+                RaiseEmpty(runtime, building, queue);
+            return true;
+        }
+
+        /// <summary>Drops a destroyed building's queue without raising any edge signals.</summary>
+        public void Destroyed(object building)
+        {
+            if (building != null)
+                _queues.Remove(building);
+        }
+
+        /// <summary>Clears every queue for a scene restart / new session.</summary>
+        public void Reset()
+        {
+            _queues.Clear();
+            _lastTime = 0;
+            _hasTime = false;
+        }
+
+        /// <summary>
+        /// Advances the active order by the time since the previous tick. Every finished unit
+        /// raises <c>TrainingFinished</c>; the next queued unit raises <c>TrainingStarted</c>;
+        /// draining the last unit raises <c>ProductionQueueEmpty</c>. Called at the top of
+        /// <see cref="EventRuntime.Tick"/>, before push signals are drained.
+        /// </summary>
+        public void Tick(EventRuntime runtime, double time)
+        {
+            double delta = _hasTime ? Math.Max(0, time - _lastTime) : 0;
+            _lastTime = time;
+            _hasTime = true;
+            if (delta <= 0)
+                return;
+
+            List<(object Actor, ProductionQueue Queue, string Unit)> finished = null;
+            List<(object Actor, ProductionQueue Queue, string Unit)> started = null;
+            List<(object Actor, ProductionQueue Queue)> emptied = null;
+
+            foreach (var pair in _queues)
+            {
+                ProductionQueue queue = pair.Value;
+                ProductionOrder order = queue.Current;
+                if (order == null)
+                    continue;
+                order.Elapsed += delta;
+                if (order.Elapsed < order.Duration)
+                    continue;
+
+                queue.Items.RemoveAt(0);
+                (finished ??= new List<(object, ProductionQueue, string)>()).Add((pair.Key, queue, order.Unit));
+                if (queue.Items.Count > 0)
+                    (started ??= new List<(object, ProductionQueue, string)>()).Add((pair.Key, queue, queue.Items[0].Unit));
+                else
+                    (emptied ??= new List<(object, ProductionQueue)>()).Add((pair.Key, queue));
+            }
+
+            if (finished != null)
+                foreach (var (actor, queue, unit) in finished)
+                    RaiseFinished(runtime, actor, queue, unit);
+            if (started != null)
+                foreach (var (actor, queue, unit) in started)
+                    RaiseStarted(runtime, actor, queue, unit);
+            if (emptied != null)
+                foreach (var (actor, queue) in emptied)
+                    RaiseEmpty(runtime, actor, queue);
+        }
+
+        /// <summary>
+        /// The data-driven training time: <c>&lt;Unit&gt;BuildTime</c>, then
+        /// <c>&lt;Building&gt;BuildTime</c>, then <see cref="DefaultBuildTimeVariable"/>, then
+        /// <see cref="DefaultBuildTime"/>.
+        /// </summary>
+        public static double ResolveBuildTime(EventVariables variables, string unit, string building)
+        {
+            if (TryNumber(variables, unit + "BuildTime", out double seconds))
+                return seconds;
+            if (TryNumber(variables, building + "BuildTime", out seconds))
+                return seconds;
+            if (TryNumber(variables, DefaultBuildTimeVariable, out seconds))
+                return seconds;
+            return DefaultBuildTime;
+        }
+
+        private ProductionQueue EnsureQueue(object building, string buildingName)
+        {
+            if (!_queues.TryGetValue(building, out ProductionQueue queue))
+            {
+                queue = new ProductionQueue { Building = buildingName ?? "" };
+                _queues[building] = queue;
+            }
+            else if (string.IsNullOrEmpty(queue.Building) && !string.IsNullOrEmpty(buildingName))
+            {
+                queue.Building = buildingName;
+            }
+            return queue;
+        }
+
+        private static bool TryNumber(EventVariables variables, string name, out double value)
+        {
+            value = 0;
+            if (variables == null || !variables.HasGlobal(name))
+                return false;
+            value = variables.GetGlobal(name).AsNumber();
+            return true;
+        }
+
+        private static void RaiseStarted(EventRuntime runtime, object building, ProductionQueue queue, string unit)
+        {
+            runtime?.RaisePushAll(new PushSignal
+            {
+                Kind = TriggerKind.TrainingStarted,
+                Name = unit,
+                Other = building,
+                Material = queue.Building,
+            });
+        }
+
+        private static void RaiseFinished(EventRuntime runtime, object building, ProductionQueue queue, string unit)
+        {
+            runtime?.RaisePushAll(new PushSignal
+            {
+                Kind = TriggerKind.TrainingFinished,
+                Name = unit,
+                Other = building,
+                Material = queue.Building,
+            });
+        }
+
+        private static void RaiseEmpty(EventRuntime runtime, object building, ProductionQueue queue)
+        {
+            runtime?.RaisePushAll(new PushSignal
+            {
+                Kind = TriggerKind.ProductionQueueEmpty,
+                Name = queue.Building,
+                Other = building,
+            });
+        }
+    }
+}

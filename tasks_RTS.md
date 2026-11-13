@@ -48,7 +48,7 @@ zero breaking changes to existing `.events` files.
 - [x] Clarify the `ConstructionManager.Cancel` comment/docs: cancel destroys the placed actor silently (no `BuildingDestroyed` signal); "cancelling is not destruction" refers only to the missing signal.
 - Not planned: automatic cost deduction on `place` (authors gate with `enough` / `can afford` and `deduct` explicitly), and `GetBuildProgress` on `IEventWorld` (Part H scope).
 
-### Part D — Production Queues & Unit Training [ ]
+### Part D — Production Queues & Unit Training [x]
 - New triggers: `when <building> finishes training <unit>`,
   `when <building> starts producing <unit>`, `when production queue is empty`
 - New actions: `train <unit> at <building>`, `cancel training <unit>`,

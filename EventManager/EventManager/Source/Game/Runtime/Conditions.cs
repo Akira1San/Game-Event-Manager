@@ -46,6 +46,10 @@ namespace Game
         // RTS construction & base building (Task 18 Part C)
         UnderConstruction,
         EnoughFor,
+        // RTS production queues & unit training (Task 18 Part D)
+        ProductionIdle,
+        QueueCount,
+        HasBuildQueue,
     }
 
     public class ConditionNode
@@ -279,6 +283,30 @@ namespace Game
             {
                 node.Kind = ConditionKind.UnderConstruction;
                 node.Thing = JoinTexts(texts, 0, texts.Length - 3);
+                return node;
+            }
+
+            // ---- RTS production queues & unit training (Task 18 Part D) ----
+            // `Barracks is idle` / `me is idle` — nothing is currently training.
+            if (texts.Length >= 3 && texts[texts.Length - 2] == "is" && texts[texts.Length - 1] == "idle")
+            {
+                node.Kind = ConditionKind.ProductionIdle;
+                node.Thing = JoinTexts(texts, 0, texts.Length - 2);
+                return node;
+            }
+            // `queue count is <n>` — the acting building's pending orders.
+            if (texts.Length >= 4 && texts[0] == "queue" && texts[1] == "count" && texts[2] == "is")
+            {
+                node.Kind = ConditionKind.QueueCount;
+                node.Right = ValueFrom(tokens, texts, 3);
+                return node;
+            }
+            // `me has build queue` — this actor is a production building (it has trained
+            // before, even when its queue is currently empty).
+            if (texts.Length == 4 && texts[0] == "me" && texts[1] == "has" &&
+                texts[2] == "build" && texts[3] == "queue")
+            {
+                node.Kind = ConditionKind.HasBuildQueue;
                 return node;
             }
 
@@ -532,6 +560,20 @@ namespace Game
                         return true;
                     return ResourceManager.ReadNumber(context.Variables, node.Name) >= cost;
                 }
+                case ConditionKind.ProductionIdle:
+                {
+                    object actor = FindTarget(node.Thing, context);
+                    return actor != null && context.Runtime.Production.IsIdle(actor);
+                }
+                case ConditionKind.QueueCount:
+                {
+                    if (node.Right == null)
+                        return false;
+                    double wanted = ValueEvaluator.Evaluate(node.Right, ContextResolver(context)).AsNumber();
+                    return context.Runtime.Production.QueueCount(context.Me) == wanted;
+                }
+                case ConditionKind.HasBuildQueue:
+                    return context.Runtime.Production.HasQueue(context.Me);
                 default:
                     return false;
             }

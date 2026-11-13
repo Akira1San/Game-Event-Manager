@@ -4310,6 +4310,263 @@ Check(badPlaceSpec.Verb == ActionVerb.Unknown && placeHint != null &&
       "`place` without `at <target>` stays a friendly unknown action");
 
 // ------------------------------------------------------------------
+// Task 18 Part D: production queues & unit training
+// ------------------------------------------------------------------
+
+// Trigger classification.
+var trainFinishedDesc = TriggerClassifier.Classify(parser.Parse(
+    "when Barracks finishes training Marine\n  set Done to 1\n").Events[0]);
+Check(trainFinishedDesc.Kind == TriggerKind.TrainingFinished &&
+      trainFinishedDesc.RequireName == "Barracks" && trainFinishedDesc.RequireUnit == "Marine",
+      "`when Barracks finishes training Marine` carries the building and unit names");
+
+var trainFinishedOwnDesc = TriggerClassifier.Classify(parser.Parse(
+    "when me finishes training Marine\n  set Done to 1\n").Events[0]);
+Check(trainFinishedOwnDesc.Kind == TriggerKind.TrainingFinished &&
+      trainFinishedOwnDesc.RequireName == "me" && trainFinishedOwnDesc.RequireUnit == "Marine",
+      "`when me finishes training Marine` keeps the `me` building form");
+
+var trainStartedDesc = TriggerClassifier.Classify(parser.Parse(
+    "when Barracks starts producing Marine\n  set Started to 1\n").Events[0]);
+Check(trainStartedDesc.Kind == TriggerKind.TrainingStarted &&
+      trainStartedDesc.RequireName == "Barracks" && trainStartedDesc.RequireUnit == "Marine",
+      "`when Barracks starts producing Marine` classifies to TrainingStarted");
+
+var readyEmptyDesc = TriggerClassifier.Classify(parser.Parse(
+    "when production queue is empty\n  set Empty to 1\n").Events[0]);
+Check(readyEmptyDesc.Kind == TriggerKind.ProductionQueueEmpty && readyEmptyDesc.RequireName.Length == 0,
+      "`when production queue is empty` listens to every building");
+
+var namedEmptyDesc = TriggerClassifier.Classify(parser.Parse(
+    "when Barracks production queue is empty\n  set Empty to 1\n").Events[0]);
+Check(namedEmptyDesc.Kind == TriggerKind.ProductionQueueEmpty && namedEmptyDesc.RequireName == "Barracks",
+      "`when Barracks production queue is empty` filters by building");
+
+// Action parsing.
+var trainProg = parser.Parse(@"when game starts
+  train Marine at Barracks
+  train Zergling at me
+  train Marine
+  cancel training Marine
+  cancel training Zergling at Barracks");
+var trainAtSpec = ActionWords.Parse(((RawActionNode)trainProg.Events[0].Body[0].Statement).Words, null);
+Check(trainAtSpec.Verb == ActionVerb.Train && trainAtSpec.Thing == "Marine" && trainAtSpec.To == "Barracks",
+      "`train Marine at Barracks` parses to Train with unit and building");
+var trainOwnSpec = ActionWords.Parse(((RawActionNode)trainProg.Events[0].Body[1].Statement).Words, null);
+Check(trainOwnSpec.Verb == ActionVerb.Train && trainOwnSpec.Thing == "Zergling" && trainOwnSpec.To == "me",
+      "`train Zergling at me` keeps the acting-building target");
+var trainBareSpec = ActionWords.Parse(((RawActionNode)trainProg.Events[0].Body[2].Statement).Words, null);
+Check(trainBareSpec.Verb == ActionVerb.Train && trainBareSpec.Thing == "Marine" && trainBareSpec.To.Length == 0,
+      "`train Marine` queues on the acting building");
+var cancelTrainSpec = ActionWords.Parse(((RawActionNode)trainProg.Events[0].Body[3].Statement).Words, null);
+Check(cancelTrainSpec.Verb == ActionVerb.CancelTraining && cancelTrainSpec.Thing == "Marine" &&
+      cancelTrainSpec.To.Length == 0,
+      "`cancel training Marine` parses to CancelTraining");
+var cancelTrainNamedSpec = ActionWords.Parse(((RawActionNode)trainProg.Events[0].Body[4].Statement).Words, null);
+Check(cancelTrainNamedSpec.Verb == ActionVerb.CancelTraining && cancelTrainNamedSpec.Thing == "Zergling" &&
+      cancelTrainNamedSpec.To == "Barracks",
+      "`cancel training Zergling at Barracks` keeps the named building");
+
+// `set build time` is its own statement, so it never becomes a variable called "build time".
+var buildTimeProg = parser.Parse(@"when game starts
+  set build time to 10 seconds
+  set build time of Barracks to 2.5 seconds
+  set build time to my TrainSpeed");
+Check(buildTimeProg.Events[0].Body[0].Statement is SetBuildTimeNode buildTimeBare &&
+      buildTimeBare.Thing.Length == 0 && buildTimeBare.Value is NumberValue buildTimeBareValue &&
+      buildTimeBareValue.Value == 10,
+      "`set build time to 10 seconds` builds a SetBuildTimeNode");
+Check(buildTimeProg.Events[0].Body[1].Statement is SetBuildTimeNode buildTimeNamed &&
+      buildTimeNamed.Thing == "Barracks" && buildTimeNamed.Value is NumberValue buildTimeNamedValue &&
+      buildTimeNamedValue.Value == 2.5,
+      "`set build time of Barracks to 2.5 seconds` keeps the named target");
+Check(buildTimeProg.Events[0].Body[2].Statement is SetBuildTimeNode buildTimeVariable &&
+      buildTimeVariable.Value is VariableValue buildTimeVariableValue &&
+      buildTimeVariableValue.Owner == "my" && buildTimeVariableValue.Name == "TrainSpeed",
+      "`set build time to my TrainSpeed` reads a per-building variable");
+
+// Condition parsing.
+var idleCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  Barracks is idle").Events[0].Body[0].Words);
+Check(idleCondition.Kind == ConditionKind.ProductionIdle && idleCondition.Thing == "Barracks",
+      "`Barracks is idle` parses to ProductionIdle");
+var queueCountCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  queue count is 2").Events[0].Body[0].Words);
+Check(queueCountCondition.Kind == ConditionKind.QueueCount &&
+      queueCountCondition.Right is NumberValue queueCountRight && queueCountRight.Value == 2,
+      "`queue count is 2` parses to QueueCount");
+var hasQueueCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  me has build queue").Events[0].Body[0].Words);
+Check(hasQueueCondition.Kind == ConditionKind.HasBuildQueue,
+      "`me has build queue` parses to HasBuildQueue");
+
+// Production state: queueing, data-driven duration, cancel and start/finish edges.
+var productionVars = new EventVariables();
+var productionManager = new ProductionManager();
+var productionActor = new FakeActor("Barracks");
+Check(productionManager.IsIdle(productionActor) && !productionManager.HasQueue(productionActor),
+      "a building with no production is idle and has no queue yet");
+productionVars.SetGlobal("MarineBuildTime", ValueBox.OfNumber(3));
+productionVars.SetGlobal("ZerglingBuildTime", ValueBox.OfNumber(4));
+productionManager.Enqueue(productionVars, null, productionActor, "Barracks", "Marine");
+Check(!productionManager.IsIdle(productionActor) && productionManager.HasQueue(productionActor) &&
+      productionManager.QueueCount(productionActor) == 1,
+      "Enqueue starts a production queue and counts the pending unit");
+Check(Math.Abs(productionManager.RemainingOf(productionActor) - 3) < 0.0001,
+      "MarineBuildTime sets the order's duration");
+productionManager.Enqueue(productionVars, null, productionActor, "Barracks", "Zergling");
+Check(productionManager.QueueCount(productionActor) == 2 && productionManager.CurrentUnit(productionActor) == "Marine",
+      "a second unit waits behind the active order");
+productionManager.Tick(null, 0);
+productionManager.Tick(null, 3);
+Check(productionManager.CurrentUnit(productionActor) == "Zergling" &&
+      productionManager.QueueCount(productionActor) == 1,
+      "the first unit finishes and the queued unit starts");
+Check(Math.Abs(productionManager.RemainingOf(productionActor) - 4) < 0.0001,
+      "the next order reads its own ZerglingBuildTime");
+productionManager.Tick(null, 7);
+Check(productionManager.IsIdle(productionActor) && productionManager.QueueCount(productionActor) == 0,
+      "the queue drains after the last unit finishes");
+
+// `set build time` overrides the data default and the current order.
+var timedVars = new EventVariables();
+timedVars.SetGlobal("MarineBuildTime", ValueBox.OfNumber(20));
+var timedManager = new ProductionManager();
+var timedActor = new FakeActor("Barracks");
+timedManager.SetBuildTime(timedVars, timedActor, "Barracks", 2);
+timedManager.Enqueue(timedVars, null, timedActor, "Barracks", "Marine");
+Check(Math.Abs(timedManager.RemainingOf(timedActor) - 2) < 0.0001,
+      "`set build time` overrides the data-driven unit build time");
+timedManager.SetBuildTime(timedVars, timedActor, "Barracks", 1);
+Check(Math.Abs(timedManager.RemainingOf(timedActor) - 1) < 0.0001,
+      "`set build time` changes the current order too");
+
+// Cancel removes the matching unit; cancelling the active one promotes the next.
+var cancelProductionManager = new ProductionManager();
+var cancelProductionActor = new FakeActor("Barracks");
+cancelProductionManager.Enqueue(productionVars, null, cancelProductionActor, "Barracks", "Marine");
+cancelProductionManager.Enqueue(productionVars, null, cancelProductionActor, "Barracks", "Zergling");
+Check(cancelProductionManager.Cancel(null, cancelProductionActor, "Zergling") &&
+      cancelProductionManager.QueueCount(cancelProductionActor) == 1,
+      "`cancel training` removes the matching queued unit");
+Check(cancelProductionManager.Cancel(null, cancelProductionActor, "Marine") &&
+      cancelProductionManager.IsIdle(cancelProductionActor),
+      "cancelling the active unit leaves the building idle");
+Check(!cancelProductionManager.Cancel(null, cancelProductionActor, "Marine"),
+      "cancelling a unit that is not queued reports no change");
+
+// Engine-level edges: start, finish and empty fire once at the right times.
+var productionWorld = new FakeWorld();
+var productionBuilding = new FakeActor("Barracks");
+productionWorld.AddActor(productionBuilding);
+var productionEngine = FreshEngine(productionWorld);
+productionEngine.AddSheet(new GlobalHost(), parser.Parse(@"when Barracks starts producing Marine
+  set Started to Started + 1
+when Barracks finishes training Marine
+  set Finished to Finished + 1
+when Barracks production queue is empty
+  set Emptied to Emptied + 1"));
+productionEngine.Variables.SetGlobal("MarineBuildTime", ValueBox.OfNumber(3));
+productionEngine.Production.Enqueue(productionEngine.Variables, productionEngine,
+    productionBuilding, "Barracks", "Marine");
+productionEngine.Tick(0);
+Check(productionEngine.Variables.GetGlobal("Started").AsNumber() == 1,
+      "`when <building> starts producing <unit>` fires when training begins");
+Check(productionEngine.Variables.GetGlobal("Finished").IsNone(),
+      "the finish edge waits for the build time");
+productionEngine.Tick(3);
+Check(productionEngine.Variables.GetGlobal("Finished").AsNumber() == 1 &&
+      productionEngine.Variables.GetGlobal("Emptied").AsNumber() == 1,
+      "training completes at its build time and the empty queue fires");
+productionEngine.Tick(4);
+Check(productionEngine.Variables.GetGlobal("Finished").AsNumber() == 1 &&
+      productionEngine.Variables.GetGlobal("Emptied").AsNumber() == 1,
+      "the finish and empty edges do not repeat while idle");
+
+// A different unit's start event does not answer this one.
+var unitFilterWorld = new FakeWorld();
+var unitFilterBuilding = new FakeActor("Barracks");
+unitFilterWorld.AddActor(unitFilterBuilding);
+var unitFilterEngine = FreshEngine(unitFilterWorld);
+unitFilterEngine.AddSheet(new GlobalHost(), parser.Parse("when Barracks starts producing Zergling\n  set Wrong to Wrong + 1"));
+unitFilterEngine.Production.Enqueue(unitFilterEngine.Variables, unitFilterEngine,
+    unitFilterBuilding, "Barracks", "Marine");
+unitFilterEngine.Tick(0);
+Check(unitFilterEngine.Variables.GetGlobal("Wrong").IsNone(),
+      "`starts producing Zergling` ignores a Marine");
+
+// Conditions read the acting building's queue, and an idle building passes even before
+// it has ever trained anything.
+var idleWorld = new FakeWorld();
+var idleActor = new FakeActor("Barracks");
+idleWorld.AddActor(idleActor);
+var idleEngine = FreshEngine(idleWorld);
+idleEngine.AddSheet(idleActor, parser.Parse("# placeholder\n"));
+idleEngine.AddSheet(new GlobalHost(), parser.Parse(@"when every 1 seconds
+  Barracks is idle
+  set Idle to Idle + 1"));
+idleEngine.Tick(1);
+Check(idleEngine.Variables.GetGlobal("Idle").AsNumber() == 1,
+      "`Barracks is idle` passes before any production");
+idleEngine.Production.Enqueue(idleEngine.Variables, idleEngine, idleActor, "Barracks", "Marine");
+idleEngine.Tick(2);
+Check(idleEngine.Variables.GetGlobal("Idle").AsNumber() == 1,
+      "`Barracks is idle` blocks while a unit is training");
+
+var queueCondEngine = FreshEngine(new FakeWorld());
+var queueCondActor = new FakeActor("Barracks");
+queueCondEngine.AddSheet(queueCondActor, parser.Parse(@"when every 1 seconds
+  queue count is 2
+  me has build queue
+  set my Ready to Ready + 1"));
+queueCondEngine.Production.Enqueue(queueCondEngine.Variables, queueCondEngine,
+    queueCondActor, "Barracks", "Marine");
+queueCondEngine.Tick(1);
+Check(queueCondEngine.Variables.GetLocal(queueCondActor, "Ready").IsNone(),
+      "`queue count is 2` blocks with one unit queued");
+queueCondEngine.Production.Enqueue(queueCondEngine.Variables, queueCondEngine,
+    queueCondActor, "Barracks", "Zergling");
+queueCondEngine.Tick(2);
+Check(queueCondEngine.Variables.GetLocal(queueCondActor, "Ready").AsNumber() == 1,
+      "`queue count is 2` and `me has build queue` pass with two units queued");
+
+// Engine dispatch: `set build time` reaches the ProductionManager, named or acting.
+var dispatchTimeEngine = FreshEngine(new FakeWorld());
+var dispatchTimeActor = new FakeActor("Barracks");
+dispatchTimeEngine.AddSheet(dispatchTimeActor, parser.Parse(@"when me appears
+  set build time to 2 seconds"));
+dispatchTimeEngine.Tick(0);
+dispatchTimeEngine.Production.Enqueue(dispatchTimeEngine.Variables, dispatchTimeEngine,
+    dispatchTimeActor, "Barracks", "Marine");
+Check(Math.Abs(dispatchTimeEngine.Production.RemainingOf(dispatchTimeActor) - 2) < 0.0001,
+      "`set build time` dispatches to the ProductionManager");
+
+var namedTimeWorld = new FakeWorld();
+var namedTimeActor = new FakeActor("Barracks");
+namedTimeWorld.AddActor(namedTimeActor);
+var namedTimeEngine = FreshEngine(namedTimeWorld);
+namedTimeEngine.AddSheet(namedTimeActor, parser.Parse("# placeholder\n"));
+namedTimeEngine.AddSheet(new GlobalHost(), parser.Parse(@"when every 1 seconds
+  set build time of Barracks to 4 seconds"));
+namedTimeEngine.Tick(1);
+namedTimeEngine.Production.Enqueue(namedTimeEngine.Variables, namedTimeEngine,
+    namedTimeActor, "Barracks", "Marine");
+Check(Math.Abs(namedTimeEngine.Production.RemainingOf(namedTimeActor) - 4) < 0.0001,
+      "`set build time of Barracks` from a global sheet targets that building");
+
+string buildTimeHint = null;
+try
+{
+    parser.Parse("when game starts\n  set build time to\n");
+}
+catch (ParseException error)
+{
+    buildTimeHint = error.Message;
+}
+Check(buildTimeHint != null && buildTimeHint.Contains("set build time", StringComparison.OrdinalIgnoreCase),
+      "a malformed `set build time` gives the friendly shape hint");
+
+// ------------------------------------------------------------------
 // Task 15 Part H: moveplatform (moving platforms)
 // ------------------------------------------------------------------
 

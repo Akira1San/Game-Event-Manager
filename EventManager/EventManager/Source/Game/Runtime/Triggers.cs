@@ -60,6 +60,10 @@ namespace Game
         BuildingPlaced,
         ConstructionCompleted,
         BuildingDestroyed,
+        // RTS production queues & unit training (Task 18 Part D)
+        TrainingStarted,
+        TrainingFinished,
+        ProductionQueueEmpty,
     }
 
     public class TriggerDescriptor
@@ -67,6 +71,9 @@ namespace Game
         public TriggerKind Kind = TriggerKind.Unknown;
         public string Key = "";
         public string RequireName = "";
+        /// <summary>For <c>when &lt;building&gt; finishes training &lt;unit&gt;</c>: the trained
+        /// unit's name, matched against the signal's <c>Name</c>.</summary>
+        public string RequireUnit = "";
         /// <summary>For <c>when me touches &lt;material&gt;</c>: the physics-material name the
         /// touched actor's collider must carry (matched in addition to, or instead of, a name).</summary>
         public string RequireMaterial = "";
@@ -137,6 +144,35 @@ namespace Game
                 {
                     Kind = TriggerKind.BuildingDestroyed,
                     RequireName = Join(trigger, 0, words.Length - 2),
+                };
+            // RTS production (Task 18 Part D). `when Barracks finishes training Marine` and
+            // `when Barracks starts producing Marine` carry both the building and the unit.
+            int finishesIndex = IndexOf(words, "finishes");
+            if (finishesIndex > 0 && finishesIndex + 2 < words.Length && words[finishesIndex + 1] == "training")
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.TrainingFinished,
+                    RequireName = Join(trigger, 0, finishesIndex),
+                    RequireUnit = Join(trigger, finishesIndex + 2, words.Length),
+                };
+            int startsIndex = IndexOf(words, "starts");
+            if (startsIndex > 0 && startsIndex + 2 < words.Length &&
+                (words[startsIndex + 1] == "producing" || words[startsIndex + 1] == "training"))
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.TrainingStarted,
+                    RequireName = Join(trigger, 0, startsIndex),
+                    RequireUnit = Join(trigger, startsIndex + 2, words.Length),
+                };
+            // `when production queue is empty` (any building) and the named form
+            // `when Barracks production queue is empty`.
+            if (words.Length >= 4 && words[words.Length - 4] == "production" &&
+                words[words.Length - 3] == "queue" && words[words.Length - 2] == "is" &&
+                words[words.Length - 1] == "empty")
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.ProductionQueueEmpty,
+                    RequireName = Join(trigger, 0, words.Length - 4),
                 };
             if (words.Length == 2 && words[0] == "selection" && words[1] == "changes")
                 return new TriggerDescriptor { Kind = TriggerKind.SelectionChanged };
