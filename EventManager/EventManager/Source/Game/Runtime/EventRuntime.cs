@@ -151,6 +151,8 @@ namespace Game
         public Selection Selection;
         /// <summary>RTS construction state, progress and grid occupancy (Task 18 Part C).</summary>
         public ConstructionManager Construction = new ConstructionManager();
+        /// <summary>Random-angle wander legs and still mode per actor (Task 16 Part A).</summary>
+        public Wanderer Wander = new Wanderer();
         public double Time;
         /// <summary>Bridge flag: poll `touches` from world contacts (distance mode / both mode).</summary>
         public bool PollTouches;

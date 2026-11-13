@@ -415,6 +415,12 @@ namespace Game
                 ParticleStates.Remove(actor);
             }
 
+            // `wander`: walk each wandering actor along its current random heading, and pick a
+            // new heading when the leg's ticks run out.
+            var wanderRuntime = EventsManager.Instance?.Runtime;
+            if (wanderRuntime != null)
+                StepWanderers(wanderRuntime);
+
             // `camera follows <thing>`: translate the camera by the target's movement, keeping
             // the offset captured when the follow started (the authored framing never changes).
             if (CameraFollowTarget != null && CameraFollowTarget.Scene == null)
@@ -469,6 +475,7 @@ namespace Game
                         return;
                     }
                     MovedThisTick.Add(me);
+                    context.Runtime.Wander.Clear(me);
                     bool physics = context.Sheet != null && context.Sheet.UsePhysicsMovement;
                     PhysicsMoveMode mode = ResolveMoveMode(me, physics);
                     if (!string.IsNullOrEmpty(spec.Thing))
@@ -495,6 +502,34 @@ namespace Game
                     // A dynamic body keeps its velocity until something brakes it.
                     if (mover != null && context.Sheet != null && context.Sheet.UsePhysicsMovement)
                         BrakeBody(mover);
+                    context.Runtime.Wander.Clear(mover);
+                    break;
+                }
+                case ActionVerb.Wander:
+                {
+                    var me = context.Me as Actor;
+                    if (me == null)
+                    {
+                        WarnOnce("\u201Cwander\u201D needs to run on an actor's sheet \u2014 the global Game sheet has no body to walk.");
+                        break;
+                    }
+                    // `wander speed 5 duration 2`: a fresh random heading every 20-60 ticks (or
+                    // the authored duration); the walk itself happens in Step.
+                    context.Runtime.Wander.Start(me, ResolveNumber(context, spec), spec.Duration);
+                    break;
+                }
+                case ActionVerb.Still:
+                {
+                    var me = context.Me as Actor;
+                    if (me == null)
+                        break;
+                    StopMovingSubject(me);
+                    context.Runtime.Wander.SetStill(me);
+                    // A still actor keeps facing its target; nearest Player is the useful default
+                    // and an explicit `face Player` later just replaces this tracker.
+                    var target = ResolveThing(context, "nearest Player") as Actor;
+                    if (target != null)
+                        Remember(new OngoingMove { Subject = me, Target = target, FaceTarget = true });
                     break;
                 }
                 case ActionVerb.Select:
@@ -646,6 +681,7 @@ namespace Game
                         WarnOnce("\u201Cgoto\u201D needs to run on an actor's sheet — the global Game sheet has no body to move.");
                         break;
                     }
+                    context.Runtime.Wander.Clear(me);
                     if (spec.Thing == "there")
                     {
                         var clickPos = LastClickPosition;
@@ -1020,6 +1056,47 @@ namespace Game
         /// a CharacterController walks with collide-and-slide <c>Move</c>; a dynamic RigidBody
         /// uses velocity; a kinematic RigidBody gets a swept move, so collisions and CCD apply.
         /// </summary>
+        /// <summary>Stops the actor's walking moves (an ongoing `face` tracker stays) and brakes a
+        /// physics body, used by `still`.</summary>
+        private static void StopMovingSubject(Actor mover)
+        {
+            if (mover == null)
+                return;
+            for (int i = Moves.Count - 1; i >= 0; i--)
+                if (Moves[i].Subject == mover && !Moves[i].FaceTarget)
+                    Moves.RemoveAt(i);
+            var sheet = EventsManager.Instance?.Runtime?.FindSheetFor(mover);
+            if (sheet != null && sheet.UsePhysicsMovement)
+                BrakeBody(mover);
+        }
+
+        /// <summary>
+        /// `wander`: walk each wandering actor one tick along its current random heading. The
+        /// heading and its 20-60 tick life live in <see cref="Wanderer"/> so the timing is
+        /// testable; this only turns degrees into a world direction.
+        /// </summary>
+        private static void StepWanderers(EventRuntime runtime)
+        {
+            foreach (object key in runtime.Wander.ActiveActors())
+            {
+                var actor = key as Actor;
+                if (actor == null || actor.Scene == null)
+                {
+                    runtime.Wander.Clear(key);
+                    continue;
+                }
+                runtime.Wander.Advance(actor, DeltaTime);
+                if (!runtime.Wander.TryGetLeg(actor, out WanderLeg leg))
+                    continue;
+                double radians = leg.AngleDegrees * Math.PI / 180.0;
+                var direction = new Vector3((float)Math.Sin(radians), 0f, (float)Math.Cos(radians));
+                var sheet = runtime.FindSheetFor(actor);
+                PhysicsMoveMode mode = ResolveMoveMode(actor, sheet != null && sheet.UsePhysicsMovement);
+                MovedThisTick.Add(actor);
+                MoveSubject(actor, direction, leg.Speed, mode);
+            }
+        }
+
         private static void MoveSubject(Actor subject, Vector3 direction, double speed, PhysicsMoveMode mode)
         {
             float step = (float)speed * DeltaTime;

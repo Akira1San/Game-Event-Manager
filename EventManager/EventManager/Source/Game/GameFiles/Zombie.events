@@ -1,0 +1,27 @@
+# ---------------- Zombie.events (Task 16 Part A: random-angle wander) ----------------
+# A shambling zombie: it picks a random direction, walks it for 20-60 ticks, picks another —
+# no waypoint grid, so the movement never looks like a patrol route. Seeing the player takes
+# it out of the wander and into a chase; losing sight sends it back to shambling.
+
+when me appears
+  enemy type "Zombie"
+  set my mode to "patrol"
+  wander speed 60
+
+# A zombie that bumps into the player while wandering still bites.
+when me is near Player by 40
+  me is wandering
+  face Player
+
+when me sees Player by my SightDistance
+  set my mode to "chase"
+  face Player
+  goto Player speed 100 facing forward
+
+when every 0.2 seconds
+  my mode is "chase"
+  goto Player speed 100 facing forward
+
+when me stops seeing Player
+  set my mode to "patrol"
+  wander speed 60

@@ -1,0 +1,18 @@
+# ---------------- Turret.events (Task 16 Part A: still + face) ----------------
+# A rooted turret (enemy type "Turret" gives it Speed 0). `still` stops any walking move and
+# keeps it turned toward the nearest player, so it tracks the player without ever chasing —
+# which is exactly TK4's stationary gun.
+
+when me appears
+  enemy type "Turret"
+  still
+  face Player
+
+# Stay aimed at the player whenever it is in sight.
+when me sees Player by my SightDistance
+  face Player
+
+# Fire only while parked and aiming at something.
+when every 2 seconds
+  me is still
+  spawn Bullet at me offset 30

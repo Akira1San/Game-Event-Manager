@@ -72,6 +72,8 @@ namespace Game
             new WordEntry { Kind = "condition", Word = "<thing> exists", Example = "Key exists", AltShape = "<thing> does not exist" },
             new WordEntry { Kind = "condition", Word = "me is near <thing> by <dist>", Example = "me is near Player by 2" },
             new WordEntry { Kind = "condition", Word = "me is moving", Example = "me is moving" },
+            new WordEntry { Kind = "condition", Word = "me is wandering", Example = "me is wandering" },
+            new WordEntry { Kind = "condition", Word = "me is still", Example = "me is still" },
             new WordEntry { Kind = "condition", Word = "me touches <material> and <condition>", Example = "me touches Grass and me is moving" },
             new WordEntry { Kind = "condition", Word = "<key> is held", Example = "Shift is held" },
             new WordEntry { Kind = "condition", Word = "<thing> is pressed", Example = "RestartButton is pressed" },
@@ -102,6 +104,8 @@ namespace Game
             new WordEntry { Kind = "directive", Word = "bind <label> to <variable> format \"<template>\"", Example = "bind HealthLabel to Health and MaxHealth format \"Health: {0}/{1}\"" },
 
             new WordEntry { Kind = "action", Word = "move", Example = "move forward speed 5" },
+            new WordEntry { Kind = "action", Word = "wander", Example = "wander speed 5", AltShape = "wander speed 5 duration 2" },
+            new WordEntry { Kind = "action", Word = "still", Example = "still" },
             new WordEntry { Kind = "action", Word = "turn", Example = "turn left degrees 90" },
             new WordEntry { Kind = "action", Word = "goto", Example = "goto Player" },
             new WordEntry { Kind = "action", Word = "goto", Example = "goto there" },

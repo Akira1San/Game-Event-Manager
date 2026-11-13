@@ -42,12 +42,12 @@ Goal: implement remaining Tapan Kaikki 4 (TK4) features not yet covered, achievi
 **Data-driven design:** All enemy types, weapons, and stats live as named variables (no new data classes). `enemy type "Zombie"` → sets `my Speed=2`, `my SightDistance=10`, `my Health=50`, `my Weapon="Claws"`, `my Hostile=true` via variables.
 
 ### Part A — Random-Angle Wander & Still Mode
-- [ ] Word registry: `wander speed <n>` — pick random angle 0-359°, walk straight for random duration (20-60 ticks), repeat; `still` — stop moving but `face <target>` rotates toward target.
-- [ ] Parser: new action verbs `wander`, `still`; `wander` takes optional `speed` and `duration` qualifiers.
-- [ ] Runtime: `FlaxActions` tracks wander state per actor (current angle, ticks remaining); `still` = `stop moving` + continuous `face` toward nearest player.
-- [ ] Condition: `me is wandering`, `me is still`.
-- [ ] Unit test: wander changes angle periodically; still enemy rotates to face player.
-- [ ] Example: `Zombie.events` uses `wander`; `Turret.events` uses `still` + `face Player`.
+- [x] Word registry: `wander speed <n>` — pick random angle 0-359°, walk straight for random duration (20-60 ticks), repeat; `still` — stop moving but `face <target>` rotates toward target.
+- [x] Parser: new action verbs `wander`, `still`; `wander` takes optional `speed` and `duration` qualifiers.
+- [x] Runtime: `FlaxActions` tracks wander state per actor (current angle, ticks remaining); `still` = `stop moving` + continuous `face` toward nearest player.
+- [x] Condition: `me is wandering`, `me is still`.
+- [x] Unit test: wander changes angle periodically; still enemy rotates to face player.
+- [x] Example: `Zombie.events` uses `wander`; `Turret.events` uses `still` + `face Player`.
 
 ### Part B — Hearing / Sound Reaction System
 - [ ] Word registry: trigger `when me hears <sound> by <dist>` (edge: fires once when sound enters range + LOS), condition `me hears <sound> by <dist>` (polled).
@@ -65,6 +65,17 @@ Goal: implement remaining Tapan Kaikki 4 (TK4) features not yet covered, achievi
 - [ ] Runtime: `FlaxActions` resolves weapon data; `spawn Bullet` uses current weapon's bullet type; reload timer suspends shooting.
 - [ ] Unit test: weapon switch changes bullet type; reload blocks fire; ammo decrements per shot.
 - [ ] Example: `Player.events` — `when 1 pressed → set weapon to "Pistol"`; `when Left Mouse pressed → unless reloading → spawn Bullet at me → add -1 to ammo Pistol`.
+
+### Part C.5 — Weapon Variants & Wall Impact (TK4: Uzi, Shotgun, Rockets, Grenades)
+Goal: different weapons behave differently — shotgun fires multiple pellets with spread, Uzi fires fast with little spread, rockets/grenades explode on wall impact, bullets bounce or stop on walls. TK4 `CBullet.cpp` drives this per bullet type: speed, angleAdd (spread), bulletAmount (pellets per shot), power (damage), pushPower (knockback), bounceType, time (lifetime), slow (deceleration), collisionTrigger (walls stop it), effect (particle on hit). Depends on Task 16 Part C (weapon/ammo data) and Task 16 Part E (particles).
+
+- [ ] Word registry: `spread <n>` (pellet spread angle for shotgun), `bounce` (bullet bounces off walls), `explosive` (explodes on wall impact), `pierce` (bullet passes through enemies/walls).
+- [ ] Data: weapon definitions in `WeaponData.events` — per weapon: bullet type, speed, spread, pellet count, fire rate, reload time, sound, smoke, ammo per shot, damage, knockback, bounce/explosive/pierce flags.
+- [ ] Runtime: `spawn Bullet` reads current weapon's bullet type + spread; shotgun spawns multiple pellets at slightly different angles; Uzi has short reload + fast fire rate; rockets/grenades are slower with larger damage radius.
+- [ ] Wall impact: `Bullet.events` — `when me touches Wall → destroy me` (default stop), or `bounce` → reflect angle and continue, or `explosive` → play particle "explosion" + damage nearby actors + destroy.
+- [ ] Muzzle flash: `MuzzleFlash.events` already exists (particle + light on shoot); ensure it fires per weapon shot.
+- [ ] Unit test: shotgun spawns N pellets with spread; Uzi fires faster than pistol; rocket explodes on wall (destroys itself + plays explosion particle); bullet bounces off wall when `bounce` set.
+- [ ] Example: `Player.events` — `when 1 pressed → set weapon to "Pistol"`; `when 2 pressed → set weapon to "Shotgun"`; `when Left Mouse pressed → unless reloading → spawn Bullet at me → add -1 to ammo <weapon>`.
 
 ### Part D — Typed Enemy Definitions
 - [x] Word registry: `enemy type <name>` (on `when me appears` or component) — applies base stats: speed, sight distance, health, default weapon, hostile flag, explosion death.
@@ -123,3 +134,13 @@ Goal: 2 local players on one PC, each with their own actor (`Player1`, `Player2`
 - [x] Camera: `camera follows Player` — the follow existed, but it hard-coded a 45° tilt and did not centre the target. Framing now comes from `CameraHeight` / `CameraDepth` / `CameraPitch` globals with `CameraDepth = -CameraHeight / tan(CameraPitch)`; TK4 sets height 600, depth 0, pitch 90 (straight down, centred).
 - [x] Unit test: key-held rotation changes `me.Orientation` yaw only; `Space` pressed spawns a bullet at the player facing its aim; bullet-on-enemy `push` applies knockback to the target.
 - [x] Example: `TK_Player.events` — `Left Arrow`/`Right Arrow` rotate, `Up Arrow`/`Down Arrow` move, `Space` shoots; `TK_Bullet.events` pushes on hit then dies.
+
+### Part I — Remaining TK4 Enemy Types (Task 16 Part D follow-up)
+Goal: add the remaining TK4 enemy types beyond `Zombie` and `Turret`, each with TK4-authentic stats (speed, health, sight distance, weapon, hostile flag, explosion death). TK4 defines 10 enemy types total; Part D covered Zombie + Turret as built-ins. This part adds the other 8 as either built-ins in `EnemyTypes.cs` or data rows in `EnemyTypes.events`, plus any per-type enemy sheets (e.g. a Turret that stays still and faces the player, a Civilian that flees when shot). Depends on Task 16 Part D (typed enemy definitions).
+
+- [ ] Word registry: no new words — `enemy type <name>` and `my type is <name>` already exist from Part D.
+- [ ] Data: add the 8 missing TK4 types to `EnemyTypes.events` (`Pistolboy`, `ShotgunManiac`, `UziRebel`, `Commando`, `BazookaBoy`, `Civilian`, `Punisher`, `Flamer`, `Punk`, `GrenadeGay`) — or add them as built-ins in `EnemyTypes.cs` if data-driven globals aren't enough.
+- [ ] Stats: TK4-authentic values per type — speed, health (energy), sight distance, current weapon, hostile/non-hostile, explosion death on kill.
+- [ ] Per-type sheets: `Turret.events` uses `still` + `face Player` + shoots (speed 0, never wanders); `Civilian.events` flees when shot (turns away from bullet origin, `EWanderAround` away from shooter).
+- [ ] Unit test: each of the 10 types applies distinct stats via `enemy type "<name>"`; `Civilian` is non-hostile (`my Hostile is false`); `Turret` speed 0 never wanders.
+- [ ] Example: `Enemy.events` already dispatches on `my type` — verify a spawned `Turret` and a spawned `Zombie` behave differently (Turret stationary, Zombie patrols).

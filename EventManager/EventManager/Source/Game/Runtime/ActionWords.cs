@@ -68,6 +68,9 @@ namespace Game
         // RTS construction (Task 18 Part C)
         PlaceBuilding,
         CancelBuild,
+        // Random-angle wander and still mode (Task 16 Part A)
+        Wander,
+        Still,
     }
 
     public class ActionSpec
@@ -245,6 +248,36 @@ namespace Game
                     if (words.Count >= 2 && words[1].Text == "particle")
                         return Unknown(spec, words, "\u201Cstop particle\u201D needs a name in quotes, like \u201Cstop particle \"smoke\"\u201D", warn);
                     return Unknown(spec, words, "yes, a \u201Cstop\u201D line — I only know \u201Cstop sound\u201D, \u201Cstop anim\u201D, \u201Cstop moving\u201D, \u201Cstop particle\u201D, and \u201Cstop this event\u201D", warn);
+
+                case "wander":
+                {
+                    // `wander` / `wander speed 5` / `wander speed 5 duration 2`
+                    int wanderIndex = 1;
+                    if (words.Count >= wanderIndex + 2 && words[wanderIndex].Text == "speed")
+                    {
+                        spec.AmountNode = ValueNodeAt(words, wanderIndex + 1);
+                        spec.HasNumber = words[wanderIndex + 1].Type == TokenType.Number;
+                        if (spec.HasNumber)
+                            spec.Number = words[wanderIndex + 1].Number;
+                        wanderIndex += 2;
+                    }
+                    else
+                    {
+                        spec.Number = 5;
+                        spec.HasNumber = true;
+                    }
+                    if (words.Count >= wanderIndex + 2 && words[wanderIndex].Text == "duration")
+                    {
+                        if (words[wanderIndex + 1].Type != TokenType.Number)
+                            return Unknown(spec, words, "\u201Cwander duration\u201D needs seconds, like \u201Cwander speed 5 duration 2\u201D", warn);
+                        spec.Duration = words[wanderIndex + 1].Number;
+                        wanderIndex += 2;
+                    }
+                    return Finish(spec, ActionVerb.Wander, words, wanderIndex);
+                }
+
+                case "still":
+                    return Finish(spec, ActionVerb.Still, words, 1);
 
                 case "move":
                     return Move(spec, words, warn);

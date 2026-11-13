@@ -4486,6 +4486,82 @@ var sightDescriptor = TriggerClassifier.Classify(sightProg.Events[0]);
 Check(sightDescriptor.Kind == TriggerKind.Sees && sightDescriptor.DistanceVariable == "SightDistance",
     "`when me sees Player by my SightDistance` reads a per-enemy range");
 
+// ---- Task 16 Part A: random-angle wander & still mode ----
+var wanderParser = new EventParser();
+var wanderDefaultSpec = ActionWords.Parse(RawWords(wanderParser, "when me appears\n  wander\n"), message => { });
+Check(wanderDefaultSpec.Verb == ActionVerb.Wander && wanderDefaultSpec.HasNumber &&
+      wanderDefaultSpec.Number == 5 && wanderDefaultSpec.Duration == 0,
+    "bare `wander` walks at the default speed 5 with a random leg length");
+var wanderSpec = ActionWords.Parse(RawWords(wanderParser, "when me appears\n  wander speed 7 duration 0.5\n"), message => { });
+Check(wanderSpec.Verb == ActionVerb.Wander && wanderSpec.HasNumber && wanderSpec.Number == 7 &&
+      Math.Abs(wanderSpec.Duration - 0.5) < 0.0001,
+    "`wander speed 7 duration 0.5` parses both qualifiers");
+var wanderBadDuration = ActionWords.Parse(RawWords(wanderParser, "when me appears\n  wander duration soon\n"), message => { });
+Check(wanderBadDuration.Verb == ActionVerb.Unknown,
+    "a non-number `wander duration` is a friendly error");
+var stillSpec = ActionWords.Parse(RawWords(wanderParser, "when me appears\n  still\n"), message => { });
+Check(stillSpec.Verb == ActionVerb.Still, "`still` parses as its own action");
+
+Rng.Seed(12345);
+var wanderer = new Wanderer();
+var wanderActor = new object();
+wanderer.Start(wanderActor, 5, 0);
+Check(wanderer.IsWandering(wanderActor), "`wander` puts the actor in wandering mode");
+wanderer.TryGetLeg(wanderActor, out WanderLeg firstLeg);
+Check(firstLeg.TicksRemaining >= Wanderer.MinTicks && firstLeg.TicksRemaining <= Wanderer.MaxTicks,
+    "a random wander leg lasts 20-60 ticks");
+Check(firstLeg.AngleDegrees >= 0 && firstLeg.AngleDegrees < 360 && firstLeg.AngleDegrees == Math.Floor(firstLeg.AngleDegrees),
+    "a wander heading is a whole angle from 0 to 359");
+double ticksBefore = firstLeg.TicksRemaining;
+wanderer.Advance(wanderActor, 0.016);
+Check(wanderer.TryGetLeg(wanderActor, out WanderLeg afterOneTick) &&
+      afterOneTick.TicksRemaining == ticksBefore - 1,
+    "each tick spends one tick of the current leg");
+
+var shortWanderer = new Wanderer();
+var shortActor = new object();
+shortWanderer.Start(shortActor, 3, 0.05);
+shortWanderer.TryGetLeg(shortActor, out WanderLeg shortLeg);
+Check(shortLeg.TicksRemaining == 3, "`duration 0.05` is three ticks at 60 ticks per second");
+bool turned = false;
+for (int tick = 0; tick < 3; tick++)
+    turned = shortWanderer.Advance(shortActor, 0.016) || turned;
+Check(turned, "a leg that runs out starts a new one (a fresh random angle)");
+shortWanderer.TryGetLeg(shortActor, out WanderLeg newLeg);
+Check(newLeg.TicksRemaining >= Wanderer.MinTicks && newLeg.TicksRemaining <= Wanderer.MaxTicks,
+    "the replacement leg is again a random 20-60 ticks");
+
+shortWanderer.SetStill(shortActor);
+Check(shortWanderer.IsStill(shortActor) && !shortWanderer.IsWandering(shortActor),
+    "`still` stops wandering and marks the actor still");
+shortWanderer.Clear(shortActor);
+Check(!shortWanderer.IsStill(shortActor), "a real move clears still mode");
+
+var wanderRuntime = new EventRuntime();
+var wanderContextActor = new object();
+var wanderContext = new EventContext
+{
+    Variables = wanderRuntime.Variables,
+    World = wanderRuntime.World,
+    Me = wanderContextActor,
+    Runtime = wanderRuntime,
+};
+var wanderingProg = new EventParser().Parse("when me appears\n  me is wandering\n");
+var wanderingNode = Conditions.Parse(wanderingProg.Events[0].Body[0].Words);
+Check(wanderingNode.Kind == ConditionKind.Wandering && !Conditions.Evaluate(wanderingNode, wanderContext),
+    "`me is wandering` is false before wandering starts");
+wanderRuntime.Wander.Start(wanderContextActor, 5, 0);
+Check(Conditions.Evaluate(wanderingNode, wanderContext),
+    "`me is wandering` is true while a wander leg is active");
+
+var stillProg = new EventParser().Parse("when me appears\n  me is still\n");
+var stillNode = Conditions.Parse(stillProg.Events[0].Body[0].Words);
+Check(stillNode.Kind == ConditionKind.Still && !Conditions.Evaluate(stillNode, wanderContext),
+    "`me is still` is false for a wandering actor");
+wanderRuntime.Wander.SetStill(wanderContextActor);
+Check(Conditions.Evaluate(stillNode, wanderContext),
+    "`me is still` is true after `still`");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

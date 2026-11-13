@@ -18,6 +18,9 @@ namespace Game
         Moving,
         // Typed enemies (Task 16 Part D)
         MyTypeIs,
+        // Wander / still modes (Task 16 Part A)
+        Wandering,
+        Still,
         HasTag,
         BagHas,
         ParticlePlaying,
@@ -94,6 +97,14 @@ namespace Game
             {
                 node.Kind = ConditionKind.MyTypeIs;
                 node.Name = tokens[3].Text;
+                return node;
+            }
+
+            // `me is wandering` / `me is still` — Task 16 Part A modes.
+            if (texts.Length == 3 && texts[0] == "me" && texts[1] == "is" &&
+                (texts[2] == "wandering" || texts[2] == "still"))
+            {
+                node.Kind = texts[2] == "wandering" ? ConditionKind.Wandering : ConditionKind.Still;
                 return node;
             }
 
@@ -355,6 +366,10 @@ namespace Game
                 case ConditionKind.MyTypeIs:
                     return string.Equals(context.ReadMy("Type").AsText(), node.Name,
                         StringComparison.OrdinalIgnoreCase);
+                case ConditionKind.Wandering:
+                    return context.Runtime != null && context.Runtime.Wander.IsWandering(context.Me);
+                case ConditionKind.Still:
+                    return context.Runtime != null && context.Runtime.Wander.IsStill(context.Me);
                 case ConditionKind.ParticlePlaying:
                     return context.World.IsParticlePlaying(context.Me, node.Thing);
                 case ConditionKind.ButtonPressed:
