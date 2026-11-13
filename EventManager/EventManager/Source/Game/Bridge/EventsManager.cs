@@ -498,6 +498,7 @@ namespace Game
             _components.Clear();
             Runtime.Selection.Reset();
             Runtime.Construction.Reset();
+            Runtime.Orders.Reset();
             Runtime.Sounds.Clear();
             Runtime.RemoveAllSheets();
         }

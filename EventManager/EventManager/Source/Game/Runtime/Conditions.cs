@@ -50,6 +50,8 @@ namespace Game
         ProductionIdle,
         QueueCount,
         HasBuildQueue,
+        // RTS orders & attack-move (Task 18 Part E)
+        CurrentOrderIs,
     }
 
     public class ConditionNode
@@ -308,6 +310,43 @@ namespace Game
             {
                 node.Kind = ConditionKind.HasBuildQueue;
                 return node;
+            }
+
+            // ---- RTS orders & attack-move (Task 18 Part E) ----
+            // `my current order is attack-move` / `my order target is Enemy` /
+            // `my order queue is 2` — multiword state that the OrderManager publishes.
+            if (texts.Length >= 5 && texts[0] == "my" && texts[3] == "is")
+            {
+                string subject = texts[1] + " " + texts[2];
+                if (subject == "current order" || subject == "order target" || subject == "order queue")
+                {
+                    bool notFlag = texts.Length >= 6 && texts[4] == "not";
+                    node.Kind = subject == "current order" && !notFlag
+                        ? ConditionKind.CurrentOrderIs
+                        : notFlag ? ConditionKind.NotEqual : ConditionKind.Equal;
+                    node.Owner = "my";
+                    node.Name = subject;
+                    int valueIndex = notFlag ? 5 : 4;
+                    if (subject == "order queue")
+                    {
+                        node.Right = ValueFrom(tokens, texts, valueIndex);
+                    }
+                    else if (valueIndex >= 0 && valueIndex < tokens.Count && tokens[valueIndex].Type == TokenType.Word)
+                    {
+                        // Order names and targets are words, not variables: `my current
+                        // order is attack-move` compares against the literal text.
+                        node.Right = new TextValue
+                        {
+                            Line = tokens[valueIndex].Line,
+                            Text = JoinTexts(texts, valueIndex, texts.Length),
+                        };
+                    }
+                    else
+                    {
+                        node.Right = ValueFrom(tokens, texts, valueIndex);
+                    }
+                    return node;
+                }
             }
 
             int isIndex = IndexOf(texts, "is");
@@ -574,6 +613,13 @@ namespace Game
                 }
                 case ConditionKind.HasBuildQueue:
                     return context.Runtime.Production.HasQueue(context.Me);
+                case ConditionKind.CurrentOrderIs:
+                {
+                    if (node.Right == null)
+                        return false;
+                    ValueBox wanted = ValueEvaluator.Evaluate(node.Right, ContextResolver(context));
+                    return CompareEqual(ValueBox.OfText(context.Runtime.Orders.CurrentOrderName(context.Me)), wanted);
+                }
                 default:
                     return false;
             }

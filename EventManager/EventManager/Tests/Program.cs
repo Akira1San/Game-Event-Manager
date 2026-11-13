@@ -4567,6 +4567,184 @@ Check(buildTimeHint != null && buildTimeHint.Contains("set build time", StringCo
       "a malformed `set build time` gives the friendly shape hint");
 
 // ------------------------------------------------------------------
+// Task 18 Part E: orders & attack-move
+// ------------------------------------------------------------------
+
+// Trigger classification.
+var orderCompleteDesc = TriggerClassifier.Classify(parser.Parse(
+    "when order completes\n  set Done to 1\n").Events[0]);
+Check(orderCompleteDesc.Kind == TriggerKind.OrderCompletes && orderCompleteDesc.RequireName.Length == 0,
+      "`when order completes` listens on the acting unit");
+
+var queuedOrderDesc = TriggerClassifier.Classify(parser.Parse(
+    "when queued order starts\n  set Started to 1\n").Events[0]);
+Check(queuedOrderDesc.Kind == TriggerKind.OrderStarts && queuedOrderDesc.RequireName.Length == 0,
+      "`when queued order starts` classifies to OrderStarts");
+
+var pathBlockedDesc = TriggerClassifier.Classify(parser.Parse(
+    "when path blocked\n  set Blocked to 1\n").Events[0]);
+Check(pathBlockedDesc.Kind == TriggerKind.PathBlocked && pathBlockedDesc.RequireName.Length == 0,
+      "`when path blocked` classifies to PathBlocked");
+
+var namedOrderDesc = TriggerClassifier.Classify(parser.Parse(
+    "when attack-move order completes\n  set Done to 1\n").Events[0]);
+Check(namedOrderDesc.Kind == TriggerKind.OrderCompletes && namedOrderDesc.RequireName == "attack-move",
+      "`when attack-move order completes` filters by order name");
+
+// Action parsing.
+var orderProg = parser.Parse(@"when game starts
+  attack-move to Enemy
+  attack Enemy
+  stop
+  hold position
+  add order to queue
+  clear orders
+  set rally point to Barracks");
+var attackMoveSpec = ActionWords.Parse(((RawActionNode)orderProg.Events[0].Body[0].Statement).Words, null);
+Check(attackMoveSpec.Verb == ActionVerb.AttackMove && attackMoveSpec.Thing == "Enemy",
+      "`attack-move to Enemy` parses to AttackMove");
+var attackSpec = ActionWords.Parse(((RawActionNode)orderProg.Events[0].Body[1].Statement).Words, null);
+Check(attackSpec.Verb == ActionVerb.AttackOrder && attackSpec.Thing == "Enemy",
+      "`attack Enemy` parses to AttackOrder");
+var stopOrderSpec = ActionWords.Parse(((RawActionNode)orderProg.Events[0].Body[2].Statement).Words, null);
+Check(stopOrderSpec.Verb == ActionVerb.StopOrder,
+      "bare `stop` parses to StopOrder");
+var holdSpec = ActionWords.Parse(((RawActionNode)orderProg.Events[0].Body[3].Statement).Words, null);
+Check(holdSpec.Verb == ActionVerb.HoldPosition,
+      "`hold position` parses to HoldPosition");
+var addOrderSpec = ActionWords.Parse(((RawActionNode)orderProg.Events[0].Body[4].Statement).Words, null);
+Check(addOrderSpec.Verb == ActionVerb.AddOrderToQueue,
+      "`add order to queue` parses to AddOrderToQueue");
+var clearOrdersSpec = ActionWords.Parse(((RawActionNode)orderProg.Events[0].Body[5].Statement).Words, null);
+Check(clearOrdersSpec.Verb == ActionVerb.ClearOrders,
+      "`clear orders` parses to ClearOrders");
+var rallySpec = ActionWords.Parse(((RawActionNode)orderProg.Events[0].Body[6].Statement).Words, null);
+Check(rallySpec.Verb == ActionVerb.SetRallyPoint && rallySpec.Thing == "Barracks",
+      "`set rally point to Barracks` parses to SetRallyPoint");
+
+// `my current order` is state, not a variable holding a value the author sets.
+var orderStateProg = parser.Parse("when game starts\n  set Target to my current order");
+var orderStateNode = (SetNode)orderStateProg.Events[0].Body[0].Statement;
+Check(orderStateNode.Value is VariableValue orderStateValue &&
+      orderStateValue.Owner == "my" && orderStateValue.Name == "current order",
+      "`my current order` parses as the multiword order state");
+
+// Condition parsing and evaluation.
+var currentOrderCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  my current order is attack-move").Events[0].Body[0].Words);
+Check(currentOrderCondition.Kind == ConditionKind.CurrentOrderIs,
+      "`my current order is attack-move` parses to CurrentOrderIs");
+var orderQueueCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  my order queue is 2").Events[0].Body[0].Words);
+Check(orderQueueCondition.Kind == ConditionKind.Equal &&
+      orderQueueCondition.Right is NumberValue orderQueueRight && orderQueueRight.Value == 2,
+      "`my order queue is 2` parses to a numeric comparison");
+var orderTargetCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  my order target is Enemy").Events[0].Body[0].Words);
+Check(orderTargetCondition.Kind == ConditionKind.Equal &&
+      orderTargetCondition.Right is TextValue orderTargetText && orderTargetText.Text == "Enemy",
+      "`my order target is Enemy` compares the target name");
+
+// Order state: start, queue, promote, stop/hold and rally points.
+var orderVars = new EventVariables();
+var orderManager = new OrderManager();
+var orderUnit = new FakeActor("Marine");
+var orderEnemy = new FakeActor("Enemy");
+var firstOrder = new UnitOrder { Kind = UnitOrderKind.AttackMove, Name = "attack-move", Target = orderEnemy, TargetName = "Enemy" };
+orderManager.StartOrder(orderVars, null, orderUnit, firstOrder);
+Check(orderManager.CurrentOrderName(orderUnit) == "attack-move" &&
+      orderManager.OrderTargetName(orderUnit) == "Enemy" &&
+      orderManager.OrderCount(orderUnit) == 1 &&
+      orderManager.HasOrders(orderUnit),
+      "StartOrder publishes the active order and its target");
+orderManager.AddOrder(orderVars, null, orderUnit,
+    new UnitOrder { Kind = UnitOrderKind.Attack, Name = "attack", Target = orderEnemy, TargetName = "Enemy" });
+Check(orderManager.CurrentOrderName(orderUnit) == "attack-move" && orderManager.OrderCount(orderUnit) == 2,
+      "a new order waits behind the active one");
+Check(orderManager.Complete(orderVars, null, orderUnit) &&
+      orderManager.CurrentOrderName(orderUnit) == "attack" &&
+      orderManager.OrderCount(orderUnit) == 1,
+      "completing an order promotes the next one");
+Check(!orderManager.Complete(orderVars, null, new FakeActor("Idle")),
+      "completing an idle unit reports no change");
+orderManager.Complete(orderVars, null, orderUnit);
+Check(orderManager.CurrentOrderName(orderUnit) == "idle" && !orderManager.HasOrders(orderUnit),
+      "draining the queue leaves the unit idle");
+orderManager.Stop(orderVars, orderUnit);
+Check(orderManager.CurrentOrderName(orderUnit) == "stop" && orderManager.OrderCount(orderUnit) == 0,
+      "`stop` leaves the unit stopped");
+orderManager.AddOrder(orderVars, null, orderUnit,
+    new UnitOrder { Kind = UnitOrderKind.Move, Name = "move", TargetName = "there", HasPositionTarget = true });
+Check(orderManager.CurrentOrderName(orderUnit) == "move" && orderManager.OrderCount(orderUnit) == 1,
+      "a new order clears the stop state");
+orderManager.Hold(orderVars, orderUnit);
+Check(orderManager.CurrentOrderName(orderUnit) == "hold" && orderManager.IsHolding(orderUnit),
+      "`hold position` leaves the unit holding");
+orderManager.Clear(orderVars, orderUnit);
+Check(orderManager.CurrentOrderName(orderUnit) == "idle" && !orderManager.IsHolding(orderUnit),
+      "`clear orders` returns the unit to idle");
+
+var rallyManager = new OrderManager();
+var rallyBuilding = new FakeActor("Barracks");
+rallyManager.SetRallyPoint(rallyBuilding, orderEnemy, "Enemy");
+Check(rallyManager.HasRallyPoint(rallyBuilding) &&
+      ReferenceEquals(rallyManager.RallyPointOf(rallyBuilding), orderEnemy) &&
+      rallyManager.RallyTargetNameOf(rallyBuilding) == "Enemy",
+      "`set rally point` stores the building's rally target");
+rallyManager.Destroyed(rallyBuilding);
+Check(!rallyManager.HasRallyPoint(rallyBuilding),
+      "destroying a building drops its rally point");
+
+// Engine-level edges: completion, queued promotion and path blocked.
+var orderFlowWorld = new FakeWorld();
+var orderFlowUnit = new FakeActor("Marine");
+orderFlowWorld.AddActor(orderFlowUnit);
+var orderFlowEngine = FreshEngine(orderFlowWorld);
+orderFlowEngine.AddSheet(orderFlowUnit, parser.Parse(@"when order completes
+  add 1 to my Completed
+when queued order starts
+  add 1 to my Started
+when path blocked
+  add 1 to my Blocked"));
+orderFlowEngine.Orders.StartOrder(orderFlowEngine.Variables, orderFlowEngine, orderFlowUnit,
+    new UnitOrder { Kind = UnitOrderKind.Move, Name = "move", TargetName = "Waypoint" });
+orderFlowEngine.Tick(0);
+Check(orderFlowEngine.Variables.GetLocal(orderFlowUnit, "Started").AsNumber() == 1,
+      "`when queued order starts` fires when a new order becomes active");
+orderFlowEngine.Orders.AddOrder(orderFlowEngine.Variables, orderFlowEngine, orderFlowUnit,
+    new UnitOrder { Kind = UnitOrderKind.Attack, Name = "attack", TargetName = "Enemy" });
+orderFlowEngine.Orders.Complete(orderFlowEngine.Variables, orderFlowEngine, orderFlowUnit);
+orderFlowEngine.Tick(1);
+Check(orderFlowEngine.Variables.GetLocal(orderFlowUnit, "Completed").AsNumber() == 1 &&
+      orderFlowEngine.Variables.GetLocal(orderFlowUnit, "Started").AsNumber() == 2,
+      "completing an order fires the complete edge and starts the queued order");
+orderFlowEngine.Orders.ReportPathBlocked(orderFlowEngine, orderFlowUnit);
+orderFlowEngine.Tick(2);
+Check(orderFlowEngine.Variables.GetLocal(orderFlowUnit, "Blocked").AsNumber() == 1,
+      "`when path blocked` fires for a blocked order");
+
+// The condition and the computed `my ...` state agree with the queue.
+var orderFlowContext = new EventContext
+{
+    Variables = orderFlowEngine.Variables,
+    World = orderFlowWorld,
+    Me = orderFlowUnit,
+    Runtime = orderFlowEngine,
+};
+Check(orderFlowContext.ReadMy("current order").AsText() == "attack" &&
+      orderFlowContext.ReadMy("order target").AsText() == "Enemy" &&
+      orderFlowContext.ReadMy("order queue").AsNumber() == 1,
+      "`my current order` / `my order target` / `my order queue` read the live queue");
+var liveOrderCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  my current order is attack").Events[0].Body[0].Words);
+Check(Conditions.Evaluate(liveOrderCondition, orderFlowContext),
+      "`my current order is attack` matches the live order");
+var liveQueueCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  my order queue is 1").Events[0].Body[0].Words);
+Check(Conditions.Evaluate(liveQueueCondition, orderFlowContext),
+      "`my order queue is 1` matches the live queue size");
+
+// ------------------------------------------------------------------
 // Task 15 Part H: moveplatform (moving platforms)
 // ------------------------------------------------------------------
 

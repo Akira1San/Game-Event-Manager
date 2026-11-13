@@ -56,7 +56,7 @@ zero breaking changes to existing `.events` files.
 - New conditions: `<building> is idle`, `queue count is <n>`, `me has build queue`
 - StarCraft Barracks/CommandCenter training; Red Alert unit production; Homeworld strike-group fabrication
 
-### Part E — Orders & Attack-Move (`OrderQueue.cs`) [ ]
+### Part E — Orders & Attack-Move (`OrderQueue.cs`) [x]
 - New triggers: `when order completes`, `when queued order starts`, `when path blocked`
 - New actions: `attack-move to <target>`, `attack <target>`, `stop`, `hold position`,
   `add order to queue`, `clear orders`, `set rally point to <target>`

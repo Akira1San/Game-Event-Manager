@@ -26,6 +26,8 @@ namespace Game
         public PhysicsMoveMode Mode = PhysicsMoveMode.Transform;
         /// <summary>True when the body carries the move instead of the transform.</summary>
         public bool UsesPhysics => Mode != PhysicsMoveMode.Transform;
+        /// <summary>True when reaching the last waypoint also finishes the unit's active order.</summary>
+        public bool CompletesOrder;
     }
 
     /// <summary>A <c>push ... for &lt;n&gt; seconds</c> that is still shoving its target —
@@ -52,6 +54,9 @@ namespace Game
     /// <summary>Actors a <c>move</c> word ran for this tick (transient: cleared at the start of
     /// each <c>Step</c>, so <c>me is moving</c> is true only while motion is actually happening).</summary>
     public static readonly HashSet<Actor> MovedThisTick = new HashSet<Actor>();
+    /// <summary>Units whose next queued order should start moving after the current Step's
+    /// move loop, so promoting an order cannot disturb the list being iterated.</summary>
+    private static readonly List<Actor> PendingOrderMoves = new List<Actor>();
         private static readonly HashSet<string> WarnedOnce = new HashSet<string>();
         public static Action<string> Warn = FlaxActions.WarnOnce;
         /// <summary>Animation state per actor (current/previous clip + the virtual graphs that play them).</summary>
@@ -302,6 +307,24 @@ namespace Game
                             FinishGoto(move);
                             Moves.RemoveAt(i);
                         }
+                    }
+                }
+            }
+
+            // Orders promoted while the move loop was running start here, after the loop,
+            // so they cannot mutate the list mid-iteration.
+            if (PendingOrderMoves.Count > 0)
+            {
+                var pending = new List<Actor>(PendingOrderMoves);
+                PendingOrderMoves.Clear();
+                var orderRuntime = EventsManager.Instance?.Runtime;
+                if (orderRuntime != null)
+                {
+                    foreach (Actor actor in pending)
+                    {
+                        UnitOrder next = orderRuntime.Orders.CurrentOrderOf(actor);
+                        if (next != null && actor != null && actor.Scene != null)
+                            BeginOrderMove(orderRuntime, actor, next, 5);
                     }
                 }
             }
@@ -747,6 +770,7 @@ namespace Game
                         string building = context.Runtime.Construction.BuildingOf(actor);
                         context.Runtime.Construction.Destroyed(context.Variables, actor);
                         context.Runtime.Production.Destroyed(actor);
+                        context.Runtime.Orders.Destroyed(actor);
                         if (wasBuilding && !string.IsNullOrEmpty(building))
                         {
                             context.Runtime.RaisePushAll(new PushSignal
@@ -782,6 +806,27 @@ namespace Game
                     break;
                 case ActionVerb.CancelTraining:
                     CancelTraining(context, spec);
+                    break;
+                case ActionVerb.AttackMove:
+                    StartAttackMove(context, spec);
+                    break;
+                case ActionVerb.AttackOrder:
+                    StartAttack(context, spec);
+                    break;
+                case ActionVerb.StopOrder:
+                    StopOrder(context);
+                    break;
+                case ActionVerb.HoldPosition:
+                    HoldPosition(context);
+                    break;
+                case ActionVerb.AddOrderToQueue:
+                    AddOrderToQueue(context);
+                    break;
+                case ActionVerb.ClearOrders:
+                    ClearOrders(context);
+                    break;
+                case ActionVerb.SetRallyPoint:
+                    SetRallyPoint(context, spec);
                     break;
                 case ActionVerb.SpawnPrefab:
                     SpawnPrefab(context, spec);
@@ -1390,6 +1435,16 @@ namespace Game
         /// snap/brake the subject. Used by both the empty-path and last-waypoint exits.</summary>
         private static void FinishGoto(OngoingMove move)
         {
+            if (move.CompletesOrder)
+            {
+                var runtime = EventsManager.Instance?.Runtime;
+                if (runtime != null)
+                {
+                    runtime.Orders.Complete(runtime.Variables, runtime, move.Subject);
+                    if (runtime.Orders.HasOrders(move.Subject) && !PendingOrderMoves.Contains(move.Subject))
+                        PendingOrderMoves.Add(move.Subject);
+                }
+            }
             if (move.HasPositionTarget)
                 RaiseArriveAt(move.Subject, "there");
             ArriveAt(move);
@@ -1550,6 +1605,7 @@ namespace Game
             // `my spawnedFrom` names the template, and the sheet fallback can use it when a
             // cloned actor's own name has no matching .events file.
             context.Runtime.MarkSpawned(clone, templateName);
+            ApplyRally(context, spawnAt, clone);
             return clone;
         }
 
@@ -1690,6 +1746,7 @@ namespace Game
             ClearActor(target);
             context.Runtime.Selection.Forget(target);
             context.Runtime.Production.Destroyed(target);
+            context.Runtime.Orders.Destroyed(target);
             FlaxEngine.Object.Destroy(target, 0f);
         }
 
@@ -1735,6 +1792,220 @@ namespace Game
             if (!string.IsNullOrEmpty(thing))
                 return ResolveThing(context, thing) as Actor;
             return context.Me as Actor;
+        }
+
+        /// <summary><c>attack-move to &lt;target&gt;</c> — walk toward a target, ready to
+        /// engage anything met on the way. The order completes on arrival (Task 18 Part E).</summary>
+        private static void StartAttackMove(EventContext context, ActionSpec spec)
+        {
+            Actor me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Cattack-move\u201D needs to run on a unit's sheet \u2014 the global Game sheet has no body to move.");
+                return;
+            }
+            if (!TryResolveOrderTarget(context, spec.Thing, out object target, out string targetName, out bool isPosition))
+                return;
+            context.Runtime.Wander.Clear(me);
+            var order = new UnitOrder
+            {
+                Kind = UnitOrderKind.AttackMove,
+                Name = "attack-move",
+                Target = target,
+                TargetName = targetName,
+                HasPositionTarget = isPosition,
+            };
+            context.Runtime.Orders.StartOrder(context.Variables, context.Runtime, me, order);
+            BeginOrderMove(context.Runtime, me, order, 5);
+        }
+
+        /// <summary><c>attack &lt;target&gt;</c> — move into contact with the target. The order
+        /// completes on arrival; combat itself stays in the event sheet.</summary>
+        private static void StartAttack(EventContext context, ActionSpec spec)
+        {
+            Actor me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Cattack\u201D needs to run on a unit's sheet \u2014 the global Game sheet has no body to move.");
+                return;
+            }
+            if (!TryResolveOrderTarget(context, spec.Thing, out object target, out string targetName, out bool isPosition))
+                return;
+            context.Runtime.Wander.Clear(me);
+            var order = new UnitOrder
+            {
+                Kind = UnitOrderKind.Attack,
+                Name = "attack",
+                Target = target,
+                TargetName = targetName,
+                HasPositionTarget = isPosition,
+            };
+            context.Runtime.Orders.StartOrder(context.Variables, context.Runtime, me, order);
+            BeginOrderMove(context.Runtime, me, order, 5);
+        }
+
+        /// <summary><c>stop</c> — cancel the current and queued orders and leave the unit idle.</summary>
+        private static void StopOrder(EventContext context)
+        {
+            Actor me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Cstop\u201D needs to run on a unit's sheet \u2014 the global Game sheet has no body to stop.");
+                return;
+            }
+            StopMovingSubject(me);
+            context.Runtime.Wander.Clear(me);
+            context.Runtime.Orders.Stop(context.Variables, me);
+        }
+
+        /// <summary><c>hold position</c> — drop queued orders and freeze in place.</summary>
+        private static void HoldPosition(EventContext context)
+        {
+            Actor me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Chold position\u201D needs to run on a unit's sheet \u2014 the global Game sheet has no body to hold.");
+                return;
+            }
+            StopMovingSubject(me);
+            context.Runtime.Wander.SetStill(me);
+            context.Runtime.Orders.Hold(context.Variables, me);
+        }
+
+        /// <summary><c>add order to queue</c> — append a copy of the current order behind it.</summary>
+        private static void AddOrderToQueue(EventContext context)
+        {
+            Actor me = context.Me as Actor;
+            UnitOrder current = me == null ? null : context.Runtime.Orders.CurrentOrderOf(me);
+            if (current == null)
+            {
+                WarnOnce("\u201Cadd order to queue\u201D needs an active order to copy \u2014 issue a move or attack first.");
+                return;
+            }
+            context.Runtime.Orders.AddOrder(context.Variables, context.Runtime, me, new UnitOrder
+            {
+                Kind = current.Kind,
+                Name = current.Name,
+                Target = current.Target,
+                TargetName = current.TargetName,
+                HasPositionTarget = current.HasPositionTarget,
+            });
+        }
+
+        /// <summary><c>clear orders</c> — silently drop the current and queued orders.</summary>
+        private static void ClearOrders(EventContext context)
+        {
+            Actor me = context.Me as Actor;
+            if (me == null)
+                return;
+            StopMovingSubject(me);
+            context.Runtime.Wander.Clear(me);
+            context.Runtime.Orders.Clear(context.Variables, me);
+        }
+
+        /// <summary><c>set rally point to &lt;target&gt;</c> — where this building's newly
+        /// spawned units should walk.</summary>
+        private static void SetRallyPoint(EventContext context, ActionSpec spec)
+        {
+            Actor me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Cset rally point\u201D needs to run on a building's sheet.");
+                return;
+            }
+            if (!TryResolveOrderTarget(context, spec.Thing, out object target, out string targetName, out bool isPosition))
+                return;
+            context.Runtime.Orders.SetRallyPoint(me, target, isPosition ? "there" : targetName);
+        }
+
+        /// <summary>Resolves an order's target actor or the last clicked ground position.</summary>
+        private static bool TryResolveOrderTarget(EventContext context, string thing,
+            out object target, out string targetName, out bool isPosition)
+        {
+            target = null;
+            targetName = thing ?? "";
+            isPosition = false;
+            if (string.IsNullOrEmpty(thing))
+            {
+                WarnOnce("an order needs a target, like \u201Cattack-move to Enemy\u201D.");
+                return false;
+            }
+            if (thing == "there")
+            {
+                if (!LastClickPosition.HasValue)
+                {
+                    WarnOnce("\u201Cthere\u201D needs a clicked position first \u2014 click somewhere in the scene to set it.");
+                    return false;
+                }
+                isPosition = true;
+                return true;
+            }
+            target = ResolveThing(context, thing) as Actor;
+            if (target == null)
+            {
+                WarnOnce($"I couldn't find \u201C{thing}\u201D to order.");
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>Starts NavMesh movement for an order; a blocked path raises
+        /// <c>when path blocked</c> instead of walking through walls.</summary>
+        private static void BeginOrderMove(EventRuntime runtime, Actor me, UnitOrder order, double speed)
+        {
+            if (runtime == null || me == null || me.Scene == null || order == null)
+                return;
+            Actor targetActor = order.Target as Actor;
+            Vector3 destination;
+            if (targetActor != null && targetActor.Scene != null)
+                destination = targetActor.Position;
+            else if (order.HasPositionTarget || order.TargetName == "there")
+            {
+                if (!LastClickPosition.HasValue)
+                    return;
+                destination = LastClickPosition.Value;
+            }
+            else
+                return;
+
+            if (!Navigation.FindPath(me.Position, destination, out Vector3[] path) || path == null || path.Length == 0)
+            {
+                runtime.Orders.ReportPathBlocked(runtime, me);
+                return;
+            }
+
+            Remember(new OngoingMove
+            {
+                Subject = me,
+                Target = targetActor,
+                Goto = true,
+                HasPositionTarget = targetActor == null,
+                PositionTarget = destination,
+                Path = path,
+                PathIndex = 0,
+                Speed = speed,
+                Mode = ResolveMoveMode(me, runtime.FindSheetFor(me)?.UsePhysicsMovement ?? false),
+                CompletesOrder = true,
+            });
+        }
+
+        /// <summary>After a spawn, send the new unit to its building's rally point if one is set.</summary>
+        private static void ApplyRally(EventContext context, Actor spawnAt, Actor clone)
+        {
+            EventRuntime runtime = context.Runtime;
+            if (spawnAt == null || clone == null || runtime == null || !runtime.Orders.HasRallyPoint(spawnAt))
+                return;
+            var order = new UnitOrder
+            {
+                Kind = UnitOrderKind.Move,
+                Name = "move",
+                Target = runtime.Orders.RallyPointOf(spawnAt),
+                TargetName = runtime.Orders.RallyTargetNameOf(spawnAt),
+                HasPositionTarget = runtime.Orders.RallyPointOf(spawnAt) == null &&
+                                    runtime.Orders.RallyTargetNameOf(spawnAt) == "there",
+            };
+            runtime.Orders.StartOrder(context.Variables, runtime, clone, order);
+            BeginOrderMove(runtime, clone, order, 5);
         }
 
         private static void SpawnPrefab(EventContext context, ActionSpec spec)

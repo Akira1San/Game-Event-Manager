@@ -45,6 +45,14 @@ namespace Game
             }
             if (name == "spawnedFrom")
                 return ValueBox.OfText(Runtime.SpawnedFrom(Me));
+            // Order state is owned by the OrderManager, so `my current order` and friends
+            // always agree with the queue even before the first command.
+            if (name == "current order" || name == "CurrentOrder")
+                return ValueBox.OfText(Runtime.Orders.CurrentOrderName(Me));
+            if (name == "order target" || name == "OrderTarget")
+                return ValueBox.OfText(Runtime.Orders.OrderTargetName(Me));
+            if (name == "order queue" || name == "OrderQueue")
+                return ValueBox.OfNumber(Runtime.Orders.OrderCount(Me));
             return Variables.GetLocal(Me, name);
         }
 
@@ -159,6 +167,8 @@ namespace Game
         public ConstructionManager Construction = new ConstructionManager();
         /// <summary>RTS production queues and training timers (Task 18 Part D).</summary>
         public ProductionManager Production = new ProductionManager();
+        /// <summary>RTS per-unit order queues, attack-move and rally points (Task 18 Part E).</summary>
+        public OrderManager Orders = new OrderManager();
         /// <summary>Random-angle wander legs and still mode per actor (Task 16 Part A).</summary>
         public Wanderer Wander = new Wanderer();
         /// <summary>Recent sounds that `when me hears` / `me hears` poll (Task 16 Part B).</summary>
@@ -618,6 +628,13 @@ namespace Game
                    kind == TriggerKind.ProductionQueueEmpty;
         }
 
+        private static bool IsOrderKind(TriggerKind kind)
+        {
+            return kind == TriggerKind.OrderCompletes ||
+                   kind == TriggerKind.OrderStarts ||
+                   kind == TriggerKind.PathBlocked;
+        }
+
         private Dictionary<string, int> BagOf(object owner)
         {
             if (!bags.TryGetValue(owner, out var bag))
@@ -671,6 +688,16 @@ namespace Game
                 if (descriptor.RequireName == "me" || descriptor.RequireName == "my")
                     return ReferenceEquals(signal.Other, sheet.Actor);
                 return signal.Material == descriptor.RequireName || NameOf(signal.Other) == descriptor.RequireName;
+            }
+            // Order signals carry the order name in `Name` and its target in `Other`; the
+            // bare trigger listens to the acting unit, the named form filters by order.
+            if (IsOrderKind(descriptor.Kind))
+            {
+                if (descriptor.RequireName.Length == 0)
+                    return true;
+                if (descriptor.RequireName == "me" || descriptor.RequireName == "my")
+                    return true;
+                return string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase);
             }
             // `when other touches me` / `when other overlaps me` means "any toucher".
             if (descriptor.RequireName == "me" && IsContactKind(descriptor.Kind))

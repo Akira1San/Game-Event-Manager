@@ -71,6 +71,14 @@ namespace Game
         // RTS production queues & unit training (Task 18 Part D)
         Train,
         CancelTraining,
+        // RTS orders & attack-move (Task 18 Part E)
+        AttackMove,
+        AttackOrder,
+        StopOrder,
+        HoldPosition,
+        AddOrderToQueue,
+        ClearOrders,
+        SetRallyPoint,
         // Random-angle wander and still mode (Task 16 Part A)
         Wander,
         Still,
@@ -234,9 +242,16 @@ namespace Game
                 return Unknown(spec, words, "", warn);
 
             string verb = words[0].Text;
+            // `add order to queue` is an RTS order action (Task 18 Part E). Checked before
+            // the switch so `add scene "HUD"` still reaches its own generic handler below.
+            if (verb == "add" && words.Count >= 4 && words[1].Text == "order" &&
+                words[2].Text == "to" && words[3].Text == "queue")
+                return Finish(spec, ActionVerb.AddOrderToQueue, words, 4);
             switch (verb)
             {
                 case "stop":
+                    if (words.Count == 1)
+                        return Finish(spec, ActionVerb.StopOrder, words, 1);
                     if (words.Count >= 2 && words[1].Text == "moving")
                         return Finish(spec, ActionVerb.StopMoving, words, 2);
                     if (words.Count >= 2 && words[1].Text == "sound")
@@ -319,6 +334,42 @@ namespace Game
                     }
                     return Unknown(spec, words, "\u201Cnavigate\u201D needs a direction, like \u201Cnavigate down\u201D (up, down, left or right)", warn);
                 }
+
+                case "attack-move":
+                {
+                    // `attack-move to Enemy` — walk toward the target, ready to fight.
+                    int attackIndex = 1;
+                    if (words.Count >= 2 && words[1].Text == "to")
+                        attackIndex = 2;
+                    string attackTarget = ThingAt(words, attackIndex, out int attackUsed);
+                    if (attackTarget != null)
+                    {
+                        spec.Thing = attackTarget;
+                        return Finish(spec, ActionVerb.AttackMove, words, attackIndex + attackUsed);
+                    }
+                    return Unknown(spec, words, "\u201Cattack-move\u201D looks like this: \u201Cattack-move to Enemy\u201D", warn);
+                }
+
+                case "attack":
+                {
+                    string attackTarget = ThingAt(words, 1, out int attackUsed);
+                    if (attackTarget != null)
+                    {
+                        spec.Thing = attackTarget;
+                        return Finish(spec, ActionVerb.AttackOrder, words, 1 + attackUsed);
+                    }
+                    return Unknown(spec, words, "\u201Cattack\u201D needs a target, like \u201Cattack Enemy\u201D", warn);
+                }
+
+                case "hold":
+                    if (words.Count >= 2 && words[1].Text == "position")
+                        return Finish(spec, ActionVerb.HoldPosition, words, 2);
+                    return Unknown(spec, words, "\u201Chold\u201D looks like this: \u201Chold position\u201D", warn);
+
+                case "clear":
+                    if (words.Count >= 2 && words[1].Text == "orders")
+                        return Finish(spec, ActionVerb.ClearOrders, words, 2);
+                    return Unknown(spec, words, "\u201Cclear\u201D looks like this: \u201Cclear orders\u201D", warn);
 
                 case "goto":
                 {
@@ -680,7 +731,17 @@ namespace Game
                             spec.Number = words[4].Number;
                         return Finish(spec, ActionVerb.SetTimeScale, words, 5);
                     }
-                    return Unknown(spec, words, "yes, a \u201Cset\u201D line — I only know \u201Cset <variable> to <value>\u201D, \u201Cset text of\u201D, \u201Cset state\u201D, \u201Cset my control group\u201D, \u201Cset light\u201D, and \u201Cset time scale\u201D", warn);
+                    if (words.Count >= 5 && words[1].Text == "rally" && words[2].Text == "point" && words[3].Text == "to")
+                    {
+                        string rallyTarget = ThingAt(words, 4, out int rallyUsed);
+                        if (rallyTarget != null)
+                        {
+                            spec.Thing = rallyTarget;
+                            return Finish(spec, ActionVerb.SetRallyPoint, words, 4 + rallyUsed);
+                        }
+                        return Unknown(spec, words, "\u201Cset rally point\u201D needs a target, like \u201Cset rally point to Barracks\u201D", warn);
+                    }
+                    return Unknown(spec, words, "yes, a \u201Cset\u201D line — I only know \u201Cset <variable> to <value>\u201D, \u201Cset text of\u201D, \u201Cset state\u201D, \u201Cset my control group\u201D, \u201Cset light\u201D, \u201Cset time scale\u201D, and \u201Cset rally point\u201D", warn);
                 }
                 case "enable":
                     if (words.Count >= 2 && words[1].Text == "light")

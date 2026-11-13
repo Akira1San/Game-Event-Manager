@@ -64,6 +64,10 @@ namespace Game
         TrainingStarted,
         TrainingFinished,
         ProductionQueueEmpty,
+        // RTS orders & attack-move (Task 18 Part E)
+        OrderCompletes,
+        OrderStarts,
+        PathBlocked,
     }
 
     public class TriggerDescriptor
@@ -173,6 +177,23 @@ namespace Game
                 {
                     Kind = TriggerKind.ProductionQueueEmpty,
                     RequireName = Join(trigger, 0, words.Length - 4),
+                };
+            // RTS orders & attack-move (Task 18 Part E). The bare forms listen to the
+            // acting unit; the optional `<order> order completes` form filters by order name.
+            if (words.Length == 2 && words[0] == "order" && words[1] == "completes")
+                return new TriggerDescriptor { Kind = TriggerKind.OrderCompletes };
+            if (words.Length == 3 && words[0] == "queued" && words[1] == "order" && words[2] == "starts")
+                return new TriggerDescriptor { Kind = TriggerKind.OrderStarts };
+            if (words.Length == 2 && words[0] == "path" && words[1] == "blocked")
+                return new TriggerDescriptor { Kind = TriggerKind.PathBlocked };
+            if (words.Length >= 3 && words[words.Length - 2] == "order" &&
+                (words[words.Length - 1] == "completes" || words[words.Length - 1] == "starts"))
+                return new TriggerDescriptor
+                {
+                    Kind = words[words.Length - 1] == "completes"
+                        ? TriggerKind.OrderCompletes
+                        : TriggerKind.OrderStarts,
+                    RequireName = Join(trigger, 0, words.Length - 2),
                 };
             if (words.Length == 2 && words[0] == "selection" && words[1] == "changes")
                 return new TriggerDescriptor { Kind = TriggerKind.SelectionChanged };

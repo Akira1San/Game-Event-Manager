@@ -565,6 +565,16 @@ namespace Game
             }
             if (t.Text == "my")
             {
+                if (index + 2 < words.Count && words[index + 1].Type == TokenType.Word &&
+                    words[index + 2].Type == TokenType.Word)
+                {
+                    string pair = words[index + 1].Text + " " + words[index + 2].Text;
+                    if (pair == "current order" || pair == "order target" || pair == "order queue")
+                    {
+                        index += 3;
+                        return new VariableValue { Line = t.Line, Owner = "my", Name = pair };
+                    }
+                }
                 if (index + 1 < words.Count && words[index + 1].Type == TokenType.Word)
                 {
                     var name = words[index + 1];
@@ -764,6 +774,16 @@ namespace Game
                 raw.Words.AddRange(words);
                 return raw;
             }
+            // `set rally point to <target>` — an RTS order action (Task 18 Part E), parsed by
+            // ActionWords rather than as a variable called "rally".
+            if (words.Count >= 5 && words[1].Type == TokenType.Word && words[1].Text == "rally" &&
+                words[2].Type == TokenType.Word && words[2].Text == "point" &&
+                words[3].Type == TokenType.Word && words[3].Text == "to")
+            {
+                var raw = new RawActionNode { Line = line.Line };
+                raw.Words.AddRange(words);
+                return raw;
+            }
             var node = new SetNode { Line = line.Line };
             int index = 1;
             // `set Supply Used to 5` / `set Minerals to 500`: resources may be multiword.
@@ -864,6 +884,14 @@ namespace Game
         private StatementNode ParseAdd(BodyLineNode line)
         {
             var words = line.Words;
+            // `add order to queue` is an RTS order action (Task 18 Part E), not the
+            // `add <value> to <variable>` statement.
+            if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "order")
+            {
+                var orderRaw = new RawActionNode { Line = line.Line };
+                orderRaw.Words.AddRange(words);
+                return orderRaw;
+            }
             // `add scene "HUD"` is an action word (additive scene load), not the
             // `add <value> to <variable>` statement — hand it to the action parser.
             if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "scene")
