@@ -53,6 +53,10 @@ namespace Game
                 return ValueBox.OfText(Runtime.Orders.OrderTargetName(Me));
             if (name == "order queue" || name == "OrderQueue")
                 return ValueBox.OfNumber(Runtime.Orders.OrderCount(Me));
+            // `my Ammo` is the held weapon's count, so one HUD line can show the selected
+            // weapon and its rounds without the sheet mirroring a variable per weapon.
+            if (string.Equals(name, "Ammo", StringComparison.OrdinalIgnoreCase))
+                return ValueBox.OfNumber(WeaponData.ReadAmmo(this, ReadMy(WeaponData.CurrentWeaponVariable).AsText()));
             return Variables.GetLocal(Me, name);
         }
 

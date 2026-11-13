@@ -25,6 +25,14 @@
 #   <Weapon>Smoke         particle played at the muzzle (Part C.5)
 #   <Weapon>AmmoPerShot   ammo one shot spends
 #   <Weapon>Ammo          ammo a fresh actor starts with
+# ---- Part C.5: projectile behaviour, stamped onto every bullet it spawns ----
+#   <Weapon>Speed         projectile speed in cm/s
+#   <Weapon>Knockback     push strength applied to the victim
+#   <Weapon>Life          projectile lifetime in seconds
+#   <Weapon>Blast         explosion radius in cm (with Explosive)
+#   <Weapon>Bounce        true = the projectile reflects off walls (`bounce`)
+#   <Weapon>Explosive     true = it explodes where it stops (`explode`)
+#   <Weapon>Pierce        true = it passes through the victim instead of stopping
 #
 # Built-in defaults (code): Pistol, Shotgun, Uzi, Rocket, Grenade. Anything set here wins.
 
@@ -39,7 +47,14 @@ when game starts
   set PistolSound to "gunshot"
   set PistolSmoke to "muzzle"
   set PistolAmmoPerShot to 1
-  set PistolAmmo to 12
+  set PistolAmmo to 25
+  set PistolSpeed to 400
+  set PistolKnockback to 100
+  set PistolLife to 3
+  set PistolBlast to 0
+  set PistolBounce to false
+  set PistolExplosive to false
+  set PistolPierce to false
 
   # --- Shotgun: a wide spray, slow to reload ---
   set ShotgunBullet to "ShotgunPellet"
@@ -52,6 +67,13 @@ when game starts
   set ShotgunSmoke to "muzzle"
   set ShotgunAmmoPerShot to 1
   set ShotgunAmmo to 8
+  set ShotgunSpeed to 360
+  set ShotgunKnockback to 80
+  set ShotgunLife to 0.8
+  set ShotgunBlast to 0
+  set ShotgunBounce to false
+  set ShotgunExplosive to false
+  set ShotgunPierce to false
 
   # --- Uzi: fast fire, short reload, little spread ---
   set UziBullet to "UziBullet"
@@ -64,6 +86,13 @@ when game starts
   set UziSmoke to "muzzle"
   set UziAmmoPerShot to 1
   set UziAmmo to 40
+  set UziSpeed to 460
+  set UziKnockback to 40
+  set UziLife to 2.2
+  set UziBlast to 0
+  set UziBounce to false
+  set UziExplosive to false
+  set UziPierce to false
 
   # --- Rocket: slow, heavy, explodes (Part C.5) ---
   set RocketBullet to "Rocket"
@@ -76,6 +105,13 @@ when game starts
   set RocketSmoke to "smoke"
   set RocketAmmoPerShot to 1
   set RocketAmmo to 4
+  set RocketSpeed to 180
+  set RocketKnockback to 200
+  set RocketLife to 6
+  set RocketBlast to 320
+  set RocketBounce to false
+  set RocketExplosive to true
+  set RocketPierce to false
 
   # --- Grenade: lobbed, heavy, explodes (Part C.5) ---
   set GrenadeBullet to "Grenade"
@@ -88,3 +124,10 @@ when game starts
   set GrenadeSmoke to "smoke"
   set GrenadeAmmoPerShot to 1
   set GrenadeAmmo to 3
+  set GrenadeSpeed to 120
+  set GrenadeKnockback to 250
+  set GrenadeLife to 6
+  set GrenadeBlast to 400
+  set GrenadeBounce to false
+  set GrenadeExplosive to true
+  set GrenadePierce to false

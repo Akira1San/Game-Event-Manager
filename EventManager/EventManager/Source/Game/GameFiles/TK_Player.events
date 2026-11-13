@@ -11,17 +11,26 @@
 #   5. Import a shot clip into Content/sounds (e.g. shot.wav). Until then
 #      `play sound "shot"` warns once and carries on.
 
-# Keep the on-screen hit points in sync with `my Health` out of `my MaxHealth`.
+# Keep the HUD in sync: hit points, the selected weapon with its rounds, and stamina.
+# `my Ammo` is the held weapon's count (a computed variable, like `my bag`), so one line
+# follows the selection through `set weapon to` without mirroring a variable per weapon.
 bind HPLabel to my Health and my MaxHealth format "HP: {0}/{1}"
+bind WeaponLabel to my Weapon and my Ammo format "Weapon: {0}   Ammo: {1}"
+bind StaminaLabel to my Stamina format "Stamina: {0}"
 
 when me appears
   set my Health to 100
   set my MaxHealth to 100
   set my Stamina to 100
   set my Invulnerable to false
+  # TK4 start: the pistol and 25 rounds, nothing else. Shotgun and Uzi start owned=false
+  # with 0 rounds; the scene pickups below turn them on.
   set weapon to "Pistol"
-  set ammo Pistol to 12
-  set ammo Shotgun to 8
+  set ammo Pistol to 25
+  set ammo Shotgun to 0
+  set ammo Uzi to 0
+  set my HasShotgun to false
+  set my HasUzi to false
   # TK4 framing: straight down and centred on the player.
   # A top-down view is centred when CameraDepth = -CameraHeight / tan(CameraPitch),
   # and tan(90) is infinite, so a straight-down camera needs no backward offset.
@@ -29,7 +38,7 @@ when me appears
   set CameraDepth to 0
   set CameraPitch to 90
   camera follows me
-  print "TK4 controls: arrows steer, Shift sprints, Space fires, 1/2 swap weapon, R reloads"
+  print "TK4 controls: arrows steer, Shift sprints, Space fires, 1/2/3 swap weapon, R reloads"
 
 # --- rotation: instant yaw, 4 degrees per tick (240 deg/s at 60 fps) ---
 when Left Arrow is held
@@ -95,8 +104,50 @@ when my Stamina changes
 when 1 is pressed
   set weapon to "Pistol"
 
+# Owned weapons only: the Shotgun and Uzi are picked up off the ground (see the pickup
+# message blocks below), so pressing 2 or 3 before that walk-over does nothing.
 when 2 is pressed
+  my HasShotgun is true
   set weapon to "Shotgun"
+
+when 3 is pressed
+  my HasUzi is true
+  set weapon to "Uzi"
+
+# --- pickups (Task 16 Part H) ---
+# The scene props (`shotgun`, `uzi`, `*_ammo_box`) run their own tiny event files and send a
+# message, because a pickup actor cannot write the Player's local variables: `set Player's
+# HasUzi to true` would create a GLOBAL, and `add to ammo` would edit the prop's own count.
+# These blocks are the only place that touches `my` weapon state, so `my Ammo` and the
+# `WeaponLabel` bind stay correct.
+when message "pickup_shotgun" arrives
+  set my HasShotgun to true
+  add 8 to ammo Shotgun
+  set weapon to "Shotgun"
+  play sound "pickup"
+  print "TK4: picked up the Shotgun (8 shells)"
+
+when message "pickup_uzi" arrives
+  set my HasUzi to true
+  add 40 to ammo Uzi
+  set weapon to "Uzi"
+  play sound "pickup"
+  print "TK4: picked up the Uzi (40 rounds)"
+
+when message "pickup_shotgun_ammo" arrives
+  add 8 to ammo Shotgun
+  play sound "pickup"
+  print "TK4: Shotgun ammo +8"
+
+when message "pickup_uzi_ammo" arrives
+  add 40 to ammo Uzi
+  play sound "pickup"
+  print "TK4: Uzi ammo +40"
+
+when message "pickup_pistol_ammo" arrives
+  add 25 to ammo Pistol
+  play sound "pickup"
+  print "TK4: Pistol ammo +25"
 
 when R is pressed
   unless reloading
@@ -105,11 +156,29 @@ when R is pressed
 when reload completes
   print "TK4: reload done"
 
-# --- fire: the clone inherits my facing, offset clear of my body ---
+# --- fire: the clone inherits my facing, offset clear of my body. `spawn Bullet` fans out
+#     `Multiplier` pellets across `Spread` when the weapon asks for it (the Shotgun), stamps
+#     the bullet's speed/damage/knockback and its `bounce`/`explosive`/`pierce` flags, and
+#     clones `<Weapon>Bullet` — see TK_Bullet.events for what the projectile does with them. ---
 when Space is pressed
   unless reloading
   unless ammo my Weapon is 0
   spawn Bullet at me offset 30
+  spawn MuzzleFlash at me offset 30
+  add -1 to ammo my Weapon
+  play sound "shot"
+
+# --- Uzi: hold Space for sustained fire (the only automatic weapon) ---
+# `when every` takes a literal, so this rate mirrors `UziFireRate` in WeaponData.events (0.08).
+# The `when Space is pressed` block above still fires the first round on the press edge, so a
+# short tap always shoots even when the timer tick misses it; holding keeps the stream going.
+when every 0.08 seconds
+  Space is held
+  weapon is "Uzi"
+  unless reloading
+  unless ammo my Weapon is 0
+  spawn Bullet at me offset 30
+  spawn MuzzleFlash at me offset 30
   add -1 to ammo my Weapon
   play sound "shot"
 

@@ -1,0 +1,18 @@
+when me appears
+  print "muzzle: appeared"
+  play particle "muzzle"
+  print "muzzle: particle played"
+  enable light
+  print "muzzle: light enabled"
+  set light intensity to 3
+  print "muzzle: intensity set"
+  set light color to "1 0.8 0.2"
+  print "muzzle: color set"
+  wait 0.1 seconds
+  print "muzzle: waited 0.1s"
+  disable light
+  print "muzzle: light disabled"
+  stop particle "muzzle"
+  print "muzzle: particle stopped"
+  # spawned once per shot (Task 16 Part C.5), so the clone cleans itself up after the flash
+  destroy me

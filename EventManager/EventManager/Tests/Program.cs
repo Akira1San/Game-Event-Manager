@@ -5150,16 +5150,18 @@ var gunContext = new EventContext
     Me = gunner,
     Runtime = gunEngine,
 };
-Check(WeaponData.ReadAmmo(gunContext, "Pistol") == 12,
+Check(WeaponData.ReadAmmo(gunContext, "Pistol") == 25,
     "an unfired weapon starts with the data's ammo");
 Check(Conditions.Evaluate(weaponCondition, gunContext), "`weapon is Pistol` reads my Weapon");
 gunEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "Space" });
 gunEngine.Tick(1);
-Check(gunEngine.Variables.GetLocal(gunner, "PistolAmmo").AsNumber() == 11,
+Check(gunEngine.Variables.GetLocal(gunner, "PistolAmmo").AsNumber() == 24,
     "one shot spends one round of ammo");
 var ammoNowNode = Conditions.Parse(
-    weaponParser.Parse("when me appears\n  ammo Pistol is 11\n").Events[0].Body[0].Words);
-Check(Conditions.Evaluate(ammoNowNode, gunContext), "`ammo Pistol is 11` reads the spent count");
+    weaponParser.Parse("when me appears\n  ammo Pistol is 24\n").Events[0].Body[0].Words);
+Check(Conditions.Evaluate(ammoNowNode, gunContext), "`ammo Pistol is 24` reads the spent count");
+Check(gunContext.ReadMy("Ammo").AsNumber() == 24,
+    "`my Ammo` reads the held weapon's count (what the HUD line binds to)");
 
 var heldPistol = WeaponData.ForActor(gunContext);
 CheckStrings("Bullet", heldPistol.Bullet, "the held Pistol spawns the Bullet template");
@@ -5257,16 +5259,108 @@ WeaponData.LoadData(null);
 
 // The shipped data file and player sheet parse, and the table loads into real stats.
 var weaponDataEvents = weaponParser.Parse(File.ReadAllText("Source/Game/GameFiles/WeaponData.events"));
-Check(weaponDataEvents.Events.Count == 1 && weaponDataEvents.Events[0].Body.Count == 50,
-    "WeaponData.events parses (five weapons, ten fields each)");
+Check(weaponDataEvents.Events.Count == 1 && weaponDataEvents.Events[0].Body.Count == 85,
+    "WeaponData.events parses (five weapons, seventeen fields each)");
 WeaponData.LoadData(weaponDataEvents);
 WeaponData.TryGet(null, "Pistol", out WeaponStats filePistol);
-Check(filePistol != null && filePistol.Ammo == 12 && Math.Abs(filePistol.Reload - 1.2) < 0.0001 &&
+Check(filePistol != null && filePistol.Ammo == 25 && Math.Abs(filePistol.Reload - 1.2) < 0.0001 &&
       filePistol.Bullet == "Bullet",
     "the shipped WeaponData.events defines the Pistol");
+WeaponData.TryGet(null, "Rocket", out WeaponStats fileRocket);
+Check(fileRocket != null && fileRocket.Explosive && Math.Abs(fileRocket.Blast - 320) < 0.0001 &&
+      fileRocket.Speed < 200 && !fileRocket.Bounce,
+    "the shipped WeaponData.events defines the Rocket's blast and slow flight");
 WeaponData.LoadData(null);
 var tkPlayerEvents = weaponParser.Parse(File.ReadAllText("Source/Game/GameFiles/TK_Player.events"));
 Check(tkPlayerEvents.Events.Count > 0, "TK_Player.events parses (weapon swap, reload, ammo-gated fire)");
+
+// ---- Task 16 Part C.5: weapon variants & wall impact ----
+var variantParser = new EventParser();
+var bounceSpec = ActionWords.Parse(RawWords(variantParser, "when me appears\n  bounce\n"), _ => { });
+Check(bounceSpec.Verb == ActionVerb.Bounce, "`bounce` parses as a projectile reflection");
+var explodeSpec = ActionWords.Parse(RawWords(variantParser, "when me appears\n  explode\n"), _ => { });
+Check(explodeSpec.Verb == ActionVerb.Explode, "`explode` parses as a blast");
+var explosiveAliasSpec = ActionWords.Parse(RawWords(variantParser, "when me appears\n  explosive\n"), _ => { });
+Check(explosiveAliasSpec.Verb == ActionVerb.Explode, "`explosive` is the friendly alias of `explode`");
+var explodeRadiusSpec = ActionWords.Parse(
+    RawWords(variantParser, "when me appears\n  explode radius 250\n"), _ => { });
+Check(explodeRadiusSpec.Verb == ActionVerb.Explode && Math.Abs(explodeRadiusSpec.Number - 250) < 0.0001,
+    "`explode radius 250` carries its own blast radius");
+var explodeBlastVarSpec = ActionWords.Parse(
+    RawWords(variantParser, "when me appears\n  explode radius my blast\n"), _ => { });
+Check(explodeBlastVarSpec.Verb == ActionVerb.Explode && explodeBlastVarSpec.AmountNode != null,
+    "`explode radius my blast` reads the radius from the bullet's data");
+
+// Per-weapon data: variants differ in the numbers that matter, not only in name.
+WeaponData.TryGet(null, "Pistol", out WeaponStats variantPistol);
+WeaponData.TryGet(null, "Shotgun", out WeaponStats variantShotgun);
+WeaponData.TryGet(null, "Uzi", out WeaponStats variantUzi);
+WeaponData.TryGet(null, "Grenade", out WeaponStats variantGrenade);
+Check(variantShotgun.Multiplier == 6 && Math.Abs(variantShotgun.Spread - 12) < 0.0001,
+    "the Shotgun fires six pellets across its spread");
+Check(variantShotgun.Life < variantPistol.Life,
+    "a shotgun pellet has shorter legs than a pistol round");
+Check(variantUzi.FireRate < variantPistol.FireRate && variantUzi.Reload < variantPistol.Reload,
+    "the Uzi fires faster and reloads faster than the Pistol");
+Check(variantGrenade.Explosive && variantGrenade.Blast > fileRocket.Blast,
+    "the Grenade explodes with the widest blast");
+Check(!variantPistol.Explosive && !variantPistol.Bounce && !variantPistol.Pierce,
+    "a pistol round is a plain bullet");
+
+// The spread math: evenly fanned, centred on the aim, with the aim kept for a single pellet.
+var shotgunAngles = BulletMath.SpreadAngles(12, 6);
+Check(shotgunAngles.Length == 6 && Math.Abs(shotgunAngles[0] + 6) < 1e-9 &&
+      Math.Abs(shotgunAngles[5] - 6) < 1e-9 && Math.Abs(shotgunAngles[2] + 1.2) < 1e-9,
+    "six pellets fan evenly across the 12° spread");
+Check(Math.Abs(shotgunAngles[0] + shotgunAngles[5]) < 1e-9 &&
+      Math.Abs(shotgunAngles[1] + shotgunAngles[4]) < 1e-9,
+    "the spread is symmetric around the aim");
+Check(BulletMath.SpreadAngles(12, 1)[0] == 0 && BulletMath.SpreadAngles(12, 0).Length == 1,
+    "one pellet keeps the exact heading");
+var straightAngles = BulletMath.SpreadAngles(0, 4);
+Check(straightAngles.Length == 4 && Array.TrueForAll(straightAngles, angle => angle == 0),
+    "a weapon with no spread fires every pellet straight");
+
+// The bounce math: a head-on hit reverses, a 45° graze mirrors, and the result is a unit vector.
+BulletMath.Reflect(0, 1, 0, -1, out double bounceX, out double bounceZ);
+Check(Math.Abs(bounceX) < 1e-9 && Math.Abs(bounceZ + 1) < 1e-9,
+    "a head-on wall hit reverses the projectile");
+BulletMath.Reflect(1, 1, -1, 0, out bounceX, out bounceZ);
+Check(Math.Abs(bounceX + Math.Sqrt(0.5)) < 1e-9 && Math.Abs(bounceZ - Math.Sqrt(0.5)) < 1e-9,
+    "a 45° graze reflects at the mirrored angle");
+Check(Math.Abs((bounceX * bounceX + bounceZ * bounceZ) - 1) < 1e-9,
+    "the reflected heading is a unit vector");
+BulletMath.Reflect(2, 0, -3, 0, out bounceX, out bounceZ);
+Check(Math.Abs(bounceX + 1) < 1e-9, "unnormalized inputs still reflect cleanly");
+Check(BulletMath.WithinBlast(100, 0, 150) && !BulletMath.WithinBlast(200, 0, 150) &&
+      !BulletMath.WithinBlast(0, 0, 0),
+    "the blast radius decides who is caught in it");
+
+// The bullet sheet the scene's templates share: flight, lifetime, wall impact, victim impact.
+var tkBulletEvents = variantParser.Parse(File.ReadAllText("Source/Game/GameFiles/TK_Bullet.events"));
+Check(tkBulletEvents.Events.Count == 4,
+    "TK_Bullet.events parses (flight, lifetime, wall impact, victim impact)");
+var wallBody = tkBulletEvents.Events[2].Body;
+Check(wallBody.Count == 7 && wallBody[0].IsCondition && wallBody[3].IsCondition,
+    "the wall event gates bounce and explode behind the bullet's own flags");
+var wallBounce = ActionWords.Parse(((RawActionNode)wallBody[1].Statement!).Words, _ => { });
+Check(wallBounce.Verb == ActionVerb.Bounce, "the wall event really calls `bounce`");
+var wallExplode = ActionWords.Parse(((RawActionNode)wallBody[4].Statement!).Words, _ => { });
+Check(wallExplode.Verb == ActionVerb.Explode, "the wall event really calls `explode`");
+var victimBody = tkBulletEvents.Events[3].Body;
+// The victim line reads the weapon's numbers through `my`, so check that shape really parses.
+var knockSpec = ActionWords.Parse(
+    RawWords(variantParser, "when me appears\n  push other back strength my knockback for 0.2 seconds\n"), _ => { });
+Check(knockSpec.Verb == ActionVerb.Push && knockSpec.AmountNode is VariableValue knockVar &&
+      knockVar.Owner == "my" && knockVar.Name == "knockback" && Math.Abs(knockSpec.Duration - 0.2) < 1e-9,
+    "`push other back strength my knockback for 0.2 seconds` uses the weapon's own push");
+var flightSpec = ActionWords.Parse(
+    RawWords(variantParser, "when me appears\n  move forward speed my BulletSpeed\n"), _ => { });
+Check(flightSpec.Verb == ActionVerb.Move && flightSpec.AmountNode is VariableValue flightVar &&
+      flightVar.Owner == "my" && flightVar.Name == "BulletSpeed",
+    "`move forward speed my BulletSpeed` flies at the stamped speed");
+Check(victimBody.Count == 8 && victimBody[5].IsCondition && !victimBody[6].IsCondition,
+    "the victim event damages, then stops or destroys the bullet (pierce keeps it flying)");
 
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");

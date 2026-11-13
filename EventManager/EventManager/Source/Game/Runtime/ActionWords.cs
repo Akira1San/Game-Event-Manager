@@ -82,6 +82,9 @@ namespace Game
         // Random-angle wander and still mode (Task 16 Part A)
         Wander,
         Still,
+        // Projectile behaviour (Task 16 Part C.5)
+        Bounce,
+        Explode,
     }
 
     public class ActionSpec
@@ -297,6 +300,26 @@ namespace Game
                 case "still":
                     return Finish(spec, ActionVerb.Still, words, 1);
 
+                case "bounce":
+                    // `bounce` — a projectile reflects off the wall it just hit (Task 16 Part C.5).
+                    return Finish(spec, ActionVerb.Bounce, words, 1);
+
+                case "explode":
+                case "explosive":
+                {
+                    // `explode` / `explode radius 320` — blast where the projectile stopped.
+                    int blastIndex = 1;
+                    if (words.Count >= blastIndex + 2 && words[blastIndex].Text == "radius")
+                    {
+                        spec.AmountNode = ValueNodeAt(words, blastIndex + 1, out int blastUsed);
+                        spec.HasNumber = words[blastIndex + 1].Type == TokenType.Number;
+                        if (spec.HasNumber)
+                            spec.Number = words[blastIndex + 1].Number;
+                        blastIndex += 1 + blastUsed;
+                    }
+                    return Finish(spec, ActionVerb.Explode, words, blastIndex);
+                }
+
                 case "move":
                     return Move(spec, words, warn);
 
@@ -500,11 +523,11 @@ namespace Game
                         int pushIndex = 3;
                         if (words.Count >= pushIndex + 2 && words[pushIndex].Text == "strength")
                         {
-                            spec.AmountNode = ValueNodeAt(words, pushIndex + 1);
+                            spec.AmountNode = ValueNodeAt(words, pushIndex + 1, out int pushUsed);
                             spec.HasNumber = words[pushIndex + 1].Type == TokenType.Number;
                             if (spec.HasNumber)
                                 spec.Number = words[pushIndex + 1].Number;
-                            pushIndex += 2;
+                            pushIndex += 1 + pushUsed;
                         }
                         else
                         {
@@ -1082,7 +1105,7 @@ namespace Game
                 spec.Dir = "away";
                 if (words.Count >= 6 && words[words.Count - 2].Text == "speed")
                 {
-                    spec.AmountNode = ValueNodeAt(words, words.Count - 1);
+                    spec.AmountNode = TrailingValue(words);
                     spec.HasNumber = words[words.Count - 1].Type == TokenType.Number;
                     if (spec.HasNumber)
                         spec.Number = words[words.Count - 1].Number;
@@ -1103,7 +1126,7 @@ namespace Game
                     int afterThing = 2 + used;
                     if (words.Count >= afterThing + 2 && words[afterThing].Text == "speed")
                     {
-                        spec.AmountNode = ValueNodeAt(words, words.Count - 1);
+                        spec.AmountNode = TrailingValue(words);
                         spec.HasNumber = words[words.Count - 1].Type == TokenType.Number;
                         if (spec.HasNumber)
                             spec.Number = words[words.Count - 1].Number;
@@ -1122,7 +1145,7 @@ namespace Game
                 spec.Dir = words[1].Text == "back" ? "backward" : words[1].Text;
                 if (words.Count >= 4 && words[2].Text == "speed")
                 {
-                    spec.AmountNode = ValueNodeAt(words, words.Count - 1);
+                    spec.AmountNode = TrailingValue(words);
                     spec.HasNumber = words[words.Count - 1].Type == TokenType.Number;
                     if (spec.HasNumber)
                         spec.Number = words[words.Count - 1].Number;
@@ -1139,9 +1162,37 @@ namespace Game
 
         private static ValueNode ValueNodeAt(List<Token> words, int index)
         {
+            return ValueNodeAt(words, index, out _);
+        }
+
+        /// <summary>
+        /// Reads the amount at <paramref name="index"/> — a number, a global, or <c>my &lt;name&gt;</c>
+        /// (which is two tokens, so <paramref name="used"/> says how many the caller just spent).
+        /// Bullet speeds, blast radii and knockbacks all come from the spawned actor's own
+        /// variables, so the per-object form has to work wherever an amount is accepted.
+        /// </summary>
+        private static ValueNode ValueNodeAt(List<Token> words, int index, out int used)
+        {
+            used = 1;
+            if (index + 1 < words.Count && words[index].Text == "my" &&
+                words[index + 1].Type == TokenType.Word)
+            {
+                used = 2;
+                return new VariableValue { Owner = "my", Name = words[index + 1].Text };
+            }
             if (words[index].Type == TokenType.Number)
                 return new NumberValue { Value = words[index].Number };
             return new VariableValue { Owner = "global", Name = words[index].Text };
+        }
+
+        /// <summary>The value that ends the line, so <c>speed 5</c> and <c>speed my Speed</c>
+        /// both read their amount.</summary>
+        private static ValueNode TrailingValue(List<Token> words)
+        {
+            int index = words.Count - 1;
+            if (index >= 1 && words[index - 1].Text == "my" && words[index].Type == TokenType.Word)
+                index--;
+            return ValueNodeAt(words, index);
         }
 
         private static bool IsThing(Token token)

@@ -1,0 +1,7 @@
+when me appears
+  print "explosion: appeared"
+  play particle "explosion"
+  print "explosion: particle played"
+  wait 0.5 seconds
+  print "explosion: waited 0.5s"
+  destroy me

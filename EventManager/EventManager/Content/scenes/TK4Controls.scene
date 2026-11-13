@@ -1,4 +1,4 @@
-{
+﻿{
 	"ID": "97f5e32416f54d579def802d157eaf1e",
 	"TypeName": "FlaxEngine.SceneAsset",
 	"EngineBuild": 7014,
@@ -109,7 +109,7 @@
 					"X": 0.0,
 					"Y": 1.0,
 					"Z": -0.0,
-					"W": -4.371138828673793e-08
+					"W": -4.371138828673793e-8
 				},
 				"Scale": {
 					"X": 0.20000000298023224,
@@ -134,13 +134,14 @@
 			"TypeName": "Game.EventSheet",
 			"ParentID": "d6f37403420a3b77b57798a1e4880679",
 			"V": {
-				"EventFile": "TK_Player"
-			}
+	"EventFile": "TK_Player"
+}
 		},
 		{
 			"ID": "31ba5a474ea15b9902d990bffcdf6252",
 			"TypeName": "FlaxEngine.StaticModel",
 			"ParentID": "97f5e32416f54d579def802d157eaf1e",
+			"IsActive": false,
 			"Name": "Enemy",
 			"Transform": {
 				"Translation": {
@@ -166,8 +167,8 @@
 			"TypeName": "Game.EventSheet",
 			"ParentID": "31ba5a474ea15b9902d990bffcdf6252",
 			"V": {
-				"EventFile": "Enemy"
-			}
+	"EventFile": "Enemy"
+}
 		},
 		{
 			"ID": "c24bb0ea415170f4d2b487ba84dc635f",
@@ -261,17 +262,20 @@
 			"TypeName": "Game.EventsManager",
 			"ParentID": "e682a79d420ccd4aa52e28a487e53f0d",
 			"V": {
-				"Runtime": {
-					"Variables": {
-						"OnWarning": {}
-					},
-					"World": {
-						"$type": "Game.DefaultEventWorld, Game.CSharp"
-					},
-					"Selection": {},
-					"Construction": {}
-				}
-			}
+	"Runtime": {
+		"Variables": {
+			"OnWarning": {}
+		},
+		"World": {
+			"$type": "Game.DefaultEventWorld, Game.CSharp"
+		},
+		"Selection": {},
+		"Construction": {},
+		"Wander": {},
+		"Sounds": {},
+		"Weapons": {}
+	}
+}
 		},
 		{
 			"ID": "25bdcb354c00aa3960b74280da1dc127",
@@ -301,10 +305,10 @@
 					"Z": 277.0111083984375
 				},
 				"Orientation": {
-					"X": -5.7024269750627354e-09,
+					"X": -5.7024269750627354e-9,
 					"Y": -0.9238795042037964,
 					"Z": 0.3826834559440613,
-					"W": 1.3766874751297564e-08
+					"W": 1.3766874751297564e-8
 				}
 			}
 		},
@@ -324,7 +328,7 @@
 					"X": 0.0,
 					"Y": 1.0,
 					"Z": -0.0,
-					"W": -4.371138828673793e-08
+					"W": -4.371138828673793e-8
 				},
 				"Scale": {
 					"X": 0.10000000149011612,
@@ -349,8 +353,8 @@
 			"TypeName": "Game.EventSheet",
 			"ParentID": "350a7fccd03648a2bf8c6efd79185a8a",
 			"V": {
-				"EventFile": "TK_Bullet"
-			}
+	"EventFile": "TK_Bullet"
+}
 		},
 		{
 			"ID": "e98bdd09104e4ed7ab144bf4a2878efc",
@@ -365,8 +369,8 @@
 				},
 				"Orientation": {
 					"X": 1.0,
-					"Y": 4.371138828673793e-08,
-					"Z": 4.371138828673793e-08,
+					"Y": 4.371138828673793e-8,
+					"Z": 4.371138828673793e-8,
 					"W": 1.910685465164705e-15
 				}
 			},
@@ -377,86 +381,939 @@
 			"TypeName": "FlaxEngine.UIControl",
 			"ParentID": "e98bdd09104e4ed7ab144bf4a2878efc",
 			"Name": "HPLabel",
+			"Transform": {
+				"Translation": {
+					"X": 20.0,
+					"Y": 20.0,
+					"Z": 0.0
+				}
+			},
 			"Control": "FlaxEngine.GUI.Label",
 			"Data": {
-				"Text": "HP: 100/100",
-				"CaseOption": 0,
-				"Bold": true,
-				"Italic": false,
-				"TextColor": {
-					"R": 0.13227417,
-					"G": 0.23703706,
-					"B": 0.14896588,
-					"A": 1.0
-				},
-				"TextColorHighlighted": {
-					"R": 1.0,
-					"G": 1.0,
-					"B": 1.0,
-					"A": 1.0
-				},
-				"HorizontalAlignment": 1,
-				"VerticalAlignment": 1,
-				"Wrapping": 0,
-				"BaseLinesGapScale": 1.0,
-				"Font": {
-					"Font": "4508d98f4aa1f0bd59362b81d47e38f4",
-					"Size": 14.0
-				},
-				"Material": null,
-				"Margin": {
-					"Left": 0.0,
-					"Right": 0.0,
-					"Top": 0.0,
-					"Bottom": 0.0
-				},
-				"ClipText": false,
-				"AutoWidth": false,
-				"AutoHeight": false,
-				"AutoFitText": false,
-				"AutoFitTextRange": {
-					"X": 0.1,
-					"Y": 100.0
-				},
-				"ClipChildren": true,
-				"CullChildren": true,
-				"AnchorMin": {
-					"X": 0.0,
-					"Y": 0.0
-				},
-				"AnchorMax": {
-					"X": 0.0,
-					"Y": 0.0
-				},
-				"Offsets": {
-					"Left": 20.0,
-					"Right": 220.0,
-					"Top": 20.0,
-					"Bottom": 50.0
+	"Text": "HP: 100/100",
+	"CaseOption": 0,
+	"Bold": true,
+	"Italic": false,
+	"TextColor": {
+		"R": 0.13227417,
+		"G": 0.23703706,
+		"B": 0.14896588,
+		"A": 1.0
+	},
+	"TextColorHighlighted": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"HorizontalAlignment": 1,
+	"VerticalAlignment": 1,
+	"Wrapping": 0,
+	"BaseLinesGapScale": 1.0,
+	"Font": {
+		"Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+		"Size": 14.0
+	},
+	"Material": null,
+	"Margin": {
+		"Left": 0.0,
+		"Right": 0.0,
+		"Top": 0.0,
+		"Bottom": 0.0
+	},
+	"ClipText": false,
+	"AutoWidth": false,
+	"AutoHeight": false,
+	"AutoFitText": false,
+	"AutoFitTextRange": {
+		"X": 0.1,
+		"Y": 100.0
+	},
+	"ClipChildren": true,
+	"CullChildren": true,
+	"AnchorMin": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"AnchorMax": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Offsets": {
+		"Left": 20.0,
+		"Right": 220.0,
+		"Top": 20.0,
+		"Bottom": 50.0
+	},
+	"Scale": {
+		"X": 1.0,
+		"Y": 1.0
+	},
+	"Pivot": {
+		"X": 0.5,
+		"Y": 0.5
+	},
+	"Shear": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Rotation": 0.0,
+	"BackgroundColor": {
+		"R": 0.0,
+		"G": 0.0,
+		"B": 0.0,
+		"A": 0.0
+	},
+	"BackgroundBrush": null,
+	"Enabled": true,
+	"Visible": true,
+	"AutoFocus": false
+}
+		},
+		{
+			"ID": "1b0c1a2d3e4f4051627384950a1b2c3d",
+			"TypeName": "FlaxEngine.UIControl",
+			"ParentID": "e98bdd09104e4ed7ab144bf4a2878efc",
+			"Name": "StaminaLabel",
+			"Transform": {
+				"Translation": {
+					"X": 109.33331298828125,
+					"Y": 6.0,
+					"Z": 0.0
+				}
+			},
+			"Control": "FlaxEngine.GUI.Label",
+			"Data": {
+	"Text": "Stamina: 100",
+	"CaseOption": 0,
+	"Bold": true,
+	"Italic": false,
+	"TextColor": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"TextColorHighlighted": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"HorizontalAlignment": 1,
+	"VerticalAlignment": 1,
+	"Wrapping": 0,
+	"BaseLinesGapScale": 1.0,
+	"Font": {
+		"Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+		"Size": 14.0
+	},
+	"Material": null,
+	"Margin": {
+		"Left": 0.0,
+		"Right": 0.0,
+		"Top": 0.0,
+		"Bottom": 0.0
+	},
+	"ClipText": false,
+	"AutoWidth": false,
+	"AutoHeight": false,
+	"AutoFitText": false,
+	"AutoFitTextRange": {
+		"X": 0.1,
+		"Y": 100.0
+	},
+	"ClipChildren": true,
+	"CullChildren": true,
+	"AnchorMin": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"AnchorMax": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Offsets": {
+		"Left": 109.33331,
+		"Right": 320.0,
+		"Top": 6.0,
+		"Bottom": 80.0
+	},
+	"Scale": {
+		"X": 1.0,
+		"Y": 1.0
+	},
+	"Pivot": {
+		"X": 0.5,
+		"Y": 0.5
+	},
+	"Shear": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Rotation": 0.0,
+	"BackgroundColor": {
+		"R": 0.0,
+		"G": 0.0,
+		"B": 0.0,
+		"A": 0.0
+	},
+	"BackgroundBrush": null,
+	"Enabled": true,
+	"Visible": true,
+	"AutoFocus": false
+}
+		},
+		{
+			"ID": "2c1d2b3e4f5a4162738495061b2c3d4e",
+			"TypeName": "FlaxEngine.UIControl",
+			"ParentID": "e98bdd09104e4ed7ab144bf4a2878efc",
+			"Name": "WeaponLabel",
+			"Transform": {
+				"Translation": {
+					"X": 8.666656494140625,
+					"Y": 412.0000305175781,
+					"Z": 0.0
+				}
+			},
+			"Control": "FlaxEngine.GUI.Label",
+			"Data": {
+	"Text": "Weapon: Pistol   Ammo: 25",
+	"CaseOption": 0,
+	"Bold": true,
+	"Italic": false,
+	"TextColor": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"TextColorHighlighted": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"HorizontalAlignment": 1,
+	"VerticalAlignment": 1,
+	"Wrapping": 0,
+	"BaseLinesGapScale": 1.0,
+	"Font": {
+		"Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+		"Size": 14.0
+	},
+	"Material": null,
+	"Margin": {
+		"Left": 0.0,
+		"Right": 0.0,
+		"Top": 0.0,
+		"Bottom": 0.0
+	},
+	"ClipText": false,
+	"AutoWidth": false,
+	"AutoHeight": false,
+	"AutoFitText": false,
+	"AutoFitTextRange": {
+		"X": 0.1,
+		"Y": 100.0
+	},
+	"ClipChildren": true,
+	"CullChildren": true,
+	"AnchorMin": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"AnchorMax": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Offsets": {
+		"Left": 8.6666565,
+		"Right": 360.0,
+		"Top": 412.00003,
+		"Bottom": 110.0
+	},
+	"Scale": {
+		"X": 1.0,
+		"Y": 1.0
+	},
+	"Pivot": {
+		"X": 0.5,
+		"Y": 0.5
+	},
+	"Shear": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Rotation": 0.0,
+	"BackgroundColor": {
+		"R": 0.0,
+		"G": 0.0,
+		"B": 0.0,
+		"A": 0.0
+	},
+	"BackgroundBrush": null,
+	"Enabled": true,
+	"Visible": true,
+	"AutoFocus": false
+}
+		},
+		{
+			"ID": "3d2e3c4f5a6b4273849506172c3d4e5f",
+			"TypeName": "FlaxEngine.UIControl",
+			"ParentID": "e98bdd09104e4ed7ab144bf4a2878efc",
+			"IsActive": false,
+			"Name": "WeaponSlot1",
+			"Transform": {
+				"Translation": {
+					"X": 20.0,
+					"Y": 1020.0,
+					"Z": 0.0
+				}
+			},
+			"Control": "FlaxEngine.GUI.Label",
+			"Data": {
+	"Text": "1  PISTOL",
+	"CaseOption": 0,
+	"Bold": true,
+	"Italic": false,
+	"TextColor": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"TextColorHighlighted": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"HorizontalAlignment": 1,
+	"VerticalAlignment": 1,
+	"Wrapping": 0,
+	"BaseLinesGapScale": 1.0,
+	"Font": {
+		"Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+		"Size": 14.0
+	},
+	"Material": null,
+	"Margin": {
+		"Left": 0.0,
+		"Right": 0.0,
+		"Top": 0.0,
+		"Bottom": 0.0
+	},
+	"ClipText": false,
+	"AutoWidth": false,
+	"AutoHeight": false,
+	"AutoFitText": false,
+	"AutoFitTextRange": {
+		"X": 0.1,
+		"Y": 100.0
+	},
+	"ClipChildren": true,
+	"CullChildren": true,
+	"AnchorMin": {
+		"X": 0.0,
+		"Y": 1.0
+	},
+	"AnchorMax": {
+		"X": 0.0,
+		"Y": 1.0
+	},
+	"Offsets": {
+		"Left": 20.0,
+		"Right": 170.0,
+		"Top": -60.0,
+		"Bottom": -28.0
+	},
+	"Scale": {
+		"X": 1.0,
+		"Y": 1.0
+	},
+	"Pivot": {
+		"X": 0.5,
+		"Y": 0.5
+	},
+	"Shear": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Rotation": 0.0,
+	"BackgroundColor": {
+		"R": 0.0,
+		"G": 0.0,
+		"B": 0.0,
+		"A": 0.55
+	},
+	"BackgroundBrush": null,
+	"Enabled": true,
+	"Visible": false,
+	"AutoFocus": false
+}
+		},
+		{
+			"ID": "4e3f4d5a6b7c4384950617283d4e5f60",
+			"TypeName": "FlaxEngine.UIControl",
+			"ParentID": "e98bdd09104e4ed7ab144bf4a2878efc",
+			"IsActive": false,
+			"Name": "WeaponSlot2",
+			"Transform": {
+				"Translation": {
+					"X": 180.0,
+					"Y": 1020.0,
+					"Z": 0.0
+				}
+			},
+			"Control": "FlaxEngine.GUI.Label",
+			"Data": {
+	"Text": "2  SHOTGUN",
+	"CaseOption": 0,
+	"Bold": true,
+	"Italic": false,
+	"TextColor": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"TextColorHighlighted": {
+		"R": 1.0,
+		"G": 1.0,
+		"B": 1.0,
+		"A": 1.0
+	},
+	"HorizontalAlignment": 1,
+	"VerticalAlignment": 1,
+	"Wrapping": 0,
+	"BaseLinesGapScale": 1.0,
+	"Font": {
+		"Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+		"Size": 14.0
+	},
+	"Material": null,
+	"Margin": {
+		"Left": 0.0,
+		"Right": 0.0,
+		"Top": 0.0,
+		"Bottom": 0.0
+	},
+	"ClipText": false,
+	"AutoWidth": false,
+	"AutoHeight": false,
+	"AutoFitText": false,
+	"AutoFitTextRange": {
+		"X": 0.1,
+		"Y": 100.0
+	},
+	"ClipChildren": true,
+	"CullChildren": true,
+	"AnchorMin": {
+		"X": 0.0,
+		"Y": 1.0
+	},
+	"AnchorMax": {
+		"X": 0.0,
+		"Y": 1.0
+	},
+	"Offsets": {
+		"Left": 180.0,
+		"Right": 330.0,
+		"Top": -60.0,
+		"Bottom": -28.0
+	},
+	"Scale": {
+		"X": 1.0,
+		"Y": 1.0
+	},
+	"Pivot": {
+		"X": 0.5,
+		"Y": 0.5
+	},
+	"Shear": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Rotation": 0.0,
+	"BackgroundColor": {
+		"R": 0.0,
+		"G": 0.0,
+		"B": 0.0,
+		"A": 0.55
+	},
+	"BackgroundBrush": null,
+	"Enabled": true,
+	"Visible": false,
+	"AutoFocus": false
+}
+		},
+		{
+			"ID": "9033bad64327735246c4d7b10d044c0f",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "97f5e32416f54d579def802d157eaf1e",
+			"Name": "Zombie",
+			"Transform": {
+				"Translation": {
+					"X": 56.29792022705078,
+					"Y": 4.04949951171875,
+					"Z": -188.37850952148438
+				}
+			},
+			"Model": "efb6d881436796e7b8fb8496dcfe8808",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "e448085a4958f904fe3a6db6cd353d42",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "3e7de4694e8490b3c71d508173002e28",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "9033bad64327735246c4d7b10d044c0f",
+			"V": {
+	"EventFile": "Zombie"
+}
+		},
+		{
+			"ID": "7ae992334af4a5acb3f1579ca29fb5f5",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "9033bad64327735246c4d7b10d044c0f",
+			"IsActive": false,
+			"Name": "BoxCollider",
+			"Center": {
+				"X": 0.0,
+				"Y": 19.999998092651367,
+				"Z": 0.0
+			},
+			"Size": {
+				"X": 54.6875,
+				"Y": 39.375,
+				"Z": 34.06249237060547
+			}
+		},
+		{
+			"ID": "f3a7f36644c662f6795ade87a0201e0c",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "97f5e32416f54d579def802d157eaf1e",
+			"Name": "wall",
+			"Transform": {
+				"Translation": {
+					"X": 38.71356201171875,
+					"Y": 67.42988586425781,
+					"Z": -33.92707824707031
 				},
 				"Scale": {
-					"X": 1.0,
-					"Y": 1.0
+					"X": 3.030351400375366,
+					"Y": 1.0,
+					"Z": 0.17791694402694702
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "bf917d8b4ddf1ea28cf137b6e6522ea8",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "f3a7f36644c662f6795ade87a0201e0c",
+			"Name": "BoxCollider",
+			"Size": {
+				"X": 99.99999237060547,
+				"Y": 100.0,
+				"Z": 100.0
+			}
+		},
+		{
+			"ID": "dc1e0f524c3b2178cab50abd256255bf",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "97f5e32416f54d579def802d157eaf1e",
+			"Name": "Weapons_to_pick"
+		},
+		{
+			"ID": "e99038064277b75f7f61909300f143f6",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "dc1e0f524c3b2178cab50abd256255bf",
+			"Name": "shotgun",
+			"Transform": {
+				"Translation": {
+					"X": -38.888607025146484,
+					"Y": 18.771194458007813,
+					"Z": 116.5347900390625
 				},
-				"Pivot": {
-					"X": 0.5,
-					"Y": 0.5
-				},
-				"Shear": {
+				"Orientation": {
 					"X": 0.0,
-					"Y": 0.0
+					"Y": 0.0,
+					"Z": 0.7071068286895752,
+					"W": 0.7071068286895752
 				},
-				"Rotation": 0.0,
-				"BackgroundColor": {
-					"R": 0.0,
-					"G": 0.0,
-					"B": 0.0,
-					"A": 0.0
+				"Scale": {
+					"X": 0.029999999329447746,
+					"Y": 0.029999999329447746,
+					"Z": 0.029999999329447746
+				}
+			},
+			"Model": "ae72fc0345bcc7225aa01b934239e162",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "26bd599e4f6b9a240351aabed2b9dfd2",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "dc1e0f524c3b2178cab50abd256255bf",
+			"Name": "uzi",
+			"Transform": {
+				"Translation": {
+					"X": 54.58711242675781,
+					"Y": 18.550750732421875,
+					"Z": 182.70620727539063
 				},
-				"BackgroundBrush": null,
-				"Enabled": true,
-				"Visible": true,
-				"AutoFocus": false
+				"Orientation": {
+					"X": 0.0,
+					"Y": 0.0,
+					"Z": 0.7071068286895752,
+					"W": 0.7071068286895752
+				},
+				"Scale": {
+					"X": 0.029999999329447746,
+					"Y": 0.029999999329447746,
+					"Z": 0.029999999329447746
+				}
+			},
+			"Model": "a8a05e4a4c4c8521f2a51f86b04d4eab",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "66f2674340a9745dede72ebeaabc8ade",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "dc1e0f524c3b2178cab50abd256255bf",
+			"Name": "Uzi_ammo_box",
+			"Transform": {
+				"Translation": {
+					"X": -0.000004954743872076506,
+					"Y": 25.636878967285156,
+					"Z": 99.65522766113281
+				},
+				"Orientation": {
+					"X": 0.0,
+					"Y": 1.0,
+					"Z": 0.0,
+					"W": -4.371138828673793e-8
+				},
+				"Scale": {
+					"X": 0.10000000149011612,
+					"Y": 0.10000000149011612,
+					"Z": 0.10000000149011612
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "52e2fabe449710bf8a1d2d96f0360558",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "dc1e0f524c3b2178cab50abd256255bf",
+			"Name": "Pistol_ammo_box",
+			"Transform": {
+				"Translation": {
+					"X": 98.519775390625,
+					"Y": 25.636878967285156,
+					"Z": 99.65522766113281
+				},
+				"Orientation": {
+					"X": 0.0,
+					"Y": 1.0,
+					"Z": 0.0,
+					"W": -4.371138828673793e-8
+				},
+				"Scale": {
+					"X": 0.10000000149011612,
+					"Y": 0.10000000149011612,
+					"Z": 0.10000000149011612
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "d90c93c940815ab17a8f8db7a98aa3e9",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "dc1e0f524c3b2178cab50abd256255bf",
+			"Name": "Shotgun_ammo_box",
+			"Transform": {
+				"Translation": {
+					"X": -85.4196548461914,
+					"Y": 25.636878967285156,
+					"Z": 200.18492126464844
+				},
+				"Orientation": {
+					"X": 0.0,
+					"Y": 1.0,
+					"Z": 0.0,
+					"W": -4.371138828673793e-8
+				},
+				"Scale": {
+					"X": 0.10000000149011612,
+					"Y": 0.10000000149011612,
+					"Z": 0.10000000149011612
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "d245ee13442de453f6521e8b6ee20201",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "97f5e32416f54d579def802d157eaf1e",
+			"IsActive": false,
+			"Name": "ShotgunPellet",
+			"Transform": {
+				"Translation": {
+					"X": 300.0,
+					"Y": 25.0,
+					"Z": -150.0
+				},
+				"Orientation": {
+					"X": 0.0,
+					"Y": 1.0,
+					"Z": -0.0,
+					"W": -4.371138828673793e-8
+				},
+				"Scale": {
+					"X": 0.10000000149011612,
+					"Y": 0.10000000149011612,
+					"Z": 0.10000000149011612
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "4f856cb6434a6e27f031d3b84cf8a92b",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "97f5e32416f54d579def802d157eaf1e",
+			"IsActive": false,
+			"Name": "UziBullet",
+			"Transform": {
+				"Translation": {
+					"X": 300.0,
+					"Y": 25.0,
+					"Z": -150.0
+				},
+				"Orientation": {
+					"X": 0.0,
+					"Y": 1.0,
+					"Z": -0.0,
+					"W": -4.371138828673793e-8
+				},
+				"Scale": {
+					"X": 0.10000000149011612,
+					"Y": 0.10000000149011612,
+					"Z": 0.10000000149011612
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "b1a2c3d4e5f60718293a4b5c6d7e8f90",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "d245ee13442de453f6521e8b6ee20201",
+			"V": {
+	"EventFile": "TK_Bullet"
+}
+		},
+		{
+			"ID": "c2b3d4e5f60718293a4b5c6d7e8f9012",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "4f856cb6434a6e27f031d3b84cf8a92b",
+			"V": {
+	"EventFile": "TK_Bullet"
+}
+		},
+		{
+			"ID": "9a01b2c3d4e5f60718293a4b5c6d7e8f",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "97f5e32416f54d579def802d157eaf1e",
+			"IsActive": false,
+			"Name": "MuzzleFlash"
+		},
+		{
+			"ID": "9a11b2c3d4e5f60718293a4b5c6d7e8f",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "9a01b2c3d4e5f60718293a4b5c6d7e8f",
+			"V": {
+				"EventFile": "MuzzleFlash"
+			}
+		},
+		{
+			"ID": "9a21b2c3d4e5f60718293a4b5c6d7e8f",
+			"TypeName": "FlaxEngine.ParticleEffect",
+			"ParentID": "9a01b2c3d4e5f60718293a4b5c6d7e8f",
+			"IsActive": false,
+			"Name": "muzzle",
+			"Overrides": [],
+			"ParticleSystem": "55de016c4cc80b1c42886e95209dc21e",
+			"IsLooping": false
+		},
+		{
+			"ID": "9a31b2c3d4e5f60718293a4b5c6d7e8f",
+			"TypeName": "FlaxEngine.PointLight",
+			"ParentID": "9a01b2c3d4e5f60718293a4b5c6d7e8f",
+			"IsActive": false,
+			"Name": "MuzzleLight",
+			"Color": {
+				"R": 1.0,
+				"G": 0.9609148502349854,
+				"B": 0.0773688554763794,
+				"A": 1.0
+			},
+			"Brightness": 141.33999633789062,
+			"Radius": 100.0,
+			"UseInverseSquaredFalloff": true
+		},
+		{
+			"ID": "9b01b2c3d4e5f60718293a4b5c6d7e8f",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "97f5e32416f54d579def802d157eaf1e",
+			"IsActive": false,
+			"Name": "Explosion"
+		},
+		{
+			"ID": "9b11b2c3d4e5f60718293a4b5c6d7e8f",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "9b01b2c3d4e5f60718293a4b5c6d7e8f",
+			"V": {
+				"EventFile": "Explosion"
+			}
+		},
+		{
+			"ID": "9b21b2c3d4e5f60718293a4b5c6d7e8f",
+			"TypeName": "FlaxEngine.ParticleEffect",
+			"ParentID": "9b01b2c3d4e5f60718293a4b5c6d7e8f",
+			"IsActive": false,
+			"Name": "explosion",
+			"Overrides": [],
+			"ParticleSystem": "ec60f1ef44f98e5146ae0988f6377a9c",
+			"IsLooping": false
+		},
+		{
+			"ID": "9c01b2c3d4e5f60718293a4b5c6d7e8f",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "97f5e32416f54d579def802d157eaf1e",
+			"IsActive": false,
+			"Name": "Rocket",
+			"Transform": {
+				"Translation": {
+					"X": 300.0,
+					"Y": 25.0,
+					"Z": -240.0
+				},
+				"Orientation": {
+					"X": 0.0,
+					"Y": 1.0,
+					"Z": -0.0,
+					"W": -4.371138828673793e-08
+				},
+				"Scale": {
+					"X": 0.15000000596046448,
+					"Y": 0.15000000596046448,
+					"Z": 0.15000000596046448
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "9c11b2c3d4e5f60718293a4b5c6d7e8f",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "9c01b2c3d4e5f60718293a4b5c6d7e8f",
+			"V": {
+				"EventFile": "TK_Bullet"
 			}
 		}
 	]

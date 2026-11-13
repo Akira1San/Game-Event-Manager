@@ -1,22 +1,46 @@
-# ---------------- TK_Bullet.events (Task 16 Part H) ----------------
-# TK4 bullet: flies along the shooter's facing, knocks the victim back, then dies.
+# ---------------- TK_Bullet.events (Task 16 Part H + C.5) ----------------
+# TK4 projectile: flies along the shooter's facing at the weapon's speed, knocks the victim
+# back with the weapon's knockback, then dies — or bounces off a wall, or explodes on it.
 #
-# The scene's "Bullet" actor is only a template for `spawn Bullet at me`. The runtime marks
-# real copies with `my spawnedFrom`, so the live blocks below are skipped on the template
-# itself — a template that ran its own `destroy me` would vanish after one second.
+# The scene's "Bullet", "ShotgunPellet", "UziBullet" and "Rocket" actors are only templates for
+# `spawn Bullet at me`: `spawn` swaps in the held weapon's `<Weapon>Bullet` name, so the clone
+# is a pellet, an uzi round or a rocket. The spawner also stamps the weapon's data onto every
+# clone — `my BulletSpeed`, `my Life`/`my TimeLeft`, `my damage`, `my knockback`, `my blast`
+# and the `my Bounce` / `my Explosive` / `my Pierce` flags (see WeaponData.events) — so this
+# one sheet serves every weapon. A template that was never spawned reads 0 and sits still.
 
-# 400 cm/s over its 3 s life crosses ~12 m — TK4 shots reach across the screen rather than
-# dying a metre out.
+# --- flight: 400 cm/s crosses ~12 m over its 3 s life, TK4's reach across the screen;
+#     a rocket is slower and a shotgun pellet has short legs. ---
 when every 0 seconds
-  my spawnedFrom is "Bullet"
-  move forward speed 400
+  my BulletSpeed is higher than 0
+  move forward speed my BulletSpeed
 
-when me touches Enemy
-  # `for 0.2 seconds` keeps shoving, so the knockback is visible instead of a single frame.
-  push other back strength 100 for 0.2 seconds
-  send message "hit" to other
+# --- lifetime: `Life` is stamped too. `when every` takes a literal, so count it down in
+#     fixed steps instead of arming one timer per bullet. ---
+when every 0.25 seconds
+  my BulletSpeed is higher than 0
+  add -0.25 to my TimeLeft
+  if my TimeLeft is lower than 0
   destroy me
 
-when every 3 seconds
-  my spawnedFrom is "Bullet"
+# --- walls (Part C.5): bounce back, blow up, or just stop ---
+when me touches wall
+  if my Bounce is true
+  bounce
+  otherwise
+  if my Explosive is true
+  explode
+  otherwise
+  destroy me
+
+# --- enemies: the weapon's own damage and knockback; rockets burst, piercers carry on ---
+when me touches Enemy
+  if my Explosive is true
+  explode
+  otherwise
+  # `for 0.2 seconds` keeps shoving, so the knockback is visible instead of a single frame.
+  push other back strength my knockback for 0.2 seconds
+  send message "damage" to other
+  if my Pierce is true
+  stop this event
   destroy me

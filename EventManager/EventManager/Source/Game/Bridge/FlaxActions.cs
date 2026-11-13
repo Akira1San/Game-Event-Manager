@@ -780,18 +780,17 @@ namespace Game
                                 Other = actor,
                             });
                         }
-                        for (int i = Moves.Count - 1; i >= 0; i--)
-                            if (Moves[i].Subject == actor || Moves[i].Target == actor)
-                                Moves.RemoveAt(i);
-                        for (int i = Pushes.Count - 1; i >= 0; i--)
-                            if (Pushes[i].Target == actor)
-                                Pushes.RemoveAt(i);
-                        ClearActor(actor);
-                        context.Runtime.Selection.Forget(actor);
+                        ForgetSubject(context, actor);
                         FlaxEngine.Object.Destroy(actor, 0f);
                     }
                     break;
                 }
+                case ActionVerb.Bounce:
+                    BounceProjectile(context);
+                    break;
+                case ActionVerb.Explode:
+                    ExplodeProjectile(context, spec);
+                    break;
                 case ActionVerb.Spawn:
                     Spawn(context, spec);
                     break;
@@ -1540,24 +1539,150 @@ namespace Game
             // clone is its pellet actor while an empty-handed sheet still clones "Bullet".
             string template = spec.Thing;
             WeaponStats weapon = null;
-            if (AssetNames.Key(template) == "bullet")
+            bool isBullet = AssetNames.Key(template) == "bullet";
+            if (isBullet)
             {
                 weapon = WeaponData.ForActor(context);
                 if (weapon != null && !string.IsNullOrEmpty(weapon.Bullet))
                     template = weapon.Bullet;
             }
-            Actor clone = SpawnClone(context, template, spec.To, offset);
-            if (clone == null)
+            // Part C.5: `Multiplier` pellets per shot, fanned across `Spread` degrees.
+            int pellets = weapon == null ? 1 : Math.Max(1, (int)Math.Round(weapon.Multiplier));
+            double[] yaws = BulletMath.SpreadAngles(weapon == null ? 0 : weapon.Spread, pellets);
+            string spawnedSound = null;
+            for (int i = 0; i < pellets; i++)
+            {
+                Actor clone = SpawnClone(context, template, spec.To, offset);
+                if (clone == null)
+                    return; // one warning from SpawnClone is enough, even for a whole spread
+                if (isBullet && weapon != null)
+                {
+                    ApplyWeaponToBullet(context, clone, weapon, pellets > 1);
+                    if (Math.Abs(yaws[i]) > 0.0001)
+                        clone.Orientation = Quaternion.Multiply(clone.Orientation,
+                            Quaternion.Euler(0, (float)yaws[i], 0));
+                }
+                EventsManager.Instance?.AttachSpawnedActor(clone);
+                // A shot or a blast is heard the moment it appears (Task 16 Part B): enemies react
+                // to gunfire without the shooter's sheet having to remember a `play sound` line.
+                // The weapon's own sound wins when it has one, so a shotgun doesn't sound like a
+                // pistol; one sound per shot, not one per pellet.
+                spawnedSound ??= weapon != null && !string.IsNullOrEmpty(weapon.Sound)
+                    ? weapon.Sound
+                    : SpawnSoundName(template);
+                if (spawnedSound != null)
+                    EmitSound(spawnedSound, clone.Position, context.Me as Actor ?? clone);
+            }
+        }
+
+        /// <summary>
+        /// Copies the held weapon's projectile data onto a freshly spawned bullet, so the bullet's
+        /// own sheet can act on it without looking the weapon up again: `my BulletSpeed`, `my Life`,
+        /// `my damage`, `my knockback`, `my blast` and the `my Bounce` / `my Explosive` /
+        /// `my Pierce` flags (Task 16 Part C.5).
+        /// </summary>
+        private static void ApplyWeaponToBullet(EventContext context, Actor clone, WeaponStats weapon, bool fromSpread)
+        {
+            EventVariables variables = context.Runtime != null ? context.Runtime.Variables : null;
+            if (variables == null)
                 return;
-            EventsManager.Instance?.AttachSpawnedActor(clone);
-            // A shot or a blast is heard the moment it appears (Task 16 Part B): enemies react to
-            // gunfire without the shooter's sheet having to remember a `play sound` line. The
-            // weapon's own sound name wins when it has one, so a shotgun doesn't sound like a pistol.
-            string spawnedSound = weapon != null && !string.IsNullOrEmpty(weapon.Sound)
-                ? weapon.Sound
-                : SpawnSoundName(template);
-            if (spawnedSound != null)
-                EmitSound(spawnedSound, clone.Position, context.Me as Actor ?? clone);
+            variables.SetLocal(clone, "BulletSpeed", ValueBox.OfNumber(weapon.Speed));
+            variables.SetLocal(clone, "Life", ValueBox.OfNumber(weapon.Life));
+            variables.SetLocal(clone, "TimeLeft", ValueBox.OfNumber(weapon.Life));
+            // lowercase `damage` is what `other's damage` reads on the victim's sheet.
+            variables.SetLocal(clone, "damage", ValueBox.OfNumber(weapon.Damage));
+            variables.SetLocal(clone, "knockback", ValueBox.OfNumber(weapon.Knockback));
+            variables.SetLocal(clone, "blast", ValueBox.OfNumber(weapon.Blast));
+            variables.SetLocal(clone, "Bounce", ValueBox.OfBoolean(weapon.Bounce));
+            variables.SetLocal(clone, "Explosive", ValueBox.OfBoolean(weapon.Explosive));
+            variables.SetLocal(clone, "Pierce", ValueBox.OfBoolean(weapon.Pierce));
+            // Marked so an explosion can skip its own siblings in the spread.
+            variables.SetLocal(clone, "fromSpread", ValueBox.OfBoolean(fromSpread));
+        }
+
+        /// <summary>
+        /// <c>bounce</c> — a projectile reflects off what it just hit and keeps flying (Task 16
+        /// Part C.5). The wall's normal comes from a short ray along the travel direction; the
+        /// mirrored heading replaces the actor's yaw, and the clone steps just clear of the
+        /// surface so the next tick is not still touching it.
+        /// </summary>
+        private static void BounceProjectile(EventContext context)
+        {
+            var me = context.Me as Actor;
+            if (me == null)
+                return;
+            Vector3 forward = Vector3.Transform(Vector3.Forward, me.Orientation);
+            double normalX = -forward.X;
+            double normalZ = -forward.Z;
+            if (Physics.RayCast(me.Position, forward, out RayCastHit hit, 120f, ~0u, false))
+            {
+                normalX = hit.Normal.X;
+                normalZ = hit.Normal.Z;
+            }
+            BulletMath.Reflect(forward.X, forward.Z, normalX, normalZ, out double outX, out double outZ);
+            double yaw = Math.Atan2(outX, outZ) * 180.0 / Math.PI;
+            me.Orientation = Quaternion.Euler(0, (float)yaw, 0);
+            me.Position += new Vector3((float)(outX * 8), 0f, (float)(outZ * 8));
+        }
+
+        /// <summary>
+        /// <c>explode</c> / <c>explode radius &lt;n&gt;</c> — a blast where the projectile stopped
+        /// (Task 16 Part C.5): the scene's Explosion actor plays the particle, every other actor
+        /// inside the radius takes a <c>"damage"</c> message whose sender carries the weapon's
+        /// <c>damage</c> (so `other's damage` on the victim reads the real number), and the
+        /// projectile removes itself. The radius is the qualifier, else the bullet's `my blast`,
+        /// else 150 cm.
+        /// </summary>
+        private static void ExplodeProjectile(EventContext context, ActionSpec spec)
+        {
+            var me = context.Me as Actor;
+            if (me == null)
+                return;
+            double blast = spec.AmountNode != null ? ResolveNumber(context, spec) : context.ReadMy("blast").AsNumber();
+            if (blast <= 0)
+                blast = 150;
+            // The blast is a world event: the Explosion template shows it and the sound bus
+            // carries it, so enemies with `when me hears "explosion"` react too.
+            Actor burst = SpawnClone(context, "Explosion", "me", 0);
+            if (burst != null)
+                EventsManager.Instance?.AttachSpawnedActor(burst);
+            EmitSound("explosion", me.Position, me, Math.Max(blast, SoundBus.DefaultRadius));
+            if (context.Runtime != null && context.World != null)
+            {
+                foreach (object other in context.World.Actors())
+                {
+                    if (other == null || ReferenceEquals(other, me))
+                        continue;
+                    if (other is Actor actor && (!actor.IsActive || ReferenceEquals(actor, me)))
+                        continue;
+                    // Don't chain-react through the rest of a shotgun spread or other bullets.
+                    if (context.Runtime.Variables.HasLocal(other, "BulletSpeed"))
+                        continue;
+                    if (context.World.Distance(me, other) > blast)
+                        continue;
+                    context.Runtime.RaisePush(other, new PushSignal
+                    {
+                        Kind = TriggerKind.Message,
+                        Name = "damage",
+                        Other = me,
+                    });
+                }
+            }
+            ForgetSubject(context, me);
+            FlaxEngine.Object.Destroy(me, 0f);
+        }
+
+        /// <summary>Drops the per-actor bookkeeping a destroyed actor leaves behind.</summary>
+        private static void ForgetSubject(EventContext context, Actor actor)
+        {
+            for (int i = Moves.Count - 1; i >= 0; i--)
+                if (Moves[i].Subject == actor || Moves[i].Target == actor)
+                    Moves.RemoveAt(i);
+            for (int i = Pushes.Count - 1; i >= 0; i--)
+                if (Pushes[i].Target == actor)
+                    Pushes.RemoveAt(i);
+            ClearActor(actor);
+            context.Runtime.Selection.Forget(actor);
         }
 
         /// <summary>The noise a spawned thing makes as it appears, or null for a quiet one.</summary>
