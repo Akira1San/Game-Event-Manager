@@ -1,0 +1,88 @@
+# ---------------- TK_Gunner.events (Task 16 Part I follow-up) ----------------
+# One sheet for every armed TK4 type: Pistolboy, ShotgunManiac, UziRebel, Commando,
+# BazookaBoy, Punisher, Flamer, Punk, GrenadeGay.
+#
+# `enemy type my name` reads the actor's own name (the computed `my name`) and pulls that
+# type's stats out of EnemyTypes.events, so this sheet never repeats a number: speed, sight
+# distance, health, weapon and explosion death all come from the data table. Retune a type
+# there and every actor named after it changes; add a type there and a scene actor named after
+# it works with no new sheet.
+#
+# The held weapon decides the attack: `spawn Bullet` is sent through `my Weapon` (Task 16
+# Part C), so a Pistolboy fires pistol rounds and a BazookaBoy launches a rocket. A type with
+# an empty weapon (a melee type) bites instead. `my Hostile` gates every reaction, so a
+# non-hostile type wearing this sheet never chases, hears or attacks.
+#
+# SETUP (editor): EventSheet on the enemy actor, Event File = TK_Gunner, and the actor named
+# after its type (Flax allows several actors with the same name). A name that is not a type
+# warns once, listing the types, and the enemy keeps its defaults.
+
+when me appears
+  enemy type my name
+  set my mode to "patrol"
+  # A gun changes the attack range: armed types shoot, unarmed ones bite.
+  set my Armed to false
+  if my Weapon is ""
+  otherwise
+  set my Armed to true
+  goto random Waypoint speed my Speed facing forward
+
+when me arrives at Waypoint
+  my Speed is higher than 0                  # a rooted type never wanders
+  wait random 0.5 to 2 seconds
+  goto random Waypoint speed my Speed
+
+# ---- sight: as far as this type's eyes reach, at this type's pace ----
+when me sees player by my SightDistance
+  my Hostile is true
+  my Speed is higher than 0
+  set my mode to "chase"
+  goto nearest player speed my Speed facing forward
+
+# ---- hearing (Task 16 Part B): a gunshot it can hear is a lead ----
+when me hears "gunshot" by my SightDistance
+  my Hostile is true
+  set my mode to "chase"
+  goto other speed my Speed facing forward
+
+when every 0.2 seconds
+  my mode is "chase"
+  my Speed is higher than 0
+  goto nearest player speed my Speed facing forward
+
+when me stops seeing player
+  set my mode to "patrol"
+  goto random Waypoint speed my Speed facing forward
+
+# ---- attack: the type's weapon, at the type's cadence ----
+when every 0.75 seconds
+  my mode is "chase"
+  my Hostile is true
+  my Armed is true
+  face nearest player
+  spawn Bullet at me offset 30
+
+# An unarmed type has to close in: same bite Enemy.events uses.
+when me is near player by 1.5
+  my mode is "chase"
+  my Hostile is true
+  my Armed is false
+  play anim "Attack"
+  send message "hurt" to nearest player
+
+# ---- damage and death (Parts C.5 + E + G) ----
+when message "damage" arrives
+  spawn Blood at me
+  set my LastDmg to other's damage
+  set my Health to my Health - my LastDmg
+
+when my Health becomes 0
+  add 1 to kills my Type
+  if my ExplosionDeath is true
+  spawn Explosion at me
+  destroy me
+  otherwise
+  spawn Gib at me offset 0
+  spawn Gib at me offset 12
+  spawn Gib at me offset -12
+  destroy me

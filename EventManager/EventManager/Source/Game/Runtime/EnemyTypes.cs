@@ -154,12 +154,48 @@ namespace Game
         /// </summary>
         public static string KnownTypeNames()
         {
+            var names = AllTypeNames();
+            names.Sort(StringComparer.OrdinalIgnoreCase);
+            return string.Join(", ", names);
+        }
+
+        /// <summary>Every type name that exists right now, unsorted.</summary>
+        public static List<string> AllTypeNames()
+        {
             var names = new List<string>(Builtins.Keys);
             foreach (string authored in Authored.Keys)
                 if (!names.Contains(authored))
                     names.Add(authored);
-            names.Sort(StringComparer.OrdinalIgnoreCase);
-            return string.Join(", ", names);
+            return names;
+        }
+
+        /// <summary>
+        /// The type an actor name refers to — the exact name, or the longest known type name the
+        /// name starts with, ending on a word boundary. That is what makes `enemy type my name`
+        /// work for clones: a spawned "Pistolboy 2" or "Pistolboy(Clone)" is a Pistolboy, while
+        /// "Pistolboys" and "Zombies" are not. Null when nothing matches.
+        /// </summary>
+        public static string TypeForActorName(EventVariables variables, string actorName)
+        {
+            if (string.IsNullOrWhiteSpace(actorName))
+                return null;
+            string exact = CanonicalFor(variables, actorName.Trim());
+            if (exact != null)
+                return exact;
+            string trimmed = actorName.Trim();
+            string best = null;
+            foreach (string name in AllTypeNames())
+            {
+                if (trimmed.Length <= name.Length ||
+                    string.Compare(trimmed, 0, name, 0, name.Length, StringComparison.OrdinalIgnoreCase) != 0)
+                    continue;
+                char next = trimmed[name.Length];
+                if (char.IsLetterOrDigit(next))
+                    continue; // "Pistolboys" is not a Pistolboy
+                if (best == null || name.Length > best.Length)
+                    best = name;
+            }
+            return best;
         }
 
         /// <summary>

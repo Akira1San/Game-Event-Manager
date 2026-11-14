@@ -183,7 +183,7 @@ namespace Game
             new WordEntry { Kind = "action", Word = "scale", Example = "scale Box 2" },
             new WordEntry { Kind = "action", Word = "make", Example = "make me solid" },
             new WordEntry { Kind = "action", Word = "destroy", Example = "destroy me" },
-            new WordEntry { Kind = "action", Word = "enemy", Example = "enemy type \"Zombie\"" },
+            new WordEntry { Kind = "action", Word = "enemy", Example = "enemy type \"Zombie\"", AltShape = "enemy type my name" },
             new WordEntry { Kind = "action", Word = "spawn", Example = "spawn Coin at SpawnPoint" },
             new WordEntry { Kind = "action", Word = "spawn", Example = "spawn Bullet at me offset 30" },
             new WordEntry { Kind = "action", Word = "spawn", Example = "spawn prefab \"Hero\" at SpawnPoint" },

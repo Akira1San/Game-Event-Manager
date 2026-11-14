@@ -51,6 +51,10 @@ namespace Game
             }
             if (name == "spawnedFrom")
                 return ValueBox.OfText(Runtime.SpawnedFrom(Me));
+            // `my name` is the actor's own name, so one sheet can serve every actor in a scene —
+            // `enemy type my name` reads the type from a scene actor called "Pistolboy".
+            if (string.Equals(name, "name", StringComparison.OrdinalIgnoreCase))
+                return ValueBox.OfText(Runtime.NameOfActor(Me));
             // `my TargetPlayer` (Task 16 Part F) is computed rather than stored: the nearest
             // living player, recomputed on every read, so vision/hearing can never leave a
             // stale name behind. Compare it with `my TargetPlayer is Player1`.
@@ -1523,8 +1527,16 @@ namespace Game
                     // so this stays in the engine-independent runtime and needs no engine action.
                     if (raw.Words.Count >= 3 && raw.Words[0].Text == "enemy" && raw.Words[1].Text == "type")
                     {
-                        string typeName = raw.Words[2].Text;
-                        if (!EnemyTypes.Apply(context, typeName))
+                        // `enemy type "Zombie"` names the type; `enemy type my name` takes it from
+                        // a variable, so one shared sheet can serve every armed type (TK_Gunner).
+                        string typeName = raw.Words[2].Text == "my" && raw.Words.Count >= 4
+                            ? context.ReadMy(raw.Words[3].Text).AsText()
+                            : raw.Words[2].Text;
+                        // A name can carry a suffix a spawned copy picks up ("Pistolboy 2"), so
+                        // fall back to matching the actor name against the known types.
+                        string resolved = EnemyTypes.CanonicalFor(context.Variables, typeName) ??
+                                          EnemyTypes.TypeForActorName(context.Variables, typeName) ?? typeName;
+                        if (!EnemyTypes.Apply(context, resolved))
                             OnRuntimeWarning($"I don't know the enemy type \u201C{typeName}\u201D \u2014 the built-in types are {EnemyTypes.KnownTypeNames()}, and a new type needs its own `<Type><Stat>` variables (see EnemyTypes.events).");
                         continue;
                     }

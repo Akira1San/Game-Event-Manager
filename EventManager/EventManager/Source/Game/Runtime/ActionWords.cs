@@ -408,11 +408,12 @@ namespace Game
                         int afterThing = 1 + gotoUsed;
                         if (words.Count >= afterThing + 2 && words[afterThing].Text == "speed")
                         {
-                            spec.AmountNode = ValueNodeAt(words, afterThing + 1);
+                            // `speed 100` or `speed my Speed` — a `my` amount is two tokens.
+                            spec.AmountNode = ValueNodeAt(words, afterThing + 1, out int gotoSpeedUsed);
                             spec.HasNumber = words[afterThing + 1].Type == TokenType.Number;
                             if (spec.HasNumber)
                                 spec.Number = words[afterThing + 1].Number;
-                            afterThing += 2;
+                            afterThing += 1 + gotoSpeedUsed;
                         }
                         else
                         {

@@ -6430,6 +6430,85 @@ civilianClearEngine.Tick(3);
 Check(civilianClearEngine.Variables.GetGlobal("Clears").AsNumber() == 1,
     "a civilian still standing does not keep the level from completing");
 
+// ---- Task 16 Part I follow-up: one shared gunner sheet, type taken from the actor name ----
+
+// `my name` is the actor's own name, and `goto ... speed my Speed` reads the pace from a stat.
+var gunnerWorld = new FakeWorld();
+var gunnerPistolboy = new FakeActor("Pistolboy");
+var gunnerCommando = new FakeActor("Commando");
+var gunnerCivilian = new FakeActor("Civilian");
+gunnerWorld.AddActor(gunnerPistolboy);
+gunnerWorld.AddActor(gunnerCommando);
+gunnerWorld.AddActor(gunnerCivilian);
+var gunnerEngine = FreshEngine(gunnerWorld);
+var gunnerProgram = parser.Parse(File.ReadAllText("Source/Game/GameFiles/TK_Gunner.events"));
+Check(gunnerProgram.Events.Count == 10, "TK_Gunner.events parses into its ten events");
+var nameReadEngine = FreshEngine(gunnerWorld);
+nameReadEngine.AddSheet(gunnerPistolboy, parser.Parse("when me appears\n  set LastSeenName to my name\n"));
+nameReadEngine.Tick(0);
+Check(nameReadEngine.Variables.GetGlobal("LastSeenName").AsText() == "Pistolboy",
+    "`my name` reads the actor's own name");
+var perActorGoto = ActionWords.Parse(RawWords(parser, "when me appears\n  goto Waypoint speed my Speed\n"), message => { });
+Check(perActorGoto.Verb == ActionVerb.Goto && perActorGoto.AmountNode is VariableValue gotoAmount &&
+      gotoAmount.Name == "Speed",
+    "`goto ... speed my Speed` walks at the actor's own pace");
+
+gunnerEngine.AddSheet(gunnerPistolboy, gunnerProgram);
+gunnerEngine.AddSheet(gunnerCommando, gunnerProgram);
+gunnerEngine.AddSheet(gunnerCivilian, gunnerProgram);
+gunnerEngine.Tick(0);
+Check(gunnerPistolboy.Name == "Pistolboy" &&
+      gunnerEngine.Variables.GetLocal(gunnerPistolboy, "Type").AsText() == "Pistolboy" &&
+      gunnerEngine.Variables.GetLocal(gunnerPistolboy, "Health").AsNumber() == 45 &&
+      gunnerEngine.Variables.GetLocal(gunnerPistolboy, "Weapon").AsText() == "Pistol",
+    "a scene actor named Pistolboy gets the Pistolboy type from the shared sheet");
+Check(gunnerEngine.Variables.GetLocal(gunnerCommando, "Type").AsText() == "Commando" &&
+      gunnerEngine.Variables.GetLocal(gunnerCommando, "Speed").AsNumber() == 100 &&
+      gunnerEngine.Variables.GetLocal(gunnerCommando, "SightDistance").AsNumber() == 300,
+    "the same sheet gives a Commando its own speed and sight");
+Check(gunnerEngine.Variables.GetLocal(gunnerCommando, "Armed").AsBoolean() &&
+      !gunnerEngine.Variables.GetLocal(gunnerCivilian, "Armed").AsBoolean(),
+    "an armed type shoots and an unarmed type bites (`my Armed` follows the type's weapon)");
+Check(gunnerEngine.Variables.GetLocal(gunnerCommando, "mode").AsText() == "patrol",
+    "a gunner starts patrolling on its own");
+Check(!gunnerEngine.Variables.GetLocal(gunnerCivilian, "Hostile").AsBoolean(),
+    "a non-hostile type wearing the gunner sheet stays passive");
+
+// A name that is not a type warns once and leaves the actor on its defaults.
+var strayWorld = new FakeWorld();
+var strayActor = new FakeActor("Barrel");
+strayWorld.AddActor(strayActor);
+var strayEngine = FreshEngine(strayWorld);
+string strayWarning = "";
+strayEngine.OnRuntimeWarning = message =>
+{
+    if (message.Contains("enemy type")) strayWarning = message;
+};
+strayEngine.AddSheet(strayActor, parser.Parse("when me appears\n  enemy type my name\n"));
+strayEngine.Tick(0);
+Check(strayWarning.Contains("Barrel") && strayWarning.Contains("Pistolboy"),
+    "an actor name that is not a type warns and lists the types it could be");
+
+// A spawned copy keeps its type: "Pistolboy 2" is a Pistolboy, "Zombies" is not a Zombie.
+var cloneWorld = new FakeWorld();
+var cloneActor = new FakeActor("Pistolboy 2");
+var pluralActor = new FakeActor("Zombies");
+cloneWorld.AddActor(cloneActor);
+cloneWorld.AddActor(pluralActor);
+var cloneEngine = FreshEngine(cloneWorld);
+int pluralWarnings = 0;
+cloneEngine.OnRuntimeWarning = message =>
+{
+    if (message.Contains("enemy type")) pluralWarnings++;
+};
+cloneEngine.AddSheet(cloneActor, parser.Parse("when me appears\n  enemy type my name\n"));
+cloneEngine.AddSheet(pluralActor, parser.Parse("when me appears\n  enemy type my name\n"));
+cloneEngine.Tick(0);
+Check(cloneEngine.Variables.GetLocal(cloneActor, "Type").AsText() == "Pistolboy",
+    "a spawned copy named \"Pistolboy 2\" keeps the Pistolboy type");
+Check(!cloneEngine.Variables.HasLocal(pluralActor, "Type") && pluralWarnings == 1,
+    "a plural name is not a type match (\"Zombies\" warns instead of guessing)");
+
 // The enemy sheets read the same data: no stat is repeated in code.
 var shippedZombieSheet = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Zombie.events"));
 bool zombieReadsStats = false;
