@@ -79,6 +79,10 @@ namespace Game
         AddOrderToQueue,
         ClearOrders,
         SetRallyPoint,
+        // RTS fog of war & visibility (Task 18 Part F)
+        RevealArea,
+        HideArea,
+        SetVisibility,
         // Random-angle wander and still mode (Task 16 Part A)
         Wander,
         Still,
@@ -764,7 +768,16 @@ namespace Game
                         }
                         return Unknown(spec, words, "\u201Cset rally point\u201D needs a target, like \u201Cset rally point to Barracks\u201D", warn);
                     }
-                    return Unknown(spec, words, "yes, a \u201Cset\u201D line — I only know \u201Cset <variable> to <value>\u201D, \u201Cset text of\u201D, \u201Cset state\u201D, \u201Cset my control group\u201D, \u201Cset light\u201D, \u201Cset time scale\u201D, and \u201Cset rally point\u201D", warn);
+                    // `set visibility to <radius>` — RTS fog of war (Task 18 Part F).
+                    if (words.Count >= 4 && words[1].Text == "visibility" && words[2].Text == "to")
+                    {
+                        spec.AmountNode = ValueNodeAt(words, 3, out int visUsed);
+                        spec.HasNumber = words[3].Type == TokenType.Number;
+                        if (spec.HasNumber)
+                            spec.Number = words[3].Number;
+                        return Finish(spec, ActionVerb.SetVisibility, words, 3 + visUsed);
+                    }
+                    return Unknown(spec, words, "yes, a \u201Cset\u201D line — I only know \u201Cset <variable> to <value>\u201D, \u201Cset text of\u201D, \u201Cset state\u201D, \u201Cset my control group\u201D, \u201Cset light\u201D, \u201Cset time scale\u201D, \u201Cset rally point\u201D, and \u201Cset visibility\u201D", warn);
                 }
                 case "enable":
                     if (words.Count >= 2 && words[1].Text == "light")
@@ -822,6 +835,22 @@ namespace Game
                     ? "\u201Cshow text\u201D displays quoted text, like \u201Cshow text \"Game Over\"\""
                     : "\u201Chide text\u201D takes nothing after it", warn);
             }
+            // `reveal area around me by <radius>` / `hide area around me by <radius>` — RTS
+            // fog of war (Task 18 Part F). Checked before the plain `hide <thing>` form so
+            // "area" is never treated as an object to hide.
+            if (words.Count >= 6 && (words[0].Text == "reveal" || words[0].Text == "hide") &&
+                words[1].Text == "area" && words[2].Text == "around" && words[3].Text == "me" &&
+                words[4].Text == "by")
+            {
+                spec.AmountNode = ValueNodeAt(words, 5, out int fogUsed);
+                spec.HasNumber = words[5].Type == TokenType.Number;
+                if (spec.HasNumber)
+                    spec.Number = words[5].Number;
+                return Finish(spec, words[0].Text == "reveal" ? ActionVerb.RevealArea : ActionVerb.HideArea, words, 5 + fogUsed);
+            }
+            if (words.Count >= 2 && (words[0].Text == "reveal" || words[0].Text == "hide") &&
+                words[1].Text == "area")
+                return Unknown(spec, words, "fog areas look like this: \u201Creveal area around me by 200\u201D or \u201Chide area around me by 200\u201D", warn);
             if (words.Count >= 2 && (words[0].Text == "hide" || words[0].Text == "show") && IsThing(words[1]))
             {
                 spec.Thing = words[1].Text;

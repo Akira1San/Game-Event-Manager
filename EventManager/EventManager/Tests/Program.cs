@@ -6101,6 +6101,121 @@ foreach (var shippedEvent in shippedZombieKills.Events)
             zombieCountsKill = true;
 Check(zombieCountsKill, "Zombie.events counts its kills with `add 1 to kills Zombie`");
 
+// ------------------------------------------------------------------
+// Task 18 Part F: fog of war & visibility
+// ------------------------------------------------------------------
+
+// Trigger classification.
+var areaRevealedDesc = TriggerClassifier.Classify(parser.Parse(
+    "when area becomes revealed\n  set Seen to 1\n").Events[0]);
+Check(areaRevealedDesc.Kind == TriggerKind.AreaRevealed,
+      "`when area becomes revealed` classifies to AreaRevealed");
+
+var areaHiddenDesc = TriggerClassifier.Classify(parser.Parse(
+    "when area becomes hidden\n  set Lost to 1\n").Events[0]);
+Check(areaHiddenDesc.Kind == TriggerKind.AreaHidden,
+      "`when area becomes hidden` classifies to AreaHidden");
+
+var entersFogDesc = TriggerClassifier.Classify(parser.Parse(
+    "when Marine enters fog\n  set Fogged to 1\n").Events[0]);
+Check(entersFogDesc.Kind == TriggerKind.EntersFog && entersFogDesc.RequireName == "Marine",
+      "`when Marine enters fog` classifies to EntersFog and keeps the unit name");
+
+var meEntersFogDesc = TriggerClassifier.Classify(parser.Parse(
+    "when me enters fog\n  set Fogged to 1\n").Events[0]);
+Check(meEntersFogDesc.Kind == TriggerKind.EntersFog && meEntersFogDesc.RequireName == "me",
+      "`when me enters fog` listens on the acting unit");
+
+// Action parsing.
+var fogProg = parser.Parse(@"when game starts
+  reveal area around me by 200
+  hide area around me by 50
+  set visibility to 300");
+var revealSpec = ActionWords.Parse(((RawActionNode)fogProg.Events[0].Body[0].Statement).Words, null);
+Check(revealSpec.Verb == ActionVerb.RevealArea && revealSpec.Number == 200,
+      "`reveal area around me by 200` parses to RevealArea");
+var hideAreaSpec = ActionWords.Parse(((RawActionNode)fogProg.Events[0].Body[1].Statement).Words, null);
+Check(hideAreaSpec.Verb == ActionVerb.HideArea && hideAreaSpec.Number == 50,
+      "`hide area around me by 50` parses to HideArea");
+var visibilitySpec = ActionWords.Parse(((RawActionNode)fogProg.Events[0].Body[2].Statement).Words, null);
+Check(visibilitySpec.Verb == ActionVerb.SetVisibility && visibilitySpec.Number == 300,
+      "`set visibility to 300` parses to SetVisibility");
+
+// Condition parsing.
+var visibleToEnemyCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  me is visible to enemy").Events[0].Body[0].Words);
+Check(visibleToEnemyCondition.Kind == ConditionKind.IsVisibleToEnemy,
+      "`me is visible to enemy` parses to IsVisibleToEnemy");
+var hiddenCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  me is hidden").Events[0].Body[0].Words);
+Check(hiddenCondition.Kind == ConditionKind.IsHidden,
+      "`me is hidden` parses to IsHidden");
+
+// Fog grid: vision, explored memory, and explicit reveal/hide.
+var fog = new FogOfWarManager { CellSize = 10 };
+var fogScout = new FakeActor("Scout");
+var fogRaider = new FakeActor("Raider");
+fog.SetActor(fogScout, 0, 0, 0, 25);
+fog.SetActor(fogRaider, 1, 15, 0, 0);
+fog.Tick(null);
+Check(fog.IsVisibleTo(0, fogRaider),
+      "an enemy inside a scout's vision is visible");
+Check(fog.IsVisibleToEnemy(fogRaider) && !fog.IsHidden(fogRaider),
+      "`me is visible to enemy` is true while the enemy sits in vision");
+fog.SetActor(fogScout, 0, 500, 500, 25);
+fog.Tick(null);
+Check(!fog.IsVisibleTo(0, fogRaider),
+      "moving vision away hides the enemy");
+Check(fog.IsHidden(fogRaider),
+      "`me is hidden` is true outside enemy vision");
+Check(fog.IsExplored(0, 15, 0) && fog.StateAt(0, 15, 0) == FogState.Explored,
+      "cells seen once stay explored after vision leaves");
+fog.HideArea(0, 15, 0, 5);
+Check(fog.StateAt(0, 15, 0) == FogState.Unexplored,
+      "`hide area` reverts explored cells to unexplored");
+fog.RevealArea(0, 15, 0, 5);
+Check(fog.StateAt(0, 15, 0) == FogState.Visible,
+      "`reveal area` makes cells visible");
+fog.HideArea(0, 15, 0, 5);
+fog.RevealAround(fogScout, 15);
+Check(fog.StateAt(0, 500, 500) == FogState.Visible,
+      "`reveal area around me` reveals the acting unit's cells");
+fog.HideAround(fogScout, 15);
+Check(fog.StateAt(0, 500, 500) == FogState.Unexplored,
+      "`hide area around me` hides the acting unit's cells");
+fog.SetVisionRadius(fogScout, 100);
+Check(fog.VisionRadiusOf(fogScout) == 100,
+      "`set visibility to` updates the actor's vision radius");
+
+// Runtime integration: area edges and the enters-fog edge reach event sheets.
+var fogEngine = FreshEngine(new FakeWorld());
+var fogWatcher = new FakeActor("FogWatcher");
+var fogEventProgram = parser.Parse(@"when area becomes revealed
+  set Revealed to Revealed + 1
+when Marine enters fog
+  set Fogged to Fogged + 1");
+fogEngine.Variables.SetGlobal("Revealed", ValueBox.OfNumber(0));
+fogEngine.Variables.SetGlobal("Fogged", ValueBox.OfNumber(0));
+fogEngine.AddSheet(fogWatcher, fogEventProgram);
+fogEngine.Fog.CellSize = 10;
+var fogLocal = new FakeActor("Scout");
+var fogEnemy = new FakeActor("Marine");
+fogEngine.Fog.SetActor(fogLocal, 0, 0, 0, 30);
+fogEngine.Fog.SetActor(fogEnemy, 1, 10, 0, 0);
+fogEngine.Tick(1);
+Check(fogEngine.Variables.GetGlobal("Revealed").AsNumber() == 1,
+      "`when area becomes revealed` fires when vision first covers cells");
+fogEngine.Fog.SetActor(fogLocal, 0, 500, 500, 30);
+fogEngine.Tick(2);
+Check(fogEngine.Variables.GetGlobal("Fogged").AsNumber() == 1,
+      "`when Marine enters fog` fires when local vision loses the unit");
+
+var fogConditionContext = new EventContext { Runtime = fogEngine, World = fogEngine.World, Me = fogEnemy };
+Check(Conditions.Evaluate(hiddenCondition, fogConditionContext),
+      "`me is hidden` reads the live fog grid");
+Check(!Conditions.Evaluate(visibleToEnemyCondition, fogConditionContext),
+      "`me is visible to enemy` is false outside enemy vision");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

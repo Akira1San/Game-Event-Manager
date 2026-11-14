@@ -63,7 +63,7 @@ zero breaking changes to existing `.events` files.
 - Per-unit order state: `my current order`, `my order target`, `my order queue`
 - StarCraft attack-move; Red Alert attack-move; Homeworld formations and strike-group orders
 
-### Part F — Fog of War / Visibility (`FogOfWarManager.cs`) [ ]
+### Part F — Fog of War / Visibility (`FogOfWarManager.cs`) [x]
 - New triggers: `when area becomes revealed`, `when area becomes hidden`,
   `when <unit> enters fog`
 - New actions: `reveal area around me by <radius>`, `hide area around me by <radius>`,

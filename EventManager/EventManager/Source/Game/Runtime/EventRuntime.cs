@@ -190,6 +190,8 @@ namespace Game
         public ProductionManager Production = new ProductionManager();
         /// <summary>RTS per-unit order queues, attack-move and rally points (Task 18 Part E).</summary>
         public OrderManager Orders = new OrderManager();
+        /// <summary>RTS per-player fog of war and visibility (Task 18 Part F).</summary>
+        public FogOfWarManager Fog = new FogOfWarManager();
         /// <summary>Random-angle wander legs and still mode per actor (Task 16 Part A).</summary>
         public Wanderer Wander = new Wanderer();
         /// <summary>Per-player key / gamepad bindings (Task 16 input follow-ups).</summary>
@@ -350,6 +352,7 @@ namespace Game
             if (equipped.TryGetValue(actor, out var _))
                 equipped.Remove(actor);
             spawnSources.Remove(actor);
+            Fog.RemoveActor(actor);
         }
 
         public void SessionStarted()
@@ -372,6 +375,7 @@ namespace Game
             enemiesSeen = false;
             allEnemiesDeadRaised = false;
             pendingLevel = "";
+            Fog.Reset();
             foreach (var sheet in sheets)
                 sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.SceneStart });
         }
@@ -949,6 +953,9 @@ namespace Game
             // Construction completions are pushed before the drain below, so a
             // `when construction completes` event runs this same tick.
             Construction.Tick(this);
+            // Fog edges (`when area becomes revealed`, `when <unit> enters fog`) are pushed
+            // before the drain too, so they run in the tick the vision changed (Task 18 Part F).
+            Fog.Tick(this);
             // Player joins/deaths/score edges (Task 16 Part F) are pushed before the drain too,
             // so `when player 1 dies` runs in the same tick its health reached 0.
             TickPlayers();
@@ -1140,6 +1147,16 @@ namespace Game
                 return descriptor.Player == signal.PlayerA;
             if (descriptor.Kind == TriggerKind.PlayerKills)
                 return descriptor.Player == signal.PlayerA && descriptor.Player2 == signal.PlayerB;
+            // ---- fog of war (Task 18 Part F) ----
+            // Area edges are broadcast per player; the bare trigger listens to the local
+            // player (0), which is the view the bridge renders.
+            if (descriptor.Kind == TriggerKind.AreaRevealed || descriptor.Kind == TriggerKind.AreaHidden)
+                return descriptor.Player == signal.PlayerA;
+            // `when <unit> enters fog` carries the unit in `Other` and its name in `Name`.
+            if (descriptor.Kind == TriggerKind.EntersFog)
+                return descriptor.RequireName == "me" || descriptor.RequireName == "my"
+                    ? ReferenceEquals(signal.Other, sheet.Actor)
+                    : string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase);
             if (descriptor.RequireName.Length == 0)
                 return true;
             // `when me is selected` / `when me is deselected`: the signal is broadcast, so

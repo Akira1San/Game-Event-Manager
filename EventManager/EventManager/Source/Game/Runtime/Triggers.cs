@@ -68,6 +68,10 @@ namespace Game
         OrderCompletes,
         OrderStarts,
         PathBlocked,
+        // RTS fog of war & visibility (Task 18 Part F)
+        AreaRevealed,
+        AreaHidden,
+        EntersFog,
         // Local multiplayer (Task 16 Part F)
         PlayerJoins,
         PlayerDies,
@@ -236,6 +240,21 @@ namespace Game
                     Kind = words[words.Length - 1] == "completes"
                         ? TriggerKind.OrderCompletes
                         : TriggerKind.OrderStarts,
+                    RequireName = Join(trigger, 0, words.Length - 2),
+                };
+            // RTS fog of war & visibility (Task 18 Part F). `when area becomes revealed` /
+            // `when area becomes hidden` listen to the local player's vision edges, and
+            // `when <unit> enters fog` names the unit that just left that vision.
+            if (words.Length == 3 && words[0] == "area" && words[1] == "becomes" &&
+                (words[2] == "revealed" || words[2] == "hidden"))
+                return new TriggerDescriptor
+                {
+                    Kind = words[2] == "revealed" ? TriggerKind.AreaRevealed : TriggerKind.AreaHidden,
+                };
+            if (words.Length >= 3 && words[words.Length - 2] == "enters" && words[words.Length - 1] == "fog")
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.EntersFog,
                     RequireName = Join(trigger, 0, words.Length - 2),
                 };
             if (words.Length == 2 && words[0] == "selection" && words[1] == "changes")

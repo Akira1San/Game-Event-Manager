@@ -832,6 +832,15 @@ namespace Game
                 raw.Words.AddRange(words);
                 return raw;
             }
+            // `set visibility to <radius>` — RTS fog of war (Task 18 Part F), also parsed by
+            // ActionWords rather than as a variable called "visibility".
+            if (words.Count >= 4 && words[1].Type == TokenType.Word && words[1].Text == "visibility" &&
+                words[2].Type == TokenType.Word && words[2].Text == "to")
+            {
+                var raw = new RawActionNode { Line = line.Line };
+                raw.Words.AddRange(words);
+                return raw;
+            }
             var node = new SetNode { Line = line.Line };
             int index = 1;
             // `set Supply Used to 5` / `set Minerals to 500`: resources may be multiword.

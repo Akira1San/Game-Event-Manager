@@ -52,6 +52,9 @@ namespace Game
         HasBuildQueue,
         // RTS orders & attack-move (Task 18 Part E)
         CurrentOrderIs,
+        // RTS fog of war & visibility (Task 18 Part F)
+        IsVisibleToEnemy,
+        IsHidden,
         // Local multiplayer (Task 16 Part F)
         PlayerExists,
         PlayerNear,
@@ -301,6 +304,21 @@ namespace Game
             {
                 node.Kind = ConditionKind.ParticlePlaying;
                 node.Thing = tokens[1].Text;
+                return node;
+            }
+
+            // ---- RTS fog of war & visibility (Task 18 Part F) ----
+            // `me is visible to enemy` / `me is hidden` — visibility relative to the other
+            // players in the fog grid.
+            if (texts.Length == 5 && texts[0] == "me" && texts[1] == "is" &&
+                texts[2] == "visible" && texts[3] == "to" && texts[4] == "enemy")
+            {
+                node.Kind = ConditionKind.IsVisibleToEnemy;
+                return node;
+            }
+            if (texts.Length == 3 && texts[0] == "me" && texts[1] == "is" && texts[2] == "hidden")
+            {
+                node.Kind = ConditionKind.IsHidden;
                 return node;
             }
 
@@ -737,6 +755,12 @@ namespace Game
                     ValueBox wanted = ValueEvaluator.Evaluate(node.Right, ContextResolver(context));
                     return CompareEqual(ValueBox.OfText(context.Runtime.Orders.CurrentOrderName(context.Me)), wanted);
                 }
+                case ConditionKind.IsVisibleToEnemy:
+                    return context.Me != null && context.Runtime != null &&
+                           context.Runtime.Fog.IsVisibleToEnemy(context.Me);
+                case ConditionKind.IsHidden:
+                    return context.Me != null && context.Runtime != null &&
+                           context.Runtime.Fog.IsHidden(context.Me);
                 case ConditionKind.PlayerExists:
                 {
                     bool exists = context.Runtime != null && context.Runtime.FindPlayer(node.Player) != null;

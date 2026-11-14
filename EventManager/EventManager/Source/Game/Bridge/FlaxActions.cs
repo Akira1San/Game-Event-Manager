@@ -130,9 +130,91 @@ namespace Game
                 Debug.LogWarning(message);
         }
 
+        /// <summary>Actors whose models are hidden by fog of war (Task 18 Part F).</summary>
+        private static readonly HashSet<Actor> FogHiddenActors = new HashSet<Actor>();
+        /// <summary>Each model's draw pass before fog hid it, so visibility restores it.</summary>
+        private static readonly Dictionary<Actor, DrawPass> FogSavedDrawModes =
+            new Dictionary<Actor, DrawPass>();
+
+        /// <summary>
+        /// Shows or hides an actor's models for fog of war (Task 18 Part F). Only rendering
+        /// changes: the actor stays active, so its event sheet and triggers keep running.
+        /// </summary>
+        public static void SetFogVisibility(Actor actor, bool visible)
+        {
+            if (actor == null)
+                return;
+            if (visible)
+            {
+                if (FogHiddenActors.Remove(actor))
+                    RestoreFogDrawModes(actor);
+                return;
+            }
+            if (FogHiddenActors.Add(actor))
+                HideFogDrawModes(actor);
+        }
+
+        /// <summary>Drops a destroyed actor's fog bookkeeping without touching its models.</summary>
+        public static void ClearFogVisibility(Actor actor)
+        {
+            if (actor == null)
+                return;
+            FogHiddenActors.Remove(actor);
+            ForgetFogDrawModes(actor);
+        }
+
+        private static void HideFogDrawModes(Actor node)
+        {
+            if (node == null)
+                return;
+            if (node is StaticModel staticModel)
+            {
+                if (!FogSavedDrawModes.ContainsKey(staticModel))
+                    FogSavedDrawModes[staticModel] = staticModel.DrawModes;
+                staticModel.DrawModes = DrawPass.None;
+            }
+            else if (node is AnimatedModel animatedModel)
+            {
+                if (!FogSavedDrawModes.ContainsKey(animatedModel))
+                    FogSavedDrawModes[animatedModel] = animatedModel.DrawModes;
+                animatedModel.DrawModes = DrawPass.None;
+            }
+            foreach (Actor child in node.Children)
+                HideFogDrawModes(child);
+        }
+
+        private static void RestoreFogDrawModes(Actor node)
+        {
+            if (node == null)
+                return;
+            if (node is StaticModel staticModel && FogSavedDrawModes.TryGetValue(staticModel, out DrawPass staticMode))
+            {
+                staticModel.DrawModes = staticMode;
+                FogSavedDrawModes.Remove(staticModel);
+            }
+            else if (node is AnimatedModel animatedModel && FogSavedDrawModes.TryGetValue(animatedModel, out DrawPass animMode))
+            {
+                animatedModel.DrawModes = animMode;
+                FogSavedDrawModes.Remove(animatedModel);
+            }
+            foreach (Actor child in node.Children)
+                RestoreFogDrawModes(child);
+        }
+
+        private static void ForgetFogDrawModes(Actor node)
+        {
+            if (node == null)
+                return;
+            FogSavedDrawModes.Remove(node);
+            foreach (Actor child in node.Children)
+                ForgetFogDrawModes(child);
+        }
+
         public static void ClearSession()
         {
             Moves.Clear();
+            FogHiddenActors.Clear();
+            FogSavedDrawModes.Clear();
             Pushes.Clear();
             Platforms.Clear();
             ActiveSounds.Clear();
@@ -960,6 +1042,15 @@ namespace Game
                     Debug.LogWarning($"Event print: time scale set to {s}");
                     break;
                 }
+                case ActionVerb.RevealArea:
+                    context.Runtime.Fog.RevealAround(context.Me, ResolveNumber(context, spec));
+                    break;
+                case ActionVerb.HideArea:
+                    context.Runtime.Fog.HideAround(context.Me, ResolveNumber(context, spec));
+                    break;
+                case ActionVerb.SetVisibility:
+                    context.Runtime.Fog.SetVisionRadius(context.Me, ResolveNumber(context, spec));
+                    break;
             }
         }
 
@@ -1697,6 +1788,7 @@ namespace Game
                     Pushes.RemoveAt(i);
             ClearActor(actor);
             context.Runtime.Selection.Forget(actor);
+            ClearFogVisibility(actor);
         }
 
         /// <summary>The noise a spawned thing makes as it appears, or null for a quiet one.</summary>

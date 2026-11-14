@@ -517,6 +517,7 @@ namespace Game
             Runtime.Selection.Reset();
             Runtime.Construction.Reset();
             Runtime.Orders.Reset();
+            Runtime.Fog.Reset();
             Runtime.Sounds.Clear();
             Runtime.RemoveAllSheets();
         }
@@ -534,10 +535,81 @@ namespace Game
             UpdateTextControls();
             UpdateFocus();
             UpdatePlayerLookAtMouse();
+            // Fog needs this tick's positions before it can raise its reveal/hide edges, and
+            // the draw modes need the refreshed grid after the tick (Task 18 Part F).
+            UpdateFogActors();
             Runtime.Tick(Time.GameTime);
+            UpdateFogVisibility();
             // Follow last: the tick is what moves the player (`move forward` lands immediately),
             // so a camera snapped before it trailed the subject by one frame and shimmered.
             UpdateCameraFollow();
+        }
+
+        /// <summary>
+        /// Registers every scene actor with the fog grid: its player (`my Player`, default 0),
+        /// vision radius (`my VisionRadius`, falling back to the global `VisionRadius`) and, for
+        /// buildings, a footprint from `my Footprint` or the actor's bounding radius.
+        /// </summary>
+        private void UpdateFogActors()
+        {
+            FogOfWarManager fog = Runtime.Fog;
+            if (fog == null)
+                return;
+            fog.Enabled = !Runtime.Variables.HasGlobal(FogOfWarManager.EnabledVariable) ||
+                          Runtime.Variables.GetGlobal(FogOfWarManager.EnabledVariable).AsNumber() != 0;
+            double globalRadius = Runtime.Variables.HasGlobal(FogOfWarManager.VisionRadiusVariable)
+                ? Runtime.Variables.GetGlobal(FogOfWarManager.VisionRadiusVariable).AsNumber()
+                : 0;
+            var alive = new HashSet<object>();
+            foreach (object item in Runtime.World.Actors())
+            {
+                if (!(item is Actor actor) || actor == null || actor.Scene == null)
+                    continue;
+                alive.Add(actor);
+                int player = (int)ReadFogNumber(actor, FogOfWarManager.PlayerVariable, 0);
+                double radius = ReadFogNumber(actor, FogOfWarManager.VisionRadiusVariable, globalRadius);
+                bool building = Runtime.Construction.IsBuilding(actor);
+                double footprint = building
+                    ? ReadFogNumber(actor, FogOfWarManager.FootprintVariable, actor.BoundingSphere.Radius)
+                    : 0;
+                fog.SetActor(actor, player, actor.Position.X, actor.Position.Z, radius, footprint, footprint);
+            }
+            fog.Prune(alive);
+        }
+
+        private double ReadFogNumber(Actor actor, string name, double fallback)
+        {
+            return Runtime.Variables.HasLocal(actor, name)
+                ? Runtime.Variables.GetLocal(actor, name).AsNumber()
+                : fallback;
+        }
+
+        /// <summary>
+        /// Applies the fog grid to rendering: enemy units outside active vision are hidden,
+        /// while buildings stay visible once their cell is explored. Own units are always
+        /// drawn. Event sheets keep running either way.
+        /// </summary>
+        private void UpdateFogVisibility()
+        {
+            FogOfWarManager fog = Runtime.Fog;
+            if (fog == null)
+                return;
+            foreach (object item in Runtime.World.Actors())
+            {
+                if (!(item is Actor actor) || actor == null)
+                    continue;
+                bool visible = true;
+                if (fog.Enabled && fog.TryGetActor(actor, out FogActor info))
+                {
+                    if (info.Player == fog.LocalPlayer)
+                        visible = true;
+                    else if (Runtime.Construction.IsBuilding(actor))
+                        visible = fog.IsExplored(fog.LocalPlayer, info.X, info.Z);
+                    else
+                        visible = fog.IsVisibleTo(fog.LocalPlayer, actor);
+                }
+                FlaxActions.SetFogVisibility(actor, visible);
+            }
         }
 
         private void UpdateCameraFollow()

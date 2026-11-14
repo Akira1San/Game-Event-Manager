@@ -86,6 +86,9 @@ namespace Game
             new WordEntry { Kind = "trigger", Word = "when <order> order completes", Example = "when attack-move order completes" },
             new WordEntry { Kind = "trigger", Word = "when queued order starts", Example = "when queued order starts" },
             new WordEntry { Kind = "trigger", Word = "when path blocked", Example = "when path blocked" },
+            new WordEntry { Kind = "trigger", Word = "when area becomes revealed", Example = "when area becomes revealed" },
+            new WordEntry { Kind = "trigger", Word = "when area becomes hidden", Example = "when area becomes hidden" },
+            new WordEntry { Kind = "trigger", Word = "when <unit> enters fog", Example = "when Marine enters fog" },
 
             new WordEntry { Kind = "condition", Word = "<var> is <value>", Example = "Score is 3" },
             new WordEntry { Kind = "condition", Word = "<var> is not <value>", Example = "my health is lower than 1" },
@@ -136,6 +139,8 @@ namespace Game
             new WordEntry { Kind = "condition", Word = "my current order is <order>", Example = "my current order is attack-move" },
             new WordEntry { Kind = "condition", Word = "my order target is <target>", Example = "my order target is Enemy" },
             new WordEntry { Kind = "condition", Word = "my order queue is <n>", Example = "my order queue is 2" },
+            new WordEntry { Kind = "condition", Word = "me is visible to enemy", Example = "me is visible to enemy" },
+            new WordEntry { Kind = "condition", Word = "me is hidden", Example = "me is hidden" },
 
             new WordEntry { Kind = "directive", Word = "bind <label> to <variable>", Example = "bind ScoreLabel to Score" },
             new WordEntry { Kind = "directive", Word = "bind progress of <thing> to <variable>", Example = "bind progress of HealthBar to Health" },
@@ -202,6 +207,9 @@ namespace Game
             new WordEntry { Kind = "action", Word = "add order to queue", Example = "add order to queue" },
             new WordEntry { Kind = "action", Word = "clear", Example = "clear orders" },
             new WordEntry { Kind = "action", Word = "set rally point to <target>", Example = "set rally point to Barracks" },
+            new WordEntry { Kind = "action", Word = "reveal", Example = "reveal area around me by 200" },
+            new WordEntry { Kind = "action", Word = "hide area around me by <radius>", Example = "hide area around me by 200" },
+            new WordEntry { Kind = "action", Word = "set visibility to <radius>", Example = "set visibility to 300" },
             new WordEntry { Kind = "action", Word = "play", Example = "play sound \"hit.wav\"" },
             new WordEntry { Kind = "action", Word = "play", Example = "play anim \"dragon_fire\"" },
             new WordEntry { Kind = "action", Word = "play", Example = "play particle \"smoke\"" },
