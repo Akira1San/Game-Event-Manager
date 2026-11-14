@@ -6,11 +6,11 @@
 when me appears
   enemy type "Turret"
   still
-  face Player
+  face nearest player
 
 # Stay aimed at the player whenever it is in sight.
-when me sees Player by my SightDistance
-  face Player
+when me sees player by my SightDistance
+  face nearest player
 
 # Fire only while parked and aiming at something.
 when every 2 seconds

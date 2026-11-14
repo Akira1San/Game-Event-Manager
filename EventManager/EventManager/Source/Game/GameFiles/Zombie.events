@@ -9,20 +9,20 @@ when me appears
   wander speed 60
 
 # A zombie that bumps into the player while wandering still bites.
-when me is near Player by 40
+when me is near player by 40
   me is wandering
-  face Player
+  face nearest player
 
-when me sees Player by my SightDistance
+when me sees player by my SightDistance
   set my mode to "chase"
-  face Player
-  goto Player speed 100 facing forward
+  face nearest player
+  goto nearest player speed 100 facing forward
 
 when every 0.2 seconds
   my mode is "chase"
-  goto Player speed 100 facing forward
+  goto nearest player speed 100 facing forward
 
-when me stops seeing Player
+when me stops seeing player
   set my mode to "patrol"
   wander speed 60
 

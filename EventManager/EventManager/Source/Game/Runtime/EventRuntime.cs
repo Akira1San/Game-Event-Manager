@@ -45,6 +45,14 @@ namespace Game
             }
             if (name == "spawnedFrom")
                 return ValueBox.OfText(Runtime.SpawnedFrom(Me));
+            // `my TargetPlayer` (Task 16 Part F) is computed rather than stored: the nearest
+            // living player, recomputed on every read, so vision/hearing can never leave a
+            // stale name behind. Compare it with `my TargetPlayer is Player1`.
+            if (name == "TargetPlayer" || name == "Target Player")
+            {
+                object target = Runtime.NearestPlayer(Me);
+                return ValueBox.OfText(target == null ? "" : Runtime.NameOfActor(target));
+            }
             // Order state is owned by the OrderManager, so `my current order` and friends
             // always agree with the queue even before the first command.
             if (name == "current order" || name == "CurrentOrder")
@@ -214,6 +222,11 @@ namespace Game
         private readonly Dictionary<object, Dictionary<string, int>> bags = new Dictionary<object, Dictionary<string, int>>();
         /// <summary>wearer -> set of item names currently equipped on that wearer.</summary>
         private readonly Dictionary<object, HashSet<string>> equipped = new Dictionary<object, HashSet<string>>();
+        /// <summary>Per-player join/die/score edges behind the Part F triggers, indexed 1..2.</summary>
+        private readonly PlayerWatch[] playerWatches = new PlayerWatch[Players.MaxPlayers + 1];
+        /// <summary>victim -> the attacker whose `"damage"` last landed on it, for deathmatch credit.</summary>
+        private readonly Dictionary<object, object> lastAttacker = new Dictionary<object, object>();
+        private bool allPlayersDeadRaised;
 
         public EventRuntime()
         {
@@ -401,9 +414,46 @@ namespace Game
                 RaisePushAll(signal);
                 return;
             }
+            // Local multiplayer targets (Task 16 Part F): `to player 2` reaches one player,
+            // `to all players` both, `to nearest player` whichever is closest to the sender.
+            if (Players.IsAllReference(toName))
+            {
+                bool delivered = false;
+                for (int number = 1; number <= Players.MaxPlayers; number++)
+                {
+                    SheetInstance sheet = FindSheetFor(FindPlayer(number));
+                    if (sheet == null)
+                        continue;
+                    DeliverToSheet(sheet, signal);
+                    delivered = true;
+                }
+                if (!delivered)
+                    DeliverToSheet(FindSheetFor(FindNamedActor("Player")), signal);
+                return;
+            }
+            if (Players.TryReadNumber(toName, out int playerNumber))
+            {
+                DeliverToSheet(FindSheetFor(FindPlayer(playerNumber)), signal);
+                return;
+            }
+            if (Players.IsNearestReference(toName))
+            {
+                DeliverToSheet(FindSheetFor(NearestPlayer(signal.Other)), signal);
+                return;
+            }
             foreach (var sheet in sheets)
                 if (sheet.ActorName == toName)
-                    sheet.PushQueue.Enqueue(signal);
+                    DeliverToSheet(sheet, signal);
+        }
+
+        /// <summary>Queues a message for one sheet, and remembers where a damage landed.</summary>
+        private void DeliverToSheet(SheetInstance sheet, PushSignal signal)
+        {
+            if (sheet == null)
+                return;
+            sheet.PushQueue.Enqueue(signal);
+            if (signal.Kind == TriggerKind.Message && IsDamageMessage(signal.Name))
+                NoteDamage(sheet.Actor, signal.Other);
         }
 
         /// <summary>Remembers what produced a spawned actor, so `my spawnedFrom` can name it
@@ -438,6 +488,230 @@ namespace Game
                 if (name != "Game" && sheet.ActorName == name)
                     return sheet;
             return null;
+        }
+
+        // ---------------- local multiplayer (Task 16 Part F) ----------------
+
+        /// <summary>The actor named <c>Player&lt;n&gt;</c> that carries a sheet, or null.</summary>
+        public object FindPlayer(int number)
+        {
+            if (!Players.IsValidNumber(number))
+                return null;
+            string name = Players.ActorName(number);
+            foreach (var sheet in sheets)
+                if (string.Equals(sheet.ActorName, name, StringComparison.OrdinalIgnoreCase))
+                    return sheet.Actor;
+            return null;
+        }
+
+        /// <summary>
+        /// The closest player to <paramref name="from"/> — what a bare <c>player</c> /
+        /// <c>nearest player</c> resolves to in a target position. A living player wins over a
+        /// dead one, so an enemy chases the player still in the fight; a single-player scene
+        /// whose hero is named <c>Player</c> still answers.
+        /// </summary>
+        public object NearestPlayer(object from)
+        {
+            object best = null;
+            double bestDistance = double.MaxValue;
+            object anyPlayer = null;
+            double anyDistance = double.MaxValue;
+            for (int number = 1; number <= Players.MaxPlayers; number++)
+            {
+                object player = FindPlayer(number);
+                if (player == null || ReferenceEquals(player, from))
+                    continue;
+                double distance = from == null ? 0 : World.Distance(from, player);
+                if (distance < anyDistance)
+                {
+                    anyDistance = distance;
+                    anyPlayer = player;
+                }
+                if (HealthOf(player) > 0 && distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = player;
+                }
+            }
+            if (best != null)
+                return best;
+            if (anyPlayer != null)
+                return anyPlayer;
+            object single = FindNamedActor("Player");
+            return ReferenceEquals(single, from) ? null : single;
+        }
+
+        /// <summary>
+        /// A player is dead when its <c>my Health</c> has reached 0 (TK_Player leaves the body
+        /// for the gibs) or when its sheet is gone. A player that never set Health is alive.
+        /// </summary>
+        public bool IsPlayerAlive(int number)
+        {
+            object player = FindPlayer(number);
+            return player != null && HealthOf(player) > 0;
+        }
+
+        /// <summary>True once every player in the scene is dead. No player at all is not "all dead".</summary>
+        public bool AllPlayersDead
+        {
+            get
+            {
+                bool sawPlayer = false;
+                for (int number = 1; number <= Players.MaxPlayers; number++)
+                {
+                    if (FindPlayer(number) == null)
+                        continue;
+                    sawPlayer = true;
+                    if (IsPlayerAlive(number))
+                        return false;
+                }
+                object single = FindNamedActor("Player");
+                if (single != null)
+                {
+                    sawPlayer = true;
+                    if (HealthOf(single) > 0)
+                        return false;
+                }
+                return sawPlayer;
+            }
+        }
+
+        /// <summary>The number of the player <paramref name="actor"/> is, or 0 for anybody else.</summary>
+        public int PlayerNumberOf(object actor)
+        {
+            if (actor == null)
+                return 0;
+            for (int number = 1; number <= Players.MaxPlayers; number++)
+                if (ReferenceEquals(FindPlayer(number), actor))
+                    return number;
+            return 0;
+        }
+
+        /// <summary>The actor's real name — the bridge uses it to stamp `my shooter` on bullets.</summary>
+        public string NameOfActor(object actor)
+        {
+            return World.NameOf(actor);
+        }
+
+        private double HealthOf(object actor)
+        {
+            return Variables.HasLocal(actor, "Health") ? Variables.GetLocal(actor, "Health").AsNumber() : 1;
+        }
+
+        /// <summary>
+        /// Polls the two player slots once a tick and pushes the edges: a player already in the
+        /// scene has "joined" on the first poll, a health drop to 0 (or a lost sheet) is a death,
+        /// and a changed <c>Player&lt;n&gt; Score</c> global is a score change. A death credits a
+        /// kill when the last <c>"damage"</c> on that player came from the other player's bullet.
+        /// </summary>
+        private void TickPlayers()
+        {
+            for (int number = 1; number <= Players.MaxPlayers; number++)
+            {
+                PlayerWatch watch = playerWatches[number];
+                if (watch == null)
+                    watch = playerWatches[number] = new PlayerWatch();
+
+                bool alive = IsPlayerAlive(number);
+                string scoreName = Players.VariableName(number, "Score");
+                double score = Variables.HasGlobal(scoreName) ? Variables.GetGlobal(scoreName).AsNumber() : 0;
+
+                if (!watch.Initialized)
+                {
+                    if (alive)
+                        RaisePlayer(TriggerKind.PlayerJoins, number);
+                }
+                else
+                {
+                    if (alive && !watch.Alive)
+                        RaisePlayer(TriggerKind.PlayerJoins, number);
+                    if (!alive && watch.Alive)
+                        PlayerDied(number);
+                }
+                if (watch.ScoreKnown && score != watch.Score)
+                    RaisePlayer(TriggerKind.PlayerScoreChanges, number);
+
+                watch.Alive = alive;
+                watch.Score = score;
+                watch.ScoreKnown = true;
+                watch.Initialized = true;
+            }
+
+            bool allDead = AllPlayersDead;
+            if (allDead && !allPlayersDeadRaised)
+            {
+                allPlayersDeadRaised = true;
+                RaisePushAll(new PushSignal { Kind = TriggerKind.AllPlayersDead });
+            }
+            else if (!allDead)
+            {
+                allPlayersDeadRaised = false;
+            }
+        }
+
+        private void RaisePlayer(TriggerKind kind, int number)
+        {
+            RaisePushAll(new PushSignal
+            {
+                Kind = kind,
+                PlayerA = number,
+                Other = FindPlayer(number),
+            });
+        }
+
+        private void PlayerDied(int number)
+        {
+            RaisePlayer(TriggerKind.PlayerDies, number);
+            object victim = FindPlayer(number);
+            if (victim == null || !lastAttacker.TryGetValue(victim, out object attacker))
+                return;
+            lastAttacker.Remove(victim);
+            int killer = PlayerNumberOf(attacker);
+            if (killer == 0 || killer == number)
+                return;
+            RaisePushAll(new PushSignal
+            {
+                Kind = TriggerKind.PlayerKills,
+                PlayerA = killer,
+                PlayerB = number,
+                Other = victim,
+            });
+        }
+
+        /// <summary>Remembers who hit what, so a player death can be credited to the other player.</summary>
+        private void NoteDamage(object target, object sender)
+        {
+            if (target == null || sender == null)
+                return;
+            lastAttacker[target] = ResolveAttacker(sender);
+        }
+
+        private static bool IsDamageMessage(string message)
+        {
+            return string.Equals(message, "damage", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(message, "hurt", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Turns the sender of a damage message into the player who should be credited: a
+        /// projectile carries <c>my shooter</c> (stamped by `spawn`), so a bullet from Player1
+        /// credits Player1 rather than the bullet clone. Anything else is its own attacker.
+        /// </summary>
+        private object ResolveAttacker(object sender)
+        {
+            if (sender == null)
+                return null;
+            if (Variables.HasLocal(sender, "shooter"))
+            {
+                string name = Variables.GetLocal(sender, "shooter").AsText();
+                if (name.Length > 0)
+                {
+                    object shooter = FindNamedActor(name);
+                    if (shooter != null)
+                        return shooter;
+                }
+            }
+            return sender;
         }
 
         /// <summary>The sheet bound to this exact object, or null. The global Game host never matches.</summary>
@@ -541,6 +815,9 @@ namespace Game
             // Construction completions are pushed before the drain below, so a
             // `when construction completes` event runs this same tick.
             Construction.Tick(this);
+            // Player joins/deaths/score edges (Task 16 Part F) are pushed before the drain too,
+            // so `when player 1 dies` runs in the same tick its health reached 0.
+            TickPlayers();
             var snapshot = sheets.ToArray();
             foreach (var sheet in snapshot)
             {
@@ -649,10 +926,19 @@ namespace Game
             return bag;
         }
 
-        private bool Matches(SheetInstance sheet, TriggerDescriptor descriptor, PushSignal signal)
+        public bool Matches(SheetInstance sheet, TriggerDescriptor descriptor, PushSignal signal)
         {
             if (descriptor.Kind != signal.Kind)
                 return false;
+            // ---- local multiplayer (Task 16 Part F) ----
+            // Player signals are broadcast with the number in the signal, so the filter is a
+            // number, not a name. `when all players dead` has no number to match.
+            if (descriptor.Kind == TriggerKind.PlayerJoins ||
+                descriptor.Kind == TriggerKind.PlayerDies ||
+                descriptor.Kind == TriggerKind.PlayerScoreChanges)
+                return descriptor.Player == signal.PlayerA;
+            if (descriptor.Kind == TriggerKind.PlayerKills)
+                return descriptor.Player == signal.PlayerA && descriptor.Player2 == signal.PlayerB;
             if (descriptor.RequireName.Length == 0)
                 return true;
             // `when me is selected` / `when me is deselected`: the signal is broadcast, so
@@ -1278,8 +1564,18 @@ namespace Game
                 return;
             string message = words[2].Text;
             string targetName = "";
-            if (words.Count >= 5 && words[3].Type == TokenType.Word && words[3].Text == "to" && words[4].Type == TokenType.Word)
-                targetName = words[4].Text;
+            if (words.Count >= 5 && words[3].Type == TokenType.Word && words[3].Text == "to")
+            {
+                // A target can be several words now: `player 2`, `all players`, `nearest player`.
+                var parts = new System.Text.StringBuilder();
+                for (int i = 4; i < words.Count; i++)
+                {
+                    if (parts.Length > 0)
+                        parts.Append(' ');
+                    parts.Append(words[i].Text);
+                }
+                targetName = parts.ToString();
+            }
             var signal = new PushSignal { Kind = TriggerKind.Message, Name = message, Other = context.Me };
             if (targetName == "me")
             {
@@ -1289,6 +1585,8 @@ namespace Game
             if (targetName == "other")
             {
                 FindSheetFor(context.Other)?.PushQueue.Enqueue(signal);
+                if (IsDamageMessage(message))
+                    NoteDamage(context.Other, context.Me);
                 return;
             }
             SendRawMessage(signal, targetName);
@@ -1590,6 +1888,11 @@ namespace Game
                 return true;
             if (descriptor.RequireName == "me")
                 return true; // `other touches me` = any toucher
+            // `when me sees player` means any of the player actors (Player, Player1, Player2), so
+            // one enemy sheet serves a two-player scene (Task 16 Part F).
+            if (Players.IsNearestReference(descriptor.RequireName) &&
+                Players.IsPlayerActorName(World.NameOf(other)))
+                return true;
             return World.NameOf(other) == descriptor.RequireName;
         }
 

@@ -376,6 +376,14 @@ namespace Game
                 line.IsCondition = true;
                 return;
             }
+            // `all players dead` (Task 16 Part F) is a condition with no condition mark in it,
+            // so name its shape here rather than adding `all` to the mark list.
+            if (first.Text == "all" && line.Words.Count >= 2 && line.Words[1].Type == TokenType.Word &&
+                line.Words[1].Text == "players")
+            {
+                line.IsCondition = true;
+                return;
+            }
             // Weapon words (Task 16 Part C). `reload` is an action, and `weapon <name>` sets the
             // current weapon — while `weapon is Pistol` is the condition of the same shape, so
             // the check happens here, before the action-verb branch below.
@@ -582,6 +590,21 @@ namespace Game
                     return new VariableValue { Line = t.Line, Owner = "my", Name = name.Text };
                 }
                 throw new ParseException("`my` needs a variable name right after it — like `my health`", t.Line);
+            }
+            // `Player1 Score` / `Player2 Kills` — a per-player counter is written as two words
+            // (Task 16 Part F). Only a player name plus a known counter (Score/Lives/Kills)
+            // joins, so an ordinary `set Foo Bar` is untouched.
+            if (index + 1 < words.Count && words[index + 1].Type == TokenType.Word &&
+                Players.TryReadVariableName(t.Text, words[index + 1].Text, out string playerVariable))
+            {
+                index += 2;
+                return new VariableValue { Line = t.Line, Name = playerVariable };
+            }
+            // The run-together spelling `Player1Score` reads as the same variable.
+            if (Players.TryReadVariableName(t.Text, out string runTogetherVariable))
+            {
+                index++;
+                return new VariableValue { Line = t.Line, Name = runTogetherVariable };
             }
             if (!char.IsLetter(t.Text[0]) || !char.IsUpper(t.Text[0]))
                 throw new ParseException($@"I can't use {DescribeWord(t)} as a variable — variables start with a capital letter, or use `my` for a per-object one (like `Score` or `my health`)", t.Line);

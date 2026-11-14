@@ -14,12 +14,12 @@ when me arrives at Waypoint
   wait random 0.5 to 2 seconds
   goto random Waypoint speed 100
 
-when me sees Player by my SightDistance      # one-shot the moment the player is spotted,
+when me sees player by my SightDistance      # one-shot the moment a player is spotted,
   my Speed is higher than 0                  # as far as this type's eyes reach
   set my mode to "chase"
   print "Enemy: chase start"
   # loop anim "Run"   # simple mesh — no animation
-  goto Player speed 100 facing forward
+  goto nearest player speed 100 facing forward
 
 # ---- hearing (Task 16 Part B): a gunshot it can hear brings it running ----
 # `other` is where the noise came from, so `goto other` walks toward the shot even while the
@@ -33,18 +33,18 @@ when me hears "gunshot" by my SightDistance
 when every 0.2 seconds                     # chase keeps re-targeting the moving player
   my mode is "chase"
   my Speed is higher than 0
-  goto Player speed 100 facing forward
+  goto nearest player speed 100 facing forward
 
-when me stops seeing Player                # went out of sight — resume patrol
+when me stops seeing player                # went out of sight — resume patrol
   set my mode to "patrol"
   print "Enemy: lost sight, back to patrol"
 
-when me is near Player by 1.5
+when me is near player by 1.5
   my mode is "chase"
   my Hostile is true                         # only hostile types attack
   print "Enemy: attack — sending hurt to Player"
   play anim "Attack"
-  send message "hurt" to Player
+  send message "hurt" to nearest player
 
 # ---- taking a bullet: every shot costs 10 of the enemy's 100 hit points ----
 when message "hit" arrives

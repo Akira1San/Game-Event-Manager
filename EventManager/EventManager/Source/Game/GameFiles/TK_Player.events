@@ -204,6 +204,19 @@ when my Health changes
   if my Health is lower than 0
   set my Health to 0
 
+# ---- the other player's bullet (Task 16 Part F: local deathmatch) ----
+# `TK_Bullet.events` sends `"damage"` with the weapon's own number, so a PvP hit costs real
+# hit points instead of the enemy contact's flat 10. Death (Health 0) is what the runtime's
+# `when player <n> dies` and deathmatch scoring watch.
+when message "damage" arrives
+  unless my Invulnerable is true
+  spawn Blood at me
+  set my Health to my Health - other's damage
+  set my Invulnerable to true
+  play sound "hurt.wav"
+  wait 1 second
+  set my Invulnerable to false
+
 # --- particles (Task 16 Part E) ---
 # Footprints: one clone every 0.3 s while walking. `me is moving` is the gate that keeps a
 # standing player from laying a puddle; the clone's sheet plays the particle and cleans up.

@@ -5,6 +5,13 @@
 when game starts
   set Score to 0
   set Lives to 3
+  # Per-player counters (Task 16 Part F): a two-word global, `Player<n> Score/Lives/Kills`.
+  set Player1 Score to 0
+  set Player1 Lives to 3
+  set Player1 Kills to 0
+  set Player2 Score to 0
+  set Player2 Lives to 3
+  set Player2 Kills to 0
   set time scale to 1
   print "Game started"
   set state menu
@@ -76,3 +83,43 @@ when state is gameover
 when RestartButton is clicked
   print "Clicked RestartButton"
   restart scene
+
+# ---------------- local multiplayer (Task 16 Part F) ----------------
+# Two players, one PC, one screen: Player1 and Player2 each carry TK_Player.events. Nothing
+# here talks to a network — the runtime watches the two player slots and raises the edges.
+#
+# `Player1 Score` and friends are ordinary globals written with the two-word variable shape
+# (`set` / `add` / `when ... changes` all read it), so saving or wiping them is the same as
+# any other variable. `my TargetPlayer` is computed per actor: the nearest player.
+when player 1 joins
+  print "Player 1 joined"
+
+when player 2 joins
+  print "Player 2 joined"
+
+# Co-op lives: each player spends their own, and the shared `Score` keeps climbing.
+when player 1 dies
+  add -1 to Player1 Lives
+
+when player 2 dies
+  add -1 to Player2 Lives
+
+# Deathmatch scoring. A kill is credited to the other player when the last `"damage"` on the
+# victim came from that player — every projectile carries `my shooter`, so a bullet's hit is
+# traced back to whoever fired it, not to the clone.
+when player 1 kills player 2
+  add 1 to Player1 Kills
+  add 1 to Player1 Score
+
+when player 2 kills player 1
+  add 1 to Player2 Kills
+  add 1 to Player2 Score
+
+when Player1 Score changes
+  print "Player 1 score changed"
+
+# Co-op game over: the run ends only when nobody is left standing.
+when all players dead
+  unless state is gameover
+  print "All players dead"
+  set state gameover

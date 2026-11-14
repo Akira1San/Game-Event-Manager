@@ -177,6 +177,15 @@ namespace Game
                 return context.Me;
             if (thing == "other")
                 return context.Other;
+            if (context.Runtime != null)
+            {
+                // Task 16 Part F: `player 2` / `Player2` is that actor, while a bare `player`
+                // and `nearest player` mean whichever player is closest to me.
+                if (Players.TryReadNumber(thing, out int playerNumber))
+                    return context.Runtime.FindPlayer(playerNumber);
+                if (Players.IsNearestReference(thing))
+                    return context.Runtime.NearestPlayer(context.Me);
+            }
             if (thing.StartsWith("nearest ", StringComparison.OrdinalIgnoreCase))
                 return NearestTo(context, thing.Substring("nearest ".Length));
             if (thing.StartsWith("random ", StringComparison.OrdinalIgnoreCase))
@@ -1555,6 +1564,11 @@ namespace Game
                 Actor clone = SpawnClone(context, template, spec.To, offset);
                 if (clone == null)
                     return; // one warning from SpawnClone is enough, even for a whole spread
+                // Task 16 Part F: a shot remembers who fired it, so a player's death can be
+                // credited back to the other player (`when player 1 kills player 2`).
+                if (isBullet && context.Runtime != null)
+                    context.Runtime.Variables.SetLocal(clone, "shooter",
+                        ValueBox.OfText(context.Runtime.NameOfActor(context.Me)));
                 if (isBullet && weapon != null)
                 {
                     ApplyWeaponToBullet(context, clone, weapon, pellets > 1);

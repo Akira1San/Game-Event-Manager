@@ -44,3 +44,17 @@ when me touches Enemy
   if my Pierce is true
   stop this event
   destroy me
+
+# --- the other local player (Task 16 Part F: deathmatch) ---
+# `player` matches Player, Player1 and Player2, so one block serves a two-player scene. The
+# damage number is the weapon's, and `spawn` stamped `my shooter` on this clone, so the victim's
+# death is credited back to whoever fired it (`when player 1 kills player 2`).
+when me touches player
+  if my Explosive is true
+  explode
+  otherwise
+  push other back strength my knockback for 0.2 seconds
+  send message "damage" to other
+  if my Pierce is true
+  stop this event
+  destroy me

@@ -68,6 +68,12 @@ namespace Game
         OrderCompletes,
         OrderStarts,
         PathBlocked,
+        // Local multiplayer (Task 16 Part F)
+        PlayerJoins,
+        PlayerDies,
+        PlayerScoreChanges,
+        PlayerKills,
+        AllPlayersDead,
     }
 
     public class TriggerDescriptor
@@ -92,6 +98,10 @@ namespace Game
         /// <summary>Additional conditions parsed from "and ..." clauses in trigger lines
         /// (e.g. "me is moving" in "when me touches Grass and me is moving").</summary>
         public List<ConditionNode> ExtraConditions = new List<ConditionNode>();
+        /// <summary>The player a <c>when player &lt;n&gt; ...</c> trigger listens to.</summary>
+        public int Player;
+        /// <summary>The victim of <c>when player &lt;n&gt; kills player &lt;m&gt;</c>.</summary>
+        public int Player2;
     }
 
     public static class TriggerClassifier
@@ -112,6 +122,30 @@ namespace Game
                 {
                     Kind = words[words.Length - 1] == "up" ? TriggerKind.WheelScrollUp : TriggerKind.WheelScrollDown,
                 };
+            // ---- local multiplayer (Task 16 Part F) ----
+            // `when all players dead` and the four per-player edges. They sit before the generic
+            // `<key> is pressed` / `changes` shapes so `player` is never read as an input key.
+            if (words.Length == 3 && words[0] == "all" && words[1] == "players" && words[2] == "dead")
+                return new TriggerDescriptor { Kind = TriggerKind.AllPlayersDead };
+            if (Players.TryReadReference(words, 0, out int playerNumber, out int playerUsed))
+            {
+                int rest = playerUsed;
+                if (words.Length == rest + 1 && words[rest] == "joins")
+                    return new TriggerDescriptor { Kind = TriggerKind.PlayerJoins, Player = playerNumber };
+                if (words.Length == rest + 1 && words[rest] == "dies")
+                    return new TriggerDescriptor { Kind = TriggerKind.PlayerDies, Player = playerNumber };
+                if (words.Length == rest + 2 && words[rest] == "score" && words[rest + 1] == "changes")
+                    return new TriggerDescriptor { Kind = TriggerKind.PlayerScoreChanges, Player = playerNumber };
+                if (words.Length >= rest + 3 && words[rest] == "kills" &&
+                    Players.TryReadReference(words, rest + 1, out int victimNumber, out int victimUsed) &&
+                    rest + 1 + victimUsed == words.Length)
+                    return new TriggerDescriptor
+                    {
+                        Kind = TriggerKind.PlayerKills,
+                        Player = playerNumber,
+                        Player2 = victimNumber,
+                    };
+            }
             // `when reload completes` — the current weapon's reload timer ran out (Task 16 Part C).
             if (words.Length >= 2 && words[0] == "reload" && words[1] == "completes")
                 return new TriggerDescriptor { Kind = TriggerKind.ReloadComplete };
@@ -558,6 +592,10 @@ namespace Game
     {
         public TriggerKind Kind;
         public object Other;
+        /// <summary>The player a join/die/score signal is about, and the killer of a kill signal.</summary>
+        public int PlayerA;
+        /// <summary>The victim of a <c>when player &lt;n&gt; kills player &lt;m&gt;</c> signal.</summary>
+        public int PlayerB;
         /// <summary>If set, the pushed event runs with this actor as `me` (used by `equip`:
         /// an item's `gets equipped`/`gets unequipped` event runs with the wearer as `me`).</summary>
         public object MeOverride;

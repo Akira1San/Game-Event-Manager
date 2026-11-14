@@ -52,6 +52,11 @@ namespace Game
         HasBuildQueue,
         // RTS orders & attack-move (Task 18 Part E)
         CurrentOrderIs,
+        // Local multiplayer (Task 16 Part F)
+        PlayerExists,
+        PlayerNear,
+        PlayerHasTag,
+        AllPlayersDead,
     }
 
     public class ConditionNode
@@ -67,6 +72,10 @@ namespace Game
         public double Distance;
         /// <summary>Control group number for <c>my control group &lt;n&gt; is assigned</c>.</summary>
         public int Group = -1;
+        /// <summary>Which player (1 or 2) a <c>player &lt;n&gt; ...</c> condition is about.</summary>
+        public int Player;
+        /// <summary>Set by <c>player &lt;n&gt; does not exist</c> so the same node can invert.</summary>
+        public bool Negated;
     }
 
     public static class Conditions
@@ -100,6 +109,62 @@ namespace Game
             {
                 node.Kind = ConditionKind.Moving;
                 return node;
+            }
+
+            // ---- local multiplayer (Task 16 Part F) ----
+            // `all players dead` — the co-op game-over gate. A scene with no player at all is
+            // not "all dead" (there is nobody to lose), so the runtime answers false there.
+            if (texts.Length == 3 && texts[0] == "all" && texts[1] == "players" && texts[2] == "dead")
+            {
+                node.Kind = ConditionKind.AllPlayersDead;
+                return node;
+            }
+            // `Player1 Score is 3` — a per-player counter, written `Player1 Score` (two words).
+            // Sits before the generic `<var> is <value>` shape so "Score" keeps its player.
+            if (texts.Length == 4 && Players.TryReadVariableName(texts[0], texts[1], out string playerVariable) &&
+                texts[2] == "is")
+            {
+                node.Kind = ConditionKind.Equal;
+                node.Name = playerVariable;
+                node.Right = ValueFrom(tokens, texts, 3);
+                return node;
+            }
+            // `player 1 exists` / `player 2 does not exist` / `player 1 is near me by 5` /
+            // `player 2 has tag Player`. `player 1` and `Player1` are both accepted.
+            if (Players.TryReadReference(texts, 0, out int playerNumber, out int playerUsed))
+            {
+                int rest = playerUsed;
+                if (texts.Length == rest + 1 && texts[rest] == "exists")
+                {
+                    node.Kind = ConditionKind.PlayerExists;
+                    node.Player = playerNumber;
+                    return node;
+                }
+                if (texts.Length == rest + 3 && texts[rest] == "does" && texts[rest + 1] == "not" &&
+                    texts[rest + 2] == "exist")
+                {
+                    node.Kind = ConditionKind.PlayerExists;
+                    node.Player = playerNumber;
+                    node.Negated = true;
+                    return node;
+                }
+                if (texts.Length >= rest + 4 && texts[rest] == "is" && texts[rest + 1] == "near")
+                {
+                    node.Kind = ConditionKind.PlayerNear;
+                    node.Player = playerNumber;
+                    node.Thing = texts[rest + 2];
+                    for (int i = rest + 3; i < tokens.Count - 1; i++)
+                        if (texts[i] == "by" && tokens[i + 1].Type == TokenType.Number)
+                            node.Distance = tokens[i + 1].Number;
+                    return node;
+                }
+                if (texts.Length == rest + 3 && texts[rest] == "has" && texts[rest + 1] == "tag")
+                {
+                    node.Kind = ConditionKind.PlayerHasTag;
+                    node.Player = playerNumber;
+                    node.Tag = texts[rest + 2];
+                    return node;
+                }
             }
 
             // `me hears "gunshot" by 12` — Task 16 Part B. `by` is optional: without it the
@@ -620,6 +685,30 @@ namespace Game
                     ValueBox wanted = ValueEvaluator.Evaluate(node.Right, ContextResolver(context));
                     return CompareEqual(ValueBox.OfText(context.Runtime.Orders.CurrentOrderName(context.Me)), wanted);
                 }
+                case ConditionKind.PlayerExists:
+                {
+                    bool exists = context.Runtime != null && context.Runtime.FindPlayer(node.Player) != null;
+                    return node.Negated ? !exists : exists;
+                }
+                case ConditionKind.PlayerNear:
+                {
+                    if (context.Runtime == null)
+                        return false;
+                    object player = context.Runtime.FindPlayer(node.Player);
+                    object anchor = node.Thing == "other" && context.Other != null ? context.Other : context.Me;
+                    if (player == null || anchor == null)
+                        return false;
+                    return context.World.Distance2D(anchor, player) <= node.Distance;
+                }
+                case ConditionKind.PlayerHasTag:
+                {
+                    if (context.Runtime == null)
+                        return false;
+                    object player = context.Runtime.FindPlayer(node.Player);
+                    return player != null && context.World.HasTag(player, node.Tag);
+                }
+                case ConditionKind.AllPlayersDead:
+                    return context.Runtime != null && context.Runtime.AllPlayersDead;
                 default:
                     return false;
             }

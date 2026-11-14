@@ -1,0 +1,64 @@
+# ---------------- TK_Enemy.events (Task 16 Part F: two-player scene) ----------------
+# The enemy sheet for TK4Multiplayer.scene. It is the same TK4 zombie as Enemy.events, but
+# every target is written as `player` / `nearest player` instead of the single `Player`
+# actor, so the same sheet hunts either local player:
+#   * `when me sees player` fires for Player1 or Player2 (the group match in NameMatches),
+#   * `goto nearest player` re-picks the closest one on every chase tick.
+# `my TargetPlayer` is computed by the runtime, so a HUD line can show who is being hunted:
+#   bind TargetLabel to my TargetPlayer format "Hunting: {0}"
+#
+# SETUP (editor): the Enemy actor -> EventSheet -> Event File = TK_Enemy.
+
+when me appears
+  enemy type "Zombie"
+  set my mode to "patrol"
+  goto random Waypoint speed 100 facing forward
+
+when me arrives at Waypoint
+  my Speed is higher than 0
+  wait random 0.5 to 2 seconds
+  goto random Waypoint speed 100
+
+# ---- sight: either player brings it running ----
+when me sees player by my SightDistance
+  my Speed is higher than 0
+  set my mode to "chase"
+  print "TK_Enemy: spotted a player"
+
+# ---- hearing (Part B): a gunshot from either player is a lead ----
+when me hears "gunshot" by my SightDistance
+  my Hostile is true
+  set my mode to "chase"
+  goto other speed 100 facing forward
+
+# Chase re-targets the nearest player, so a second player walking past steals the aggro.
+when every 0.2 seconds
+  my mode is "chase"
+  my Speed is higher than 0
+  goto nearest player speed 100 facing forward
+
+when me stops seeing player
+  set my mode to "patrol"
+  goto random Waypoint speed 100 facing forward
+
+# ---- attack: whoever it is standing next to ----
+when me is near player by 1.5
+  my mode is "chase"
+  my Hostile is true
+  play anim "Attack"
+  send message "hurt" to nearest player
+
+# ---- damage and death (Parts C.5 + E) ----
+when message "damage" arrives
+  spawn Blood at me
+  set my LastDmg to other's damage
+  set my health to my health - my LastDmg
+
+when my health becomes 0
+  if my ExplosionDeath is true
+  spawn Explosion at me
+  otherwise
+  spawn Gib at me offset 0
+  spawn Gib at me offset 12
+  spawn Gib at me offset -12
+  destroy me

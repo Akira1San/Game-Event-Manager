@@ -5338,8 +5338,8 @@ Check(BulletMath.WithinBlast(100, 0, 150) && !BulletMath.WithinBlast(200, 0, 150
 
 // The bullet sheet the scene's templates share: flight, lifetime, wall impact, victim impact.
 var tkBulletEvents = variantParser.Parse(File.ReadAllText("Source/Game/GameFiles/TK_Bullet.events"));
-Check(tkBulletEvents.Events.Count == 4,
-    "TK_Bullet.events parses (flight, lifetime, wall impact, victim impact)");
+Check(tkBulletEvents.Events.Count == 5,
+    "TK_Bullet.events parses (flight, lifetime, wall impact, enemy impact, player impact)");
 var tkMuzzleEvents = variantParser.Parse(File.ReadAllText("Source/Game/GameFiles/TK4_MuzzleFlash.events"));
 Check(tkMuzzleEvents.Events.Count == 1 && tkMuzzleEvents.Events[0].Body[0].IsCondition,
     "TK4_MuzzleFlash.events parses and gates the flash on the clone marker");
@@ -5452,6 +5452,190 @@ foreach (var ev in tkEnemyEvents.Events)
         enemyDies = true;
 }
 Check(enemyTakesDamage && enemyDies, "Enemy.events sprays blood on damage and gibs on death");
+
+// ---- Task 16 Part F: local multiplayer (2 players, one PC) ----
+ConditionNode PlayerCondition(string line)
+{
+    var program = parser.Parse("when every 1 seconds\n  " + line + "\n");
+    return Conditions.Parse(program.Events[0].Body[0].Words);
+}
+
+TriggerDescriptor ClassifyOne(string source)
+{
+    return TriggerClassifier.Classify(parser.Parse(source).Events[0]);
+}
+
+// The two-word per-player global is read by set / add / set text of.
+var mpProgram = variantParser.Parse(@"when game starts
+  set Player1 Score to 0
+  add 1 to Player2 Kills
+  set text of ScoreLabel to Player1 Score");
+Check(mpProgram.Events[0].Body[0].Statement is SetNode mpSet && mpSet.Target.Name == "Player1 Score",
+    "`set Player1 Score to 0` writes the two-word per-player global");
+Check(mpProgram.Events[0].Body[1].Statement is AddNode mpAdd && mpAdd.Target.Name == "Player2 Kills",
+    "`add 1 to Player2 Kills` counts a deathmatch kill");
+Check(mpProgram.Events[0].Body[2].Statement is SetTextNode mpText &&
+      mpText.Value is VariableValue mpTextValue && mpTextValue.Name == "Player1 Score",
+    "a per-player counter also reads as a value (`set text of`)");
+Check(variantParser.Parse("when game starts\n  set Player1Score to 4\n").Events[0].Body[0].Statement
+        is SetNode runTogether && runTogether.Target.Name == "Player1 Score",
+    "the run-together `Player1Score` reads as the same counter");
+
+// Conditions.
+var playerExistsCondition = PlayerCondition("player 1 exists");
+Check(playerExistsCondition.Kind == ConditionKind.PlayerExists && playerExistsCondition.Player == 1,
+    "`player 1 exists` reads player 1");
+var playerMissingCondition = PlayerCondition("player 2 does not exist");
+Check(playerMissingCondition.Kind == ConditionKind.PlayerExists && playerMissingCondition.Negated,
+    "`player 2 does not exist` inverts the same check");
+var playerNearCondition = PlayerCondition("player 2 is near me by 5");
+Check(playerNearCondition.Kind == ConditionKind.PlayerNear && playerNearCondition.Player == 2 &&
+      Math.Abs(playerNearCondition.Distance - 5) < 1e-9 && playerNearCondition.Thing == "me",
+    "`player 2 is near me by 5` measures that player");
+var playerTagCondition = PlayerCondition("player 1 has tag Player");
+Check(playerTagCondition.Kind == ConditionKind.PlayerHasTag && playerTagCondition.Tag == "Player",
+    "`player 1 has tag Player` reads the tag");
+Check(PlayerCondition("all players dead").Kind == ConditionKind.AllPlayersDead,
+    "`all players dead` parses as a condition with no condition mark");
+var playerScoreCondition = PlayerCondition("Player1 Score is 3");
+Check(playerScoreCondition.Kind == ConditionKind.Equal && playerScoreCondition.Name == "Player1 Score",
+    "`Player1 Score is 3` compares the per-player counter");
+
+// Triggers.
+var joinsTrigger = ClassifyOne("when player 1 joins\n  print \"a\"\n");
+Check(joinsTrigger.Kind == TriggerKind.PlayerJoins && joinsTrigger.Player == 1,
+    "`when player 1 joins` classifies to PlayerJoins");
+var diesTrigger = ClassifyOne("when player 2 dies\n  print \"a\"\n");
+Check(diesTrigger.Kind == TriggerKind.PlayerDies && diesTrigger.Player == 2,
+    "`when player 2 dies` classifies to PlayerDies");
+var scoreTrigger = ClassifyOne("when player 1 score changes\n  print \"a\"\n");
+Check(scoreTrigger.Kind == TriggerKind.PlayerScoreChanges && scoreTrigger.Player == 1,
+    "`when player 1 score changes` watches that player's score");
+var killTrigger = ClassifyOne("when player 1 kills player 2\n  print \"a\"\n");
+Check(killTrigger.Kind == TriggerKind.PlayerKills && killTrigger.Player == 1 && killTrigger.Player2 == 2,
+    "`when player 1 kills player 2` names killer and victim");
+Check(ClassifyOne("when all players dead\n  print \"a\"\n").Kind == TriggerKind.AllPlayersDead,
+    "`when all players dead` classifies to AllPlayersDead");
+
+// `spawn <thing> at player <n>` keeps the player as the spawn spot.
+var playerSpawnSpec = ActionWords.Parse(RawWords(variantParser, "when game starts\n  spawn Gib at player 2\n"), _ => { });
+Check(playerSpawnSpec.Verb == ActionVerb.Spawn && playerSpawnSpec.Thing == "Gib" && playerSpawnSpec.To == "player 2",
+    "`spawn Gib at player 2` spawns on that player");
+var nearestSpawnSpec = ActionWords.Parse(RawWords(variantParser, "when game starts\n  spawn Bullet at nearest player\n"), _ => { });
+Check(nearestSpawnSpec.Verb == ActionVerb.Spawn && nearestSpawnSpec.To == "nearest player",
+    "`spawn Bullet at nearest player` keeps the nearest-player qualifier");
+
+// Two players in one scene, each with its own sheet.
+var mpWorld = new FakeWorld();
+var mpP1 = new FakeActor("Player1");
+var mpP2 = new FakeActor("Player2");
+var mpGame = new FakeActor("Game");
+var mpSeeker = new FakeActor("Zombie");
+var mpBullet = new FakeActor("Bullet");
+mpWorld.AddActor(mpP1);
+mpWorld.AddActor(mpP2);
+mpWorld.AddActor(mpGame);
+mpWorld.AddActor(mpSeeker);
+mpWorld.AddActor(mpBullet);
+mpWorld.SetDistance(mpP1, mpP2, 12);
+mpWorld.SetDistance(mpSeeker, mpP1, 9);
+mpWorld.SetDistance(mpSeeker, mpP2, 3);
+var mpEngine = FreshEngine(mpWorld);
+mpEngine.AddSheet(mpGame, variantParser.Parse(@"when player 1 joins
+  add 1 to P1Joins
+when player 2 joins
+  add 1 to P2Joins
+when player 1 dies
+  add 1 to P1Deaths
+when player 2 dies
+  add 1 to P2Deaths
+when player 1 kills player 2
+  add 1 to Player1 Kills
+when Player1 Score changes
+  add 1 to P1ScoreChanges
+when all players dead
+  add 1 to GameOvers"));
+mpEngine.AddSheet(mpP1, variantParser.Parse(@"when every 1 seconds
+  set TargetName to my TargetPlayer
+when message ""ping"" arrives
+  add 1 to my Pings"));
+mpEngine.AddSheet(mpP2, variantParser.Parse(@"when message ""ping"" arrives
+  add 1 to my Pings"));
+mpEngine.Tick(0);
+Check(mpEngine.FindPlayer(1) == mpP1 && mpEngine.FindPlayer(2) == mpP2,
+    "two player actors each have a sheet");
+Check(mpEngine.Variables.GetGlobal("P1Joins").AsNumber() == 1 &&
+      mpEngine.Variables.GetGlobal("P2Joins").AsNumber() == 1,
+    "each player raises `joins` once on the first poll");
+Check(mpEngine.NearestPlayer(mpSeeker) == mpP2,
+    "vision picks the closer of the two players");
+
+// Targeting one player, or broadcasting to all of them.
+mpEngine.SendRawMessage(new PushSignal { Kind = TriggerKind.Message, Name = "ping", Other = mpGame }, "player 2");
+mpEngine.Tick(1);
+Check(mpEngine.Variables.GetLocal(mpP2, "Pings").AsNumber() == 1 &&
+      mpEngine.Variables.GetLocal(mpP1, "Pings").AsNumber() == 0,
+    "`send message ... to player 2` reaches only player 2");
+Check(mpEngine.Variables.GetGlobal("TargetName").AsText() == "Player2",
+    "`my TargetPlayer` names the nearest player");
+mpEngine.SendRawMessage(new PushSignal { Kind = TriggerKind.Message, Name = "ping", Other = mpGame }, "all players");
+mpEngine.Tick(2);
+Check(mpEngine.Variables.GetLocal(mpP1, "Pings").AsNumber() == 1 &&
+      mpEngine.Variables.GetLocal(mpP2, "Pings").AsNumber() == 2,
+    "`send message ... to all players` reaches both");
+
+// Deathmatch: the bullet carries `my shooter`, so the kill credits that player.
+mpEngine.Variables.SetLocal(mpBullet, "shooter", ValueBox.OfText("Player1"));
+mpEngine.SendRawMessage(new PushSignal { Kind = TriggerKind.Message, Name = "damage", Other = mpBullet }, "Player2");
+mpEngine.Tick(3);
+Check(mpEngine.IsPlayerAlive(2), "a damage message alone does not kill a player");
+mpEngine.Variables.SetLocal(mpP2, "Health", ValueBox.OfNumber(0));
+mpEngine.Tick(4);
+Check(mpEngine.Variables.GetGlobal("P2Deaths").AsNumber() == 1 &&
+      mpEngine.Variables.GetGlobal("P1Deaths").AsNumber() == 0,
+    "a player's health reaching 0 raises only that player's death trigger");
+Check(mpEngine.Variables.GetGlobal("Player1 Kills").AsNumber() == 1,
+    "deathmatch credits the kill to the other player (Player1 Kills = 1)");
+Check(mpEngine.NearestPlayer(mpSeeker) == mpP1,
+    "the nearest-player pick passes over a dead player while the other is alive");
+
+// Co-op end: the run ends when the last player is gone, and only once.
+mpEngine.Variables.SetLocal(mpP1, "Health", ValueBox.OfNumber(0));
+mpEngine.Tick(5);
+mpEngine.Tick(6);
+Check(mpEngine.Variables.GetGlobal("GameOvers").AsNumber() == 1,
+    "`when all players dead` fires once the last player dies");
+
+// Score edge: changing the per-player counter raises the change trigger.
+mpEngine.Variables.SetGlobal("Player1 Score", ValueBox.OfNumber(7));
+mpEngine.Tick(7);
+Check(mpEngine.Variables.GetGlobal("P1ScoreChanges").AsNumber() == 1,
+    "`when Player1 Score changes` fires when that counter moves");
+Check(mpEngine.FindPlayer(3) == null && mpEngine.PlayerNumberOf(mpP2) == 2,
+    "only players 1 and 2 exist, and each actor knows its number");
+
+// The shipped sheets carry the two-player wiring.
+var tkEnemySheet = variantParser.Parse(File.ReadAllText("Source/Game/GameFiles/TK_Enemy.events"));
+Check(tkEnemySheet.Events.Count == 9, $"TK_Enemy.events parses into 9 events (got {tkEnemySheet.Events.Count})");
+var shippedGame = variantParser.Parse(File.ReadAllText("Source/Game/GameFiles/Game.events"));
+bool gameTracksJoins = false, gameTracksDeaths = false, gameTracksKills = false, gameTracksAllDead = false;
+foreach (var ev in shippedGame.Events)
+{
+    var desc = TriggerClassifier.Classify(ev);
+    if (desc.Kind == TriggerKind.PlayerJoins) gameTracksJoins = true;
+    if (desc.Kind == TriggerKind.PlayerDies) gameTracksDeaths = true;
+    if (desc.Kind == TriggerKind.PlayerKills) gameTracksKills = true;
+    if (desc.Kind == TriggerKind.AllPlayersDead) gameTracksAllDead = true;
+}
+Check(gameTracksJoins && gameTracksDeaths && gameTracksKills && gameTracksAllDead,
+    "Game.events tracks joins, deaths, deathmatch kills and all-players-dead");
+var shippedEnemy = variantParser.Parse(File.ReadAllText("Source/Game/GameFiles/Enemy.events"));
+bool enemyTargetsNearest = false;
+foreach (var ev in shippedEnemy.Events)
+    if (TriggerClassifier.Classify(ev).Kind == TriggerKind.Sees &&
+        TriggerClassifier.Classify(ev).RequireName == "player")
+        enemyTargetsNearest = true;
+Check(enemyTargetsNearest, "Enemy.events sees `player`, the group that matches Player1 or Player2");
 
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
