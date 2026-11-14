@@ -1067,11 +1067,21 @@ namespace Game
         }
 
         /// <summary>An enemy is an actor whose sheet was given a type by `enemy type`.</summary>
+        /// <summary>
+        /// Whether an actor counts as an enemy for level completion and run statistics: it has a
+        /// type and has not declared itself a bystander. A type can opt out with `my Hostile
+        /// false` (the Civilian, Task 16 Part I), so a cleared level does not wait on civilians
+        /// and shooting one spoils nobody's accuracy.
+        /// </summary>
         private bool IsEnemy(object actor)
         {
             if (actor == null || actor is GlobalHost)
                 return false;
-            return TypeOf(actor).Length > 0;
+            if (TypeOf(actor).Length == 0)
+                return false;
+            if (Variables.HasLocal(actor, "Hostile"))
+                return Variables.GetLocal(actor, "Hostile").AsBoolean();
+            return true;
         }
 
         private string TypeOf(object actor)

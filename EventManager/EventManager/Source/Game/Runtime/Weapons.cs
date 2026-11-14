@@ -201,7 +201,12 @@ namespace Game
         /// <summary>The names of the built-in weapons, sorted, for warning messages.</summary>
         public static string KnownNames()
         {
+            // Built-in defaults plus whatever WeaponData.events defines, so a data-only
+            // weapon (the Flamer the Flamer enemy carries) is named in the help too.
             var names = new List<string>(Builtins.Keys);
+            foreach (string authored in Authored.Keys)
+                if (!names.Contains(authored))
+                    names.Add(authored);
             names.Sort(StringComparer.OrdinalIgnoreCase);
             return string.Join(", ", names);
         }

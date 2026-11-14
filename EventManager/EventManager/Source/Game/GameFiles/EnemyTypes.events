@@ -14,7 +14,7 @@
 # blind at 10 cm and never chase. Change a type here, not in code.
 
 when game starts
-  set ZombieSpeed to 100
+  set ZombieSpeed to 60
   set ZombieSightDistance to 200
   set ZombieHealth to 50
   set ZombieWeapon to "Claws"
@@ -27,3 +27,91 @@ when game starts
   set TurretWeapon to "Cannon"
   set TurretHostile to true
   set TurretExplosionDeath to true
+
+  # ---- Part I: the rest of TK4's cast ----------------------------------------------------
+  # Every type is six rows of data — speed (cm/s), sight (cm), health, weapon, hostile and
+  # explosion-death. Nothing about them lives in code: change a number here and the next
+  # `enemy type "<name>"` picks it up. The weapon names are WeaponData.events' weapons, so a
+  # type's `spawn Bullet` fires that weapon's bullet; a type with no weapon (the Civilian)
+  # simply never shoots. `my Hostile` is what `when all enemies dead` and the enemy sheets
+  # read, so a non-hostile type neither blocks a cleared level nor gets hunted.
+
+  # Pistolboy — the ordinary TK4 gunner: a pistol, average legs, not much health.
+  set PistolboySpeed to 70
+  set PistolboySightDistance to 250
+  set PistolboyHealth to 45
+  set PistolboyWeapon to "Pistol"
+  set PistolboyHostile to true
+  set PistolboyExplosionDeath to false
+
+  # ShotgunManiac — rushes in and lets the spread do the work: short sight, more health.
+  set ShotgunManiacSpeed to 80
+  set ShotgunManiacSightDistance to 180
+  set ShotgunManiacHealth to 55
+  set ShotgunManiacWeapon to "Shotgun"
+  set ShotgunManiacHostile to true
+  set ShotgunManiacExplosionDeath to false
+
+  # UziRebel — fast and light, sprays on the move.
+  set UziRebelSpeed to 90
+  set UziRebelSightDistance to 220
+  set UziRebelHealth to 40
+  set UziRebelWeapon to "Uzi"
+  set UziRebelHostile to true
+  set UziRebelExplosionDeath to false
+
+  # Commando — the soldier of the bunch: quickest, furthest sight, hardest to drop.
+  set CommandoSpeed to 100
+  set CommandoSightDistance to 300
+  set CommandoHealth to 90
+  set CommandoWeapon to "Uzi"
+  set CommandoHostile to true
+  set CommandoExplosionDeath to false
+
+  # BazookaBoy — slow, spots you from far away, and the rocket in his hands goes off with him.
+  set BazookaBoySpeed to 45
+  set BazookaBoySightDistance to 320
+  set BazookaBoyHealth to 70
+  set BazookaBoyWeapon to "Rocket"
+  set BazookaBoyHostile to true
+  set BazookaBoyExplosionDeath to true
+
+  # Civilian — non-hostile, unarmed bystander. They run when shot (Civilian.events).
+  set CivilianSpeed to 70
+  set CivilianSightDistance to 150
+  set CivilianHealth to 30
+  set CivilianWeapon to ""
+  set CivilianHostile to false
+  set CivilianExplosionDeath to false
+
+  # Punisher — the heavy: slowest of the walkers, twice a zombie's health, tough on purpose.
+  set PunisherSpeed to 55
+  set PunisherSightDistance to 260
+  set PunisherHealth to 120
+  set PunisherWeapon to "Shotgun"
+  set PunisherHostile to true
+  set PunisherExplosionDeath to true
+
+  # Flamer — short sight, short-range flames, volatile when killed.
+  set FlamerSpeed to 65
+  set FlamerSightDistance to 170
+  set FlamerHealth to 80
+  set FlamerWeapon to "Flamer"
+  set FlamerHostile to true
+  set FlamerExplosionDeath to true
+
+  # Punk — weak and short-sighted, dangerous only up close.
+  set PunkSpeed to 85
+  set PunkSightDistance to 150
+  set PunkHealth to 35
+  set PunkWeapon to "Pistol"
+  set PunkHostile to true
+  set PunkExplosionDeath to false
+
+  # GrenadeGay — lobs grenades from a distance; the bandolier goes up with him.
+  set GrenadeGaySpeed to 60
+  set GrenadeGaySightDistance to 240
+  set GrenadeGayHealth to 55
+  set GrenadeGayWeapon to "Grenade"
+  set GrenadeGayHostile to true
+  set GrenadeGayExplosionDeath to true

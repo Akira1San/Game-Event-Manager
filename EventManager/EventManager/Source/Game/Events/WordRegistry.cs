@@ -147,7 +147,7 @@ namespace Game
             new WordEntry { Kind = "directive", Word = "bind <label> to <variable> format \"<template>\"", Example = "bind HealthLabel to Health and MaxHealth format \"Health: {0}/{1}\"" },
 
             new WordEntry { Kind = "action", Word = "move", Example = "move forward speed 5" },
-            new WordEntry { Kind = "action", Word = "wander", Example = "wander speed 5", AltShape = "wander speed 5 duration 2" },
+            new WordEntry { Kind = "action", Word = "wander", Example = "wander speed 5", AltShape = "wander speed my Speed duration 2" },
             new WordEntry { Kind = "action", Word = "still", Example = "still" },
             new WordEntry { Kind = "action", Word = "send", Example = "send message \"die\" to player 2", AltShape = "send message \"die\" to all players / to nearest player" },
             new WordEntry { Kind = "action", Word = "spawn", Example = "spawn Gib at player 2", AltShape = "spawn Bullet at nearest player" },

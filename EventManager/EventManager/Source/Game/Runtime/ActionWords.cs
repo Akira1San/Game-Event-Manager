@@ -276,15 +276,16 @@ namespace Game
 
                 case "wander":
                 {
-                    // `wander` / `wander speed 5` / `wander speed 5 duration 2`
+                    // `wander` / `wander speed 5` / `wander speed my Speed` / `wander speed 5 duration 2`
                     int wanderIndex = 1;
                     if (words.Count >= wanderIndex + 2 && words[wanderIndex].Text == "speed")
                     {
-                        spec.AmountNode = ValueNodeAt(words, wanderIndex + 1);
+                        // `my <name>` is two tokens, so the amount reports how many it used.
+                        spec.AmountNode = ValueNodeAt(words, wanderIndex + 1, out int wanderUsed);
                         spec.HasNumber = words[wanderIndex + 1].Type == TokenType.Number;
                         if (spec.HasNumber)
                             spec.Number = words[wanderIndex + 1].Number;
-                        wanderIndex += 2;
+                        wanderIndex += 1 + wanderUsed;
                     }
                     else
                     {

@@ -5326,8 +5326,8 @@ WeaponData.LoadData(null);
 
 // The shipped data file and player sheet parse, and the table loads into real stats.
 var weaponDataEvents = weaponParser.Parse(File.ReadAllText("Source/Game/GameFiles/WeaponData.events"));
-Check(weaponDataEvents.Events.Count == 1 && weaponDataEvents.Events[0].Body.Count == 85,
-    "WeaponData.events parses (five weapons, seventeen fields each)");
+Check(weaponDataEvents.Events.Count == 1 && weaponDataEvents.Events[0].Body.Count == 102,
+    "WeaponData.events parses (six weapons, seventeen fields each)");
 WeaponData.LoadData(weaponDataEvents);
 WeaponData.TryGet(null, "Pistol", out WeaponStats filePistol);
 Check(filePistol != null && filePistol.Ammo == 25 && Math.Abs(filePistol.Reload - 1.2) < 0.0001 &&
@@ -6282,6 +6282,163 @@ Check(Conditions.Evaluate(hiddenCondition, fogConditionContext),
       "`me is hidden` reads the live fog grid");
 Check(!Conditions.Evaluate(visibleToEnemyCondition, fogConditionContext),
       "`me is visible to enemy` is false outside enemy vision");
+
+// ---- Task 16 Part I: the rest of TK4's enemy cast (data-driven) ----
+
+// `wander speed my Speed` takes the pace from the actor's own stat, so a sheet can follow a
+// type's data instead of repeating a number.
+var perActorWander = ActionWords.Parse(RawWords(parser, "when me appears\n  wander speed my Speed\n"), message => { });
+Check(perActorWander.Verb == ActionVerb.Wander && perActorWander.AmountNode is VariableValue wanderAmount &&
+      wanderAmount.Name == "Speed",
+    "`wander speed my Speed` takes the pace from the actor's own stat");
+
+// The shipped data file is the whole cast: ten Part I types on top of Zombie and Turret.
+var enemyTypeFile = File.ReadAllText("Source/Game/GameFiles/EnemyTypes.events");
+var shippedTypeProgram = parser.Parse(enemyTypeFile);
+EnemyTypes.LoadData(shippedTypeProgram);
+WeaponData.LoadData(parser.Parse(File.ReadAllText("Source/Game/GameFiles/WeaponData.events")));
+var tk4TypeNames = new[]
+{
+    "Zombie", "Turret", "Pistolboy", "ShotgunManiac", "UziRebel", "Commando",
+    "BazookaBoy", "Civilian", "Punisher", "Flamer", "Punk", "GrenadeGay",
+};
+
+var typeSnapshot = new List<(string Name, double Speed, double Sight, double Health, string Weapon, bool Hostile, bool Explodes)>();
+bool everyTypeApplies = true;
+foreach (string typeName in tk4TypeNames)
+{
+    var applyRuntime = new EventRuntime();
+    var applyActor = new object();
+    applyRuntime.AddSheet(applyActor, parser.Parse("when me appears\n  enemy type \"" + typeName + "\"\n"));
+    applyRuntime.Tick(0);
+    if (!applyRuntime.Variables.HasLocal(applyActor, "Type") ||
+        applyRuntime.Variables.GetLocal(applyActor, "Type").AsText() != typeName)
+        everyTypeApplies = false;
+    typeSnapshot.Add((
+        typeName,
+        applyRuntime.Variables.GetLocal(applyActor, "Speed").AsNumber(),
+        applyRuntime.Variables.GetLocal(applyActor, "SightDistance").AsNumber(),
+        applyRuntime.Variables.GetLocal(applyActor, "Health").AsNumber(),
+        applyRuntime.Variables.GetLocal(applyActor, "Weapon").AsText(),
+        applyRuntime.Variables.GetLocal(applyActor, "Hostile").AsBoolean(),
+        applyRuntime.Variables.GetLocal(applyActor, "ExplosionDeath").AsBoolean()));
+}
+Check(everyTypeApplies, $"all {tk4TypeNames.Length} TK4 types apply via `enemy type` (data file only)");
+Check(typeSnapshot.Select(t => t.Speed + "/" + t.Sight + "/" + t.Health).Distinct().Count() == tk4TypeNames.Length,
+    "every type has its own speed/sight/health triple");
+
+var typeBy = typeSnapshot.ToDictionary(t => t.Name);
+Check(!typeBy["Civilian"].Hostile && typeBy["Civilian"].Weapon == "" && typeBy["Civilian"].Health == 30,
+    "Civilian is non-hostile, unarmed, and as weak as its data says");
+Check(typeBy["Turret"].Speed == 0, "Turret is still the one type that cannot walk");
+Check(typeBy["Pistolboy"].Weapon == "Pistol" && typeBy["ShotgunManiac"].Weapon == "Shotgun" &&
+      typeBy["UziRebel"].Weapon == "Uzi" && typeBy["BazookaBoy"].Weapon == "Rocket" &&
+      typeBy["GrenadeGay"].Weapon == "Grenade" && typeBy["Flamer"].Weapon == "Flamer",
+    "each gunner type carries its own weapon from the data table");
+Check(typeBy["BazookaBoy"].Explodes && typeBy["Punisher"].Explodes && typeBy["Flamer"].Explodes &&
+      typeBy["GrenadeGay"].Explodes && !typeBy["Punk"].Explodes,
+    "only the volatile types die in an explosion");
+Check(EnemyTypes.KnownTypeNames().Contains("Pistolboy") &&
+      EnemyTypes.KnownTypeNames().Contains("Civilian") &&
+      EnemyTypes.KnownTypeNames().Contains("GrenadeGay"),
+    "the unknown-type help names every data-defined type");
+Check(WeaponData.CanonicalFor(new EventVariables(), "Flamer") == "Flamer",
+    "the Flamer weapon exists as data (WeaponData.events)");
+
+// Turret vs Zombie: the same gates the shipped sheets use — a Turret never patrols.
+string PatrolSheet(string typeName) =>
+    "when me appears\n  enemy type \"" + typeName + "\"\nwhen every 1 seconds\n  my Speed is higher than 0\n  add 1 to Moves";
+
+var turretWorld = new FakeWorld();
+var turretBody = new FakeActor("Turret");
+turretWorld.AddActor(turretBody);
+var turretEngine = FreshEngine(turretWorld);
+turretEngine.AddSheet(turretBody, parser.Parse(PatrolSheet("Turret")));
+turretEngine.Tick(0);
+turretEngine.Tick(1);
+turretEngine.Tick(2);
+Check(!turretEngine.Variables.HasGlobal("Moves") || turretEngine.Variables.GetGlobal("Moves").AsNumber() == 0,
+    "a spawned Turret never patrols (Speed 0 closes the `my Speed is higher than 0` gate)");
+
+var zombiePatrolWorld = new FakeWorld();
+var zombieBody = new FakeActor("Zombie");
+zombiePatrolWorld.AddActor(zombieBody);
+var zombiePatrolEngine = FreshEngine(zombiePatrolWorld);
+zombiePatrolEngine.AddSheet(zombieBody, parser.Parse(PatrolSheet("Zombie")));
+zombiePatrolEngine.Tick(0);
+zombiePatrolEngine.Tick(1);
+zombiePatrolEngine.Tick(2);
+Check(zombiePatrolEngine.Variables.GetGlobal("Moves").AsNumber() > 0,
+    "a spawned Zombie patrols on the same sheet");
+
+// The Civilian sheet: calm at the type's pace, then shot -> flee faster.
+var civilianProgram = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Civilian.events"));
+var civilianWorld = new FakeWorld();
+var civilian = new FakeActor("Civilian");
+var civilianBullet = new FakeActor("Bullet");
+civilianWorld.AddActor(civilian);
+var civilianEngine = FreshEngine(civilianWorld);
+civilianEngine.AddSheet(civilian, civilianProgram);
+civilianEngine.Tick(0);
+Check(!civilianEngine.Variables.GetLocal(civilian, "Hostile").AsBoolean(),
+    "Civilian.events puts a civilian on the non-hostile type");
+Check(civilianEngine.Variables.GetLocal(civilian, "Health").AsNumber() == 30,
+    "a civilian's health is the type's data, not a number in the sheet");
+// The calm wander reads the type's pace (`wander speed my Speed`), and the flee leg its own
+// faster one; the engine-free runtime does not run engine actions, so read the two lines.
+var calmWanderNode = civilianProgram.Events[0].Body[3].Statement as RawActionNode;
+Check(calmWanderNode != null && calmWanderNode.Words[1].Text == "speed" &&
+      calmWanderNode.Words[2].Text == "my" && calmWanderNode.Words[3].Text == "Speed",
+    "a calm civilian wanders at the type's own walking speed");
+var fleeWanderNode = civilianProgram.Events[1].Body[5].Statement as RawActionNode;
+Check(fleeWanderNode != null && fleeWanderNode.Words[1].Text == "speed" &&
+      fleeWanderNode.Words[3].Text == "FleeSpeed",
+    "the flee leg wanders at the civilian's own FleeSpeed");
+Check(civilianEngine.Variables.GetLocal(civilian, "FleeSpeed").AsNumber() == 140,
+    "FleeSpeed is derived from the type's Speed (70 + 70), not authored twice");
+civilianEngine.Variables.SetLocal(civilianBullet, "damage", ValueBox.OfNumber(10));
+civilianEngine.RaisePush(civilian, new PushSignal { Kind = TriggerKind.Message, Name = "damage", Other = civilianBullet });
+civilianEngine.Tick(1);
+Check(civilianEngine.Variables.GetLocal(civilian, "Health").AsNumber() == 20,
+    "a shot takes the bullet's damage off the civilian");
+Check(civilianEngine.Variables.GetLocal(civilian, "mode").AsText() == "flee",
+    "a shot sends the civilian into flee mode");
+
+// A civilian is not an enemy: a level with a civilian in it still clears (Part G trigger).
+var civilianClearWorld = new FakeWorld();
+var civilianClearGame = new FakeActor("Game");
+var civilianClearZombie = new FakeActor("ZombieA");
+var civilianBystander = new FakeActor("Bystander");
+civilianClearWorld.AddActor(civilianClearGame);
+civilianClearWorld.AddActor(civilianClearZombie);
+civilianClearWorld.AddActor(civilianBystander);
+var civilianClearEngine = FreshEngine(civilianClearWorld);
+civilianClearEngine.AddSheet(civilianClearGame, parser.Parse("when all enemies dead\n  add 1 to Clears"));
+civilianClearEngine.AddSheet(civilianClearZombie, parser.Parse("when me appears\n  set my mode to \"patrol\"\n"));
+civilianClearEngine.AddSheet(civilianBystander, parser.Parse("when me appears\n  enemy type \"Civilian\"\n"));
+civilianClearEngine.SceneStarted("Level1");
+civilianClearEngine.Tick(0);
+Check(!civilianClearEngine.Variables.HasGlobal("Clears") ||
+      civilianClearEngine.Variables.GetGlobal("Clears").AsNumber() == 0,
+    "a level populated only by civilians has no enemies to clear");
+civilianClearEngine.Variables.SetLocal(civilianClearZombie, "Type", ValueBox.OfText("Zombie"));
+civilianClearEngine.Variables.SetLocal(civilianClearZombie, "health", ValueBox.OfNumber(50));
+civilianClearEngine.Tick(1);
+civilianClearEngine.Variables.SetLocal(civilianClearZombie, "health", ValueBox.OfNumber(0));
+civilianClearEngine.Tick(2);
+civilianClearEngine.Tick(3);
+Check(civilianClearEngine.Variables.GetGlobal("Clears").AsNumber() == 1,
+    "a civilian still standing does not keep the level from completing");
+
+// The enemy sheets read the same data: no stat is repeated in code.
+var shippedZombieSheet = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Zombie.events"));
+bool zombieReadsStats = false;
+foreach (var shippedEvent in shippedZombieSheet.Events)
+    foreach (var shippedLine in shippedEvent.Body)
+        if (shippedLine.Words.Count >= 3 && shippedLine.Words[0].Text == "enemy" &&
+            shippedLine.Words[2].Text == "Zombie")
+            zombieReadsStats = true;
+Check(zombieReadsStats, "Zombie.events still gets its stats from `enemy type \"Zombie\"`");
 
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");

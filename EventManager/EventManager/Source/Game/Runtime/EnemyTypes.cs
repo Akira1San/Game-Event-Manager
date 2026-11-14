@@ -147,10 +147,17 @@ namespace Game
             }
         }
 
-        /// <summary>The names of the built-in types, sorted, for warning messages.</summary>
+        /// <summary>
+        /// Every type name that exists right now — the built-in fallbacks plus everything the
+        /// data file defines — sorted, for warning messages. Adding a type to
+        /// <c>EnemyTypes.events</c> therefore names it in the "I don't know that type" help too.
+        /// </summary>
         public static string KnownTypeNames()
         {
             var names = new List<string>(Builtins.Keys);
+            foreach (string authored in Authored.Keys)
+                if (!names.Contains(authored))
+                    names.Add(authored);
             names.Sort(StringComparer.OrdinalIgnoreCase);
             return string.Join(", ", names);
         }

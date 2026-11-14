@@ -1,0 +1,32 @@
+# ---------------- Civilian.events (Task 16 Part I: non-hostile bystander) ----------------
+# TK4's civilian: unarmed, never attacks, wanders calmly — and bolts the moment it is shot.
+# Every number comes from `enemy type "Civilian"` (EnemyTypes.events); this sheet only says
+# what a civilian *does*, so retuning civilians is a data-file edit.
+#
+# Being the one type with `my Hostile false` is load-bearing: the enemy sheets check that flag
+# before chasing or attacking, and `when all enemies dead` (Task 16 Part G) ignores
+# non-hostile actors — a level can be cleared with civilians still running around.
+
+when me appears
+  enemy type "Civilian"
+  set my mode to "calm"
+  # Run at twice the type's walking pace, so a shot visibly changes the civilian's speed.
+  set my FleeSpeed to my Speed + 70
+  wander speed my Speed
+
+# Shot: spray, count the damage, then turn away from the shooter and run. `other` is the
+# projectile (or whoever sent `"damage"`), so facing it puts the civilian's back to the threat
+# and the new, faster wander leg carries them off.
+when message "damage" arrives
+  spawn Blood at me
+  set my LastDmg to other's damage
+  set my Health to my Health - my LastDmg
+  set my mode to "flee"
+  face other
+  wander speed my FleeSpeed
+
+when my Health becomes 0
+  spawn Gib at me offset 0
+  spawn Gib at me offset 12
+  spawn Gib at me offset -12
+  destroy me

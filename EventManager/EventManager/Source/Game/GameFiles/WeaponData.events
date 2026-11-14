@@ -113,6 +113,25 @@ when game starts
   set RocketExplosive to true
   set RocketPierce to false
 
+  # --- Flamer: a wide, very short-lived spray (the Flamer enemy type carries it) ---
+  set FlamerBullet to "Bullet"
+  set FlamerDamage to 4
+  set FlamerFireRate to 0.1
+  set FlamerSpread to 20
+  set FlamerMultiplier to 4
+  set FlamerReload to 1.8
+  set FlamerSound to "flame"
+  set FlamerSmoke to "smoke"
+  set FlamerAmmoPerShot to 1
+  set FlamerAmmo to 60
+  set FlamerSpeed to 220
+  set FlamerKnockback to 10
+  set FlamerLife to 0.5
+  set FlamerBlast to 0
+  set FlamerBounce to false
+  set FlamerExplosive to false
+  set FlamerPierce to false
+
   # --- Grenade: lobbed, heavy, explodes (Part C.5) ---
   set GrenadeBullet to "Grenade"
   set GrenadeDamage to 50
