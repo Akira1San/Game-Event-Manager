@@ -11,6 +11,8 @@ namespace Game
         private readonly Dictionary<object, Dictionary<string, ValueBox>> locals = new Dictionary<object, Dictionary<string, ValueBox>>();
         private readonly HashSet<string> warnedGlobalNames = new HashSet<string>();
         private readonly HashSet<string> warnedLocalKeys = new HashSet<string>();
+        /// <summary>The checkpoint written by <c>save stats</c> (Task 16 Part G).</summary>
+        private Dictionary<string, ValueBox> savedStats;
 
         public ValueBox GetGlobal(string name)
         {
@@ -29,6 +31,35 @@ namespace Game
         public bool HasGlobal(string name)
         {
             return globals.ContainsKey(name);
+        }
+
+        /// <summary><c>save stats</c>: keeps a copy of every global, so a later
+        /// <c>load stats</c> can put the run back the way it was.</summary>
+        public void SaveStats()
+        {
+            savedStats = new Dictionary<string, ValueBox>();
+            foreach (var pair in globals)
+                savedStats[pair.Key] = ValueBox.Copy(pair.Value);
+        }
+
+        /// <summary><c>load stats</c>: replaces the globals with the last saved checkpoint.
+        /// Returns false when nothing has been saved yet.</summary>
+        public bool LoadStats()
+        {
+            if (savedStats == null)
+                return false;
+            globals.Clear();
+            foreach (var pair in savedStats)
+                globals[pair.Key] = ValueBox.Copy(pair.Value);
+            warnedGlobalNames.Clear();
+            return true;
+        }
+
+        /// <summary><c>wipe game variables</c>: forgets every global, for a new game.</summary>
+        public void WipeGlobals()
+        {
+            globals.Clear();
+            warnedGlobalNames.Clear();
         }
 
         public ValueBox GetLocal(object host, string name)

@@ -123,3 +123,26 @@ when all players dead
   unless state is gameover
   print "All players dead"
   set state gameover
+
+# ---------------- level progression & statistics (Task 16 Part G) ----------------
+# A level is a scene. Every enemy type tags its own actor with `my Type` (Task 16 Part D),
+# so `when all enemies dead` fires once per level when the last of them is gone — a scene
+# with no enemies at all never claims a cleared level. `next level` raises
+# `when level completes` and then loads the next scene in the level order the bridge fills
+# in from the project's scenes.
+#
+# The run's statistics are ordinary globals, so a HUD can bind or print them:
+#   Kills Total, Kills <type>     from `add 1 to kills <type>` on the enemy death sheets
+#   Shots, Hits, Accuracy          one `spawn Bullet` from a player, one `"damage"` on an enemy
+#   Time Elapsed                   seconds spent in this level
+#   LevelName, LevelNumber         the current level (1-based)
+when level starts
+  print "Level started"
+
+when level completes
+  print "Level complete!"
+
+when all enemies dead
+  show text "Level complete!"
+  wait 2
+  next level

@@ -23,7 +23,13 @@ namespace Game
         public bool Stopped;
 
         public ValueBox ReadGlobal(string name)
-            => ResourceManager.Read(Variables, name);
+        {
+            // A statistic nobody wrote yet reads as 0 instead of warning: a fresh run asks
+            // `kills Zombie` before the first zombie dies (Task 16 Part G).
+            if (Levels.IsStatName(name) && !Variables.HasGlobal(name))
+                return Levels.DefaultFor(name);
+            return ResourceManager.Read(Variables, name);
+        }
 
         /// <summary>
         /// Reads one of the sheet actor's own variables. A few names are computed rather than
@@ -192,6 +198,17 @@ namespace Game
         public SoundBus Sounds = new SoundBus();
         /// <summary>Per-actor reload timers behind `reload` / `reloading` (Task 16 Part C).</summary>
         public WeaponClock Weapons = new WeaponClock();
+        /// <summary>Level order, current level and run statistics (Task 16 Part G).</summary>
+        public Levels Levels = new Levels();
+        /// <summary>The bridge loads the scene `next level` picks; a test can just record it.</summary>
+        public Action<string> OnLevelAdvance = name => { };
+        /// <summary>The level `next level` asked for, loaded at the end of the tick so the
+        /// `when level completes` events queued with it still run first.</summary>
+        private string pendingLevel = "";
+        /// <summary>True once an enemy (`my Type` set) has stood in this level, so a scene with
+        /// no enemies never claims "all enemies dead".</summary>
+        private bool enemiesSeen;
+        private bool allEnemiesDeadRaised;
         public double Time;
         /// <summary>Bridge flag: poll `touches` from world contacts (distance mode / both mode).</summary>
         public bool PollTouches;
@@ -343,8 +360,18 @@ namespace Game
                 sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.GameStart });
         }
 
-        public void SceneStarted()
+        /// <summary>
+        /// A scene finished loading. A level is a scene (Task 16 Part G), so this is also
+        /// where the level name/number and this level's clock are recorded; `when scene
+        /// starts` and `when level starts` both answer it. Statistics survive (a run spans
+        /// levels) — only <c>Time Elapsed</c> restarts.
+        /// </summary>
+        public void SceneStarted(string levelName = "")
         {
+            Levels.Start(levelName, Variables, Time);
+            enemiesSeen = false;
+            allEnemiesDeadRaised = false;
+            pendingLevel = "";
             foreach (var sheet in sheets)
                 sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.SceneStart });
         }
@@ -466,7 +493,12 @@ namespace Game
                 return;
             sheet.PushQueue.Enqueue(signal);
             if (signal.Kind == TriggerKind.Message && IsDamageMessage(signal.Name))
+            {
                 NoteDamage(sheet.Actor, signal.Other);
+                // A landed shot on an enemy feeds `accuracy` (Task 16 Part G).
+                if (IsEnemy(sheet.Actor))
+                    Levels.CountHit(Variables);
+            }
         }
 
         /// <summary>Remembers what produced a spawned actor, so `my spawnedFrom` can name it
@@ -920,6 +952,8 @@ namespace Game
             // Player joins/deaths/score edges (Task 16 Part F) are pushed before the drain too,
             // so `when player 1 dies` runs in the same tick its health reached 0.
             TickPlayers();
+            // Level clock, accuracy and `when all enemies dead` (Task 16 Part G).
+            TickLevel(time);
             var snapshot = sheets.ToArray();
             foreach (var sheet in snapshot)
             {
@@ -985,6 +1019,71 @@ namespace Game
 
             foreach (var sheet in snapshot)
                 sheet.LastState = sheet.CurrentState;
+
+            // `next level` asked for a scene: load it only now, so the events queued with the
+            // signal (`when level completes`) have had their run this tick.
+            if (pendingLevel.Length > 0)
+            {
+                string next = pendingLevel;
+                pendingLevel = "";
+                OnLevelAdvance(next);
+            }
+        }
+
+        /// <summary>
+        /// Once a tick: refreshes the level clock and accuracy, and raises
+        /// <c>when all enemies dead</c> on the edge from "some enemy alive" to "none". An
+        /// enemy is any actor whose sheet carries <c>my Type</c> (what `enemy type` writes).
+        /// </summary>
+        private void TickLevel(double time)
+        {
+            Levels.Tick(time, Variables);
+            bool living = false;
+            foreach (var sheet in sheets)
+            {
+                if (!IsEnemy(sheet.Actor))
+                    continue;
+                enemiesSeen = true;
+                if (EnemyHealthOf(sheet.Actor) > 0)
+                    living = true;
+            }
+            bool allDead = enemiesSeen && !living;
+            if (allDead && !allEnemiesDeadRaised)
+            {
+                allEnemiesDeadRaised = true;
+                RaisePushAll(new PushSignal { Kind = TriggerKind.AllEnemiesDead });
+            }
+            else if (!allDead)
+            {
+                allEnemiesDeadRaised = false;
+            }
+        }
+
+        /// <summary>An enemy is an actor whose sheet was given a type by `enemy type`.</summary>
+        private bool IsEnemy(object actor)
+        {
+            if (actor == null || actor is GlobalHost)
+                return false;
+            return TypeOf(actor).Length > 0;
+        }
+
+        private string TypeOf(object actor)
+        {
+            return Variables.HasLocal(actor, "Type") ? Variables.GetLocal(actor, "Type").AsText() : "";
+        }
+
+        /// <summary>
+        /// The enemy's remaining hit points. The enemy sheets in this project spell the stat
+        /// lowercase (`my health`), while `enemy type` seeds the capitalised `my Health`; either
+        /// spelling answers here, and an enemy with neither counts as alive.
+        /// </summary>
+        private double EnemyHealthOf(object actor)
+        {
+            if (Variables.HasLocal(actor, "health"))
+                return Variables.GetLocal(actor, "health").AsNumber();
+            if (Variables.HasLocal(actor, "Health"))
+                return Variables.GetLocal(actor, "Health").AsNumber();
+            return 1;
         }
 
         private string NameOf(object actor)
@@ -1285,6 +1384,10 @@ namespace Game
                 {
                     ExecuteAdd(context, add);
                 }
+                else if (statement is AddKillNode addKill)
+                {
+                    ExecuteAddKill(context, addKill);
+                }
                 else if (statement is DeductNode deduct)
                 {
                     ExecuteDeduct(context, deduct);
@@ -1398,6 +1501,42 @@ namespace Game
                             OnRuntimeWarning($"I don't know the enemy type \u201C{typeName}\u201D \u2014 the built-in types are {EnemyTypes.KnownTypeNames()}, and a new type needs its own `<Type><Stat>` variables (see EnemyTypes.events).");
                         continue;
                     }
+                    // ---- level progression & statistics (Task 16 Part G) ----
+                    // All engine-free, so the stats and the level hand-off are the same code the
+                    // tests drive; only the actual scene load is the bridge's job.
+                    if (raw.Words.Count >= 2 && raw.Words[0].Text == "next" && raw.Words[1].Text == "level")
+                    {
+                        ExecuteNextLevel();
+                        continue;
+                    }
+                    if (raw.Words.Count >= 3 && raw.Words[0].Text == "set" && raw.Words[1].Text == "level" &&
+                        raw.Words[2].Text == "to")
+                    {
+                        ExecuteSetLevel(context, raw.Words);
+                        continue;
+                    }
+                    if (raw.Words.Count >= 2 && raw.Words[0].Text == "save" && raw.Words[1].Text == "stats")
+                    {
+                        Variables.SaveStats();
+                        continue;
+                    }
+                    if (raw.Words.Count >= 2 && raw.Words[0].Text == "load" && raw.Words[1].Text == "stats")
+                    {
+                        if (!Variables.LoadStats())
+                            OnRuntimeWarning("`load stats` found nothing saved yet — `save stats` first.");
+                        continue;
+                    }
+                    if (raw.Words.Count >= 2 && raw.Words[0].Text == "wipe" && raw.Words[1].Text == "game")
+                    {
+                        Variables.WipeGlobals();
+                        Levels.Reseed(Variables);
+                        continue;
+                    }
+                    // A `spawn Bullet` on a player's sheet is a shot fired — the accuracy
+                    // denominator. Enemy sheets shooting (`Turret.events`) don't count.
+                    if (raw.Words.Count >= 2 && raw.Words[0].Text == "spawn" && raw.Words[1].Text == "Bullet" &&
+                        context.Sheet != null && Players.IsPlayerActorName(context.Sheet.ActorName))
+                        Levels.CountShot(Variables);
                     if (IsStopThisEvent(raw))
                     {
                         context.Stopped = true;
@@ -1565,6 +1704,65 @@ namespace Game
                 Selection.AddToControlGroup(node.Group, context.Me);
         }
 
+        /// <summary>
+        /// <c>add 1 to kills &lt;type&gt;</c> — one kill for that enemy type and for
+        /// <c>Kills Total</c> (Task 16 Part G). <c>add 1 to kills my Type</c> reads the type
+        /// from the actor, so one sheet can serve every enemy type.
+        /// </summary>
+        private void ExecuteAddKill(EventContext context, AddKillNode node)
+        {
+            string type = node.TypeVariable.Length > 0
+                ? context.ReadMy(node.TypeVariable).AsText()
+                : node.EnemyType;
+            if (string.IsNullOrEmpty(type))
+            {
+                OnRuntimeWarning("`add ... to kills my Type` needs `enemy type <name>` to have run first — nothing was counted.");
+                return;
+            }
+            string canonical = EnemyTypes.CanonicalFor(context.Variables, type) ?? type;
+            Levels.CountKill(canonical, context.Evaluate(node.Amount).AsNumber(), Variables);
+        }
+
+        /// <summary>
+        /// <c>next level</c>: raises <c>when level completes</c> and asks the bridge for the
+        /// next scene in the level order. The load itself happens at the end of the tick, so
+        /// the events queued with the signal still run (see <see cref="Tick"/>).
+        /// </summary>
+        private void ExecuteNextLevel()
+        {
+            RaisePushAll(new PushSignal { Kind = TriggerKind.LevelComplete });
+            string next = Levels.NextName();
+            if (string.IsNullOrEmpty(next))
+            {
+                OnRuntimeWarning(Levels.Order.Count == 0
+                    ? "`next level` needs a level order — the bridge fills it from the project's scenes; on a level that is not in it, use `load scene \"<name>\"`."
+                    : $"\u201C{Levels.Current}\u201D is the last level, so `next level` has nowhere to go.");
+                return;
+            }
+            pendingLevel = next;
+        }
+
+        /// <summary><c>set level to &lt;n&gt;</c>: records the run's level without loading it.</summary>
+        private void ExecuteSetLevel(EventContext context, List<Token> words)
+        {
+            if (words.Count < 4)
+            {
+                OnRuntimeWarning("`set level` looks like this: `set level to 2`");
+                return;
+            }
+            double value;
+            if (words[3].Type == TokenType.Number)
+                value = words[3].Number;
+            else if (words[3].Type == TokenType.Word)
+                value = context.ReadGlobal(words[3].Text).AsNumber();
+            else
+            {
+                OnRuntimeWarning("`set level` takes a level number, like `set level to 2`");
+                return;
+            }
+            Levels.SetNumber(value, Variables);
+        }
+
         private void ExecuteAdd(EventContext context, AddNode add)
         {
             // `add Sword to my bag` puts a named item in the bag (counted). The amount names
@@ -1710,9 +1908,7 @@ namespace Game
             }
             if (targetName == "other")
             {
-                FindSheetFor(context.Other)?.PushQueue.Enqueue(signal);
-                if (IsDamageMessage(message))
-                    NoteDamage(context.Other, context.Me);
+                DeliverToSheet(FindSheetFor(context.Other), signal);
                 return;
             }
             SendRawMessage(signal, targetName);

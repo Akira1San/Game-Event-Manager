@@ -5860,6 +5860,247 @@ Check(optMenuEngine.IsCapturingKey && optMenuEngine.TryCompleteCapture("K", null
 Check(optMenuEngine.Variables.GetGlobal("Leaving").AsNumber() == 0,
     "the options menu changes scene only once, through its `Leaving` guard");
 
+// ---- Task 16 Part G: level progression & statistics ----
+
+// Grammar: the level triggers, the statistic conditions/values and the actions.
+Check(ClassifyOne("when level starts\n  print \"a\"\n").Kind == TriggerKind.SceneStart,
+    "`when level starts` is the level start edge (the same signal as `when scene starts`)");
+Check(ClassifyOne("when level completes\n  print \"a\"\n").Kind == TriggerKind.LevelComplete,
+    "`when level completes` classifies to LevelComplete");
+Check(ClassifyOne("when all enemies dead\n  print \"a\"\n").Kind == TriggerKind.AllEnemiesDead,
+    "`when all enemies dead` classifies to AllEnemiesDead");
+var levelNumberCondition = PlayerCondition("level number is 3");
+Check(levelNumberCondition.Kind == ConditionKind.Equal && levelNumberCondition.Name == "LevelNumber",
+    "`level number is 3` compares the 1-based level number");
+var levelNameCondition = PlayerCondition("level is \"Hospital\"");
+Check(levelNameCondition.Kind == ConditionKind.Equal && levelNameCondition.Name == "LevelName",
+    "`level is \"Hospital\"` compares the level name");
+var killsCondition = PlayerCondition("kills Zombie is 5");
+Check(killsCondition.Kind == ConditionKind.Equal && killsCondition.Name == "Kills Zombie",
+    "`kills Zombie is 5` reads that type's kill counter");
+var accuracyCondition = PlayerCondition("accuracy is lower than 50");
+Check(accuracyCondition.Kind == ConditionKind.Lower && accuracyCondition.Name == "Accuracy",
+    "`accuracy is lower than 50` compares the hit percentage");
+
+var statReads = parser.Parse(@"when game starts
+  set A to kills total
+  set B to kills Zombie
+  set C to accuracy
+  set D to time elapsed
+  set E to level number
+  set F to level name");
+string StatTarget(int index) =>
+    ((SetNode)statReads.Events[0].Body[index].Statement).Value is VariableValue statValue ? statValue.Name : "?";
+Check(StatTarget(0) == "Kills Total" && StatTarget(1) == "Kills Zombie" && StatTarget(2) == "Accuracy" &&
+      StatTarget(3) == "Time Elapsed" && StatTarget(4) == "LevelNumber" && StatTarget(5) == "LevelName",
+    "kills total / kills <type> / accuracy / time elapsed / level number / level name read as values");
+
+var killNode = parser.Parse("when me appears\n  add 1 to kills Zombie\n").Events[0].Body[0].Statement;
+Check(killNode is AddKillNode killByType && killByType.EnemyType == "Zombie",
+    "`add 1 to kills Zombie` parses as a typed kill");
+var typedKillNode = parser.Parse("when me appears\n  add 1 to kills my Type\n").Events[0].Body[0].Statement;
+Check(typedKillNode is AddKillNode killByVariable && killByVariable.TypeVariable == "Type",
+    "`add 1 to kills my Type` reads the type from the enemy");
+Check(parser.Parse("when game starts\n  next level\n").Events[0].Body[0].Statement is RawActionNode nextRaw &&
+      nextRaw.Words[0].Text == "next" && nextRaw.Words[1].Text == "level",
+    "`next level` parses as an action");
+Check(parser.Parse("when game starts\n  set level to 2\n").Events[0].Body[0].Statement is RawActionNode setLevelRaw &&
+      setLevelRaw.Words[1].Text == "level" && setLevelRaw.Words[3].Number == 2,
+    "`set level to 2` parses as a level action, not a variable called level");
+Check(parser.Parse("when game starts\n  save stats\n  load stats\n  wipe game variables\n")
+        .Events[0].Body[2].Statement is RawActionNode wipeRaw && wipeRaw.Words[0].Text == "wipe",
+    "`save stats` / `load stats` / `wipe game variables` parse as actions");
+Check(WordRegistry.All.Any(e => e.Kind == "trigger" && e.Word == "when all enemies dead") &&
+      WordRegistry.All.Any(e => e.Kind == "action" && e.Word == "next") &&
+      WordRegistry.All.Any(e => e.Kind == "action" && e.Word == "set level to <n>") &&
+      WordRegistry.All.Any(e => e.Kind == "action" && e.Word == "wipe") &&
+      WordRegistry.All.Any(e => e.Kind == "value" && e.Word == "kills total"),
+    "the registry documents the level triggers, the statistics and the level actions");
+
+// Five zombie deaths count five kills, for the type and for the run total.
+var killsWorld = new FakeWorld();
+var killsGame = new FakeActor("Game");
+killsWorld.AddActor(killsGame);
+var killsEngine = FreshEngine(killsWorld);
+killsEngine.AddSheet(killsGame, parser.Parse("when message \"kill\" arrives\n  add 1 to kills Zombie"));
+for (int i = 0; i < 5; i++)
+{
+    killsEngine.RaisePush(killsGame, new PushSignal { Kind = TriggerKind.Message, Name = "kill" });
+    killsEngine.Tick(i);
+}
+Check(killsEngine.Variables.GetGlobal("Kills Zombie").AsNumber() == 5 &&
+      killsEngine.Variables.GetGlobal("Kills Total").AsNumber() == 5,
+    "five zombie kills read back as `kills Zombie` = 5 and `Kills Total` = 5");
+
+// A generic enemy sheet counts its own type.
+var typedWorld = new FakeWorld();
+var typedEnemy = new FakeActor("Guard");
+typedWorld.AddActor(typedEnemy);
+var typedEngine = FreshEngine(typedWorld);
+typedEngine.AddSheet(typedEnemy, parser.Parse("when message \"die\" arrives\n  add 1 to kills my Type"));
+typedEngine.Variables.SetLocal(typedEnemy, "Type", ValueBox.OfText("Turret"));
+typedEngine.RaisePush(typedEnemy, new PushSignal { Kind = TriggerKind.Message, Name = "die" });
+typedEngine.Tick(0);
+Check(typedEngine.Variables.GetGlobal("Kills Turret").AsNumber() == 1,
+    "`add 1 to kills my Type` counts a kill for the type the enemy was given");
+
+// Level start, `next level` and `set level to`.
+var levelWorld = new FakeWorld();
+var levelGame = new FakeActor("Game");
+levelWorld.AddActor(levelGame);
+var levelEngine = FreshEngine(levelWorld);
+var advanced = new List<string>();
+levelEngine.OnLevelAdvance = name => advanced.Add(name);
+levelEngine.Levels.SetOrder(new[] { "Level1", "Level2", "Level3" });
+levelEngine.AddSheet(levelGame, parser.Parse(@"when level starts
+  add 1 to LevelStarts
+when level completes
+  add 1 to LevelCompletes
+when message ""go"" arrives
+  next level
+when message ""jump"" arrives
+  set level to 3"));
+levelEngine.SessionStarted();
+levelEngine.SceneStarted("Level1");
+levelEngine.Tick(0);
+Check(levelEngine.Variables.GetGlobal("LevelName").AsText() == "Level1" &&
+      levelEngine.Variables.GetGlobal("LevelNumber").AsNumber() == 1,
+    "a level start records Level1 as level 1");
+Check(levelEngine.Variables.GetGlobal("LevelStarts").AsNumber() == 1,
+    "`when level starts` fires on the scene load");
+levelEngine.RaisePush(levelGame, new PushSignal { Kind = TriggerKind.Message, Name = "go" });
+levelEngine.Tick(1);
+Check(levelEngine.Variables.GetGlobal("LevelCompletes").AsNumber() == 1,
+    "`next level` raises `when level completes` before the scene changes");
+Check(advanced.Count == 1 && advanced[0] == "Level2",
+    "`next level` loads the next scene in the level order");
+levelEngine.RaisePush(levelGame, new PushSignal { Kind = TriggerKind.Message, Name = "jump" });
+levelEngine.Tick(2);
+Check(levelEngine.Variables.GetGlobal("LevelNumber").AsNumber() == 3 &&
+      levelEngine.Variables.GetGlobal("LevelName").AsText() == "Level3",
+    "`set level to 3` records the third level (and its name)");
+
+// Statistics persist across a checkpoint, and `wipe game variables` starts a new run.
+var statsWorld = new FakeWorld();
+var statsGame = new FakeActor("Game");
+statsWorld.AddActor(statsGame);
+var statsEngine = FreshEngine(statsWorld);
+statsEngine.Levels.SetOrder(new[] { "Level1", "Level2" });
+statsEngine.AddSheet(statsGame, parser.Parse(@"when message ""kill"" arrives
+  add 1 to kills Zombie
+when message ""save"" arrives
+  save stats
+when message ""load"" arrives
+  load stats
+when message ""wipe"" arrives
+  wipe game variables"));
+statsEngine.SceneStarted("Level2");
+void StatsMessage(string message, double time)
+{
+    statsEngine.RaisePush(statsGame, new PushSignal { Kind = TriggerKind.Message, Name = message });
+    statsEngine.Tick(time);
+}
+foreach (int i in new[] { 0, 1, 2 })
+    StatsMessage("kill", i);
+StatsMessage("save", 3);
+StatsMessage("kill", 4);
+StatsMessage("kill", 5);
+Check(statsEngine.Variables.GetGlobal("Kills Zombie").AsNumber() == 5,
+    "two more kills after `save stats` read back as 5");
+StatsMessage("load", 6);
+Check(statsEngine.Variables.GetGlobal("Kills Zombie").AsNumber() == 3 &&
+      statsEngine.Variables.GetGlobal("Kills Total").AsNumber() == 3,
+    "`load stats` restores the saved kill counters");
+StatsMessage("wipe", 7);
+Check(statsEngine.Variables.GetGlobal("Kills Zombie").AsNumber() == 0 &&
+      statsEngine.Variables.GetGlobal("LevelNumber").AsNumber() == 2,
+    "`wipe game variables` clears the run's counters but keeps the current level");
+
+// A player's shot and a landed hit drive `accuracy`; `time elapsed` counts the level.
+var aimWorld = new FakeWorld();
+var aimPlayer = new FakeActor("Player");
+var aimEnemy = new FakeActor("Zombie");
+aimWorld.AddActor(aimPlayer);
+aimWorld.AddActor(aimEnemy);
+var aimEngine = FreshEngine(aimWorld);
+aimEngine.AddSheet(aimPlayer, parser.Parse("when Space is pressed\n  spawn Bullet at me offset 30"));
+aimEngine.AddSheet(aimEnemy, parser.Parse("when message \"damage\" arrives\n  set my LastDmg to other's Damage"));
+aimEngine.Variables.SetLocal(aimEnemy, "Type", ValueBox.OfText("Zombie"));
+aimEngine.Variables.SetLocal(aimEnemy, "health", ValueBox.OfNumber(10));
+aimEngine.SceneStarted("Level1");
+aimEngine.Tick(0);
+aimEngine.RaisePushAll(new PushSignal
+{
+    Kind = TriggerKind.KeyPressed,
+    Name = "Space",
+    PlayerA = aimEngine.PlayerForKey("Space"),
+});
+aimEngine.Tick(1);
+Check(aimEngine.Variables.GetGlobal("Shots").AsNumber() == 1,
+    "a player's `spawn Bullet` counts as a shot");
+aimEngine.SendRawMessage(new PushSignal { Kind = TriggerKind.Message, Name = "damage", Other = aimPlayer }, "Zombie");
+aimEngine.Tick(2);
+Check(aimEngine.Variables.GetGlobal("Hits").AsNumber() == 1 &&
+      Math.Abs(aimEngine.Variables.GetGlobal("Accuracy").AsNumber() - 100) < 1e-6,
+    "a landed `\"damage\"` on an enemy counts as a hit (one shot, one hit → 100%)");
+Check(Math.Abs(aimEngine.Variables.GetGlobal("Time Elapsed").AsNumber() - 2) < 1e-6,
+    "`time elapsed` counts the seconds since this level started");
+
+// `when all enemies dead` fires once, and only for a level that had enemies.
+var clearWorld = new FakeWorld();
+var clearGame = new FakeActor("Game");
+var clearZombieA = new FakeActor("ZombieA");
+var clearZombieB = new FakeActor("ZombieB");
+clearWorld.AddActor(clearGame);
+clearWorld.AddActor(clearZombieA);
+clearWorld.AddActor(clearZombieB);
+var clearEngine = FreshEngine(clearWorld);
+clearEngine.AddSheet(clearGame, parser.Parse("when all enemies dead\n  add 1 to Clears"));
+clearEngine.AddSheet(clearZombieA, parser.Parse("when me appears\n  set my mode to \"patrol\""));
+clearEngine.AddSheet(clearZombieB, parser.Parse("when me appears\n  set my mode to \"patrol\""));
+clearEngine.SceneStarted("Level1");
+clearEngine.Tick(0);
+Check(clearEngine.Variables.GetGlobal("Clears").AsNumber() == 0,
+    "a level with no enemies is not a cleared level");
+clearEngine.Variables.SetLocal(clearZombieA, "Type", ValueBox.OfText("Zombie"));
+clearEngine.Variables.SetLocal(clearZombieA, "health", ValueBox.OfNumber(50));
+clearEngine.Variables.SetLocal(clearZombieB, "Type", ValueBox.OfText("Zombie"));
+clearEngine.Variables.SetLocal(clearZombieB, "health", ValueBox.OfNumber(50));
+clearEngine.Tick(1);
+Check(clearEngine.Variables.GetGlobal("Clears").AsNumber() == 0,
+    "a living enemy keeps the level open");
+clearEngine.Variables.SetLocal(clearZombieA, "health", ValueBox.OfNumber(0));
+clearEngine.Tick(2);
+Check(clearEngine.Variables.GetGlobal("Clears").AsNumber() == 0,
+    "the level stays open while one enemy lives");
+clearEngine.Variables.SetLocal(clearZombieB, "health", ValueBox.OfNumber(0));
+clearEngine.Tick(3);
+clearEngine.Tick(4);
+Check(clearEngine.Variables.GetGlobal("Clears").AsNumber() == 1,
+    "`when all enemies dead` fires once when the last enemy dies");
+
+// The shipped sheets carry the wiring.
+var shippedGameLevels = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Game.events"));
+bool gameClearsLevel = false, gameAdvancesLevel = false;
+foreach (var shippedEvent in shippedGameLevels.Events)
+{
+    if (TriggerClassifier.Classify(shippedEvent).Kind == TriggerKind.AllEnemiesDead)
+        gameClearsLevel = true;
+    foreach (var shippedLine in shippedEvent.Body)
+        if (shippedLine.Statement is RawActionNode shippedRaw && shippedRaw.Words.Count >= 1 &&
+            shippedRaw.Words[0].Text == "next")
+            gameAdvancesLevel = true;
+}
+Check(gameClearsLevel && gameAdvancesLevel,
+    "Game.events clears a level: `when all enemies dead` -> \"Level complete!\" -> `next level`");
+var shippedZombieKills = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Zombie.events"));
+bool zombieCountsKill = false;
+foreach (var shippedEvent in shippedZombieKills.Events)
+    foreach (var shippedLine in shippedEvent.Body)
+        if (shippedLine.Statement is AddKillNode shippedKill && shippedKill.EnemyType == "Zombie")
+            zombieCountsKill = true;
+Check(zombieCountsKill, "Zombie.events counts its kills with `add 1 to kills Zombie`");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

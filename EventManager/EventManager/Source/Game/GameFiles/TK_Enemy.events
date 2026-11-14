@@ -55,6 +55,7 @@ when message "damage" arrives
   set my health to my health - my LastDmg
 
 when my health becomes 0
+  add 1 to kills my Type
   if my ExplosionDeath is true
   spawn Explosion at me
   otherwise

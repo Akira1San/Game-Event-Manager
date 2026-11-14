@@ -35,6 +35,7 @@ when message "damage" arrives
   set my health to my health - my LastDmg
 
 when my health becomes 0
+  add 1 to kills Zombie
   spawn Gib at me offset 0
   spawn Gib at me offset 12
   spawn Gib at me offset -12

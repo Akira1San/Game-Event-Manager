@@ -192,4 +192,14 @@ namespace Game
         public string Weapon = "";
         public string WeaponVariable = "";
     }
+
+    /// <summary><c>add 1 to kills &lt;enemyType&gt;</c> — counts a kill for that type and for
+    /// <c>Kills Total</c> (Task 16 Part G). <see cref="TypeVariable"/> reads the type from the
+    /// actor instead (<c>add 1 to kills my Type</c>), so one enemy sheet serves every type.</summary>
+    public class AddKillNode : StatementNode
+    {
+        public ValueNode Amount = new NumberValue();
+        public string EnemyType = "";
+        public string TypeVariable = "";
+    }
 }

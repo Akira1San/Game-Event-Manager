@@ -3194,6 +3194,49 @@ namespace Game
             return false;
         }
 
+        /// <summary>
+        /// <c>next level</c> (Task 16 Part G): loads the scene the level order named. The
+        /// scene replacement path is the same one `load scene` uses.
+        /// </summary>
+        public static bool LoadLevel(string name)
+        {
+            return LoadSceneByName(name);
+        }
+
+        /// <summary>
+        /// The scene names that make up the level order `next level` walks. Flax 1.13 has no
+        /// runtime access to the editor's build list, so this is every scene the content
+        /// database knows (plus raw <c>.scene</c> files), de-duplicated and sorted — a stable
+        /// order, and the loaded scene is always in it.
+        /// </summary>
+        public static List<string> KnownSceneNames()
+        {
+            var names = new List<string>();
+            foreach (var scene in Level.Scenes)
+                if (scene != null && !names.Contains(scene.Name))
+                    names.Add(scene.Name);
+            foreach (var id in Content.GetAllAssetsByType(typeof(Scene)))
+            {
+                if (!Content.GetAssetInfo(id, out AssetInfo info))
+                    continue;
+                string name = System.IO.Path.GetFileNameWithoutExtension(info.Path);
+                if (!names.Contains(name))
+                    names.Add(name);
+            }
+            string contentDir = System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "Content");
+            if (System.IO.Directory.Exists(contentDir))
+            {
+                foreach (var file in System.IO.Directory.GetFiles(contentDir, "*.scene", System.IO.SearchOption.AllDirectories))
+                {
+                    string name = System.IO.Path.GetFileNameWithoutExtension(file);
+                    if (!names.Contains(name))
+                        names.Add(name);
+                }
+            }
+            names.Sort(StringComparer.OrdinalIgnoreCase);
+            return names;
+        }
+
         private static bool LoadSceneByName(string name)
         {
             if (!TryFindSceneId(name, out Guid id))

@@ -76,6 +76,9 @@ namespace Game
         AllPlayersDead,
         // Per-player input bindings (Task 16 input follow-ups)
         BindingChanges,
+        // Level progression (Task 16 Part G)
+        LevelComplete,
+        AllEnemiesDead,
     }
 
     public class TriggerDescriptor
@@ -249,6 +252,16 @@ namespace Game
                     Key = Selection.KeyForGroup(group),
                 };
             }
+            // ---- level progression (Task 16 Part G) ----
+            // A level is a scene, so `when level starts` is the same edge as `when scene
+            // starts`; `when level completes` has its own signal, raised by `next level`.
+            if (words.Length == 2 && words[0] == "level" && words[1] == "starts")
+                return new TriggerDescriptor { Kind = TriggerKind.SceneStart };
+            if (words.Length == 2 && words[0] == "level" && words[1] == "completes")
+                return new TriggerDescriptor { Kind = TriggerKind.LevelComplete };
+            // `when all enemies dead` — polled once a tick (every enemy type is `my Type`-tagged).
+            if (words.Length == 3 && words[0] == "all" && words[1] == "enemies" && words[2] == "dead")
+                return new TriggerDescriptor { Kind = TriggerKind.AllEnemiesDead };
             if (words.Length >= 2 && words[0] == "game" && words[words.Length - 1] == "starts")
                 return new TriggerDescriptor { Kind = TriggerKind.GameStart };
             if (words.Length >= 2 && words[0] == "scene" && words[words.Length - 1] == "starts")

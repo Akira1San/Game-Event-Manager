@@ -423,6 +423,45 @@ namespace Game
                 }
             }
 
+            // ---- level progression & statistics (Task 16 Part G) ----
+            // `level number is 3`, `level is "Level2"`, `kills Zombie is 5`, `accuracy is
+            // lower than 50` … The statistic names are multiword, so they are read here
+            // before the generic `<var> is <value>` shape (which would keep only the last word).
+            if (texts.Length >= 3 && texts[0] == "level" && texts[1] == "is")
+            {
+                node.Kind = ConditionKind.Equal;
+                node.Name = Levels.NameVariable;
+                node.Right = ValueFrom(tokens, texts, 2);
+                return node;
+            }
+            if (Levels.TryReadStatName(tokens, 0, out string statName, out int statUsed) &&
+                texts.Length >= statUsed + 2 && texts[statUsed] == "is")
+            {
+                {
+                    node.Name = statName;
+                    bool statNot = texts.Length >= statUsed + 3 && texts[statUsed + 1] == "not";
+                    bool statHigher = texts.Length >= statUsed + 3 && texts[statUsed + 1] == "higher";
+                    bool statLower = texts.Length >= statUsed + 3 && texts[statUsed + 1] == "lower";
+                    if (statNot)
+                    {
+                        node.Kind = ConditionKind.NotEqual;
+                        node.Right = ValueFrom(tokens, texts, statUsed + 2);
+                    }
+                    else if (statHigher || statLower)
+                    {
+                        // `accuracy is lower than 50` / `kills total is higher than 5`.
+                        node.Kind = statHigher ? ConditionKind.Higher : ConditionKind.Lower;
+                        node.Right = ValueFromSpan(tokens, texts, statUsed + 3);
+                    }
+                    else
+                    {
+                        node.Kind = ConditionKind.Equal;
+                        node.Right = ValueFrom(tokens, texts, statUsed + 1);
+                    }
+                    return node;
+                }
+            }
+
             int isIndex = IndexOf(texts, "is");
             if (isIndex > 0)
             {

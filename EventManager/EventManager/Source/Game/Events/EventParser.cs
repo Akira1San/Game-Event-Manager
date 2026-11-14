@@ -609,6 +609,14 @@ namespace Game
                 index += 2;
                 return new VariableValue { Line = t.Line, Name = setting };
             }
+            // Level statistics (Task 16 Part G): `kills total`, `kills Zombie`, `accuracy`,
+            // `time elapsed`, `level number` and `level name`. These are lowercase words, so
+            // they must be recognised before the capital-letter variable rule below.
+            if (Levels.TryReadStatName(words, index, out string statName, out int statUsed))
+            {
+                index += statUsed;
+                return new VariableValue { Line = t.Line, Name = statName };
+            }
             // The run-together spelling `Player1Score` reads as the same variable.
             if (Players.TryReadVariableName(t.Text, out string runTogetherVariable))
             {
@@ -713,6 +721,14 @@ namespace Game
                 ammoNode.Value = ReadValue(words, ref ammoIndex, line.Line);
                 CheckEndOfLine(words, ammoIndex, line.Line, "set ammo Pistol to 12");
                 return ammoNode;
+            }
+            // `set level to <n>` — level progression (Task 16 Part G). The current level is
+            // runtime state, not a global variable called "level".
+            if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "level")
+            {
+                var levelRaw = new RawActionNode { Line = line.Line };
+                levelRaw.Words.AddRange(words);
+                return levelRaw;
             }
             // `set light intensity/color/range to <value>` — handled as a raw action word.
             if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "light")
@@ -961,6 +977,51 @@ namespace Game
                     ammoNode.WeaponVariable = ammoVariable;
                     CheckEndOfLine(words, ammoIndex, line.Line, "add -1 to ammo Pistol");
                     return ammoNode;
+                }
+            }
+            // `add 1 to kills <enemyType>` / `add 1 to kills my Type` — level statistics
+            // (Task 16 Part G). Detected before the generic `add` shape so `kills` is never
+            // read as a variable.
+            {
+                int killsTo = -1;
+                for (int i = 2; i < words.Count; i++)
+                {
+                    if (words[i].Type == TokenType.Word && words[i].Text == "to")
+                    {
+                        killsTo = i;
+                        break;
+                    }
+                }
+                if (killsTo > 1 && killsTo + 1 < words.Count && words[killsTo + 1].Type == TokenType.Word &&
+                    words[killsTo + 1].Text == "kills")
+                {
+                    var killNode = new AddKillNode { Line = line.Line };
+                    int killIndex = 1;
+                    killNode.Amount = ReadValue(words, ref killIndex, line.Line);
+                    if (killNode.Amount is MathValue)
+                        throw new ParseException("`add` takes one plain value — do the math in a `set` line instead", line.Line);
+                    if (killIndex != killsTo)
+                        throw new ParseException("`add` to kills looks like this: `add 1 to kills Zombie`", line.Line);
+
+                    int typeIndex = killsTo + 2;
+                    if (typeIndex >= words.Count)
+                        throw new ParseException("`add` to kills names an enemy type — `add 1 to kills Zombie` or `add 1 to kills my Type`", line.Line);
+                    if (words[typeIndex].Type == TokenType.Word && words[typeIndex].Text == "my")
+                    {
+                        if (typeIndex + 1 >= words.Count || words[typeIndex + 1].Type != TokenType.Word)
+                            throw new ParseException("`add` to kills my Type` needs the variable after `my` — `add 1 to kills my Type`", line.Line);
+                        killNode.TypeVariable = words[typeIndex + 1].Text;
+                        typeIndex += 2;
+                    }
+                    else
+                    {
+                        if (words[typeIndex].Type != TokenType.Word)
+                            throw new ParseException("`add` to kills names an enemy type — `add 1 to kills Zombie`", line.Line);
+                        killNode.EnemyType = words[typeIndex].Text;
+                        typeIndex += 1;
+                    }
+                    CheckEndOfLine(words, typeIndex, line.Line, "add 1 to kills Zombie");
+                    return killNode;
                 }
             }
             // `add <n> to build progress of <building>` — named RTS construction

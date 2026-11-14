@@ -191,7 +191,11 @@ namespace Game
                 _sessionBegan = true;
                 Runtime.SessionStarted();
             }
-            Runtime.SceneStarted();
+            // Level progression (Task 16 Part G): the order `next level` walks comes from the
+            // project's scenes, and the scene that just loaded is the current level.
+            Runtime.Levels.SetOrder(FlaxActions.KnownSceneNames());
+            Runtime.OnLevelAdvance = name => FlaxActions.LoadLevel(name);
+            Runtime.SceneStarted(Level.ScenesCount > 0 ? Level.GetScene(0).Name : "");
 
             // Camera framing lives in globals so events can author it (variable names start
             // with a capital letter): `set CameraPitch to 90` before `camera follows me`.

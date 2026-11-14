@@ -66,6 +66,8 @@ when message "damage" arrives
 
 # ---- death drops loot ----
 when my health becomes 0
+  # Part G: the type this enemy was given counts the kill (`my Type`).
+  add 1 to kills my Type
   # Part E: gibs for every type, and an `ExplosionDeath` type (Turret) bursts instead of
   # leaving chunks — `my ExplosionDeath` comes from the enemy-type data (Task 16 Part D).
   chance 30%
