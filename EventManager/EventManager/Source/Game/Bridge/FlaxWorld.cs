@@ -31,6 +31,51 @@ namespace Game
             return false;
         }
 
+        /// <summary>Written gamepad button names → Flax's <c>GamepadButton</c>. A name we don't
+        /// know fails rather than answering for another button.</summary>
+        private static readonly Dictionary<string, GamepadButton> GamepadButtonNames =
+            new Dictionary<string, GamepadButton>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "A", GamepadButton.A },
+                { "B", GamepadButton.B },
+                { "X", GamepadButton.X },
+                { "Y", GamepadButton.Y },
+                { "LeftShoulder", GamepadButton.LeftShoulder },
+                { "RightShoulder", GamepadButton.RightShoulder },
+                { "Back", GamepadButton.Back },
+                { "Start", GamepadButton.Start },
+                { "DPadUp", GamepadButton.DPadUp },
+                { "DPadDown", GamepadButton.DPadDown },
+                { "DPadLeft", GamepadButton.DPadLeft },
+                { "DPadRight", GamepadButton.DPadRight },
+                { "LeftStickUp", GamepadButton.LeftStickUp },
+                { "LeftStickDown", GamepadButton.LeftStickDown },
+                { "LeftStickLeft", GamepadButton.LeftStickLeft },
+                { "LeftStickRight", GamepadButton.LeftStickRight },
+                { "RightStickUp", GamepadButton.RightStickUp },
+                { "RightStickDown", GamepadButton.RightStickDown },
+                { "RightStickLeft", GamepadButton.RightStickLeft },
+                { "RightStickRight", GamepadButton.RightStickRight },
+            };
+
+        /// <summary>Thumb stick buttons need a dead zone before they count as pressed.</summary>
+        public const float GamepadDeadZone = 0.3f;
+
+        public static bool TryGetGamepadButton(string name, out GamepadButton button)
+        {
+            button = default;
+            if (string.IsNullOrEmpty(name))
+                return false;
+            return GamepadButtonNames.TryGetValue(name.Trim(), out button);
+        }
+
+        public bool IsGamepadButtonHeld(int gamepad, string button)
+        {
+            if (!TryGetGamepadButton(button, out GamepadButton mapped))
+                return false;
+            return Input.GetGamepadButton(gamepad, mapped, GamepadDeadZone);
+        }
+
         static bool TryParseKey(string name, out KeyboardKeys keys)
         {
             keys = default;

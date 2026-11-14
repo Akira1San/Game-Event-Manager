@@ -5,6 +5,10 @@ namespace Game
     public interface IEventWorld
     {
         bool IsKeyHeld(string key);
+        /// <summary>True while the named <c>GamepadButton</c> ("A", "LeftStickUp", …) is held on
+        /// that gamepad. Player 1 reads pad 0 and player 2 pad 1, so two controllers drive the
+        /// two local players (Task 16 input follow-ups).</summary>
+        bool IsGamepadButtonHeld(int gamepad, string button);
         double Distance(object from, object to);
         /// <summary>Horizontal (XZ) distance ignoring height. Ground-plane triggers
         /// (<c>near</c>, <c>arrives</c>) use this so a tall prop's pivot can't keep it
@@ -64,6 +68,11 @@ namespace Game
     public class DefaultEventWorld : IEventWorld
     {
         public bool IsKeyHeld(string key)
+        {
+            return false;
+        }
+
+        public bool IsGamepadButtonHeld(int gamepad, string button)
         {
             return false;
         }

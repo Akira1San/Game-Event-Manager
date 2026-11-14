@@ -1,0 +1,4423 @@
+{
+ "ID": "7764eeb8f37946ed83374b1f37aa0d34",
+ "TypeName": "FlaxEngine.SceneAsset",
+ "EngineBuild": 7012,
+ "Data": [
+  {
+   "ID": "e547a4d0ccb04401b73010a18c97fc45",
+   "TypeName": "FlaxEngine.Scene",
+   "LightmapSettings": {
+    "IndirectLightingIntensity": 1.0,
+    "GlobalObjectsScale": 1.0,
+    "ChartsPadding": 3,
+    "AtlasSize": 1024,
+    "BounceCount": 1,
+    "CompressLightmaps": true,
+    "UseGeometryWithNoMaterials": true,
+    "Quality": 10
+   }
+  },
+  {
+   "ID": "c0d111d546ad457b8fc91ffdc75976a7",
+   "TypeName": "FlaxEngine.DirectionalLight",
+   "ParentID": "e547a4d0ccb04401b73010a18c97fc45",
+   "Name": "Sun",
+   "Transform": {
+    "Translation": {
+     "X": 40.0,
+     "Y": 160.0,
+     "Z": 0.0
+    },
+    "Orientation": {
+     "X": 0.3826834559440613,
+     "Y": 0.0,
+     "Z": 0.0,
+     "W": 0.9238795042037964
+    }
+   },
+   "ShadowsResolution": 512
+  },
+  {
+   "ID": "d8adb21321254e16b9decbd56f28c4b9",
+   "TypeName": "FlaxEngine.Sky",
+   "ParentID": "e547a4d0ccb04401b73010a18c97fc45",
+   "Name": "Sky",
+   "Transform": {
+    "Translation": {
+     "X": 40.0,
+     "Y": 150.0,
+     "Z": 0.0
+    }
+   },
+   "Sun": "b222c333d444e555f666a777b888c999"
+  },
+  {
+   "ID": "0cf17c72f4e741fc811fde6648f3e5b5",
+   "TypeName": "FlaxEngine.SkyLight",
+   "ParentID": "e547a4d0ccb04401b73010a18c97fc45",
+   "Name": "SkyLight",
+   "Brightness": 2.5,
+   "CustomTexture": "c54410104ff39427bc11e5bc761d66b0"
+  },
+  {
+   "ID": "2f8195cf0261496e95350eaf210d7b0c",
+   "TypeName": "FlaxEngine.UICanvas",
+   "ParentID": "e547a4d0ccb04401b73010a18c97fc45",
+   "Name": "ui canvas",
+   "Transform": {
+    "Orientation": {
+     "X": 1.0,
+     "Y": 4.371138828673793e-08,
+     "Z": 4.371138828673793e-08,
+     "W": 1.910685465164705e-15
+    }
+   },
+   "V": {}
+  },
+  {
+   "ID": "bd87a393fb8a4d468e5d855cb443ec28",
+   "TypeName": "FlaxEngine.EmptyActor",
+   "ParentID": "e547a4d0ccb04401b73010a18c97fc45",
+   "Name": "TK4Options"
+  },
+  {
+   "ID": "da3db7f98b08407ba89c4dcce2e67ab7",
+   "TypeName": "Game.EventsManager",
+   "ParentID": "bd87a393fb8a4d468e5d855cb443ec28",
+   "V": {
+    "Runtime": {
+     "Variables": {
+      "OnWarning": {}
+     },
+     "World": {
+      "$type": "Game.DefaultEventWorld, Game.CSharp"
+     }
+    }
+   }
+  },
+  {
+   "ID": "36bfc3fe16af46718452407ed022d844",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "TitleLabel",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Input Bindings",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 30.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 80.0,
+     "Right": 780.0,
+     "Top": 40.0,
+     "Bottom": 90.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "15b2c4b8e9ce4bd1ba07c914e3dcd6f9",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "HintLabel",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Click an action, then press a new key or gamepad button.",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 80.0,
+     "Right": 1840.0,
+     "Top": 92.0,
+     "Bottom": 122.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "e1d8ae073d1740c98e6ee6e2d4447bf2",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1Header",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "PLAYER 1",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 20.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 80.0,
+     "Right": 480.0,
+     "Top": 140.0,
+     "Bottom": 170.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "4eeb0b08fd3f49e58687fb5fa30af896",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1TurnLeft",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Turn Left",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 80.0,
+     "Right": 400.0,
+     "Top": 180.0,
+     "Bottom": 220.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "1455640b658e4918ac80db2169bfbbe6",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1TurnLeftKey",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 420.0,
+     "Right": 660.0,
+     "Top": 180.0,
+     "Bottom": 220.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "1c7568b9c4134813a060edbd2f670f64",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1TurnRight",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Turn Right",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 80.0,
+     "Right": 400.0,
+     "Top": 232.0,
+     "Bottom": 272.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "bd6a7cf6c15641bda60d2a1d47cee244",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1TurnRightKey",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 420.0,
+     "Right": 660.0,
+     "Top": 232.0,
+     "Bottom": 272.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "afc13bcddbe54998956f789824d52c02",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1Forward",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Move Forward",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 80.0,
+     "Right": 400.0,
+     "Top": 284.0,
+     "Bottom": 324.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "5cfd7c4fa6284511aa1d187c7d8e3a57",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1ForwardKey",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 420.0,
+     "Right": 660.0,
+     "Top": 284.0,
+     "Bottom": 324.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "cc384c94c4984b958325eb20296d49f4",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1Back",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Move Backward",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 80.0,
+     "Right": 400.0,
+     "Top": 336.0,
+     "Bottom": 376.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "b70720b6509e4d9c833f3a1da351ff87",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1BackKey",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 420.0,
+     "Right": 660.0,
+     "Top": 336.0,
+     "Bottom": 376.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "2387b99e4b7c4ff1ade265d22f5b471a",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1Shoot",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Shoot",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 80.0,
+     "Right": 400.0,
+     "Top": 388.0,
+     "Bottom": 428.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "a8acc551dbd64447b845236c7b1bc1b0",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1ShootKey",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 420.0,
+     "Right": 660.0,
+     "Top": 388.0,
+     "Bottom": 428.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "e458e1db3715411c8dfa55142a2a77e1",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1Sprint",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Sprint",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 80.0,
+     "Right": 400.0,
+     "Top": 440.0,
+     "Bottom": 480.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "642a637f5dcc4f5e8f67158b239aa3b4",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1SprintKey",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 420.0,
+     "Right": 660.0,
+     "Top": 440.0,
+     "Bottom": 480.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "79f93193521a45a6a8e3b036aa19003e",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1Reload",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Reload",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 80.0,
+     "Right": 400.0,
+     "Top": 492.0,
+     "Bottom": 532.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "475523a52b1c48c9a5472c951c5ecdab",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1ReloadKey",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 420.0,
+     "Right": 660.0,
+     "Top": 492.0,
+     "Bottom": 532.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "33c31b1b3e9d4e45bcbfb2e1229dbe19",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1Weapon1",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Weapon 1",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 80.0,
+     "Right": 400.0,
+     "Top": 544.0,
+     "Bottom": 584.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "f1812d3059924a1cbe5a3fa01a4497d3",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1Weapon1Key",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 420.0,
+     "Right": 660.0,
+     "Top": 544.0,
+     "Bottom": 584.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "64802d585f1f4508bd8b8a9ce7319bea",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1Weapon2",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Weapon 2",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 80.0,
+     "Right": 400.0,
+     "Top": 596.0,
+     "Bottom": 636.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "c930a56341ca4691b152cc0998ee1906",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1Weapon2Key",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 420.0,
+     "Right": 660.0,
+     "Top": 596.0,
+     "Bottom": 636.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "5132c8c0f87441589a29bf50bb9c7f59",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1Weapon3",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Weapon 3",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 80.0,
+     "Right": 400.0,
+     "Top": 648.0,
+     "Bottom": 688.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "c043c2d90fa84636ad156b895da20c48",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P1Weapon3Key",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 420.0,
+     "Right": 660.0,
+     "Top": 648.0,
+     "Bottom": 688.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "7c28baa713e44624bf84e5717ca66229",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2Header",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "PLAYER 2",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 20.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1000.0,
+     "Right": 1400.0,
+     "Top": 140.0,
+     "Bottom": 170.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "d6789c48885c4710a2bde8e9c3076304",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2TurnLeft",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Turn Left",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1000.0,
+     "Right": 1320.0,
+     "Top": 180.0,
+     "Bottom": 220.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "d0dfda96cf4446d3bc70d8be96463e38",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2TurnLeftKey",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1340.0,
+     "Right": 1580.0,
+     "Top": 180.0,
+     "Bottom": 220.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "3a5dbe77571741fba1d58b27735ed576",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2TurnRight",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Turn Right",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1000.0,
+     "Right": 1320.0,
+     "Top": 232.0,
+     "Bottom": 272.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "42c6c1c3acf04d8c9d5c708c48691a6a",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2TurnRightKey",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1340.0,
+     "Right": 1580.0,
+     "Top": 232.0,
+     "Bottom": 272.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "486f6e6a05da4f36bbe68769990411f7",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2Forward",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Move Forward",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1000.0,
+     "Right": 1320.0,
+     "Top": 284.0,
+     "Bottom": 324.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "20f4189e104e481d9572ed3d5beb361d",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2ForwardKey",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1340.0,
+     "Right": 1580.0,
+     "Top": 284.0,
+     "Bottom": 324.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "f2b29c0786c3426482f861152d2060d1",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2Back",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Move Backward",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1000.0,
+     "Right": 1320.0,
+     "Top": 336.0,
+     "Bottom": 376.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "73c0aa4dcc5c46bfa673b40506a17db2",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2BackKey",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1340.0,
+     "Right": 1580.0,
+     "Top": 336.0,
+     "Bottom": 376.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "2ff9a3b6c2e442cd93dca1c6dfb35c4c",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2Shoot",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Shoot",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1000.0,
+     "Right": 1320.0,
+     "Top": 388.0,
+     "Bottom": 428.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "df1c6837319741d39397f273dae986e7",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2ShootKey",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1340.0,
+     "Right": 1580.0,
+     "Top": 388.0,
+     "Bottom": 428.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "2c5968d75d284f7abfe4a7cf58a26206",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2Sprint",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Sprint",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1000.0,
+     "Right": 1320.0,
+     "Top": 440.0,
+     "Bottom": 480.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "8911bdf93599464d8ea17c4b26a96cda",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2SprintKey",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1340.0,
+     "Right": 1580.0,
+     "Top": 440.0,
+     "Bottom": 480.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "b8848074c7534e5c86838f8b3cd027e9",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2Reload",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Reload",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1000.0,
+     "Right": 1320.0,
+     "Top": 492.0,
+     "Bottom": 532.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "d0cbb9a144774cbe8c23254408120bb6",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2ReloadKey",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1340.0,
+     "Right": 1580.0,
+     "Top": 492.0,
+     "Bottom": 532.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "5f7f3d792cf54d3798eddf03bff6b384",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2Weapon1",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Weapon 1",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1000.0,
+     "Right": 1320.0,
+     "Top": 544.0,
+     "Bottom": 584.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "22d0a27b2e1946a1978317567932107c",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2Weapon1Key",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1340.0,
+     "Right": 1580.0,
+     "Top": 544.0,
+     "Bottom": 584.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "e564f21e9a0a4fcc874dc8a279b75163",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2Weapon2",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Weapon 2",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1000.0,
+     "Right": 1320.0,
+     "Top": 596.0,
+     "Bottom": 636.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "f182497beb8444d9ab6f5d1f9e4f4dca",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2Weapon2Key",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1340.0,
+     "Right": 1580.0,
+     "Top": 596.0,
+     "Bottom": 636.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "40e5177b7a374a0fa920a9296a2e5f08",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2Weapon3",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Weapon 3",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1000.0,
+     "Right": 1320.0,
+     "Top": 648.0,
+     "Bottom": 688.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "e515b5ee2cc641dc9f57849916c7f0bc",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "P2Weapon3Key",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "?",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 16.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 1340.0,
+     "Right": 1580.0,
+     "Top": 648.0,
+     "Bottom": 688.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "07cc9f109d2b4661985d427d865275ec",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "StatusLabel",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 18.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 80.0,
+     "Right": 1840.0,
+     "Top": 760.0,
+     "Bottom": 794.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  },
+  {
+   "ID": "c29503e7528f44af8afc488f7c5fa1a6",
+   "TypeName": "FlaxEngine.UIControl",
+   "ParentID": "2f8195cf0261496e95350eaf210d7b0c",
+   "Name": "BackButton",
+   "Transform": {
+    "Translation": {
+     "X": 0.0,
+     "Y": 0.0,
+     "Z": 0.0
+    }
+   },
+   "Control": "FlaxEngine.GUI.Label",
+   "Data": {
+    "Text": "Back (save and play)",
+    "CaseOption": 0,
+    "Bold": true,
+    "Italic": false,
+    "TextColor": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "TextColorHighlighted": {
+     "R": 1.0,
+     "G": 1.0,
+     "B": 1.0,
+     "A": 1.0
+    },
+    "HorizontalAlignment": 0,
+    "VerticalAlignment": 1,
+    "Wrapping": 0,
+    "BaseLinesGapScale": 1.0,
+    "Font": {
+     "Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+     "Size": 22.0
+    },
+    "Material": null,
+    "Margin": {
+     "Left": 0.0,
+     "Right": 0.0,
+     "Top": 0.0,
+     "Bottom": 0.0
+    },
+    "ClipText": false,
+    "AutoWidth": false,
+    "AutoHeight": false,
+    "AutoFitText": false,
+    "AutoFitTextRange": {
+     "X": 0.1,
+     "Y": 100.0
+    },
+    "ClipChildren": true,
+    "CullChildren": true,
+    "AnchorMin": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "AnchorMax": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Offsets": {
+     "Left": 80.0,
+     "Right": 580.0,
+     "Top": 820.0,
+     "Bottom": 864.0
+    },
+    "Scale": {
+     "X": 1.0,
+     "Y": 1.0
+    },
+    "Pivot": {
+     "X": 0.5,
+     "Y": 0.5
+    },
+    "Shear": {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    "Rotation": 0.0,
+    "BackgroundColor": {
+     "R": 0.0,
+     "G": 0.0,
+     "B": 0.0,
+     "A": 0.0
+    },
+    "BackgroundBrush": null,
+    "Enabled": true,
+    "Visible": true,
+    "AutoFocus": false
+   }
+  }
+ ]
+}

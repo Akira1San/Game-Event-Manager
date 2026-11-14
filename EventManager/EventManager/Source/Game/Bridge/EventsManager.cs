@@ -22,6 +22,8 @@ namespace Game
         public EventRuntime Runtime = new EventRuntime();
         private readonly FlaxWorld _world = new FlaxWorld();
         private readonly Dictionary<string, bool> _heldLastTick = new Dictionary<string, bool>();
+        /// <summary>"player actionId" → was that gamepad button held last tick.</summary>
+        private readonly Dictionary<string, bool> _gamepadLast = new Dictionary<string, bool>();
         private string _gameFilesFolder;
         private readonly Dictionary<string, string> _fileSignatures = new Dictionary<string, string>();
         private readonly Dictionary<string, string> _shownErrors = new Dictionary<string, string>();
@@ -297,13 +299,25 @@ namespace Game
                     continue;
                 if (Runtime.FindSheetFor(actor) != null)
                     continue;
-                // UI buttons share Menu.events (defines `when <button> is clicked`);
-                // no PlayButton.events/QuitButton.events exists, so fall back to Menu.
+                // UI controls share one sheet per scene: the scene's own file when it has one
+                // (Menu.scene → Menu.events, TK4Options.scene → TK4Options.events), otherwise
+                // Menu.events. No PlayButton.events/TurnLeftLabel.events exists.
                 string source = actor.Name;
                 if (actor is UIControl && ProgramNamed(actor.Name) == null)
-                    source = "Menu";
+                    source = UiSheetName();
                 AttachByName(actor, source);
             }
+        }
+
+        /// <summary>The .events file UI controls share: the scene's own name when it has one
+        /// (<c>Menu.scene</c> → Menu.events, <c>TK4Options.scene</c> → TK4Options.events), else
+        /// <c>Menu</c> — no PlayButton.events/TurnLeftLabel.events exists.</summary>
+        private string UiSheetName()
+        {
+            string scene = Level.ScenesCount > 0 ? Level.GetScene(0).Name : null;
+            if (!string.IsNullOrEmpty(scene) && ProgramNamed(scene) != null)
+                return scene;
+            return "Menu";
         }
 
         /// <summary>An EventSheet component appeared (scene sweep, editor-added, clone). Give it its
@@ -595,7 +609,21 @@ namespace Game
                 _heldLastTick.TryGetValue(key, out bool wasHeld);
                 if (held && !wasHeld)
                 {
-                    var press = new PushSignal { Kind = TriggerKind.KeyPressed, Name = key };
+                    // A capture (`rebind player 2 Shoot`) swallows this press: the menu is
+                    // binding a key, not playing.
+                    if (Runtime.TryCompleteCapture(key, null))
+                    {
+                        _heldLastTick[key] = held;
+                        continue;
+                    }
+                    // Key signals carry their owner, so player 1's sheet ignores player 2's
+                    // keys; unbound global keys (P, Escape) carry 0 and reach every sheet.
+                    var press = new PushSignal
+                    {
+                        Kind = TriggerKind.KeyPressed,
+                        Name = key,
+                        PlayerA = Runtime.PlayerForKey(key),
+                    };
                     Runtime.RaisePushAll(press);
                     // Pressing 1–0 recalls that control group (classic RTS behaviour).
                     if (Selection.TryGroupKey(key, out int group))
@@ -603,10 +631,17 @@ namespace Game
                 }
                 else if (wasHeld && !held)
                 {
-                    Runtime.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyReleased, Name = key });
+                    Runtime.RaisePushAll(new PushSignal
+                    {
+                        Kind = TriggerKind.KeyReleased,
+                        Name = key,
+                        PlayerA = Runtime.PlayerForKey(key),
+                    });
                 }
                 _heldLastTick[key] = held;
             }
+            GamepadEdges();
+
             float wheel = Input.MouseScrollDelta;
             if (wheel > 0)
                 Runtime.RaisePushAll(new PushSignal { Kind = TriggerKind.WheelScrollUp });
@@ -636,6 +671,54 @@ namespace Game
             if (middleMouseDown && !_middleMouseDownLastFrame)
                 HandleMouseClick(mousePos, screenCenter, TriggerKind.MiddleClicked);
             _middleMouseDownLastFrame = middleMouseDown;
+        }
+
+        /// <summary>
+        /// Turns gamepad buttons into the same key signals the keyboard raises (Task 16 input
+        /// follow-ups): player 1 reads pad 0 and player 2 pad 1, and each button pushes the key
+        /// that action is bound to — so `when Shoot is pressed` fires for a controller too.
+        /// </summary>
+        private void GamepadEdges()
+        {
+            for (int player = 1; player <= PlayerInput.MaxPlayers; player++)
+            {
+                int pad = PlayerInput.GamepadFor(player);
+                if (Input.GetGamepad(pad) == null)
+                    continue; // no controller plugged into this slot
+                foreach (InputAction action in PlayerInput.Actions)
+                {
+                    string button = Runtime.Input.ButtonFor(player, action.Name);
+                    if (!FlaxWorld.TryGetGamepadButton(button, out GamepadButton mapped))
+                        continue;
+                    bool held = Input.GetGamepadButton(pad, mapped, FlaxWorld.GamepadDeadZone);
+                    string slot = player + " " + action.Id;
+                    _gamepadLast.TryGetValue(slot, out bool wasHeld);
+                    if (held && !wasHeld)
+                    {
+                        if (Runtime.TryCompleteCapture(null, button))
+                        {
+                            _gamepadLast[slot] = held;
+                            continue;
+                        }
+                        Runtime.RaisePushAll(new PushSignal
+                        {
+                            Kind = TriggerKind.KeyPressed,
+                            Name = Runtime.Input.KeyFor(player, action.Name),
+                            PlayerA = player,
+                        });
+                    }
+                    else if (wasHeld && !held)
+                    {
+                        Runtime.RaisePushAll(new PushSignal
+                        {
+                            Kind = TriggerKind.KeyReleased,
+                            Name = Runtime.Input.KeyFor(player, action.Name),
+                            PlayerA = player,
+                        });
+                    }
+                    _gamepadLast[slot] = held;
+                }
+            }
         }
 
         /// <summary>Per-frame hover tracking: when the mouse enters a UIControl, raise a

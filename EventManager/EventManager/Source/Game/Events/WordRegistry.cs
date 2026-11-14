@@ -55,6 +55,8 @@ namespace Game
             new WordEntry { Kind = "trigger", Word = "when player <n> dies", Example = "when player 2 dies" },
             new WordEntry { Kind = "trigger", Word = "when player <n> score changes", Example = "when player 1 score changes" },
             new WordEntry { Kind = "trigger", Word = "when player <n> kills player <m>", Example = "when player 1 kills player 2" },
+            new WordEntry { Kind = "trigger", Word = "when binding changes", Example = "when binding changes", AltShape = "a key or button was just captured by `rebind`" },
+            new WordEntry { Kind = "condition", Word = "capturing a key", Example = "capturing a key" },
             new WordEntry { Kind = "trigger", Word = "when all players dead", Example = "when all players dead" },
             new WordEntry { Kind = "trigger", Word = "when tween <thing> ends", Example = "when tween PausePanel ends" },
             new WordEntry { Kind = "trigger", Word = "when state is <thing>", Example = "when state is chase" },
@@ -143,6 +145,9 @@ namespace Game
             new WordEntry { Kind = "action", Word = "explosive", Example = "explosive", AltShape = "the same as `explode`" },
             new WordEntry { Kind = "action", Word = "weapon", Example = "weapon \"Shotgun\"", AltShape = "set weapon to \"Pistol\"" },
             new WordEntry { Kind = "action", Word = "reload", Example = "reload" },
+            new WordEntry { Kind = "action", Word = "rebind", Example = "rebind player 2 Shoot", AltShape = "rebind player 1 Turn Left — the next key or gamepad button becomes that action" },
+            new WordEntry { Kind = "action", Word = "save", Example = "save bindings" },
+            new WordEntry { Kind = "action", Word = "load", Example = "load bindings" },
             new WordEntry { Kind = "action", Word = "set", Example = "set weapon to \"Pistol\"" },
             new WordEntry { Kind = "action", Word = "set", Example = "set ammo Pistol to 12" },
             new WordEntry { Kind = "action", Word = "add", Example = "add -1 to ammo Pistol" },
@@ -259,6 +264,8 @@ namespace Game
             "hears",
             // `reloading` on its own line is a condition too.
             "reloading",
+            // `capturing a key` — the options menu is waiting for a rebind press.
+            "capturing",
         };
 
         public static readonly string[] Suggestables = BuildSuggestables();

@@ -121,6 +121,7 @@
         <tr><td><span class="kw">when player</span> <span class="placeholder">&lt;n&gt;</span> <span class="kw">score changes</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when player 1 score changes</span><br><span class="alt">fires when the global <code>Player&lt;n&gt; Score</code> moves (the first tick only sets the baseline, like every <code>changes</code> watcher)</span></td></tr>
         <tr><td><span class="kw">when player</span> <span class="placeholder">&lt;n&gt;</span> <span class="kw">kills player</span> <span class="placeholder">&lt;m&gt;</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when player 1 kills player 2</span><br><span class="alt">deathmatch scoring: fires when Player&lt;m&gt; dies and the last <code>"damage"</code> on it came from Player&lt;n&gt; · every projectile carries <code>my shooter</code> (stamped by <code>spawn</code>), so a bullet&#39;s hit is traced back to the player who fired it, never to the clone</span></td></tr>
         <tr><td><span class="kw">when all players dead</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when all players dead</span><br><span class="alt">co-op game over: fires once when nobody is left standing · a scene with no player never fires it</span></td></tr>
+        <tr><td><span class="kw">when binding changes</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when binding changes</span><br><span class="alt">a key or gamepad button was just captured by <code>rebind</code> · the capturing sheet gets <code>my LastBoundPlayer</code>, <code>my LastBoundAction</code> and <code>my LastBoundKey</code>, so a menu can echo what was bound</span></td></tr>
         <tr><td><span class="kw">when me gets equipped</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when me gets equipped</span></td></tr>
         <tr><td><span class="kw">when me gets unequipped</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when me gets unequipped</span></td></tr>
         <tr><td><span class="kw">when me gets dropped</span></td><td><span class="badge badge-trigger">trigger</span></td><td><span class="example">when me gets dropped</span></td></tr>
@@ -163,6 +164,8 @@
         <tr><td><span class="kw">player</span> <span class="placeholder">&lt;n&gt;</span> <span class="kw">is near me by</span> <span class="placeholder">&lt;dist&gt;</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">player 2 is near me by 5</span></td></tr>
         <tr><td><span class="kw">player</span> <span class="placeholder">&lt;n&gt;</span> <span class="kw">has tag</span> <span class="placeholder">&lt;tag&gt;</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">player 1 has tag Player</span></td></tr>
         <tr><td><span class="kw">all players dead</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">all players dead</span><br><span class="alt">true once every player in the scene has <code>my Health</code> 0</span></td></tr>
+        <tr><td><span class="kw">capturing a key</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">capturing a key</span><br><span class="alt">a <code>rebind</code> is waiting for the next key or gamepad button — use it to show a "press a key…" prompt or to suspend gameplay input</span></td></tr>
+        <tr><td><span class="kw">Player&lt;n&gt;</span> <span class="placeholder">&lt;Action&gt;</span><span class="kw">Key</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">Player2 ShootKey</span><br><span class="alt">a saved input binding, e.g. <code>Player1 ForwardKey</code>, <code>Player2 ShootKey</code> · readable in any value (<code>bind P2ShootKey to Player2 ShootKey</code>), written by <code>save bindings</code></span></td></tr>
         <tr><td><span class="kw">Player&lt;n&gt; Score</span> <span class="kw">is</span> <span class="placeholder">&lt;value&gt;</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">Player1 Score is 3</span><br><span class="alt">per-player counters are two-word globals: <code>Player1 Score</code>, <code>Player2 Lives</code>, <code>Player1 Kills</code> · <code>set</code>/<code>add</code>/<code>set text of</code> and <code>when Player1 Score changes</code> all read the same variable</span></td></tr>
         <tr><td><span class="placeholder">&lt;key&gt;</span> <span class="kw">is held</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">Shift is held</span></td></tr>
         <tr><td><span class="kw">chance</span> <span class="placeholder">&lt;n&gt;%</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">chance 20%</span></td></tr>
@@ -255,6 +258,8 @@
         <tr><td><span class="kw">add</span></td><td><span class="kw">add scene "&lt;name&gt;"</span></td><td><span class="example">add scene "HUD"</span><br><span class="alt">loads a scene <b>on top of</b> the current one for overlays/HUDs — nothing already in the level moves, and the overlay runs `when scene starts`. Unlike <code>load scene</code> it does not replace anything.</span></td></tr>
         <tr><td><span class="kw">unload</span></td><td><span class="kw">unload scene "&lt;name&gt;"</span></td><td><span class="example">unload scene "HUD"</span><br><span class="alt">removes one scene added with `add scene` (closes the overlay) and leaves the level running; refusing to unload the last scene.</span></td></tr>
         <tr><td><span class="kw">quit</span></td><td><span class="kw">quit game</span></td><td><span class="example">quit game</span></td></tr>
+        <tr><td><span class="kw">rebind</span></td><td><span class="kw">rebind player &lt;n&gt; &lt;action&gt;</span></td><td><span class="example">rebind player 2 Shoot</span><br><span class="alt">arms a capture: the next key press or gamepad button becomes player &lt;n&gt;'s binding for that action, is stored in the per-player map and saved as <code>Player&lt;n&gt; &lt;Action&gt;Key</code> · the press that answers is swallowed (menus bind, they do not play)</span></td></tr>
+        <tr><td><span class="kw">save</span> / <span class="kw">load</span></td><td><span class="kw">save bindings</span> / <span class="kw">load bindings</span></td><td><span class="example">save bindings</span><br><span class="alt">writes every player's bindings back to the <code>Player&lt;n&gt; &lt;Action&gt;Key</code> globals, or reads them in (a fresh session loads whatever the last one saved; the defaults stay for anything never saved)</span></td></tr>
         <tr><td><span class="kw">print</span></td><td><span class="kw">print "W is held"</span> / <span class="kw">print W is held</span></td><td><span class="example">print "W is held"</span><br><span class="example">print W is held</span><br><span class="alt">prints text to the editor console via Debug.LogWarning</span></td></tr>
         <tr><td><span class="kw">debug</span></td><td><span class="kw">debug "health = " + my health</span> / <span class="kw">debug Score changed</span></td><td><span class="example">debug Score changed</span><br><span class="alt">alias for print — prints to the editor console</span></td></tr>
       </tbody>
@@ -275,6 +280,28 @@
         <tr><td><span class="kw">bind</span> <span class="placeholder">&lt;label&gt;</span> <span class="kw">to</span> <span class="placeholder">&lt;variable&gt;</span> [<span class="kw">and</span> <span class="placeholder">&lt;variable&gt;</span>…] <span class="kw">format</span> <span class="placeholder">"&lt;template&gt;"</span></td><td><span class="example">bind HealthLabel to Health and MaxHealth format "Health: {0}/{1}"</span></td><td><span class="alt">placeholders <code>{0}</code>, <code>{1}</code>, … fill from the listed variables in order · the label repaints when any of them changes</span></td></tr>
       </tbody>
     </table>
+  </section>
+
+  <section id="input">
+    <h2>Local two-player input</h2>
+    <p><code>Player1</code> and <code>Player2</code> each read their own keys, so one sheet drives both: on a player's sheet <code>when Left Arrow is held</code> means <em>that player's turn-left key</em>, and <code>when Shoot is pressed</code> / <code>when shoot is held</code> mean that player's shoot button. Key signals carry their owner, so player 1's keys never reach player 2's sheet. Sheets that are not a player (menus, the <code>Game</code> host, a scene with a single <code>Player</code>) keep reading the written key literally.</p>
+
+    <table>
+      <thead>
+        <tr><th style="width:34%">Action</th><th style="width:34%">Player 1</th><th>Player 2</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>Turn Left</code> / <code>Turn Right</code></td><td>Left / Right Arrow</td><td>A / D</td></tr>
+        <tr><td><code>Move Forward</code> / <code>Move Backward</code></td><td>Up / Down Arrow</td><td>W / S</td></tr>
+        <tr><td><code>Shoot</code></td><td>Space</td><td>Left Ctrl</td></tr>
+        <tr><td><code>Sprint</code></td><td>Left Shift</td><td>Left Alt (Flax folds both shifts into one key)</td></tr>
+        <tr><td><code>Reload</code></td><td>R</td><td>Q</td></tr>
+        <tr><td><code>Weapon 1</code> / <code>Weapon 2</code> / <code>Weapon 3</code></td><td>1 / 2 / 3</td><td>4 / 5 / 6</td></tr>
+        <tr><td>Gamepad</td><td>pad 0</td><td>pad 1</td></tr>
+      </tbody>
+    </table>
+
+    <p>Gamepad buttons raise the same key signals as the keyboard, so one <code>when Shoot is pressed</code> answers both: left stick / D-pad for the movement actions, A / B / X for shoot / sprint / reload, D-pad for the three weapons. The ready-made rebinding screen is <code>Content/scenes/TK4Options.scene</code> plus <code>GameFiles/TK4Options.events</code> — click an action, press a key or button, and the change is saved.</p>
   </section>
 
   <section id="animation">

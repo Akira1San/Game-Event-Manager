@@ -57,6 +57,8 @@ namespace Game
         PlayerNear,
         PlayerHasTag,
         AllPlayersDead,
+        // Key rebinding (Task 16 input follow-ups)
+        Capturing,
     }
 
     public class ConditionNode
@@ -108,6 +110,13 @@ namespace Game
             if (texts.Length == 3 && texts[0] == "me" && texts[1] == "is" && texts[2] == "moving")
             {
                 node.Kind = ConditionKind.Moving;
+                return node;
+            }
+
+            // `capturing a key` — the options menu is waiting for the next key press.
+            if (texts.Length == 3 && texts[0] == "capturing" && texts[1] == "a" && texts[2] == "key")
+            {
+                node.Kind = ConditionKind.Capturing;
                 return node;
             }
 
@@ -512,7 +521,11 @@ namespace Game
                 case ConditionKind.Chance:
                     return Rng.NextDouble() * 100 < node.Percent;
                 case ConditionKind.KeyHeld:
-                    return context.World.IsKeyHeld(node.Key);
+                    // On a player's sheet the written key means that player's binding
+                    // (`unless Left Shift is held` asks about P2's sprint key).
+                    return context.Runtime != null
+                        ? context.Runtime.IsKeyHeldFor(context.Sheet, node.Key)
+                        : context.World.IsKeyHeld(node.Key);
                 case ConditionKind.Equal:
                 case ConditionKind.NotEqual:
                 {
@@ -709,6 +722,8 @@ namespace Game
                 }
                 case ConditionKind.AllPlayersDead:
                     return context.Runtime != null && context.Runtime.AllPlayersDead;
+                case ConditionKind.Capturing:
+                    return context.Runtime != null && context.Runtime.IsCapturingKey;
                 default:
                     return false;
             }

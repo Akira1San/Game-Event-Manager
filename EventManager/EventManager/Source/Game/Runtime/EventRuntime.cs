@@ -127,6 +127,9 @@ namespace Game
         /// <summary>Opt-in (EventSheet "Use Physics Movement"): move through the actor's
         /// body instead of assigning Position. Off = the normal transform path.</summary>
         public bool UsePhysicsMovement;
+        /// <summary>Which local player this sheet belongs to (1 or 2, from the actor name), or 0
+        /// for a sheet that is not a player and reads physical keys globally.</summary>
+        public int Player;
         /// <summary>How far below the feet still counts as ground for a CharacterController
         /// (EventSheet "Character Ground Check Distance").</summary>
         public float GroundCheckDistance = 10f;
@@ -183,6 +186,8 @@ namespace Game
         public OrderManager Orders = new OrderManager();
         /// <summary>Random-angle wander legs and still mode per actor (Task 16 Part A).</summary>
         public Wanderer Wander = new Wanderer();
+        /// <summary>Per-player key / gamepad bindings (Task 16 input follow-ups).</summary>
+        public PlayerInput Input = new PlayerInput();
         /// <summary>Recent sounds that `when me hears` / `me hears` poll (Task 16 Part B).</summary>
         public SoundBus Sounds = new SoundBus();
         /// <summary>Per-actor reload timers behind `reload` / `reloading` (Task 16 Part C).</summary>
@@ -227,6 +232,10 @@ namespace Game
         /// <summary>victim -> the attacker whose `"damage"` last landed on it, for deathmatch credit.</summary>
         private readonly Dictionary<object, object> lastAttacker = new Dictionary<object, object>();
         private bool allPlayersDeadRaised;
+        /// <summary>The sheet waiting for a key press (`rebind player &lt;n&gt; &lt;action&gt;`).</summary>
+        private SheetInstance rebindSheet;
+        private int rebindPlayer;
+        private string rebindAction = "";
 
         public EventRuntime()
         {
@@ -256,10 +265,12 @@ namespace Game
 
         public SheetInstance AddSheet(object actor, ProgramFile program, string sourceName)
         {
+            string actorName = World.NameOf(actor);
             var sheet = new SheetInstance
             {
                 Actor = actor,
-                ActorName = World.NameOf(actor),
+                ActorName = actorName,
+                Player = Players.TryReadNumber(actorName, out int playerNumber) ? playerNumber : 0,
                 SourceName = sourceName ?? "",
                 Program = program,
                 AnchorTime = Time,
@@ -326,6 +337,8 @@ namespace Game
 
         public void SessionStarted()
         {
+            // Bindings saved by the options menu come back before any gameplay key is polled.
+            Input.LoadFrom(Variables);
             foreach (var sheet in sheets)
                 sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.GameStart });
         }
@@ -591,6 +604,95 @@ namespace Game
         public string NameOfActor(object actor)
         {
             return World.NameOf(actor);
+        }
+
+        // ---------------- per-player input (Task 16 input follow-ups) ----------------
+
+        /// <summary>Which player owns a physical key, or 0 when the key is global (`P`, `Escape`).</summary>
+        public int PlayerForKey(string physicalKey)
+        {
+            return Input.OwnerOf(physicalKey);
+        }
+
+        /// <summary>
+        /// The physical key this sheet reads for a written key. A player's sheet turns
+        /// <c>Left Arrow</c> / <c>turn left</c> into that player's binding; any other sheet keeps
+        /// the written key, so menus and single-player scenes behave exactly as before.
+        /// </summary>
+        public string ResolveKeyForSheet(SheetInstance sheet, string writtenKey)
+        {
+            return Input.Resolve(sheet == null ? 0 : sheet.Player, writtenKey);
+        }
+
+        /// <summary>
+        /// True while the sheet's player holds the written key or the gamepad button bound to it.
+        /// <c>when Left Arrow is held</c> on Player2 asks about A, and the left stick works too.
+        /// </summary>
+        public bool IsKeyHeldFor(SheetInstance sheet, string writtenKey)
+        {
+            if (string.IsNullOrEmpty(writtenKey))
+                return false;
+            if (World.IsKeyHeld(ResolveKeyForSheet(sheet, writtenKey)))
+                return true;
+            int player = sheet == null ? 0 : sheet.Player;
+            if (player <= 0 || !PlayerInput.TryActionFor(writtenKey, out string action))
+                return false;
+            string button = Input.ButtonFor(player, action);
+            return button.Length > 0 && World.IsGamepadButtonHeld(PlayerInput.GamepadFor(player), button);
+        }
+
+        /// <summary>True while the options menu is waiting for the next key or button.</summary>
+        public bool IsCapturingKey
+        {
+            get { return rebindSheet != null && rebindAction.Length > 0; }
+        }
+
+        /// <summary>
+        /// <c>rebind player 2 Shoot</c> — arms the capture: the next key press (or gamepad
+        /// button) on that sheet's watch is stored as player 2's Shoot binding and persisted.
+        /// </summary>
+        public void BeginRebind(EventContext context, int player, string action)
+        {
+            if (!Players.IsValidNumber(player) || !PlayerInput.TryReadAction(action, out string canonical))
+            {
+                OnRuntimeWarning($"I can't rebind \u201C{action}\u201D for player {player} \u2014 the actions are {PlayerInput.ActionNames()}.");
+                return;
+            }
+            rebindSheet = context == null ? null : context.Sheet;
+            rebindPlayer = player;
+            rebindAction = canonical;
+            Variables.SetLocal(context == null ? null : context.Me, "LastBoundKey", ValueBox.OfText(""));
+            Variables.SetLocal(context == null ? null : context.Me, "LastBoundAction", ValueBox.OfText(canonical));
+            Variables.SetLocal(context == null ? null : context.Me, "LastBoundPlayer", ValueBox.OfNumber(player));
+        }
+
+        /// <summary>
+        /// Finishes an armed capture with the key (<paramref name="key"/>) or gamepad button
+        /// (<paramref name="button"/>) that was just pressed. Returns false when nothing is armed.
+        /// </summary>
+        public bool TryCompleteCapture(string key, string button)
+        {
+            if (!IsCapturingKey)
+                return false;
+            if (!string.IsNullOrEmpty(key))
+                Input.SetBinding(rebindPlayer, rebindAction, key);
+            else if (!string.IsNullOrEmpty(button))
+                Input.SetButton(rebindPlayer, rebindAction, button);
+            else
+                return false;
+
+            // Persist immediately, so a `bind` label on the options menu refreshes itself.
+            Input.SaveTo(Variables);
+            string shown = !string.IsNullOrEmpty(key) ? key : button;
+            Variables.SetLocal(rebindSheet.Actor, "LastBoundKey", ValueBox.OfText(shown));
+            Variables.SetLocal(rebindSheet.Actor, "LastBoundAction", ValueBox.OfText(rebindAction));
+            Variables.SetLocal(rebindSheet.Actor, "LastBoundPlayer", ValueBox.OfNumber(rebindPlayer));
+            string action = rebindAction;
+            rebindSheet = null;
+            rebindPlayer = 0;
+            rebindAction = "";
+            RaisePushAll(new PushSignal { Kind = TriggerKind.BindingChanges, Name = action });
+            return true;
         }
 
         private double HealthOf(object actor)
@@ -1009,11 +1111,18 @@ namespace Game
                     ? ReferenceEquals(signal.Other, sheet.Actor)
                     : signal.Name == descriptor.RequireName;
             // Number keys: `when 1 is pressed` must answer the input layer's `D1` signal (and
-            // tests/manual pushes of plain `1`).
-            if (IsKeyKind(descriptor.Kind) &&
-                KeyNameMatches(descriptor.RequireName, signal.Name) &&
-                ExtraConditionsMatch(descriptor, sheet, signal.Other))
-                return true;
+            // tests/manual pushes of plain `1`). A player's sheet listens only to its own keys:
+            // the signal carries the owning player (0 = a key nobody bound, e.g. P or Escape),
+            // and the written key resolves through that player's binding before comparing.
+            if (IsKeyKind(descriptor.Kind))
+            {
+                // Only a *player* sheet filters: global sheets (menus, the Game host) still hear
+                // every key, so a menu can answer `when 1 is pressed`.
+                if (sheet.Player != 0 && signal.PlayerA != 0 && signal.PlayerA != sheet.Player)
+                    return false;
+                return KeyNameMatches(ResolveKeyForSheet(sheet, descriptor.RequireName), signal.Name) &&
+                       ExtraConditionsMatch(descriptor, sheet, signal.Other);
+            }
             // Name match, or material match for `when me touches <material>`.
             if (signal.Name == descriptor.RequireName && ExtraConditionsMatch(descriptor, sheet, signal.Other))
                 return true;
@@ -1316,6 +1425,23 @@ namespace Game
                         ExecuteSend(context, raw.Words);
                         continue;
                     }
+                    // Per-player input (Task 16 input follow-ups): all engine-free, so the
+                    // capture and persistence paths are the same ones the tests drive.
+                    if (raw.Words.Count >= 2 && raw.Words[0].Text == "rebind")
+                    {
+                        ExecuteRebind(context, raw.Words);
+                        continue;
+                    }
+                    if (raw.Words.Count >= 2 && raw.Words[0].Text == "save" && raw.Words[1].Text == "bindings")
+                    {
+                        Input.SaveTo(Variables);
+                        continue;
+                    }
+                    if (raw.Words.Count >= 2 && raw.Words[0].Text == "load" && raw.Words[1].Text == "bindings")
+                    {
+                        Input.LoadFrom(Variables);
+                        continue;
+                    }
                     OnRawAction(context, raw.Words);
                 }
             }
@@ -1598,6 +1724,24 @@ namespace Game
                    raw.Words[1].Text == "this" && raw.Words[2].Text == "event";
         }
 
+        /// <summary><c>rebind player &lt;n&gt; &lt;action&gt;</c> — arms a capture (see <see cref="BeginRebind"/>).</summary>
+        private void ExecuteRebind(EventContext context, List<Token> words)
+        {
+            if (words.Count < 4 || words[1].Text != "player" || words[2].Type != TokenType.Number)
+            {
+                OnRuntimeWarning("`rebind` looks like this: `rebind player 2 Shoot`");
+                return;
+            }
+            var parts = new System.Text.StringBuilder();
+            for (int i = 3; i < words.Count; i++)
+            {
+                if (parts.Length > 0)
+                    parts.Append(' ');
+                parts.Append(words[i].Text);
+            }
+            BeginRebind(context, (int)words[2].Number, parts.ToString());
+        }
+
         private static bool IsSend(RawActionNode raw)
         {
             return raw.Words.Count >= 2 && raw.Words[0].Text == "send" && raw.Words[1].Text == "message";
@@ -1634,7 +1778,7 @@ namespace Game
             switch (descriptor.Kind)
             {
                 case TriggerKind.KeyHeld:
-                    if (World.IsKeyHeld(descriptor.Key))
+                    if (IsKeyHeldFor(sheet, descriptor.RequireName))
                         RunEvent(sheet, eventIndex, null);
                     break;
                 case TriggerKind.ControlGroupHeld:

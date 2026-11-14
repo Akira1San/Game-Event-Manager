@@ -5637,6 +5637,229 @@ foreach (var ev in shippedEnemy.Events)
         enemyTargetsNearest = true;
 Check(enemyTargetsNearest, "Enemy.events sees `player`, the group that matches Player1 or Player2");
 
+// ---- Task 16 input follow-ups: per-player keys, gamepad buttons, rebinding ----
+
+// The default map: player 1 on the arrows, player 2 on WASD.
+var defaultInput = new PlayerInput();
+Check(defaultInput.KeyFor(1, "Turn Left") == "Left Arrow" && defaultInput.KeyFor(1, "Shoot") == "Space" &&
+      defaultInput.KeyFor(2, "Turn Left") == "A" && defaultInput.KeyFor(2, "Shoot") == "Left Ctrl",
+    "player 1 turns with the arrows and shoots with Space; player 2 uses A/D and Left Ctrl");
+Check(PlayerInput.TryReadAction("forward", out string shortForward) && shortForward == "Move Forward" &&
+      PlayerInput.TryActionFor("Left Arrow", out string arrowAction) && arrowAction == "Turn Left",
+    "an action reads by name or by short form, and a default key names its action");
+Check(defaultInput.Resolve(2, "Left Arrow") == "A" && defaultInput.Resolve(1, "Left Arrow") == "Left Arrow" &&
+      defaultInput.Resolve(2, "P") == "P" && defaultInput.Resolve(2, "shoot") == "Left Ctrl",
+    "a written key or action resolves through that player's binding, and other keys stay themselves");
+Check(defaultInput.OwnerOf("A") == 2 && defaultInput.OwnerOf("D1") == 1 && defaultInput.OwnerOf("P") == 0,
+    "a key knows its owning player, and `D1` matches the bridge's spelling of 1");
+
+// Routing: two player sheets in one scene hear only their own keys.
+var inWorld = new FakeWorld();
+var inP1 = new FakeActor("Player1");
+var inP2 = new FakeActor("Player2");
+var inGame = new FakeActor("Game");
+inWorld.AddActor(inP1);
+inWorld.AddActor(inP2);
+inWorld.AddActor(inGame);
+var inEngine = FreshEngine(inWorld);
+inEngine.AddSheet(inGame, variantParser.Parse("when P is pressed\n  add 1 to Pauses\nwhen 1 is pressed\n  add 1 to GlobalDigits"));
+inEngine.AddSheet(inP1, variantParser.Parse(@"
+when Left Arrow is pressed
+  add 1 to my Lefts
+when Space is pressed
+  add 1 to my Shots
+when Left Arrow is held
+  add 1 to my HeldTicks
+when Shoot is held
+  add 1 to my PadShots"));
+inEngine.AddSheet(inP2, variantParser.Parse(@"
+when Left Arrow is pressed
+  add 1 to my Lefts
+when Space is pressed
+  add 1 to my Shots
+when Shoot is held
+  add 1 to my PadShots"));
+inEngine.Tick(0);
+int inClock = 0;
+void PressKey(string key)
+{
+    inEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = key, PlayerA = inEngine.PlayerForKey(key) });
+    inEngine.Tick(++inClock);
+}
+PressKey("A");
+Check(inEngine.Variables.GetLocal(inP2, "Lefts").AsNumber() == 1 && inEngine.Variables.GetLocal(inP1, "Lefts").AsNumber() == 0,
+    "pressing A turns player 2 only — player 1's sheet ignores player 2's keys");
+PressKey("Left Arrow");
+Check(inEngine.Variables.GetLocal(inP1, "Lefts").AsNumber() == 1 && inEngine.Variables.GetLocal(inP2, "Lefts").AsNumber() == 1,
+    "one `when Left Arrow is pressed` line answers player 1's arrow and player 2's A");
+PressKey("Space");
+Check(inEngine.Variables.GetLocal(inP1, "Shots").AsNumber() == 1 && inEngine.Variables.GetLocal(inP2, "Shots").AsNumber() == 0,
+    "player 1's Space shoots for player 1 only");
+PressKey("Left Ctrl");
+Check(inEngine.Variables.GetLocal(inP2, "Shots").AsNumber() == 1, "player 2 shoots with Left Ctrl");
+PressKey("P");
+Check(inEngine.Variables.GetGlobal("Pauses").AsNumber() == 1, "an unbound key (P) stays global and reaches every sheet");
+PressKey("1");
+Check(inEngine.Variables.GetGlobal("GlobalDigits").AsNumber() == 1,
+    "a player's key still reaches a global sheet (a menu can answer `when 1 is pressed`)");
+
+double p1Held = inEngine.Variables.GetLocal(inP1, "HeldTicks").AsNumber();
+inWorld.SetHeld("W", true);
+inEngine.Tick(++inClock);
+inEngine.Tick(++inClock);
+inWorld.SetHeld("W", false);
+Check(inEngine.Variables.GetLocal(inP1, "HeldTicks").AsNumber() == p1Held,
+    "holding player 2's W does not hold player 1's `Left Arrow`");
+
+// Gamepad: player 2's pad (slot 1) drives the same actions; player 1's sheet stays quiet.
+double p2PadBefore = inEngine.Variables.GetLocal(inP2, "PadShots").AsNumber();
+double p1PadBefore = inEngine.Variables.GetLocal(inP1, "PadShots").AsNumber();
+inWorld.SetGamepadButton(1, "A", true);
+inEngine.Tick(++inClock);
+inEngine.Tick(++inClock);
+inWorld.SetGamepadButton(1, "A", false);
+inEngine.Tick(++inClock);
+Check(inEngine.Variables.GetLocal(inP2, "PadShots").AsNumber() > p2PadBefore,
+    "player 2's gamepad A holds their Shoot action");
+Check(inEngine.Variables.GetLocal(inP1, "PadShots").AsNumber() == p1PadBefore,
+    "player 1's pad is a different slot, so player 2's button never reaches them");
+
+// Rebinding: `rebind player 2 Shoot`, capture the next key, persist it.
+var optWorld = new FakeWorld();
+var optActor = new FakeActor("Options");
+optWorld.AddActor(optActor);
+var optEngine = FreshEngine(optWorld);
+optEngine.AddSheet(optActor, variantParser.Parse(@"
+when me appears
+  rebind player 2 Shoot
+when binding changes
+  add 1 to Bound
+  set BoundKey to my LastBoundKey
+when message ""reload bindings"" arrives
+  load bindings"));
+optEngine.Tick(0);
+Check(optEngine.IsCapturingKey, "`rebind player 2 Shoot` arms a capture");
+Check(optEngine.TryCompleteCapture("J", null), "the next key press completes the capture");
+Check(optEngine.Input.KeyFor(2, "Shoot") == "J" &&
+      optEngine.Variables.GetGlobal("Player2 ShootKey").AsText() == "J",
+    "the captured key becomes player 2's Shoot binding and is saved to `Player2 ShootKey`");
+Check(!optEngine.IsCapturingKey && !optEngine.TryCompleteCapture("K", null),
+    "the capture ends after one key");
+optEngine.Tick(1);
+Check(optEngine.Variables.GetGlobal("Bound").AsNumber() == 1 &&
+      optEngine.Variables.GetGlobal("BoundKey").AsText() == "J",
+    "`when binding changes` fires with the captured key in `my LastBoundKey`");
+optEngine.Input.SetBinding(2, "Shoot", "K");
+optEngine.RaisePush(optActor, new PushSignal { Kind = TriggerKind.Message, Name = "reload bindings" });
+optEngine.Tick(2);
+Check(optEngine.Input.KeyFor(2, "Shoot") == "J",
+    "`load bindings` restores what the last save stored");
+
+// After a rebind the old key is dead and the new one works, for that player only.
+var rbWorld = new FakeWorld();
+var rbOptions = new FakeActor("Options");
+var rbP2 = new FakeActor("Player2");
+rbWorld.AddActor(rbOptions);
+rbWorld.AddActor(rbP2);
+var rbEngine = FreshEngine(rbWorld);
+rbEngine.AddSheet(rbOptions, variantParser.Parse(@"
+when me appears
+  rebind player 2 Shoot
+when message ""rebind sprint"" arrives
+  rebind player 2 Sprint"));
+rbEngine.AddSheet(rbP2, variantParser.Parse("when Space is pressed\n  add 1 to my Shots"));
+rbEngine.Tick(0);
+rbEngine.TryCompleteCapture("J", null);
+rbEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "J", PlayerA = rbEngine.PlayerForKey("J") });
+rbEngine.Tick(1);
+rbEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "Space", PlayerA = rbEngine.PlayerForKey("Space") });
+rbEngine.Tick(2);
+Check(rbEngine.Variables.GetLocal(rbP2, "Shots").AsNumber() == 1 && rbEngine.PlayerForKey("J") == 2,
+    "after `rebind`, the new key shoots for that player and the old one no longer does");
+
+// A gamepad button can be captured too, and the sheet's held check answers it.
+rbEngine.RaisePush(rbOptions, new PushSignal { Kind = TriggerKind.Message, Name = "rebind sprint" });
+rbEngine.Tick(3);
+Check(rbEngine.TryCompleteCapture(null, "LeftShoulder"), "a gamepad button completes a capture");
+Check(rbEngine.Input.ButtonFor(2, "Sprint") == "LeftShoulder",
+    "the captured button becomes player 2's Sprint button");
+rbWorld.SetGamepadButton(1, "LeftShoulder", true);
+Check(rbEngine.IsKeyHeldFor(rbEngine.FindActorSheet("Player2"), "Sprint"),
+    "`Sprint is held` answers the captured gamepad button");
+
+// Grammar: the trigger, the condition and the three actions.
+Check(ClassifyOne("when binding changes\n  print \"a\"\n").Kind == TriggerKind.BindingChanges,
+    "`when binding changes` classifies to BindingChanges");
+Check(PlayerCondition("capturing a key").Kind == ConditionKind.Capturing,
+    "`capturing a key` parses as a condition");
+var rebindProgram = variantParser.Parse("when me appears\n  rebind player 2 Move Forward\n");
+Check(rebindProgram.Events[0].Body[0].Statement is RawActionNode rebindRaw &&
+      rebindRaw.Words[0].Text == "rebind" && rebindRaw.Words.Count == 5,
+    "`rebind player 2 Move Forward` parses as a rebind action with the two-word action");
+Check(variantParser.Parse("when me appears\n  save bindings\n").Events[0].Body[0].Statement is RawActionNode saveRaw &&
+      saveRaw.Words[1].Text == "bindings",
+    "`save bindings` parses as an action");
+Check(variantParser.Parse("when me appears\n  load bindings\n").Events[0].Body[0].Statement is RawActionNode loadRaw &&
+      loadRaw.Words[1].Text == "bindings",
+    "`load bindings` parses as an action");
+Check(WordRegistry.All.Any(e => e.Kind == "action" && e.Word == "rebind") &&
+      WordRegistry.All.Any(e => e.Kind == "trigger" && e.Word == "when binding changes") &&
+      WordRegistry.All.Any(e => e.Kind == "condition" && e.Word == "capturing a key"),
+    "the registry documents rebind, `when binding changes` and `capturing a key`");
+
+// A label can show what a player presses: `bind <label> to Player2 ShootKey`.
+var bindSettingProgram = variantParser.Parse("bind P2ShootLabel to Player2 ShootKey\n");
+Check(bindSettingProgram.Events.Count == 1 &&
+      bindSettingProgram.Events[0].Body[0].Statement is SetTextNode bindSettingText &&
+      bindSettingText.Target == "P2ShootLabel" &&
+      bindSettingText.Value is VariableValue bindSettingValue && bindSettingValue.Name == "Player2 ShootKey",
+    "`bind P2ShootLabel to Player2 ShootKey` reads the saved binding");
+
+// The shipped options menu: every row binds a real setting, and every click rebinds one.
+var optionsEvents = variantParser.Parse(File.ReadAllText("Source/Game/GameFiles/TK4Options.events"));
+var boundSettings = new List<string>();
+var rebindTargets = new List<string>();
+var rebindPlayers = new List<long>();
+foreach (var problemEvent in optionsEvents.Events)
+    foreach (var line in problemEvent.Body)
+    {
+        if (line.Statement is SetTextNode optionText && optionText.Value is VariableValue optionValue &&
+            optionValue.Name.Length > "Key".Length && optionValue.Name.EndsWith("Key"))
+            boundSettings.Add(optionValue.Name);
+        if (line.Statement is RawActionNode optionRaw && optionRaw.Words[0].Text == "rebind")
+        {
+            rebindPlayers.Add((long)optionRaw.Words[2].Number);
+            var actionWordsWritten = new List<string>();
+            for (int i = 3; i < optionRaw.Words.Count; i++)
+                actionWordsWritten.Add(optionRaw.Words[i].Text);
+            rebindTargets.Add(string.Join(" ", actionWordsWritten));
+        }
+    }
+Check(boundSettings.Count == 20 && boundSettings.All(name => defaultInput.HasSetting(name)),
+    $"TK4Options.events binds all 20 player settings (got {boundSettings.Count})");
+Check(rebindTargets.Count == 20 && rebindTargets.All(action => PlayerInput.Find(action) != null) &&
+      rebindPlayers.All(player => player == 1 || player == 2),
+    $"TK4Options.events rebinds 20 real actions for players 1 and 2 (got {rebindTargets.Count})");
+
+// Clicking a row on the options menu arms that player's action.
+var optMenuWorld = new FakeWorld();
+var optMenu = new FakeActor("TK4Options");
+optMenuWorld.AddActor(optMenu);
+var optMenuEngine = FreshEngine(optMenuWorld);
+optMenuEngine.AddSheet(optMenu, optionsEvents);
+optMenuEngine.Tick(0);
+Check(optMenuEngine.Input.KeyFor(1, "Move Forward") == "Up Arrow" &&
+      optMenuEngine.Input.KeyFor(2, "Shoot") == "Left Ctrl",
+    "opening the options menu keeps the default bindings and saves them");
+optMenuEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.Clicked, Name = "P1Forward" });
+optMenuEngine.Tick(1);
+Check(optMenuEngine.IsCapturingKey && optMenuEngine.TryCompleteCapture("K", null) &&
+      optMenuEngine.Input.KeyFor(1, "Move Forward") == "K" &&
+      optMenuEngine.Variables.GetGlobal("Player1 ForwardKey").AsText() == "K",
+    "clicking Move Forward on the options menu rebinds player 1 and saves it");
+Check(optMenuEngine.Variables.GetGlobal("Leaving").AsNumber() == 0,
+    "the options menu changes scene only once, through its `Leaving` guard");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
@@ -5803,6 +6026,22 @@ class FakeWorld : IEventWorld
     public bool IsKeyHeld(string key)
     {
         return held.Contains(key);
+    }
+
+    /// <summary>"pad button" pairs held on the fake gamepads (player 1 → pad 0).</summary>
+    private readonly HashSet<string> gamepad = new HashSet<string>();
+
+    public void SetGamepadButton(int pad, string button, bool on)
+    {
+        if (on)
+            gamepad.Add(pad + " " + button);
+        else
+            gamepad.Remove(pad + " " + button);
+    }
+
+    public bool IsGamepadButtonHeld(int pad, string button)
+    {
+        return gamepad.Contains(pad + " " + button);
     }
 
     public double Distance(object from, object to)

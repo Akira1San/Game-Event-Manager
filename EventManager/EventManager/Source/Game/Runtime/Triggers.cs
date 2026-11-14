@@ -74,6 +74,8 @@ namespace Game
         PlayerScoreChanges,
         PlayerKills,
         AllPlayersDead,
+        // Per-player input bindings (Task 16 input follow-ups)
+        BindingChanges,
     }
 
     public class TriggerDescriptor
@@ -122,6 +124,10 @@ namespace Game
                 {
                     Kind = words[words.Length - 1] == "up" ? TriggerKind.WheelScrollUp : TriggerKind.WheelScrollDown,
                 };
+            // `when binding changes` — a key was captured by the options menu (Task 16 input
+            // follow-ups). Sits before the generic `<var> changes` watcher.
+            if (words.Length == 2 && words[0] == "binding" && words[1] == "changes")
+                return new TriggerDescriptor { Kind = TriggerKind.BindingChanges };
             // ---- local multiplayer (Task 16 Part F) ----
             // `when all players dead` and the four per-player edges. They sit before the generic
             // `<key> is pressed` / `changes` shapes so `player` is never read as an input key.

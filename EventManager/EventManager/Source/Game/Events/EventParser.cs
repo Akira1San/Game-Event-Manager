@@ -600,6 +600,15 @@ namespace Game
                 index += 2;
                 return new VariableValue { Line = t.Line, Name = playerVariable };
             }
+            // `Player2 ShootKey` — a saved input binding, so a label can show the key a player
+            // presses (Task 16 input follow-ups).
+            if (index + 1 < words.Count && words[index + 1].Type == TokenType.Word &&
+                PlayerInput.TryReadSettingName(t.Text, words[index + 1].Text, out int bindPlayer, out string bindAction))
+            {
+                string setting = PlayerInput.SettingName(bindPlayer, bindAction);
+                index += 2;
+                return new VariableValue { Line = t.Line, Name = setting };
+            }
             // The run-together spelling `Player1Score` reads as the same variable.
             if (Players.TryReadVariableName(t.Text, out string runTogetherVariable))
             {

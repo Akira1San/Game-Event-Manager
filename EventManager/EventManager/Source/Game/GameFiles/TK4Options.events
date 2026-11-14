@@ -1,0 +1,130 @@
+# ---------------- TK4Options.events (per-player input bindings) ----------------
+#
+# Task 16 "input" follow-up: each local player's actions are listed here with the key
+# they answer to. Click an action to arm it, then press a key (or a gamepad button) —
+# `rebind player <n> <action>` stores it in the per-player map and saves it, so the
+# next scene keeps it.
+#
+# Player 1 defaults: arrows, Space, Left Shift, R, 1/2/3.
+# Player 2 defaults: WASD, Left Ctrl, Left Alt, Q, 4/5/6.
+# Player 2's keys reach Player1.events too: a player sheet reads `Left Arrow` /
+# `shoot` as *its own* binding, so the two sheets stay one file.
+
+# Each key label follows its saved setting (Player1 TurnLeftKey, ...).
+bind P1TurnLeftKey to Player1 TurnLeftKey
+bind P1TurnRightKey to Player1 TurnRightKey
+bind P1ForwardKey to Player1 ForwardKey
+bind P1BackKey to Player1 BackKey
+bind P1ShootKey to Player1 ShootKey
+bind P1SprintKey to Player1 SprintKey
+bind P1ReloadKey to Player1 ReloadKey
+bind P1Weapon1Key to Player1 Weapon1Key
+bind P1Weapon2Key to Player1 Weapon2Key
+bind P1Weapon3Key to Player1 Weapon3Key
+
+bind P2TurnLeftKey to Player2 TurnLeftKey
+bind P2TurnRightKey to Player2 TurnRightKey
+bind P2ForwardKey to Player2 ForwardKey
+bind P2BackKey to Player2 BackKey
+bind P2ShootKey to Player2 ShootKey
+bind P2SprintKey to Player2 SprintKey
+bind P2ReloadKey to Player2 ReloadKey
+bind P2Weapon1Key to Player2 Weapon1Key
+bind P2Weapon2Key to Player2 Weapon2Key
+bind P2Weapon3Key to Player2 Weapon3Key
+
+when scene starts
+  load bindings
+  # Writing the settings back fills in any binding this run has never saved, and refreshes
+  # every label bound above.
+  save bindings
+  set text of StatusLabel to "Click an action to change it, then press a key or a gamepad button."
+
+# A finished capture reports through these two per-sheet variables.
+when binding changes
+  set StatusMessage to my LastBoundPlayer
+  set StatusMessage to StatusMessage + my LastBoundAction
+  set StatusMessage to StatusMessage + " = "
+  set StatusMessage to StatusMessage + my LastBoundKey
+  set text of StatusLabel to StatusMessage
+
+# ---------------- player 1 ----------------
+
+when P1TurnLeft is clicked
+  rebind player 1 Turn Left
+
+when P1TurnRight is clicked
+  rebind player 1 Turn Right
+
+when P1Forward is clicked
+  rebind player 1 Move Forward
+
+when P1Back is clicked
+  rebind player 1 Move Backward
+
+when P1Shoot is clicked
+  rebind player 1 Shoot
+
+when P1Sprint is clicked
+  rebind player 1 Sprint
+
+when P1Reload is clicked
+  rebind player 1 Reload
+
+when P1Weapon1 is clicked
+  rebind player 1 Weapon 1
+
+when P1Weapon2 is clicked
+  rebind player 1 Weapon 2
+
+when P1Weapon3 is clicked
+  rebind player 1 Weapon 3
+
+# ---------------- player 2 ----------------
+
+when P2TurnLeft is clicked
+  rebind player 2 Turn Left
+
+when P2TurnRight is clicked
+  rebind player 2 Turn Right
+
+when P2Forward is clicked
+  rebind player 2 Move Forward
+
+when P2Back is clicked
+  rebind player 2 Move Backward
+
+when P2Shoot is clicked
+  rebind player 2 Shoot
+
+when P2Sprint is clicked
+  rebind player 2 Sprint
+
+when P2Reload is clicked
+  rebind player 2 Reload
+
+when P2Weapon1 is clicked
+  rebind player 2 Weapon 1
+
+when P2Weapon2 is clicked
+  rebind player 2 Weapon 2
+
+when P2Weapon3 is clicked
+  rebind player 2 Weapon 3
+
+# ---------------- leaving ----------------
+#
+# Every UI control shares this sheet, so one click reaches several copies of these
+# handlers. `Leaving` makes the first one win, so we change scene exactly once.
+
+when BackButton is clicked
+  if Leaving is 0
+  set Leaving to 1
+  save bindings
+  load scene "TK4Multiplayer"
+
+when Escape is pressed
+  if Leaving is 0
+  set Leaving to 1
+  save bindings
+  load scene "TK4Multiplayer"
