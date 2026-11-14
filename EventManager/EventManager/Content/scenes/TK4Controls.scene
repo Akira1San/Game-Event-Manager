@@ -1218,7 +1218,7 @@
 			"TypeName": "Game.EventSheet",
 			"ParentID": "9a01b2c3d4e5f60718293a4b5c6d7e8f",
 			"V": {
-				"EventFile": "MuzzleFlash"
+				"EventFile": "TK4_MuzzleFlash"
 			}
 		},
 		{
@@ -1259,7 +1259,7 @@
 			"TypeName": "Game.EventSheet",
 			"ParentID": "9b01b2c3d4e5f60718293a4b5c6d7e8f",
 			"V": {
-				"EventFile": "Explosion"
+				"EventFile": "TK4_Explosion"
 			}
 		},
 		{
@@ -1315,6 +1315,102 @@
 			"V": {
 				"EventFile": "TK_Bullet"
 			}
+		},
+		{
+			"ID": "9d01b2c3d4e5f60718293a4b5c6d7e8f",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "97f5e32416f54d579def802d157eaf1e",
+			"IsActive": false,
+			"Name": "Footprint",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 25.0,
+					"Z": -280.0
+				}
+			}
+		},
+		{
+			"ID": "9d11b2c3d4e5f60718293a4b5c6d7e8f",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "9d01b2c3d4e5f60718293a4b5c6d7e8f",
+			"V": {
+				"EventFile": "Footprint"
+			}
+		},
+		{
+			"ID": "9d21b2c3d4e5f60718293a4b5c6d7e8f",
+			"TypeName": "FlaxEngine.ParticleEffect",
+			"ParentID": "9d01b2c3d4e5f60718293a4b5c6d7e8f",
+			"IsActive": false,
+			"Name": "footprint",
+			"Overrides": [],
+			"ParticleSystem": "00000000000000000000000000000000",
+			"IsLooping": false
+		},
+		{
+			"ID": "9e01b2c3d4e5f60718293a4b5c6d7e8f",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "97f5e32416f54d579def802d157eaf1e",
+			"IsActive": false,
+			"Name": "Blood",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 25.0,
+					"Z": -300.0
+				}
+			}
+		},
+		{
+			"ID": "9e11b2c3d4e5f60718293a4b5c6d7e8f",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "9e01b2c3d4e5f60718293a4b5c6d7e8f",
+			"V": {
+				"EventFile": "Blood"
+			}
+		},
+		{
+			"ID": "9e21b2c3d4e5f60718293a4b5c6d7e8f",
+			"TypeName": "FlaxEngine.ParticleEffect",
+			"ParentID": "9e01b2c3d4e5f60718293a4b5c6d7e8f",
+			"IsActive": false,
+			"Name": "blood",
+			"Overrides": [],
+			"ParticleSystem": "00000000000000000000000000000000",
+			"IsLooping": false
+		},
+		{
+			"ID": "9f01b2c3d4e5f60718293a4b5c6d7e8f",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "97f5e32416f54d579def802d157eaf1e",
+			"IsActive": false,
+			"Name": "Gib",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 25.0,
+					"Z": -320.0
+				}
+			}
+		},
+		{
+			"ID": "9f11b2c3d4e5f60718293a4b5c6d7e8f",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "9f01b2c3d4e5f60718293a4b5c6d7e8f",
+			"V": {
+				"EventFile": "Gib"
+			}
+		},
+		{
+			"ID": "9f21b2c3d4e5f60718293a4b5c6d7e8f",
+			"TypeName": "FlaxEngine.ParticleEffect",
+			"ParentID": "9f01b2c3d4e5f60718293a4b5c6d7e8f",
+			"IsActive": false,
+			"Name": "gib",
+			"Overrides": [],
+			"ParticleSystem": "00000000000000000000000000000000",
+			"IsLooping": false
 		}
 	]
 }

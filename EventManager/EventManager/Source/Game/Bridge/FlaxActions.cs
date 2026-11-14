@@ -2712,6 +2712,15 @@ namespace Game
                 WarnOnce($"I couldn't find a ParticleEffect on \u201C{me.Name}\u201D to play \u201C{spec.Thing}\u201D.");
                 return;
             }
+            // A template actor staged before its asset is dragged in would otherwise be played
+            // with no particle system at all: warn once with the fix instead of failing silently
+            // every shot (Task 16 Part E adds three such templates to the TK4 scene).
+            ParticleSystem system = effect.ParticleSystem;
+            if (system == null)
+            {
+                WarnOnce($"\u201C{me.Name}\u201D has a ParticleEffect with no particle system asset, so \u201C{spec.Thing}\u201D has nothing to play — drag a .flax particle asset onto that ParticleEffect in the scene.");
+                return;
+            }
             effect.IsActive = true;
             effect.Play();
             string key = AssetNames.Key(spec.Thing);

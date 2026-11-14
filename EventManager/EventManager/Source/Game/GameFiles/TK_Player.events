@@ -163,8 +163,10 @@ when reload completes
 when Space is pressed
   unless reloading
   unless ammo my Weapon is 0
+  print "TK4 fire: spawning Bullet + MuzzleFlash"
   spawn Bullet at me offset 30
   spawn MuzzleFlash at me offset 30
+  print "TK4 fire: spawned, spending a round"
   add -1 to ammo my Weapon
   play sound "shot"
 
@@ -177,6 +179,7 @@ when every 0.08 seconds
   weapon is "Uzi"
   unless reloading
   unless ammo my Weapon is 0
+  print "TK4 fire: uzi burst, spawning Bullet + MuzzleFlash"
   spawn Bullet at me offset 30
   spawn MuzzleFlash at me offset 30
   add -1 to ammo my Weapon
@@ -186,6 +189,8 @@ when every 0.08 seconds
 # An enemy hit costs 10 of the 100 hit points shown on screen.
 when message "hurt" arrives
   unless my Invulnerable is true
+  # Part E: the spray appears at the body at the moment the hit lands.
+  spawn Blood at me
   add -10 to my Health
   add -1 to Lives
   set my Invulnerable to true
@@ -198,3 +203,18 @@ when message "hurt" arrives
 when my Health changes
   if my Health is lower than 0
   set my Health to 0
+
+# --- particles (Task 16 Part E) ---
+# Footprints: one clone every 0.3 s while walking. `me is moving` is the gate that keeps a
+# standing player from laying a puddle; the clone's sheet plays the particle and cleans up.
+when every 0.3 seconds
+  me is moving
+  spawn Footprint at me
+
+# Gibs: three chunk bursts when the player dies. Offsets are literal so the spray scatters
+# instead of stacking on one spot — the random velocity lives in the particle asset.
+when my Health becomes 0
+  spawn Gib at me offset 0
+  spawn Gib at me offset 12
+  spawn Gib at me offset -12
+  print "TK4: player death — gibs"

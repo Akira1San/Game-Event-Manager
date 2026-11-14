@@ -25,3 +25,18 @@ when every 0.2 seconds
 when me stops seeing Player
   set my mode to "patrol"
   wander speed 60
+
+# ---- taking a bullet (Task 16 Part C.5 damage, Part E effects) ----
+# `TK_Bullet.events` sends `"damage"` with the weapon's number, so the zombie finally dies to
+# gunfire: Blood at the body on the hit, Gibs on the death, then it leaves the scene.
+when message "damage" arrives
+  spawn Blood at me
+  set my LastDmg to other's damage
+  set my health to my health - my LastDmg
+
+when my health becomes 0
+  spawn Gib at me offset 0
+  spawn Gib at me offset 12
+  spawn Gib at me offset -12
+  print "TK4: zombie death — gibs"
+  destroy me

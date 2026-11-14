@@ -5340,6 +5340,12 @@ Check(BulletMath.WithinBlast(100, 0, 150) && !BulletMath.WithinBlast(200, 0, 150
 var tkBulletEvents = variantParser.Parse(File.ReadAllText("Source/Game/GameFiles/TK_Bullet.events"));
 Check(tkBulletEvents.Events.Count == 4,
     "TK_Bullet.events parses (flight, lifetime, wall impact, victim impact)");
+var tkMuzzleEvents = variantParser.Parse(File.ReadAllText("Source/Game/GameFiles/TK4_MuzzleFlash.events"));
+Check(tkMuzzleEvents.Events.Count == 1 && tkMuzzleEvents.Events[0].Body[0].IsCondition,
+    "TK4_MuzzleFlash.events parses and gates the flash on the clone marker");
+var tkExplosionEvents = variantParser.Parse(File.ReadAllText("Source/Game/GameFiles/TK4_Explosion.events"));
+Check(tkExplosionEvents.Events.Count == 1 && tkExplosionEvents.Events[0].Body[0].IsCondition,
+    "TK4_Explosion.events parses and gates the burst on the clone marker");
 var wallBody = tkBulletEvents.Events[2].Body;
 Check(wallBody.Count == 7 && wallBody[0].IsCondition && wallBody[3].IsCondition,
     "the wall event gates bounce and explode behind the bullet's own flags");
@@ -5361,6 +5367,91 @@ Check(flightSpec.Verb == ActionVerb.Move && flightSpec.AmountNode is VariableVal
     "`move forward speed my BulletSpeed` flies at the stamped speed");
 Check(victimBody.Count == 8 && victimBody[5].IsCondition && !victimBody[6].IsCondition,
     "the victim event damages, then stops or destroys the bullet (pierce keeps it flying)");
+
+// ---- Task 16 Part E: TK4 particle effects (footprint, blood, gibs) ----
+var footprintEvents = variantParser.Parse(File.ReadAllText("Source/Game/GameFiles/Footprint.events"));
+Check(footprintEvents.Events.Count == 1 && footprintEvents.Events[0].Body[0].IsCondition,
+    "Footprint.events parses and only runs on spawned clones");
+var bloodEvents = variantParser.Parse(File.ReadAllText("Source/Game/GameFiles/Blood.events"));
+Check(bloodEvents.Events.Count == 1 && bloodEvents.Events[0].Body[0].IsCondition,
+    "Blood.events parses and only runs on spawned clones");
+var gibEvents = variantParser.Parse(File.ReadAllText("Source/Game/GameFiles/Gib.events"));
+Check(gibEvents.Events.Count == 1 && gibEvents.Events[0].Body[0].IsCondition,
+    "Gib.events parses and only runs on spawned clones");
+
+// Footprint gate: the trail falls while the player walks and stops when it stands.
+var trailWorld = new FakeWorld();
+var walker = new FakeActor("Player");
+trailWorld.AddActor(walker);
+var trailEngine = FreshEngine(trailWorld);
+trailEngine.AddSheet(walker, variantParser.Parse(
+    "when every 0.3 seconds\n  me is moving\n  add 1 to my Steps\n"));
+trailEngine.Tick(0);
+trailEngine.Tick(0.3);
+Check(trailEngine.Variables.GetLocal(walker, "Steps").AsNumber() == 0,
+    "a standing player leaves no footprints");
+trailWorld.SetMoving(walker, true);
+trailEngine.Tick(0.6);
+trailEngine.Tick(0.9);
+Check(trailEngine.Variables.GetLocal(walker, "Steps").AsNumber() == 2,
+    "one footprint per 0.3 s while the player walks");
+trailWorld.SetMoving(walker, false);
+trailEngine.Tick(1.2);
+Check(trailEngine.Variables.GetLocal(walker, "Steps").AsNumber() == 2,
+    "the footprint trail stops when the player stands still");
+
+// Blood rides the hurt: one spray per landed hit, at the body.
+var bloodWorld = new FakeWorld();
+var bloodVictim = new FakeActor("Player");
+bloodWorld.AddActor(bloodVictim);
+var bloodEngine = FreshEngine(bloodWorld);
+bloodEngine.AddSheet(bloodVictim, variantParser.Parse(
+    "when message \"hurt\" arrives\n  add 1 to my Sprays\n  add -10 to my Health\n"));
+bloodEngine.Tick(0);
+bloodEngine.RaisePush(bloodVictim, new PushSignal { Kind = TriggerKind.Message, Name = "hurt" });
+bloodEngine.Tick(1);
+Check(bloodEngine.Variables.GetLocal(bloodVictim, "Sprays").AsNumber() == 1 &&
+      bloodEngine.Variables.GetLocal(bloodVictim, "Health").AsNumber() == -10,
+    "a hurt message lands once and raises one blood spray");
+
+// Gibs: the death watch fires once, not on every later tick.
+var gibWorld = new FakeWorld();
+var doomed = new FakeActor("Zombie");
+gibWorld.AddActor(doomed);
+var gibEngine = FreshEngine(gibWorld);
+gibEngine.AddSheet(doomed, variantParser.Parse("when my health becomes 0\n  add 1 to my Bursts\n"));
+gibEngine.Variables.SetLocal(doomed, "health", ValueBox.OfNumber(50));
+gibEngine.Tick(0);
+gibEngine.Variables.SetLocal(doomed, "health", ValueBox.OfNumber(0));
+gibEngine.Tick(1);
+gibEngine.Tick(2);
+Check(gibEngine.Variables.GetLocal(doomed, "Bursts").AsNumber() == 1,
+    "the gib burst fires once when health reaches 0");
+
+// The shipped TK4 sheets carry the wiring those effects hang off.
+var tkZombieEvents = variantParser.Parse(File.ReadAllText("Source/Game/GameFiles/Zombie.events"));
+bool zombieTakesDamage = false, zombieDies = false;
+foreach (var ev in tkZombieEvents.Events)
+{
+    var desc = TriggerClassifier.Classify(ev);
+    if (desc.Kind == TriggerKind.Message && (desc.RequireName == "damage" || desc.Key == "damage"))
+        zombieTakesDamage = true;
+    if (desc.Kind == TriggerKind.WatchBecomes)
+        zombieDies = true;
+}
+Check(zombieTakesDamage && zombieDies,
+    "Zombie.events answers `damage` and bursts gibs on death (the TK4 enemy is killable)");
+var tkEnemyEvents = variantParser.Parse(File.ReadAllText("Source/Game/GameFiles/Enemy.events"));
+bool enemyTakesDamage = false, enemyDies = false;
+foreach (var ev in tkEnemyEvents.Events)
+{
+    var desc = TriggerClassifier.Classify(ev);
+    if (desc.Kind == TriggerKind.Message && (desc.RequireName == "damage" || desc.Key == "damage"))
+        enemyTakesDamage = true;
+    if (desc.Kind == TriggerKind.WatchBecomes)
+        enemyDies = true;
+}
+Check(enemyTakesDamage && enemyDies, "Enemy.events sprays blood on damage and gibs on death");
 
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");

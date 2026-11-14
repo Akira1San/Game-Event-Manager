@@ -1,0 +1,15 @@
+# ---------------- TK4_Explosion.events (Task 16 Part C.5) ----------------
+# `explode` spawns the scene's Explosion actor where the projectile stopped, and this block runs
+# on that clone: the particle, half a second to play out, then the clone removes itself.
+#
+# Same `my spawnedFrom` gate as TK4_MuzzleFlash.events: the scene's template gets its sheet
+# attached at startup even while inactive, so an ungated `destroy me` would delete the template
+# before anything could clone it. Only a spawned copy reads this flag.
+
+when me appears
+  my spawnedFrom is "Explosion"
+  print "TK4 explosion: clone appeared"
+  play particle "explosion"
+  wait 0.5 seconds
+  print "TK4 explosion: clone done"
+  destroy me

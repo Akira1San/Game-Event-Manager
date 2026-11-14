@@ -1,0 +1,23 @@
+# ---------------- TK4_MuzzleFlash.events (Task 16 Part C.5) ----------------
+# One flash per shot: `TK_Player.events` does `spawn MuzzleFlash at me offset 30`, so this block
+# runs on a fresh clone each time — never on the scene's template.
+#
+# The `my spawnedFrom` gate is what keeps the template usable: an EventSheet component is
+# attached even on an inactive actor, so without the gate the template would run this block at
+# scene start, flash once at its own position and `destroy me` itself — leaving nothing for the
+# first real shot to clone (which is why the flash "went missing"). A clone carries
+# `my spawnedFrom` = the template's name; the template itself does not.
+
+when me appears
+  my spawnedFrom is "MuzzleFlash"
+  print "TK4 muzzle: clone appeared"
+  play particle "muzzle"
+  print "TK4 muzzle: particle played"
+  enable light
+  set light intensity to 3
+  set light color to "1 0.8 0.2"
+  wait 0.1 seconds
+  disable light
+  stop particle "muzzle"
+  print "TK4 muzzle: flash done"
+  destroy me

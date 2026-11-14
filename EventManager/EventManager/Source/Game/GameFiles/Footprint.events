@@ -1,0 +1,16 @@
+# ---------------- Footprint.events (Task 16 Part E) ----------------
+# One footprint puff. `TK_Player.events` spawns this template every 0.3 seconds while the player
+# walks, so the trail follows the feet without a spawn per frame and without a .cs particle s.
+#
+# `my spawnedFrom` is the gate that keeps the template usable: an EventSheet component attaches
+# even on an inactive actor, so an ungated block would play once at scene start and then
+# `destroy me` itself, leaving nothing for the walk to clone (the muzzle flash taught us this).
+#
+# The look (two dark quads, fade-out, lifetime) lives in the `footprint` particle asset dragged
+# onto this actor's ParticleEffect child — the sheet only plays it and cleans the clone up.
+
+when me appears
+  my spawnedFrom is "Footprint"
+  play particle "footprint"
+  wait 1.5 seconds
+  destroy me

@@ -1,0 +1,17 @@
+# ---------------- Blood.events (Task 16 Part E) ----------------
+# One blood spray: spawned where a victim was hit (`TK_Player.events` and the enemy sheets both
+# `spawn Blood at me` in their hurt/damage blocks), so the spray appears at the body rather than
+# following it around.
+#
+# Gated on `my spawnedFrom` — the scene's Blood actor is a template, and its sheet runs at scene
+# start even while the actor is inactive. Only spawned copies get this flag.
+#
+# Particle side (the `blood` asset on the ParticleEffect child): a 16-particle radial burst,
+# ~0.8 s life, red, gravity pulling the drops down. N particles per burst is an emitter setting,
+# not something the event language has to count.
+
+when me appears
+  my spawnedFrom is "Blood"
+  play particle "blood"
+  wait 1 seconds
+  destroy me

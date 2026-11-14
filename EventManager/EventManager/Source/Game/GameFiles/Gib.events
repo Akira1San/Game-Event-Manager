@@ -1,0 +1,17 @@
+# ---------------- Gib.events (Task 16 Part E) ----------------
+# One chunk burst for a death: the dying sheet spawns three of these at slightly different
+# offsets (`spawn Gib at me offset 0 / 12 / -12`), which reads as a scattered spray without
+# needing a random offset in the event language.
+#
+# Gated on `my spawnedFrom` for the same reason as the other effects: the template's sheet runs
+# at scene start even while the actor is inactive, and an ungated `destroy me` would eat it.
+#
+# Particle side (the `gib` asset on the ParticleEffect child): a handful of small chunks, random
+# initial velocity 200-400 cm/s, gravity on, ~3 s life. `ExplosionDeath` enemies spawn an
+# Explosion instead — see the ship sheet in `Enemy.events`.
+
+when me appears
+  my spawnedFrom is "Gib"
+  play particle "gib"
+  wait 3 seconds
+  destroy me

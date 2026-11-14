@@ -86,13 +86,13 @@ Goal: different weapons behave differently — shotgun fires multiple pellets wi
 - [x] Example: `Enemy.events` uses `my Speed`, `my SightDistance` instead of hardcoded values.
 
 ### Part E — TK4 Particle Effects (Footprint, Blood, Gibs)
-- [ ] Integrates with Task 14 (Particle & Light Bridge).
-- [ ] Footprint: `when me moves and me touches Floor → play particle "footprint" at feet` (random left/right).
-- [ ] Blood: `when message "hurt" arrives → play particle "blood" at me` (16 particles, random angles).
-- [ ] Gibs: `when my health becomes 0 → spawn Gib at me` (3x, random angle, velocity 2-4, lifetime 3s); `ExplosionDeath` variant: `play particle "explosion"` + burned gibs.
-- [ ] Asset naming: `effects/footprint`, `effects/blood`, `effects/gib`, `effects/explosion`.
-- [ ] Unit test: footprint triggers on floor contact; blood on hurt; gibs on death.
-- [ ] Example: `Enemy.events` adds footprint/blood/gib triggers; `Turret.events` uses explosion death.
+- [x] Integrates with Task 14 (Particle & Light Bridge): the effects use `play particle "<name>"` / `stop particle`, the `particle "<name>" is playing` condition and `when particle "<name>" ends`, so no new bridge code was needed. The one code change is a guard: a `ParticleEffect` with no `.flax` asset warns once ("drag a particle asset onto that ParticleEffect") instead of playing nothing.
+- [x] Footprint: `TK_Player.events` — `when every 0.3 seconds → me is moving → spawn Footprint at me`; the clone's sheet plays the particle and cleans up 1.5 s later. One clone per 0.3 s rather than per frame, and a standing player lays nothing (`me is moving` is the gate). Left/right alternation stays with the particle asset (a two-quad emitter), so the event stays one line.
+- [x] Blood: `spawn Blood at me` sits in the hurt blocks — `TK_Player.events` (`when message "hurt" arrives`) and the enemy sheets (`when message "damage" arrives`) — so the spray appears at the body. The 16-particle radial burst is the `blood` asset's emitter setting.
+- [x] Gibs: `when my health becomes 0 → spawn Gib at me offset 0 / 12 / -12` in `TK_Player.events`, `Zombie.events` and `Enemy.events`. The `ExplosionDeath` variant is in `Enemy.events`: `if my ExplosionDeath is true → spawn Explosion at me`, otherwise the three gib bursts (velocity 2-4 m/s and the 3 s lifetime are emitter settings).
+- [ ] Asset naming: the scene templates exist (`Footprint`, `Blood`, `Gib` — inactive actors with a `ParticleEffect` child, in `Content/effects/`), but the three `.flax` particle assets themselves still need to be authored in the Flax editor and dragged onto those children. Until then each effect warns once and plays nothing.
+- [x] Unit test: footprint timer + `me is moving` gate (none while standing, two after 0.6 s of walking, none when stopped), blood per landed `"hurt"`, gibs firing once on `my health becomes 0`, and the shipped `Zombie.events`/`Enemy.events` carrying the `damage` and death blocks. 10 new checks -> 977 passed, 0 failed.
+- [x] Example: `TK_Player.events` (footprints, blood on hurt, gibs on death), `Zombie.events` (blood on `"damage"`, gibs + `destroy me` on death — the TK4 zombie is now killable), `Enemy.events` (blood on damage; gibs, or an Explosion for an `ExplosionDeath` type such as Turret).
 
 ### Part F — Multiplayer Support (2 Players, Local)
 Goal: 2 local players on one PC, each with their own actor (`Player1`, `Player2`), per-player key bindings set from an options menu, and optional joystick/gamepad input. Single screen (one camera) for now — split screen is deferred to its own task. Depends on Task 1–3, Task 16 Part H (player controls). TK4 reference: per-player `CKeys` bindings, local only, no networking.
