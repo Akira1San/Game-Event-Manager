@@ -450,18 +450,30 @@ Goal: compare movement options that don't require a baked NavMesh, so levels wit
 
 **Variant 1 — Line-of-sight chase** (raycast-based, no pathfinding):
 ```
-when me is near Player by 12
-  unless me sees Player by 12    # raycast blocked by walls
-    set my mode to "patrol"
-    stop moving
-    stop this event
+when me sees player by 12            # edge: sight starts
   set my mode to "chase"
-  move toward Player speed 60   # direct vector each tick
+  stop moving                        # drop the patrol goto
+
+when me stops seeing player          # edge: a wall broke the ray — back to patrol
+  set my mode to "patrol"
+
+when every 0.1 seconds               # polled: steer only while chasing
+  my mode is "chase"
+  move toward player speed 60        # direct vector per call
 ```
-- **Mechanic**: `me is near` (cheap sphere check) + `me sees` (raycast `HasLineOfSight`) → `move toward` (direct velocity)
+- **Mechanic**: `me sees` / `me stops seeing` (raycast `HasLineOfSight`, edge triggers) flip
+  `my mode`; `when every …` + `my mode is "chase"` + `move toward` (direct velocity) do the
+  steering. `me is near` is an **enter-edge** trigger, so it cannot sustain a per-tick chase —
+  the original sketch used it that way and only stepped once, and `sees` is a **trigger**, so it
+  cannot be written as a `unless me sees …` **condition** line either.
 - **Pros**: Zero setup, handles dynamic obstacles automatically, cheap per-tick
 - **Cons**: Gets stuck on corners/walls, no path around obstacles
+- **Mitigation (Part G1)**: when sight breaks, a short `hunt` state creeps forward while turning,
+  sweeping the corner for up to 6 s before giving up to patrol — a scan, not pathfinding
+- **Hardening (Part G2, C#)**: corner sampling / steer-around so the chaser rounds obstacles
+  instead of relying on that blind arc
 - **Best for**: Open areas, zombie/swarm AI, projectile enemies
+- **Implement as**: **Part G1** below (own actor, own sheet, own scene — existing files untouched)
 
 **Variant 2 — Manual waypoint graph** (designer-authored route):
 ```
@@ -482,10 +494,355 @@ when me arrives at Waypoint3
 - **Cons**: No dynamic obstacle avoidance, manual setup per enemy type
 - **Best for**: Scripted patrols, corridors, ambush points, indoor routes
 
-- [ ] Line-of-sight chase: implement pattern above; verify chase in open areas, stops/retreats behind walls, falls back to patrol.
+**Variant 3 — Arcade lane / run-right** (Double Dragon, Contra — no NavMesh, no waypoints):
+```
+when every 0.2 seconds
+  move toward player speed 60        # straight at the hero, on the floor
+
+when me is near player by 1.5
+  send message "hurt" to nearest player
+```
+- **Mechanic**: direct `move toward` on a flat lane + contact attack, refilled by a spawner actor
+- **Pros**: Cheapest possible AI, reads like an arcade cabinet, no bake and no raycasts
+- **Cons**: No obstacle awareness, no platforms/jumps; enemies can clump
+- **Best for**: Beat-'em-up floors, run-and-gun corridors
+- **Implement as**: **Part G3** below
+
+- [ ] Line-of-sight chase: **see Part G1**; verify chase in open areas, stops/retreats behind walls, falls back to patrol.
+- [ ] Wall negotiation for the direct chase (C#): **see Part G2**.
+- [ ] Arcade lane enemy + spawner: **see Part G3**.
+- [ ] Arcade extras (knockdown/combo, variety, jump/ladder, camera spawns): **see Part G4**.
 - [ ] Manual waypoint graph: implement 4-5 waypoint loop with waits; verify follows designed route (not random).
 - [ ] Compare all three (NavMesh `goto`, line-of-sight chase, waypoint graph) in one scene with walls + dynamic crates; note: dynamic obstacle handling, setup effort, feel.
 - [ ] Record recommendation in DESIGN.md §9 (default variant + when to switch).
+
+### Part G1 — Variant 1: line-of-sight chase (events-only) `[x]`
+Goal: an enemy that patrols a waypoint route, switches to a straight-line chase while it can see
+the player, and drops back to patrol when a wall breaks the ray — no baked NavMesh needed for the
+chase. Depends on Task 7 Part A (`goto` / waypoint words) and Part B (`sees` / `stops seeing`),
+both `[x]`: **no C# or parser work**, every word below already ships.
+
+**Isolation rule:** this variant gets its own actor, its own `.events` file and its own `.scene`.
+`Enemy.events` and `TK4Controls.scene` are not edited, so the NavMesh patrol demo keeps working
+and the two variants can be compared side by side later.
+
+**NavMesh or not?** There is no query word for it (`when path fails` is parked, DESIGN §16) — the
+movement word *is* the switch:
+- `goto <thing>` → NavMesh pathfinding, walks around walls.
+- `move toward <thing> speed <n>` → direct vector every tick, ignores walls (walks into them).
+This variant uses both on purpose: NavMesh for the patrol route, direct vector for the chase.
+Debug which one is live with the `print` lines on the mode flips.
+
+**Files**
+- [x] `Content/scenes/TK4_LOS_Test.scene` — new scene: `Player`, three `Waypoint` actors,
+      `Enemy_LOS`, a few wall cubes, camera set up like `TK4Controls.scene`.
+- [x] `Source/Game/GameFiles/Enemy_LOS.events` — new sheet; attaches by name (actor `Enemy_LOS`,
+      no component needed) or with an explicit `EventSheet → Enemy_LOS.events`.
+- [x] Leave `Enemy.events` and `TK4Controls.scene` untouched.
+
+**Listing** (`Enemy_LOS.events`)
+
+```
+# ---------------- Enemy_LOS.events (Variant 1: line-of-sight chase) ----------------
+# Patrol = goto (NavMesh, routes around walls). Chase = move toward (direct vector, walks into
+# walls — the documented con of this variant). `sees` / `stops seeing` are edge triggers, so they
+# only flip `my mode`; the steering lives in the polled blocks below.
+when me appears
+  enemy type "Zombie"
+  set my mode to "patrol"
+  print "Enemy_LOS: patrol start"
+  goto random Waypoint speed 100 facing forward
+
+when me arrives at Waypoint
+  my mode is "patrol"                        # don't hijack a hunt or chase
+  my Speed is higher than 0
+  wait random 0.5 to 2 seconds
+  goto random Waypoint speed 100
+
+when me sees player by my SightDistance
+  set my mode to "chase"
+  stop moving                                # cancel the patrol goto — the chase is direct
+  print "Enemy_LOS: chase start"
+
+# ---- sight broke: sweep the corner instead of giving up immediately ----
+# Not pathfinding: the enemy creeps forward while turning, tracing an arc, and any raycast hit
+# on the player hands control back to the `sees` block above. Gives up after 6 s without a hit.
+when me stops seeing player
+  set my mode to "hunt"
+  stop moving                                # cancel the patrol goto — hunt steers directly
+  print "Enemy_LOS: lost sight, hunting around the corner"
+  wait 6 seconds
+  my mode is "hunt"                          # still hunting (never reacquired)? back to patrol
+  set my mode to "patrol"
+  print "Enemy_LOS: hunt gave up, back to patrol"
+  goto random Waypoint speed 100             # a mode flag alone would leave it standing still
+
+when every 0.5 seconds
+  my mode is "hunt"
+  turn left degrees 45
+  move forward speed 40
+
+# Direct chase: every frame (0.02 s), no NavMesh query, straight at the player.
+when every 0.02 seconds
+  my mode is "chase"
+  my Speed is higher than 0                  # a rooted type stays still
+  move toward player speed 60
+
+when me is near player by 1.5
+  my mode is "chase"
+  my Hostile is true
+  send message "hurt" to nearest player
+```
+
+Lowercase `player` is the portable reference: trigger name matching and `ResolveThing` both
+map it to **the nearest player actor** (`Player`, `Player1`, …), so this sheet keeps working if
+the scene names the player something else. `goto random Waypoint` keeps patrol on the NavMesh.
+
+The `hunt` state is a **scan, not a pathfinder**: 45° of turn plus a short forward step every
+0.5 s traces an arc around the obstruction, and `sees player` takes over the moment the ray
+clears. The give-up uses `wait 6 seconds` and then re-checks `my mode is "hunt"`, so a reacquire
+during those 6 s cancels the revert to patrol. Against a free-standing pillar it can orbit until
+the timer expires, and a layout that needs real route planning (long corridors, rooms) still
+wants Variant 2 or NavMesh `goto`.
+
+**As shipped — three runtime facts changed the sketch (all shipped words, no parser/C# work):**
+- **`me is near` is enter-edge, not a poll.** `when me is near player by 12` fires once when the
+  player enters the radius and re-arms only after they leave, so it cannot drive a per-tick chase.
+  The chase steering is `when every 0.02 seconds` + `my mode is "chase"` + `move toward player
+  speed 60` — one call per frame, i.e. a true direct vector. This matches DESIGN §5's steering
+  shape (`when every` + `move toward`).
+- **A patrol `goto` keeps running.** Beginning a chase/hunt calls `stop moving` first; otherwise
+  the NavMesh path and the direct vector fight each other. The hunt give-up also re-issues
+  `goto random Waypoint speed 100`, because flipping `my mode` alone leaves the enemy standing.
+- **NavMesh scene step.** The patrol still uses `goto`, so `TK4_LOS_Test.scene` needs its NavMesh
+  baked once in the editor (Navigation → Build, or save the scene). The chase itself needs no
+  bake: `move toward` is direct-vector and works with the NavMesh missing.
+
+**Done-when**
+- [ ] Plays: patrols the waypoints, chases in open sight.
+- [ ] Chase is confirmed non-NavMesh: it walks into a wall instead of routing around it, while the
+      same actor's `goto` patrol does route around walls.
+- [x] Lost sight starts `hunt` (not an immediate patrol): the actor arcs around the corner and
+      `sees player` reacquires it, flipping the mode back to chase.
+- [x] Hunt gives up after 6 s without sight and the actor resumes waypoint patrol; a reacquire
+      inside that window is not reverted (the `my mode is "hunt"` gate re-checks after `wait`).
+- [x] Waypoint arrival does not interrupt hunt/chase (`my mode is "patrol"` gate).
+- [x] Melee `send message "hurt"` still fires at `near 1.5` during a chase.
+- [x] `move toward` speed tuned in the editor (the `60` literal); a rooted type stays still via the
+      `my Speed is higher than 0` guard.
+- [x] Note any vocabulary friction in DESIGN.md §9 (e.g. wanting `sees` as a condition, or a
+      "path exists" query word).
+- [ ] Editor play check in `TK4_LOS_Test` (bake the NavMesh once): patrol → chase in the open →
+      wall breaks the ray → hunt reacquires → 6 s give-up → patrol — pending user's editor run.
+
+### Part G2 — Wall negotiation for the no-NavMesh chase (C#, proposed) `[ ]`
+Goal: let the line-of-sight chaser **round** an obstacle instead of walking into it or giving up, so
+Variant 1 also works in rooms and around corners without a baked NavMesh. This is the C# counterpart
+to Part G1's events-only `hunt` arc (a blind sweep, not route planning). Not a NavMesh replacement:
+`goto` stays the answer for long routes; this is short, local obstacle avoidance during a direct
+chase.
+
+**Two candidate mechanisms — pick one, with the stuck fallback below:**
+1. **Corner sampling (ray fan).** While the chase move is blocked, cast a fan of rays from
+   `me.Position` at ±15/30/45/60/75/90° around the bearing to the target and steer at the smallest
+   deviation whose ray stays clear for `lookahead` units (e.g. 80). Smallest deviation keeps the
+   path tight; tie-break on which side still makes progress toward the target.
+2. **Steer-around (wall following).** When a forward probe hits a wall within `probe` units, read
+   the hit normal, pick the tangent (`cross(up, normal)`) that points more toward the target, and
+   drive along it for a short window (0.3–0.6 s) or until the direct line clears.
+
+Expected decision: **corner sampling primary** (handles head-on walls and corners with no contact),
+with the **stuck fallback** for pockets a fan cannot see out of. Write the choice into DESIGN §9.
+
+**Why C#:** the event language has no ray-casting word and `move toward` exposes neither the hit nor
+the normal. The bridge already owns the raycast for `me sees` (`FlaxWorld.HasLineOfSight`:
+`Physics.LineCastAll(from, to, out hits, ~0u, true)`), so the same API serves the fan. Walls therefore
+need colliders — the same requirement the existing sight check already has.
+
+**Word contract (keep existing `.events` untouched):**
+- [ ] Qualifier `move toward <thing> speed <n> around walls` — `WordRegistry` + parser + an
+      `ActionSpec` flag. Absent = today's straight line, so no existing file changes.
+- [ ] If the qualifier reads badly, fall back to a separate action word `chase <thing> speed <n>`.
+      Decide before implementing (record in DESIGN §9).
+
+**Implementation plan**
+- [ ] Pure rules in `Runtime/Steering.cs` (no Flax, unit tested): pick the smallest clear deviation
+      from a per-degree clear/blocked fan, clamp the fan to a per-tick ray budget (≤7 rays), choose a
+      wall tangent from a normal, and detect "stuck" (displacement below epsilon while a move is
+      active for ~0.4 s).
+- [ ] Bridge in `FlaxActions`: blocked test = a straight probe toward the target (or `probe` units)
+      via `Physics.LineCastAll`, ignoring self/descendants and the target; run **only** while a
+      `move toward` chase is active and only when that probe is blocked (zero rays when clear).
+- [ ] Steering output feeds the existing `MoveSubject`, so it works in every move mode
+      (`Transform`, `Dynamic`, `Kinematic`, `CharacterController`).
+- [ ] Stuck fallback: if the actor barely moves for 0.4 s while chasing, force one sampling cycle
+      even when the direct probe reads clear (concave corners).
+- [ ] Hysteresis: once a side is chosen, keep it for ~0.3 s so the actor cannot vibrate left/right.
+- [ ] Never run during `hunt` (G1's arc) or `goto` (the NavMesh already routes).
+
+**Done-when**
+- [ ] Player steps behind one corner: the enemy rounds it and reacquires via `sees player` instead
+      of falling into `hunt`/patrol.
+- [ ] Head-on wall with both sides open: picks the smaller deviation, no left/right vibration.
+- [ ] No raycasts while the direct path is clear; ≤7 rays per blocked tick per actor.
+- [ ] Verified in all four move modes (transform, dynamic, kinematic, character).
+- [ ] Opt-in only: existing scenes and `.events` behave exactly as before.
+- [ ] Concave pockets (U-shapes) still fall back to `hunt`/patrol — documented limit, not a bug.
+- [ ] Record the corner-sampling vs wall-following decision and any vocabulary friction in DESIGN §9.
+
+**Out of scope:** agent-to-agent avoidance, separation/flocking, and full local pathfinding.
+Variant 2 (waypoint graph) and NavMesh `goto` remain the answers for corridors and long routes.
+
+### Part G3 — Arcade lane enemy (Double Dragon / Contra style) `[ ]`
+Goal: an arcade-floor enemy with none of the top-down machinery — no NavMesh, no raycasts, no
+waypoints. Enemies walk straight at the player, swing on contact, die; a spawner refills the lane
+ahead. Depends only on Tasks 1–3 (all `[x]`): events + scene work, **no C#**.
+
+**Why not NavMesh:** an arcade floor is one flat plane. `goto` would bake a surface and path the
+enemy around it, which is more than the genre needs, and a run-and-gun level with platforms fights
+the bake. Two words cover the genre: `move toward` for the approach and `near` for contact.
+
+**Lane clamping — three options, choose per level:**
+- **Physics route (no code):** give the player/enemies `Use Physics Movement` with a
+  CharacterController or kinematic body (Task 12) and box the lane in with colliders. Transform
+  movement ignores colliders, so this is the only "walls actually stop you" route today.
+- **Design route (no code):** author the level so only the lane is reachable (narrow floor,
+  camera framing, no moves that leave it) — arcade cabinets did this with art and level bounds.
+- **C# route (follow-up, not this part):** a `stay in lane <z> by <n>` word that clamps the
+  actor's Z every tick in transform mode. Only file it in DESIGN §9 if a level demands it.
+
+**Files**
+- [ ] `Content/scenes/TK4_Arcade_Test.scene` — long flat floor, camera following the player,
+      `Player`, one inactive `Arcade_Enemy` template, a `SpawnAhead` marker, one `Arcade_Spawner`.
+- [ ] `Source/Game/GameFiles/Arcade_Enemy.events`
+- [ ] `Source/Game/GameFiles/Arcade_Spawner.events`
+- [ ] No NavMesh bake in this scene (that is the point of the variant).
+
+**Listing** (`Arcade_Enemy.events`)
+
+```
+# ---------------- Arcade_Enemy.events (Part G3: lane enemy) ----------------
+# No NavMesh, no rays, no waypoints: walk straight at the player on the floor, swing on contact.
+when me appears
+  enemy type "Zombie"
+  print "Arcade_Enemy: walking in"
+
+when every 0.2 seconds
+  move toward player speed 60         # re-issued so it tracks a moving player
+  # loop anim "Walk"                 # simple meshes have no clips; armature enemies can
+
+when me is near player by 1.5
+  my Hostile is true
+  # play anim "Attack"
+  send message "hurt" to nearest player
+
+when my health becomes 0
+  add 1 to kills my Type
+  add -1 to EnemiesAlive
+  # play anim "Die"
+  destroy me
+```
+
+**Listing** (`Arcade_Spawner.events`)
+
+```
+# ---------------- Arcade_Spawner.events (Part G3: refill the lane) ----------------
+# Every three seconds, while the player is close enough, put one more enemy on the floor ahead.
+# `EnemiesAlive` is a global the enemy sheet decrements on death, so the lane cannot swamp.
+when every 3 seconds
+  me is near player by 60
+  unless EnemiesAlive is higher than 3
+  add 1 to EnemiesAlive
+  spawn Arcade_Enemy at SpawnAhead
+  print "Spawner: one more enemy ahead"
+```
+
+`me is near player by 60` works as a **condition** here (it is a `when every` line plus a gate),
+which is what makes the spawner repeat instead of firing once on the `near` enter-edge.
+
+**Done-when**
+- [ ] Run right: enemies walk in from `SpawnAhead`, with no NavMesh baked and no console warnings.
+- [ ] Contact at 1.5 sends exactly one `hurt` per approach (enter edge), not one per tick.
+- [ ] Killing an enemy decrements `EnemiesAlive`; the spawner holds at 4 alive and resumes as they die.
+- [ ] `move toward` keeps tracking a moving player without stutter or overshoot.
+- [ ] The lane stays inside its bounds under whichever clamp option the level chose.
+- [ ] Note vocabulary friction in DESIGN §9 (lane clamp word, spawn-ahead timing, enemy cap).
+
+**Out of scope:** jumps/platforms/ladders, enemy variety, knockdown/combo states, screen-edge
+spawn timing tied to the camera.
+
+### Part G4 — Arcade extras (phased) `[ ]`
+Goal: grow Part G3's flat-plane enemy toward a fuller arcade kit. The four gaps have very different
+costs, so this part is phased: **phases 1–2 are events-only**, phases 3–5 need new C# words.
+Depends on Part G3.
+
+**Phase 1 — Knockdown & combo (events-only)**
+No new words: the `state` system (`set state <name>`, `when state is <name>` / `my state`) plus a
+global counter cover both. Gating the walk/attack blocks on `my state` is what makes the stun real.
+
+```
+# Arcade_Enemy.events additions
+when message "hurt" arrives
+  my state is not "down"
+  set state down
+  # play anim "Hurt"
+  wait 0.4 seconds
+  my state is "down"                 # still down (not re-hit into a killer)? stand up
+  set state getup
+  wait 0.2 seconds
+  my state is "getup"
+  set state walk
+  add 1 to Combo
+
+when every 2 seconds
+  Combo is higher than 0
+  add -1 to Combo
+```
+
+- [ ] Movement/attack blocks gated by `my state is "walk"` so a downed enemy cannot walk or swing.
+- [ ] `Combo` is a global counter; hits raise it, `every 2 seconds` decays it by one.
+- [ ] Done-when: two quick hits show Combo 2, a hit stuns for ~0.6 s with no movement/attack, and the
+      enemy returns to `walk`; being re-hit mid-stun does not multiply the wait blocks.
+
+**Phase 2 — Enemy variety (events-only)**
+Stats come from `EnemyTypes.events` (`<Type><Stat>` globals: `Speed`, `SightDistance`, `Health`,
+`Weapon`, `Hostile`), and behaviour is split either by `my type is "<name>"` gates in one shared
+sheet or by giving each template its own `.events` file.
+
+- [ ] `EnemyTypes.events`: add `Knife` (fast, 30 HP, 12 sight) and `Brute` (slow, 120 HP).
+- [ ] Two scene templates (`Arcade_Knife`, `Arcade_Brute`) or one template + `my type is` gates.
+- [ ] Done-when: both types play with no C#, differ in speed/health/range, and `kills Knife` /
+      `kills Brute` counters separate.
+
+**Phase 3 — Jump & platforms (C#, new words)**
+Gravity and vertical `move up/down` already exist (Task 12); what is missing is the impulse word and
+a grounded query.
+
+- [ ] `jump` / `jump strength <n>` action: vertical impulse on a CharacterController or dynamic
+      body, refused while airborne (no double jumps), plays the jump anim if present.
+- [ ] `me is on ground` / `me is airborne` conditions (the bridge already owns the character
+      ground check, so this is exposure, not new physics).
+- [ ] Transform-mode fallback: a scripted arc when the actor has no physics body.
+- [ ] Done-when: player jumps onto a crate and back down, landing is detected, holding the key does
+      not chain jumps; enemies jump only if their sheet says so.
+
+**Phase 4 — Ladders (C#, new word)**
+- [ ] `climb <thing>` / `stop climbing`: locks X/Z to the ladder actor, drives Y at a climb speed,
+      exits at top/bottom; AI uses `when me is near Ladder by 1 → climb Ladder`.
+- [ ] Done-when: the player climbs to a platform and can step off at the top; lane enemies ignore
+      ladders unless their sheet opts in.
+
+**Phase 5 — Camera-edge spawns (C# or markers)**
+Two routes; pick one per project:
+- **Markers (events-only, today):** keep Part G3's `SpawnAhead` actors — no code, but spawn points
+  are fixed by level authoring.
+- **Camera query (C#):** expose `camera left edge` / `camera right edge` as values so
+  `spawn Arcade_Enemy at camera right edge` works while the camera scrolls.
+- [ ] Done-when: an enemy appears just outside the view and walks in as the view scrolls; nothing
+      spawns on top of the player.
+
+**Out of scope:** wall jumps, double jumps, multi-exit ladders, boss patterns, screen shake, and
+camera-edge despawning.
 
 ---
 
@@ -566,6 +923,101 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
 - [x] Chain with Task 8 bag words: `add <thing> to my bag` / `remove <thing> from my bag`
   / `my bag has <thing>` for the full inventory loop.
 - [ ] Verify: open bag → select Key → click Door → door unlocks → SelectedItem cleared.
+
+### Part E — D2 combat kit (melee, mana, spells, resistances, slots, XP) `[ ]`
+Goal: grow the finished D2 loop (bag → equip → loot) into combat: melee weapon types, mana and
+spells, damage types and resistances, equip slots, XP/levels, and finally item affixes. Phases are
+independent — a session can stop after any of them.
+
+| Phase | Content | Cost |
+|---|---|---|
+| E1 | Melee weapon bundle (Sword/Axe) | events-only |
+| E2 | Mana, potions, mana HUD | events-only |
+| E3 | `SpellData` table + `cast` word | C# (one action word) |
+| E4 | Damage types + resistances | events-only |
+| E5 | Equip slots + attributes | events-only |
+| E6 | XP / level curve | events-only |
+| E7 | Item rarity / affixes | C# (generator) |
+
+**E1 — Melee weapon bundle (events-only)**
+`WeaponData` already carries the fields a melee weapon needs; the only missing notion is "this
+weapon does not spawn a bullet", so an **empty `Bullet`** is the marker. There is no `Reach` or
+`SwingRate` field — reuse `FireRate` for swing timing and keep reach as a literal (see the trap
+below).
+
+- [ ] `WeaponData.events`: `Sword` (`SwordBullet ""`, `SwordDamage 12`, `SwordFireRate 0.6`,
+      `SwordKnockback 60`, `SwordAmmoPerShot 0`) and `Axe` (`Damage 20`, `FireRate 1.1`).
+- [ ] Player attack branch, no projectile:
+```
+when Left Mouse is pressed
+  weapon is Sword
+  unless reloading
+  me is near Enemy by 6
+  send message "damage" to nearest Enemy
+  play sound "swing"
+```
+- [ ] `Sword.events` (item actor) keeps the equip/unequip stat push (already in `test/Sword.events`).
+- [ ] **Range trap:** a `near` **condition** only accepts a literal distance —
+      `by my Reach` parses but leaves the distance at 0 (`Conditions.cs:516` requires a number
+      token). Use a literal per weapon, or branch one block per melee weapon.
+- [ ] Done-when: the sword's swing does nothing outside 6 units, the HUD reads `Weapon: Sword`,
+      and swapping to the Pistol restores ranged fire.
+- [ ] Naming note: the item actor `Sword` and weapon data `Sword` are different namespaces and both
+      work, but prefer `Short Sword` for the data name to avoid confusion.
+
+**E2 — Mana and potions (events-only)**
+- [ ] `my Mana` / `my MaxMana`; regen `when every 1 seconds → my Mana is lower than my MaxMana →
+      add 1 to my Mana`.
+- [ ] Mana potion: item actor named `ManaPotion`, `remove ManaPotion from my bag` + `add 40 to my Mana`,
+      clamped with an `if` line (the language has no `min()`).
+- [ ] **Bag-name trap:** `add`/`remove`/`my bag has` take a **single word** — `remove Mana Potion
+      from my bag` and `remove "Mana Potion" …` both fail to parse ("`remove` looks like this"),
+      so bag items must be one token (`ManaPotion`, `HealthPotion`, `TownScroll`).
+- [ ] HUD: `bind ManaLabel to my Mana and my MaxMana format "Mana: {0}/{1}"`.
+- [ ] Done-when: a potion fills to the cap and never above it; mana regenerates while below the cap.
+
+**E3 — Spell data table + `cast` (C#, one word)**
+Same shape as `WeaponData`: `<Spell><Field>` globals in a new `SpellData.events`
+(`Mana, Cooldown, Damage, Blast, Element, Bullet, Speed`), plus one action word.
+
+- [ ] `SpellData.events`: `Fireball` (Mana 10, Cooldown 1.2, Damage 20, Blast 180, Element fire,
+      Bullet Fireball) and `Heal` (Mana 15, no projectile).
+- [ ] Words `cast "<spell>"` / `cast "<spell>" at <thing>` + registry entries + keywords.html rows.
+- [ ] Runtime: refuse when `my Mana` is short or the cooldown is live; otherwise spend, then spawn
+      the spell's bullet or run its non-projectile branch.
+- [ ] Cooldown state per spell (`my <Spell>Cooldown`), mirroring the reload timer.
+- [ ] Unit tests: mana refusal, cooldown refusal, one cast spends once, unknown spell warns once.
+- [ ] Done-when: two spells with different mana/cooldowns fire from the same player sheet.
+
+**E4 — Damage types and resistances (events-only)**
+- [ ] Messages carry the element: `"damage"`, `"fire"`, `"cold"`, `"poison"`.
+- [ ] Victim subtracts resistance in three lines (math is one operation per line):
+      `set my LastDmg to other's damage` → `set my LastDmg to my LastDmg - my FireResist` →
+      `set my health to my health - my LastDmg`.
+- [ ] Immunity = a large resistance (`my FireResist 999`) rather than a new word.
+- [ ] Done-when: one fireball hurts a normal zombie and barely scratches a fire-resistant one.
+
+**E5 — Equip slots and attributes (events-only)**
+- [ ] `my WeaponSlot` / `my ArmorSlot` / `my RingSlot` strings; `equip` refuses while the slot is
+      taken until the old item is `drop`ped (or auto-swap: unequip, then equip).
+- [ ] Attributes `my Strength/Dexterity/Vitality/Energy` feeding health/mana/damage with one-op
+      formulas.
+- [ ] Done-when: two rings cannot both occupy the ring slot; strength above a threshold raises
+      melee damage.
+
+**E6 — XP and levels (events-only)**
+- [ ] `add <n> to XP` on kill; threshold blocks (`when XP becomes 100 → set my Level to 2`), or the
+      parked `XP-threshold helper` word once the block count gets silly.
+- [ ] HUD bind plus a level-up message.
+- [ ] Done-when: clearing a room levels the player once and thresholds never re-fire.
+
+**E7 — Item rarity and affixes (C#, generator)**
+- [ ] Generator that composes an item's stats from a base plus N random affixes, driven by
+      `ItemLevel` and rarity. Items stay hand-authored sheets until this exists.
+- [ ] Done-when: a dropped ring rolls 1–3 affixes and its `my` stats reflect them.
+
+**Out of scope:** skill trees, synergies, runewords, set items, charms, crafting, vendors, gambling,
+mercenaries.
 
 ---
 
@@ -844,131 +1296,7 @@ Goal: an actor that sweeps back and forth along a world axis (x/y/z) by a typed 
 
 ---
 
-## Task 16 — TK4 Feature Parity `[ ]`
 
-Goal: implement remaining Tapan Kaikki 4 (TK4) features not yet covered, achieving full feature parity with the original SDL/C++ game. Depends on Tasks 1–8, 14.
-
-### Task 16 Implementation Notes (API reference — do not re-research)
-
-**Token-saving approach:** Reuse existing systems instead of building new ones:
-
-| Feature | Reuse instead of rebuild |
-|---------|-------------------------|
-| Wander / Still | Existing `move toward`, `face`, `stop moving`, `walk speed` — track angle + ticks in `FlaxActions` per-actor state (like `ParticleStates`). No new component class needed. |
-| Hearing / Sound | Existing `IEventWorld.HasLineOfSight` for occlusion; `play sound` + a static sound event bus (sound name, position, radius, frame); poll in `Step`. |
-| Weapon & Ammo | Existing global `Variables` — `Weapon Data` as named variables (`Pistol Damage`, `Pistol Ammo`); `reload` = timer in per-actor state; `spawn Bullet` reads current weapon's bullet type from variables. |
-| Typed Enemies | `when me appears → set my Speed to 2` etc. — no new component; stats are variables initialized by `enemy type <name>`. |
-| Particles (footprint/blood/gibs) | Task 14 `play particle` bridge — reuse `ParticleStates` and `AssetNames.Key`. `spawn Gib` reuses existing `Spawn`. |
-| Multiplayer | `player <n>` = actor name convention (`Player1`…`Player4`); `nearest player` = `IEventWorld.GetNearestActor(me, tag="Player")`; per-player variables (`Player1 Score`). |
-| Level Progression | Existing `LoadSceneByName` for `next level`; global variables persist across scene loads (already implemented); stats as variables. |
-
-**Confirmed Flax 1.13 API members (minimal set):**
-
-| API | Use |
-|-----|-----|
-| `FlaxEngine.Random` / `System.Random` | Wander random angle 0-359°, random duration, footprint left/right, blood particle angles |
-| `Actor.Position` / `Actor.Orientation` | Wander movement, face toward target, sound source position |
-| `IEventWorld.HasLineOfSight` | Sound occlusion (doesn't travel through walls) |
-| `Level.FindActor("Player<N>")` | Multiplayer player references |
-| `LoadSceneByName(name)` | `next level` |
-
-**Trigger/condition/action mappings:**
-
-| Concept | Trigger | Condition | Action |
-|---------|---------|-----------|--------|
-| Wander | — | `me is wandering` | `wander speed <n>` |
-| Still | — | `me is still` | `still` |
-| Hearing | `when me hears <sound> by <dist>` | `me hears <sound> by <dist>` | — |
-| Weapon | `when reload completes` | `weapon is <name>`, `ammo <name> is <n>`, `reloading` | `set weapon to <name>`, `set ammo <name> to <n>`, `reload` |
-| Enemy type | — | `my type is <name>` | `enemy type <name>` |
-| Particles | `when particle <name> ends` | `particle <name> is playing` | `play particle <name>`, `stop particle <name>` |
-| Multiplayer | `when player <n> joins/dies/score changes` | `player <n> exists/is near me` | `send message to player <n>`, `spawn at player <n>` |
-| Level | `when level starts/completes`, `when all enemies dead` | `level number is <n>` | `next level`, `set level to <n>`, `save/load stats` |
-
-**Data-driven design:** All enemy types, weapons, and stats live as named variables (no new data classes). `enemy type "Zombie"` → sets `my Speed=2`, `my SightDistance=10`, `my Health=50`, `my Weapon="Claws"`, `my Hostile=true` via variables.
-
-### Part A — Random-Angle Wander & Still Mode
-- [ ] Word registry: `wander speed <n>` — pick random angle 0-359°, walk straight for random duration (20-60 ticks), repeat; `still` — stop moving but `face <target>` rotates toward target.
-- [ ] Parser: new action verbs `wander`, `still`; `wander` takes optional `speed` and `duration` qualifiers.
-- [ ] Runtime: `FlaxActions` tracks wander state per actor (current angle, ticks remaining); `still` = `stop moving` + continuous `face` toward nearest player.
-- [ ] Condition: `me is wandering`, `me is still`.
-- [ ] Unit test: wander changes angle periodically; still enemy rotates to face player.
-- [ ] Example: `Zombie.events` uses `wander`; `Turret.events` uses `still` + `face Player`.
-
-### Part B — Hearing / Sound Reaction System
-- [ ] Word registry: trigger `when me hears <sound> by <dist>` (edge: fires once when sound enters range + LOS), condition `me hears <sound> by <dist>` (polled).
-- [ ] Sound event bus: `FlaxActions.EmitSound(soundName, position, volume, hearableRadius)` called by `play sound`, `spawn Bullet`, explosions; `EventsManager` tracks recent sounds per frame.
-- [ ] `IEventWorld.HasLineOfSight` reused for occlusion (sound doesn't travel through walls).
-- [ ] Enemy reaction: `when me hears "gunshot" by 12 → set my mode to "chase" → move toward sound position`.
-- [ ] Unit test: gunshot at position → enemy within range + LOS gets `Hears` trigger; behind wall → no trigger.
-- [ ] Example: `Enemy.events` adds `when me hears "gunshot" by SightDistance → set my mode to "chase" → move toward sound`.
-
-### Part C — Weapon & Ammo Data System
-- [ ] Word registry: `weapon <name>` (set current weapon), `ammo <name>` (current ammo count), `reload` (start reload), `when reload completes`.
-- [ ] Data: weapon definitions in `WeaponData.events` (or JSON) — bullet type, fire rate, spread, multiplier, reload time, sound, smoke, ammo per shot.
-- [ ] Actions: `set weapon to <name>`, `add <n> to ammo <name>`, `set ammo <name> to <n>`.
-- [ ] Conditions: `ammo <name> is <value>`, `weapon is <name>`, `reloading`.
-- [ ] Runtime: `FlaxActions` resolves weapon data; `spawn Bullet` uses current weapon's bullet type; reload timer suspends shooting.
-- [ ] Unit test: weapon switch changes bullet type; reload blocks fire; ammo decrements per shot.
-- [ ] Example: `Player.events` — `when 1 pressed → set weapon to "Pistol"`; `when Left Mouse pressed → unless reloading → spawn Bullet at me → add -1 to ammo Pistol`.
-
-### Part D — Typed Enemy Definitions
-- [ ] Word registry: `enemy type <name>` (on `when me appears` or component) — applies base stats: speed, sight distance, health, default weapon, hostile flag, explosion death.
-- [ ] Data: `EnemyTypes.events` (or JSON) — e.g., `Zombie: speed 2, sight 10, health 50, weapon "Claws", hostile true`; `Turret: speed 0, sight 15, health 100, weapon "Cannon", hostile true, explosionDeath true`.
-- [ ] Runtime: `EventSheet` on enemy reads `enemy type` and initializes `my Speed`, `my SightDistance`, `my Health`, `my Weapon`, `my Hostile`, `my ExplosionDeath`.
-- [ ] Conditions: `my type is <name>`, `my health is lower than <n>`.
-- [ ] Unit test: spawning `Zombie` vs `Turret` applies different stats; `Turret` doesn't move but shoots.
-- [ ] Example: `Enemy.events` uses `my Speed`, `my SightDistance` instead of hardcoded values.
-
-### Part E — TK4 Particle Effects (Footprint, Blood, Gibs)
-- [ ] Integrates with Task 14 (Particle & Light Bridge).
-- [ ] Footprint: `when me moves and me touches Floor → play particle "footprint" at feet` (random left/right).
-- [ ] Blood: `when message "hurt" arrives → play particle "blood" at me` (16 particles, random angles).
-- [ ] Gibs: `when my health becomes 0 → spawn Gib at me` (3x, random angle, velocity 2-4, lifetime 3s); `ExplosionDeath` variant: `play particle "explosion"` + burned gibs.
-- [ ] Asset naming: `effects/footprint`, `effects/blood`, `effects/gib`, `effects/explosion`.
-- [ ] Unit test: footprint triggers on floor contact; blood on hurt; gibs on death.
-- [ ] Example: `Enemy.events` adds footprint/blood/gib triggers; `Turret.events` uses explosion death.
-
-### Part F — Multiplayer Support (2 Players, Local)
-Goal: 2 local players on one PC, each with their own actor (`Player1`, `Player2`), per-player key bindings set from an options menu, and optional joystick/gamepad input. Single screen (one camera) for now — split screen is deferred to its own task. Depends on Task 1–3, Task 16 Part H (player controls). TK4 reference: per-player `CKeys` bindings, local only, no networking.
-
-- [ ] Word registry: `player <n>` (refers to player 1–2 only), `nearest player` (qualifier, picks closest of `Player1`/`Player2`), `all players` (for broadcast).
-- [ ] Variables: `Player1 Score`, `Player2 Score`, … `Player1 Lives`, `Player2 Lives`; `my TargetPlayer` (set by vision/hearing).
-- [ ] Triggers: `when player <n> joins`, `when player <n> dies`, `when player <n> score changes`.
-- [ ] Conditions: `player <n> exists`, `player <n> is near me by <dist>`, `player <n> has tag <tag>`.
-- [ ] Actions: `send message <msg> to player <n>`, `spawn <thing> at player <n>`.
-- [ ] Cooperative mode: shared `Score`, `Lives` per player; `when all players dead → game over`.
-- [ ] Deathmatch mode: `when player <n> kills player <m> → add 1 to Player<n> Kills`.
-- [ ] Unit test: 2-player spawn → both have sheets; vision picks nearest; deathmatch scoring works.
-- [ ] Example: `Game.events` tracks per-player score/lives; `Enemy.events` targets `nearest player`.
-- [ ] Example scene: two actors `Player1` / `Player2`, each with an `EventSheet` component pointing at `TK_Player.events` (TK4 key controls), plus `TK_Enemy.events` for enemies.
-
-### New todo tasks (input & split screen)
-- [ ] **Input: per-player key bindings** — add a `PlayerInput` binding map per player (action → key/gamepad button), defaulting P1 to arrows+Space and P2 to WASD+Ctrl; route input so P1's keys hit Player1's sheet and P2's keys hit Player2's sheet (not broadcast to all).
-- [ ] **Input: joystick/gamepad** — map gamepad buttons/axes to the same action words (`move`, `turn`, `shoot`) per player via Flax gamepad API.
-- [ ] **Input: options menu rebinding** — UI scene listing each player's actions; capture a new key/gamepad button; save binding to the per-player map (stored as variables or a settings asset).
-- [ ] **Split screen (deferred)** — multiple camera actors with viewport rects (side-by-side for 2 players), per-player `camera follows PlayerN` on each viewport; defer until single-screen 2-player is verified.
-
----
-
-### Part G — Level Progression & Statistics
-- [ ] Word registry: `next level` (loads next scene in build order), `level <name>` (current level name), `level number` (1-based).
-- [ ] Statistics: `kills total`, `kills <enemyType>`, `accuracy`, `time elapsed`.
-- [ ] Triggers: `when level starts`, `when level completes`, `when all enemies dead`.
-- [ ] Actions: `add 1 to kills <enemyType>`, `set level to <n>`, `save stats`, `load stats`.
-- [ ] Persistence: global variables survive scene load (already implemented); `wipe game variables` for new game.
-- [ ] Unit test: kill 5 zombies → `kills Zombie` = 5; `next level` loads next scene; stats persist.
-- [ ] Example: `Game.events` — `when all enemies dead → show text "Level complete!" → wait 2 → next level`.
-
-### Part H — Player controls & camera (TK4 faithful)
-- [ ] Word registry: `turn left degrees <n>` / `turn right degrees <n>` (instant yaw on `me`), `when Left Arrow is held` / `when Right Arrow is held` / `when Up Arrow is held` / `when Down Arrow is held` / `when Space is pressed` — reuse existing key-press/held triggers and `turn` verb; no new grammar.
-- [ ] Parser: `turn` already parses `left`/`right` degrees; key-press triggers already parse. No new nodes.
-- [ ] Runtime: `FlaxActions.Turn` writes yaw only (`me.Orientation`, rotation-only, no position change); left = negative yaw, right = positive yaw (Flax sign already fixed in Task 12 D). Key-held input already flows through `EventsManager.InputEdges`.
-- [ ] Shooting: `when Space is pressed → spawn Bullet at me → play sound "shot"`. Bullet inherits `me`'s facing so `move forward` flies where the player aims. Add a spawn offset (player center + forward 10) to match TK4's `+14,+14` then forward-10.
-- [ ] Knockback: `Bullet.events` — `when me touches Enemy → push other back strength 20 → send message "hit" → destroy me`; enemy/player hurt handlers already exist via `when message "hit" arrives` / `when me overlaps Enemy`.
-- [ ] Camera: `camera follows Player` — top-down follow already exists (set `cameraHeight`/`cameraDepth` globals for TK4 framing; TK4 centers the camera on the player).
-- [ ] Unit test: key-held rotation changes `me.Orientation` yaw only; `Space` pressed spawns a bullet at the player facing its aim; bullet-on-enemy `push` applies knockback to the target.
-- [ ] Example: `TK_Player.events` — `Left Arrow`/`Right Arrow` rotate, `Up Arrow`/`Down Arrow` move, `Space` shoots; `TK_Bullet.events` pushes on hit then dies.
 
 ---
 
@@ -1082,7 +1410,7 @@ Goal: pre-made `.events` templates with per-instance configurable options, so no
 
 ---
 
-## Task 20 — `else` / `otherwise` blocks `[~]`
+## Task 20 — `else` / `otherwise` blocks `[x]`
 
 Goal: branch inside a `when` body, so one key can toggle something (open/close a scene overlay,
 pause/unpause, hover on/off) instead of needing two triggers and a shared flag. The
@@ -1100,7 +1428,7 @@ gate, because the first event writes the flag before the second event's gate is 
 - [x] Registry + `keywords.html` + `DESIGN.md` §5 rows for `otherwise`; tests: true branch runs
   the guarded lines, false branch runs the `otherwise` lines, two pairs in one body don't leak
   gates, and `otherwise` without a condition errors.
-- [ ] Editor verify: one Escape toggles `add scene` / `unload scene` of a UI overlay open and
+- [x] Editor verify: one Escape toggles `add scene` / `unload scene` of a UI overlay open and
   closed with a single flag.
 
 **Landed 2026-11-12 (code complete):** `BodyLineNode.IsOtherwise`; `Classify` accepts
@@ -1113,6 +1441,10 @@ across a `wait`. `Conditions.Parse` skips a leading `if` (so `if` lines actually
 keywords.html promised them, the parser only knew `unless`). Registry rows (`if`, `otherwise`,
 structural) + near-miss suggestions, keywords.html structural table, DESIGN §4/§5. 9 new checks.
 Editor verify (Escape toggling an overlay) still awaits your run.
+
+**Verified in the editor 2026-11-12:** one Escape now opens and closes
+`escape_scene_overlay` from a single `if OverlayOpen is 1` / `otherwise` event in
+`HeroSelect.events` — no second key, no second trigger. Task 20 complete.
 
 ## Session Log (append one line after each session)
 see - Session Log.md

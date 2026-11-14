@@ -1806,6 +1806,73 @@ when me is released
     nearTriggerEngine.Tick(4);
     Check(nearTriggerEngine.Variables.GetGlobal("Nearing").AsNumber() == 2, "coming back into range refires near");
 
+    // ------------------------------------------------------------------
+    // Task 7 Part G1: Enemy_LOS.events (line-of-sight chase, events only)
+    // ------------------------------------------------------------------
+
+    var losProgram = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Enemy_LOS.events"));
+    Check(losProgram.Events.Count == 7, $"Enemy_LOS.events parses into 7 events (got {losProgram.Events.Count})");
+
+    // Patrol -> chase on the sight edge, hunt on the fall, patrol again after the 6 s timer.
+    var losWorld = new FakeWorld();
+    var losEnemy = new FakeActor("Enemy_LOS");
+    var losPlayer = new FakeActor("Player");
+    losWorld.AddActor(losEnemy);
+    losWorld.AddActor(losPlayer);
+    losWorld.SetDistance(losEnemy, losPlayer, 500); // outside the Zombie's 200 cm sight
+    losWorld.SetBlocking(losEnemy, losPlayer, false);
+    var losEngine = FreshEngine(losWorld);
+    losEngine.AddSheet(losEnemy, losProgram);
+    var losHurtProgram = parser.Parse("when message \"hurt\" arrives\n  set Hurts to Hurts + 1");
+    losEngine.AddSheet(losPlayer, losHurtProgram);
+    losEngine.Tick(0);
+    Check(losEngine.Variables.GetLocal(losEnemy, "mode").AsText() == "patrol", "Enemy_LOS starts in patrol");
+    Check(losEngine.Variables.GetLocal(losEnemy, "SightDistance").AsNumber() == 10,
+        "Enemy_LOS copies the Zombie type's sight range");
+
+    losWorld.SetDistance(losEnemy, losPlayer, 3);
+    losEngine.Tick(0.1);
+    Check(losEngine.Variables.GetLocal(losEnemy, "mode").AsText() == "chase", "seeing the player flips Enemy_LOS to chase");
+
+    losWorld.SetBlocking(losEnemy, losPlayer, true);
+    losEngine.Tick(0.2);
+    Check(losEngine.Variables.GetLocal(losEnemy, "mode").AsText() == "hunt", "a broken ray flips Enemy_LOS to hunt");
+
+    losEngine.Tick(6.3);
+    Check(losEngine.Variables.GetLocal(losEnemy, "mode").AsText() == "patrol",
+        "hunt gives up after 6 s without sight and returns to patrol");
+
+    // Reacquiring inside the 6 s window keeps the chase (the `my mode is "hunt"` gate re-checks).
+    var losReacquireWorld = new FakeWorld();
+    var losReacquireEnemy = new FakeActor("Enemy_LOS");
+    var losReacquirePlayer = new FakeActor("Player");
+    losReacquireWorld.AddActor(losReacquireEnemy);
+    losReacquireWorld.AddActor(losReacquirePlayer);
+    losReacquireWorld.SetDistance(losReacquireEnemy, losReacquirePlayer, 500);
+    losReacquireWorld.SetBlocking(losReacquireEnemy, losReacquirePlayer, false);
+    var losReacquireEngine = FreshEngine(losReacquireWorld);
+    losReacquireEngine.AddSheet(losReacquireEnemy, losProgram);
+    losReacquireEngine.AddSheet(losReacquirePlayer, losHurtProgram);
+    losReacquireEngine.Tick(0);
+    losReacquireWorld.SetDistance(losReacquireEnemy, losReacquirePlayer, 3);
+    losReacquireEngine.Tick(0.1);
+    losReacquireWorld.SetBlocking(losReacquireEnemy, losReacquirePlayer, true);
+    losReacquireEngine.Tick(0.2);
+    losReacquireWorld.SetBlocking(losReacquireEnemy, losReacquirePlayer, false);
+    losReacquireEngine.Tick(1);
+    Check(losReacquireEngine.Variables.GetLocal(losReacquireEnemy, "mode").AsText() == "chase",
+        "reacquiring during the hunt flips back to chase");
+    losReacquireEngine.Tick(7);
+    Check(losReacquireEngine.Variables.GetLocal(losReacquireEnemy, "mode").AsText() == "chase",
+        "a reacquire inside the 6 s window is not reverted to patrol");
+
+    // Melee contact still fires on the `near 1.5` enter edge during a chase.
+    losReacquireWorld.SetDistance(losReacquireEnemy, losReacquirePlayer, 1);
+    losReacquireEngine.Tick(7.1);
+    losReacquireEngine.Tick(7.2); // messages are delivered on the next tick
+    Check(losReacquireEngine.Variables.GetGlobal("Hurts").AsNumber() == 1,
+        "Enemy_LOS sends `hurt` to the nearest player at melee range during a chase");
+
     static List<Token> RawWords(EventParser parser, string source)
 {
     var program = parser.Parse(source);

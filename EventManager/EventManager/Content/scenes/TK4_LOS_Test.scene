@@ -1,0 +1,352 @@
+{
+	"ID": "7e20d547c9824a3086d42e03fdc71ed2",
+	"TypeName": "FlaxEngine.SceneAsset",
+	"EngineBuild": 7014,
+	"Data": [
+		{
+			"ID": "7e20d547c9824a3086d42e03fdc71ed2",
+			"TypeName": "FlaxEngine.Scene",
+			"LightmapSettings": {
+				"IndirectLightingIntensity": 1.0,
+				"GlobalObjectsScale": 1.0,
+				"ChartsPadding": 3,
+				"AtlasSize": 1024,
+				"BounceCount": 1,
+				"CompressLightmaps": true,
+				"UseGeometryWithNoMaterials": true,
+				"Quality": 10
+			}
+		},
+		{
+			"ID": "d7015722d89f400ead2ba1e105eeb0f6",
+			"TypeName": "FlaxEngine.DirectionalLight",
+			"ParentID": "7e20d547c9824a3086d42e03fdc71ed2",
+			"Name": "Sun",
+			"Transform": {
+				"Translation": {
+					"X": 40.0,
+					"Y": 160.0,
+					"Z": -15.033416748046875
+				},
+				"Orientation": {
+					"X": 0.3826834559440613,
+					"Y": 0.0,
+					"Z": 0.0,
+					"W": 0.9238795042037964
+				}
+			}
+		},
+		{
+			"ID": "d1c1803cb03749a095bd1a471f878e55",
+			"TypeName": "FlaxEngine.Sky",
+			"ParentID": "7e20d547c9824a3086d42e03fdc71ed2",
+			"Name": "Sky",
+			"Transform": {
+				"Translation": {
+					"X": 40.0,
+					"Y": 150.0,
+					"Z": 0.0
+				}
+			},
+			"Sun": "d7015722d89f400ead2ba1e105eeb0f6"
+		},
+		{
+			"ID": "4bbbf04682c54a0b948a5f8291c75c2e",
+			"TypeName": "FlaxEngine.SkyLight",
+			"ParentID": "7e20d547c9824a3086d42e03fdc71ed2",
+			"Name": "SkyLight",
+			"Brightness": 2.5,
+			"CustomTexture": "c54410104ff39427bc11e5bc761d66b0"
+		},
+		{
+			"ID": "3d22607577a04a748fdaa64ae55ac8d1",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "7e20d547c9824a3086d42e03fdc71ed2",
+			"Name": "Floor",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": -22.57009506225586,
+					"Z": 0.0
+				},
+				"Scale": {
+					"X": 8.0,
+					"Y": 0.800000011920929,
+					"Z": 6.400000095367432
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "ea4b98824f51d74380d64fa533ea934a",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "8dc7a7332b654266a9e79192fb02760b",
+			"TypeName": "FlaxEngine.MeshCollider",
+			"ParentID": "3d22607577a04a748fdaa64ae55ac8d1",
+			"Name": "MeshCollider",
+			"CollisionData": "8684de1f4dd59eef8fdb8584788e2ad5"
+		},
+		{
+			"ID": "ddcea8759e624ecca474ba9c98fd6078",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "7e20d547c9824a3086d42e03fdc71ed2",
+			"Name": "Player",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 25.636878967285156,
+					"Z": 200.0
+				},
+				"Orientation": {
+					"X": 0.0,
+					"Y": 1.0,
+					"Z": -0.0,
+					"W": -4.371138828673793e-8
+				},
+				"Scale": {
+					"X": 0.20000000298023224,
+					"Y": 0.20000000298023224,
+					"Z": 0.20000000298023224
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "1a63d4a2808f4822860da6515d1a68c2",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "ddcea8759e624ecca474ba9c98fd6078",
+			"V": {
+				"EventFile": "TK_Player"
+			}
+		},
+		{
+			"ID": "22ca783cb3e44caeb9365cb2b3559e7b",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "7e20d547c9824a3086d42e03fdc71ed2",
+			"Name": "Enemy_LOS",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 4.04949951171875,
+					"Z": -150.0
+				}
+			},
+			"Model": "efb6d881436796e7b8fb8496dcfe8808",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "e448085a4958f904fe3a6db6cd353d42",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "31dc134e9ab543af9d5fb96e60ad25f8",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "22ca783cb3e44caeb9365cb2b3559e7b",
+			"V": {
+				"EventFile": "Enemy_LOS"
+			}
+		},
+		{
+			"ID": "3d85cdbdc35048fd91ff23a40cdc155b",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "7e20d547c9824a3086d42e03fdc71ed2",
+			"Name": "Waypoint",
+			"Transform": {
+				"Translation": {
+					"X": -300.0,
+					"Y": 0.0,
+					"Z": -200.0
+				}
+			}
+		},
+		{
+			"ID": "53194b3106324df1bace51b8b65349fe",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "7e20d547c9824a3086d42e03fdc71ed2",
+			"Name": "Waypoint",
+			"Transform": {
+				"Translation": {
+					"X": 300.0,
+					"Y": 0.0,
+					"Z": -200.0
+				}
+			}
+		},
+		{
+			"ID": "8a9d0f70ed68458a87efce41aab1de97",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "7e20d547c9824a3086d42e03fdc71ed2",
+			"Name": "Waypoint",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 0.0,
+					"Z": 250.0
+				}
+			}
+		},
+		{
+			"ID": "cbd082447e1847f8b45e619605fa2675",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "7e20d547c9824a3086d42e03fdc71ed2",
+			"Name": "wall_left",
+			"Transform": {
+				"Translation": {
+					"X": -210.0,
+					"Y": 67.42988586425781,
+					"Z": 0.0
+				},
+				"Scale": {
+					"X": 3.0,
+					"Y": 1.0,
+					"Z": 0.18000000715255737
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "4c646be2c19448b383faaba56c873ebd",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "cbd082447e1847f8b45e619605fa2675",
+			"Name": "BoxCollider",
+			"Size": {
+				"X": 100.0,
+				"Y": 100.0,
+				"Z": 100.0
+			}
+		},
+		{
+			"ID": "21c5d0cbaa134542af739c7e8722b6bb",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "7e20d547c9824a3086d42e03fdc71ed2",
+			"Name": "wall_right",
+			"Transform": {
+				"Translation": {
+					"X": 210.0,
+					"Y": 67.42988586425781,
+					"Z": 0.0
+				},
+				"Scale": {
+					"X": 3.0,
+					"Y": 1.0,
+					"Z": 0.18000000715255737
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "413b87826a1c4af4a2445ab6f64c7747",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "21c5d0cbaa134542af739c7e8722b6bb",
+			"Name": "BoxCollider",
+			"Size": {
+				"X": 100.0,
+				"Y": 100.0,
+				"Z": 100.0
+			}
+		},
+		{
+			"ID": "a94b7103974041398cc530c8abd27c1a",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "7e20d547c9824a3086d42e03fdc71ed2",
+			"Name": "Game"
+		},
+		{
+			"ID": "6bd69823857040ab93c6478c89f2c030",
+			"TypeName": "Game.EventsManager",
+			"ParentID": "a94b7103974041398cc530c8abd27c1a",
+			"V": {
+				"Runtime": {
+					"Variables": {
+						"OnWarning": {}
+					},
+					"World": {
+						"$type": "Game.DefaultEventWorld, Game.CSharp"
+					},
+					"Selection": {},
+					"Construction": {},
+					"Wander": {},
+					"Sounds": {},
+					"Weapons": {}
+				}
+			}
+		},
+		{
+			"ID": "e573cd2d6de34052a2f6d196894310d8",
+			"TypeName": "FlaxEngine.NavMeshBoundsVolume",
+			"ParentID": "7e20d547c9824a3086d42e03fdc71ed2",
+			"Name": "NavMeshBoundsVolume"
+		},
+		{
+			"ID": "b72f6c87f5c04371a3a20a604f02c3bc",
+			"TypeName": "FlaxEngine.NavMesh",
+			"ParentID": "7e20d547c9824a3086d42e03fdc71ed2",
+			"Name": "NavMesh.Default",
+			"Properties": {
+				"Name": "Default"
+			}
+		},
+		{
+			"ID": "780abc0408d54bb4b561fc984e7bf46e",
+			"TypeName": "FlaxEngine.Camera",
+			"ParentID": "7e20d547c9824a3086d42e03fdc71ed2",
+			"Name": "Camera",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 216.930419921875,
+					"Z": 277.0111083984375
+				},
+				"Orientation": {
+					"X": -5.7024269750627354e-9,
+					"Y": -0.9238795042037964,
+					"Z": 0.3826834559440613,
+					"W": 1.3766874751297564e-8
+				}
+			}
+		}
+	]
+}

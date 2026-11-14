@@ -1008,6 +1008,15 @@ window around a broken runtime.
   rule for *what keeps ticking while paused* (proposal: menu/UI sheets and clicks stay live,
   world actors, timers and physics freeze) â€” decide when a game actually needs it, likely
   together with the Menus batch (Task 6).
+- **Direct-vector chase needs a poll, not `near` (Task 7 G1):** `move toward` steps the subject
+  once by `speed × deltaTime`, and `when me is near <thing> by <dist>` is an **enter-edge** trigger
+  (fires once, re-arms only after the target leaves). So the line-of-sight chase cannot be steered
+  from `near`; it needs `when every 0.02 seconds` (one call per frame) + a `my mode is "chase"`
+  gate + `move toward player speed 60`. A patrolling `goto` must also be cancelled with
+  `stop moving` when the chase/hunt starts, because an ongoing move is not replaced by a `move`
+  word — otherwise the NavMesh path and the direct vector fight. `sees` stays a trigger, not a
+  condition; the `my mode` string carries the state. No `path exists` word exists (parked), so the
+  movement verb itself is the NavMesh/no-NavMesh switch.
 - **Pathfinding edge cases:** what happens when `goto` can't reach the target (player on a
   pillar, waypoint inside a wall)? Proposal: `goto` gives up after a few seconds and â€” for now â€”
   quietly stops walking; a `when path fails` trigger is parked for when a game actually needs it.

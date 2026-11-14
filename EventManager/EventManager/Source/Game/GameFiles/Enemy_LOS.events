@@ -1,0 +1,61 @@
+# ---------------- Enemy_LOS.events (Task 7 Part G1: line-of-sight chase) ----------------
+# Patrol = goto (NavMesh, routes around walls). Chase = move toward (direct vector, walks into
+# walls — the documented con of this variant). `sees` / `stops seeing` are edge triggers, so they
+# only flip `my mode`; the steering lives in the polled blocks below.
+#
+# Two shapes differ from the sketch in TASKS.md because the words behave differently at runtime:
+#   1. `when me is near player by 12` is an ENTER-edge trigger (fires once, then re-arms only
+#      after the player leaves), so it cannot drive a per-tick chase. The chase steering is a
+#      `when every 0.02 seconds` block instead — that is one call per frame, i.e. a true direct
+#      vector — the same shape DESIGN.md §5 uses for steering.
+#   2. A patrol `goto` keeps running until it arrives, so starting a chase/hunt has to cancel it
+#      with `stop moving`; otherwise the NavMesh path and the direct vector fight each other.
+#      The hunt give-up also re-issues a patrol `goto`, because flipping the flag alone would
+#      leave the enemy standing still.
+# Both are all shipped words — no C# or parser change.
+
+when me appears
+  enemy type "Zombie"
+  set my mode to "patrol"
+  print "Enemy_LOS: patrol start"
+  goto random Waypoint speed 100 facing forward
+
+when me arrives at Waypoint
+  my mode is "patrol"                        # don't hijack a hunt or chase
+  my Speed is higher than 0
+  wait random 0.5 to 2 seconds
+  goto random Waypoint speed 100
+
+when me sees player by my SightDistance
+  set my mode to "chase"
+  stop moving                                # cancel the patrol goto — the chase is direct
+  print "Enemy_LOS: chase start"
+
+# ---- sight broke: sweep the corner instead of giving up immediately ----
+# Not pathfinding: the enemy creeps forward while turning, tracing an arc, and any raycast hit
+# on the player hands control back to the `sees` block above. Gives up after 6 s without a hit.
+when me stops seeing player
+  set my mode to "hunt"
+  stop moving                                # cancel the patrol goto — hunt steers directly
+  print "Enemy_LOS: lost sight, hunting around the corner"
+  wait 6 seconds
+  my mode is "hunt"                          # still hunting (never reacquired)? back to patrol
+  set my mode to "patrol"
+  print "Enemy_LOS: hunt gave up, back to patrol"
+  goto random Waypoint speed 100             # a mode flag alone would leave it standing still
+
+when every 0.5 seconds
+  my mode is "hunt"
+  turn left degrees 45
+  move forward speed 40
+
+# Direct chase: every frame (0.02 s), no NavMesh query, straight at the player.
+when every 0.02 seconds
+  my mode is "chase"
+  my Speed is higher than 0                  # a rooted type stays still
+  move toward player speed 60
+
+when me is near player by 1.5
+  my mode is "chase"
+  my Hostile is true
+  send message "hurt" to nearest player
