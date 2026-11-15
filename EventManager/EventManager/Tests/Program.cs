@@ -5426,6 +5426,82 @@ Check(cameraContext.ReadMy("camera position").AsText() == "120, 0, -80",
       "`my camera position` reads the pan focus as x, 0, z");
 
 // ------------------------------------------------------------------
+// Data-driven resources (Task 25 audit fix)
+// ------------------------------------------------------------------
+
+ResourceManager.Reset();
+var resourceDataVars = new EventVariables();
+var resourceParser = new EventParser();
+Check(ResourceManager.IsResource("Minerals") && ResourceManager.IsResource("supply used") &&
+      ResourceManager.IsResource("ore") && !ResourceManager.IsResource("Credits"),
+      "without a data file the built-in resources and their spellings still parse");
+Check(ResourceManager.CanonicalNames.Count == 9 &&
+      ResourceManager.SupplyUsedName == "SupplyUsed" &&
+      ResourceManager.SupplyCapName == "SupplyMax" &&
+      ResourceManager.DefaultCostName == "Minerals",
+      "the built-in resource table is the nine names the scenes already use");
+
+// `set Resources to "..."` in Resources.events replaces the list and adds spellings.
+var resourceFile = resourceParser.Parse(
+    "when game starts\n" +
+    "  set Resources to \"Credits, Tiberium, Supply, SupplyCap\"\n" +
+    "  set ResourceAliases to \"Credits=creds,gold; Tiberium=tib\"\n" +
+    "  set SupplyUsedResource to \"Supply\"\n" +
+    "  set SupplyCapResource to \"SupplyCap\"\n" +
+    "  set DefaultCostResource to \"Credits\"\n");
+ResourceManager.LoadData(resourceFile);
+Check(ResourceManager.IsResource("credits") && ResourceManager.IsResource("gold") &&
+      ResourceManager.IsResource("tib") && !ResourceManager.IsResource("Minerals"),
+      "a data file declares its own resources and spellings");
+Check(ResourceManager.CanonicalOrName("creds") == "Credits" &&
+      ResourceManager.SupplyUsedName == "Supply" &&
+      ResourceManager.SupplyCapName == "SupplyCap" &&
+      ResourceManager.DefaultCostName == "Credits",
+      "the declared names drive canonical lookup, supply and the default cost resource");
+
+// A building costing the new resources is gated by them, and `<Building>Cost` means Credits.
+resourceDataVars.SetGlobal("Credits", ValueBox.OfNumber(100));
+resourceDataVars.SetGlobal("Tiberium", ValueBox.OfNumber(0));
+resourceDataVars.SetGlobal("Supply", ValueBox.OfNumber(5));
+resourceDataVars.SetGlobal("SupplyCap", ValueBox.OfNumber(10));
+resourceDataVars.SetGlobal("BarracksCost", ValueBox.OfNumber(150));
+var resourceCosts = new EventVariables();
+resourceCosts.SetGlobal("Credits", ValueBox.OfNumber(200));
+resourceCosts.SetGlobal("BarracksCost", ValueBox.OfNumber(150));
+resourceCosts.SetGlobal("SupplyCap", ValueBox.OfNumber(10));
+Check(!ResourceManager.CanAfford(resourceDataVars, "Barracks"),
+      "`<Building>Cost` is charged against the declared default resource");
+Check(ResourceManager.TryCost(resourceCosts, "Barracks", "Credits", out double creditsCost) &&
+      creditsCost == 150 &&
+      !ResourceManager.TryCost(resourceCosts, "Unknown", "Credits", out _),
+      "a cost variable names any declared resource");
+resourceCosts.SetGlobal("BarracksTiberiumCost", ValueBox.OfNumber(10));
+resourceCosts.SetGlobal("Tiberium", ValueBox.OfNumber(4));
+Check(!ResourceManager.CanAfford(resourceCosts, "Barracks"),
+      "a declared resource with no stock blocks the purchase");
+resourceCosts.SetGlobal("Tiberium", ValueBox.OfNumber(20));
+Check(ResourceManager.CanAfford(resourceCosts, "Barracks"),
+      "enough of every declared resource makes it affordable");
+resourceCosts.SetGlobal("BarracksSupplyCost", ValueBox.OfNumber(5));
+resourceCosts.SetGlobal("Supply", ValueBox.OfNumber(8));
+Check(!ResourceManager.CanAfford(resourceCosts, "Barracks") &&
+      Math.Abs(ResourceManager.SupplyCap(resourceCosts) - 10) < 0.0001,
+      "supply costs are checked against the declared supply used and cap");
+
+// `Credits is higher than 5` parses as a resource condition once the file declared it.
+var creditCondition = resourceParser.Parse("when game starts\n  if credits is higher than 5\n  set Rich to 1\n");
+Check(creditCondition.Events.Count == 1, "a declared resource spelling works in a condition");
+
+// A file that declares nothing (or no file at all) restores the built-in nine.
+ResourceManager.LoadData(resourceParser.Parse("when game starts\n  set Score to 1\n"));
+Check(ResourceManager.IsResource("Minerals") && !ResourceManager.IsResource("Credits") &&
+      ResourceManager.CanonicalNames.Count == 9,
+      "a file with no declarations leaves the built-in resource table alone");
+ResourceManager.LoadData(null);
+Check(ResourceManager.IsResource("Gas") && ResourceManager.SupplyUsedName == "SupplyUsed",
+      "loading no file restores the built-in resource table");
+
+// ------------------------------------------------------------------
 // Task 24: RTS minimap
 // ------------------------------------------------------------------
 

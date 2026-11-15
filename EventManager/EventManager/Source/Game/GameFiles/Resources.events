@@ -1,0 +1,36 @@
+# ---------------- Resources.events (RTS resource names) ----------------
+# Which resources the economy knows about. Every resource is just a global variable; this file
+# only tells the engine the names, so `Minerals is higher than 50`, `enough Minerals for Barracks`,
+# `<Building><Resource>Cost`, `when resources change` and `add 5 to Credits` all work on them.
+#
+# HOW IT LOADS: the file is read by name — Resources.events — once at load and again on hot
+# reload, BEFORE the other sheets are parsed, so a name or spelling declared here is understood by
+# every sheet in the game. Attaching it to a sheet is optional; the `when game starts` block below
+# keeps it valid as a normal event file.
+#
+# TO ADD YOUR OWN RESOURCE: add its name to the `Resources` list (and its cost variables in your
+# building sheets, e.g. `set BarracksCreditsCost to 150`). No code change is needed. To rename a
+# whole economy, replace the list — StarCraft's Minerals/Gas, Red Alert's Ore/Gems/Power and
+# Homeworld's RUs are all in the default list already.
+#
+# NO FILE, NO PROBLEM: with this file missing (or declaring nothing) the built-in nine below are
+# used, so scenes authored before it existed behave exactly as before.
+
+when game starts
+  # ---- the resources, in the order `when resources change` reports them ------------------
+  set Resources to "Minerals, Gas, SupplyUsed, SupplyMax, FoodCap, Ore, Gems, Power, RUs"
+
+  # ---- extra spellings: `Canonical=alias,alias; Canonical2=alias` -------------------------
+  # The built-in ones (`mineral`, `supply used`, `food`, `ru`, …) keep working; these are on top.
+  set ResourceAliases to "Minerals=minerals,min; SupplyUsed=supply used,supplied; SupplyMax=supply max,max supply; FoodCap=food cap; Gems=gem; RUs=ru,resource units"
+
+  # ---- what supply means in this game -----------------------------------------------------
+  # `SupplyUsedResource` is the "used" counter, `SupplyCapResource` the ceiling, and the fallback
+  # is read when the ceiling was never set (Red Alert's food cap).
+  set SupplyUsedResource to "SupplyUsed"
+  set SupplyCapResource to "SupplyMax"
+  set SupplyCapFallbackResource to "FoodCap"
+
+  # ---- which resource `<Building>Cost` means ----------------------------------------------
+  # `set BarracksCost to 150` charges this resource; `<Building>GasCost` etc. name others.
+  set DefaultCostResource to "Minerals"

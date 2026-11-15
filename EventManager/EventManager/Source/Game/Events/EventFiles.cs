@@ -85,5 +85,36 @@ namespace Game
             }
             return results;
         }
+
+        /// <summary>
+        /// Parses one named file without loading the rest, so a data file that other sheets are
+        /// parsed against (the resource list) can be read first. Returns null when the file does
+        /// not exist; a broken file comes back with <see cref="EventFileResult.Error"/> set, like
+        /// <see cref="LoadAll"/>.
+        /// </summary>
+        public static EventFileResult LoadOne(string folder, string name)
+        {
+            if (string.IsNullOrEmpty(folder) || string.IsNullOrEmpty(name) || !Directory.Exists(folder))
+                return null;
+            string path = Path.Combine(folder, name + ".events");
+            if (!File.Exists(path))
+                return null;
+            var result = new EventFileResult { Name = name, Path = path };
+            try
+            {
+                result.File = new EventParser().Parse(File.ReadAllText(path));
+            }
+            catch (ParseException error)
+            {
+                result.File = new ProgramFile();
+                result.Error = error.Message;
+            }
+            catch (LexException error)
+            {
+                result.File = new ProgramFile();
+                result.Error = error.Message;
+            }
+            return result;
+        }
     }
 }

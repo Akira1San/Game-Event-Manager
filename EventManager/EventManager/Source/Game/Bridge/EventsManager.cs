@@ -172,6 +172,10 @@ namespace Game
                 Debug.LogWarning("I couldn't find a GameFiles folder with .events files — events won't run this scene.");
                 return;
             }
+            // The resource list is read before the other sheets are parsed, so a resource name or
+            // spelling a game declares here is understood by every sheet it writes. Orphan
+            // resource names simply stay global variables, so this never breaks a scene.
+            ResourceManager.LoadData(EventFiles.LoadOne(_gameFilesFolder, ResourceManager.FileName)?.File);
             var programs = EventFiles.LoadAll(_gameFilesFolder);
             _programs = programs;
             // Typed enemy stats come from the data file, read before any sheet runs so an
@@ -235,6 +239,7 @@ namespace Game
             if (_gameFilesFolder == null || Time.UnscaledGameTime < _nextWatchCheck)
                 return;
             _nextWatchCheck = Time.UnscaledGameTime + 0.25f;
+            ResourceManager.LoadData(EventFiles.LoadOne(_gameFilesFolder, ResourceManager.FileName)?.File);
             var programs = EventFiles.LoadAll(_gameFilesFolder);
             bool changed = false;
             foreach (EventFileResult program in programs)
@@ -255,6 +260,7 @@ namespace Game
         private void ApplyReload(List<EventFileResult> programs)
         {
             _programs = programs;
+            ResourceManager.LoadData(EventFiles.LoadOne(_gameFilesFolder, ResourceManager.FileName)?.File);
             EnemyTypes.LoadData(ProgramNamed("EnemyTypes")?.File);
             WeaponData.LoadData(ProgramNamed("WeaponData")?.File);
             Matchups.LoadData(ProgramNamed(Matchups.FileName)?.File);

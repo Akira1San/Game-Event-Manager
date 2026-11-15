@@ -120,6 +120,9 @@ Goal: write the RTS `.events` files plus StarCraft / Red Alert / Homeworld-speci
 Files live in `Source/Game/GameFiles/` alongside `Player.events`, `Enemy.events`, `Game.events`.
 
 ### Part A — StarCraft-style examples [ ]
+- `UnitTypes.events` — the RTS unit table: cost, build time, supply, hit points, attack type,
+  range, speed, what it can attack and which building trains it (read at boot like
+  `Matchups.events`; `EnemyTypes.events` stays the non-RTS typed-enemy file)
 - `Marine.events` — ranged infantry: selection ring, combat, per-unit HP
 - `Zergling.events` — melee infantry
 - `Barracks.events` — production building, train Marine
@@ -372,17 +375,187 @@ play-check still pending (assign the control type, click, drag).
 
 ---
 
-## Task 25 — Enemy AI Building Placement [ ]
+## Task 25 — Enemy AI: Brain, Economy & Attack [ ]
 
-Goal: give enemy AI the ability to find and place buildings at valid empty spots automatically.
+Goal: give the enemy a *player brain*, not just scripts on individual units — it mines, spends,
+expands, builds, trains, scouts, defends and attacks, and can be tuned without recompiling.
 
-### Part A — Build spot finding [ ]
-- `ConstructionManager.FindEmptyCellNear(anchor, radius)` — returns a free grid cell
-- AI evaluates nearby resources, own buildings, and enemy distance before placing
+### How RTS games actually do this (and what we copy)
 
-### Part B — Enemy build logic [ ]
-- `.events` script for enemy base building using `place <building> at <found spot>`
-- Expansion: enemy places new bases when resources allow
+Every serious RTS opponent is a **layered manager stack**, not one big state machine. Published
+Archon bots (EISBot, SPAR, AIUR, Nova/BBQ) all land on the same shape:
+
+1. **Strategy** — one slow decision layer. Picks a game plan (rush / balanced / turtle), tracks a
+   phase (opening → mid → late) and sets targets: worker count, supply, building list, unit mix,
+   attack timing. Ticked about once a second, or on a phase change.
+2. **Managers** — one per concern, each acting on the strategy's targets: income/workers,
+   construction, production, combat, scouting. They talk to the game, not to each other, so a
+   broken economy never stops the army from defending. Contention is settled by a spending
+   priority order (defence > rebuild > supply > army > expansion).
+3. **Execution** — units get ordinary orders (`attack-move`, `attack`, `goto`) and the game's own
+   systems do the rest (pathing, ranges, formations, matchups).
+
+Bots differ in where the *policy* lives: AIUR/MicroRTS keep it in scripted rule tables, Nova in
+hand-written C#, research bots in planners (HTN/search). For this project the split is the same as
+the rest of the codebase: **data drives policy, code drives decisions, events drive reactions.**
+
+### Design for this project
+
+| Layer | Lives in | Why |
+| --- | --- | --- |
+| Strategy profile (build order steps, targets, timings) | `GameFiles/AiStrategies.events` — plain `set` globals, the same pattern as `Matchups.events` and the RTS `UnitTypes.events` | designers/mods retune without a rebuild; hot-reloads like every other data file |
+| Brain loop, planners, spending priority | new `Runtime/EnemyBrain.cs` + `AiEconomy` / `AiBuilder` / `AiProduction` / `AiArmy` (pure C#, no Flax types) | needs per-tick counts over every unit and building; unit-tested with the existing `FakeWorld` harness |
+| Issuing orders | existing `OrderManager`, `ProductionManager`, `ConstructionManager` | one code path for player and AI, so AI orders obey the same rules |
+| Per-unit reactions and income ticks | ordinary `.events` on units/resources/buildings | `when me arrives`, `when me is attacked`, `add 1 to Player2 Minerals` — already supported |
+
+Strategy data uses numbered globals instead of a new grammar, e.g.
+`set AiRushStep1 to "Barracks"`, `set AiRushAttackUnits to 6`, `set AiRushWorkers to 6`.
+The brain walks `Ai<Strategy>Step1..N` until one is missing — no parser work, and a mod adds a
+step by adding a line.
+
+### Content is data, not code (audit before Part A)
+
+A grep of `Source/Game/**/*.cs` for RTS names (`Barracks`, `Marine`, `CommandCenter`, `SupplyDepot`,
+`Worker`, `Pylon`, …) returns **only** example strings in parser hints, `WordRegistry` rows, doc
+comments and `Matchups.events` — no building or unit name appears in any decision path. The real
+hardcoded things, and what to do about them:
+
+| Hardcoded thing | Where | Verdict |
+| --- | --- | --- |
+| TK4 typed-enemy stats (`Zombie`, `Turret`) | `Runtime/EnemyTypes.cs` built-ins | Non-RTS content, overridden by `EnemyTypes.events`. Leave it; the RTS must never add entries here |
+| TK4 weapon defaults | `Runtime/Weapons.cs` built-ins | Same: overridden by `WeaponData.events`. Leave it |
+| Unit-type and attack-type vocabulary (`land/air/sea`, `melee/ranged`) | `UnitTypes.cs`, `AttackTypes.cs` + the default `Matchups` table | Closed vocabulary the engine reasons with, so it stays code — but a fourth type or third attack type needs a code change. Known limit, documented |
+| Resource names (`Minerals`, `Gas`, `Ore`, `Gems`, `Power`, `RUs`, supply) | `ResourceManager` | **Fixed.** The list, aliases, which names mean supply and which resource `<Building>Cost` charges all come from `Resources.events` (built-in nine as defaults), read before the other sheets parse. Adding Credits/Tiberium is an eventsheet edit, no code |
+| Actor-name conventions (`Player`, `Camera`, `Minimap`, `SelectionRing`, `ControlGroup0…9`) | `FlaxWorld`, `EventsManager`, `MinimapView`, `SelectionView` | Scene conventions with one-time warnings, but `Player` is game-specific. Move the lookup names to globals when convenient (`PlayerActorName`, `CameraActorName`) |
+| Numeric defaults (grid 64, build time 5 s, formation spacing 80, pan 600) | `ConstructionManager`, `ProductionManager`, `Formations`, `CameraRig` | Fine: every one is overridable by a global or a per-building variable |
+
+**Rule for this task:** a planner may only learn a unit, building or resource name from
+`UnitTypes.events`, the strategy profile, or the resource list — never from a literal in C#. The
+acceptance check greps the new `Ai*.cs` / `EnemyBrain.cs` files for those names and fails on a hit.
+
+**Unit data for the RTS is `UnitTypes.events`, not `EnemyTypes.events`.** `EnemyTypes.events` is
+the TK4-style typed-enemy table for the non-RTS scenes (speed/sight/health/weapon per enemy name)
+and stays exactly as it is. The RTS needs its own unit table — cost, build time, supply, hit
+points, attack type, range, speed, what it can attack, which building trains it — read at boot the
+same way `Matchups.events` already is, with `UnitTypes.cs` (land/air/sea) unchanged underneath.
+The AI reads it for unit costs and the composition ratio instead of hard-coding names.
+
+### Part A — The brain loop (`Runtime/EnemyBrain.cs`) [ ]
+- `EnemyBrain.Tick(runtime, dt)`, one instance per AI player, ticked from `EventRuntime` like
+  `ProductionManager`/`ConstructionManager`
+- Resolves the profile from `AiStrategy` (falling back to `balanced`), reads its targets, keeps a
+  phase (`opening` / `mid` / `late`) from game time + supply + army size
+- Spending priority when several managers want resources: defence → rebuild → supply → army →
+  expansion → tech
+- Actions: `start enemy ai for player 2`, `stop enemy ai`; condition `enemy ai is on`; value
+  `enemy ai phase`, `enemy army size`; trigger `when enemy ai phase changes`
+- Default: no brain runs unless a sheet starts one — old scenes are untouched
+
+### Part B — Economy and workers (`Runtime/AiEconomy.cs`) [ ]
+- **Separate per-player banks (decided).** `Player1 Minerals` / `Player2 Minerals` (and Gas, Ore,
+  …) are the real stockpiles; the bare `Minerals` global stays as **player 1's** alias, so every
+  existing single-player economy file keeps working untouched. `AiEconomy.CanAfford(variables,
+  player, building)` mirrors `ResourceManager.CanAfford` against that player's bank, and the HUD
+  reads the same names.
+- Resource names are already data (see the audit above): `Resources.events` declares the list,
+  spellings, supply names and the default cost resource; the AI's per-player banks read the same
+  declared names, so a style's economy needs no code change
+- Bank income comes from the game style (Part H): StarCraft workers mine, Red Alert ore trucks
+  haul, and a style without workers uses the passive building income this project ships today.
+- Worker bookkeeping: count workers, find idle ones, keep `Ai<Strategy>Workers` employed
+- Assign idle workers to the nearest resource node (actor tagged `ResourceNode`, with
+  `my NodeAmount`), `goto` it, and re-assign when the node runs dry
+- Income itself stays authored: a worker next to a node ticks
+  `add 1 to Player2 Minerals`, a drop-off adds the carry — no new gathering engine, and the same
+  rule serves the human player's workers
+- Supply: build a supply provider when `SupplyUsed` is within one unit of `SupplyMax`
+
+### Part C — Construction (`ConstructionManager.FindEmptyCellNear`) [ ]
+- `FindEmptyCellNear(variables, x, z, radius, building)` — spiral/ring search over the occupancy
+  grid `TryReserveCells` already keeps, returns the nearest cell whose footprint is free
+- Scoring for *where* to build: near the base for economy, forward toward the enemy for barracks
+  and defences, away from the enemy for expansions; refuse spots inside marked water/blocked
+  terrain (reuse `TerrainMap.IsPassable`)
+- `Runtime/AiBuilder.cs`: turns the next build-order step into `place <building> at <spot>` calls,
+  one at a time, remembering what it already has; rebuilds a destroyed building once
+- Expansion: new base when the profile's `ExpandAt` supply/mineral threshold is met and the bank
+  can afford it
+
+### Part D — Production (`Runtime/AiProduction.cs`) [ ]
+- Keeps every production building busy from the profile's unit mix (e.g. 3 melee : 2 ranged),
+  gated by `CanAfford` and supply headroom
+- Uses the existing `ProductionManager` queue so build times, rally points and
+  `when training finished` all behave the same as for the player
+- Priority: defence units first while under attack, then the profile mix
+
+### Part E — Army: scouting, attack timing, defence (`Runtime/AiArmy.cs`) [ ]
+- **Scouting:** pick the cheapest idle unit, send it `goto` the nearest unexplored cell (from
+  `FogOfWarManager` + `Minimap` sampling), record the first enemy building it can see as
+  `AiEnemyBaseX/Z`; keep scouting until the base is found
+- **Attack decision:** attack when any profile threshold is met — army size (`AttackUnits`), army
+  value, game time (`AttackTime`), or the enemy army being seen and smaller; otherwise keep units
+  home and hold position
+- **Attack execution:** gather idle combat units, `attack-move to` the enemy base (formations from
+  Task 23 Part C spread them), re-issue when the group shrinks below `RetreatAt`, retreat to base
+- **Defence:** when a friendly building takes damage or an enemy is visible inside the base radius,
+  recall the army to that point and defend before resuming the attack
+- No per-unit micro in v1: no focus fire, no kiting — attack-move and the existing combat rules
+  do the fighting (documented as the first place to improve later)
+
+### Part F — Reactive overrides [ ]
+- Under attack → recall army, queue defenders, then resume
+- Lost a building → one rebuild request, outranking new construction
+- No workers left → fall back to passive income buildings, keep army production running
+- Banked and supply-capped for N seconds → spend on tech/expansion instead of idling
+- Lost the whole army → hold at base until `AttackUnits` is reached again
+
+### Part G — Content, difficulty and acceptance [ ]
+- `GameFiles/AiStrategies.events` shipping three profiles: **rush** (early barracks, cheap melee,
+  attack at 6 units), **balanced** (economy, ranged tech, attack at 15 units or 8 minutes),
+  **turtle** (defences, expansions, counter-attack after the first assault)
+- Difficulty knobs: reaction delay, income multiplier, unit-cap target, aggression
+  (`Ai<Difficulty>Income`, `Ai<Difficulty>Reaction`), applied through the bank and tick rate —
+  no rule-bending or hidden information
+- Example content: `UnitTypes.events` (the RTS unit table), `AiStrategies.events`, per-style
+  `AiStarCraft.events` / `AiRedAlert.events`, plus `CommandCenter.events`, `Barracks.events`,
+  `Marine.events`, `Worker.events` and `ResourceNode.events` (Task 19 Part A) so a full enemy game
+  exists to test against
+- Acceptance: a headless test scene runs 10 minutes of simulated ticks and asserts the brain built
+  ≥1 barracks, trained units, expanded once and launched an attack; a playable scene where the
+  enemy beats an idle player
+- Tests: pure planners under `Tests/` (spending priority, build-order stepping, spot search,
+  attack thresholds, worker assignment); the order-issuing bridge stays untested as usual
+
+### Part H — Game style: StarCraft or Red Alert [ ]
+- One global picks the flavour: `set GameStyle to "starcraft"` (default) or `"redalert"`
+  (`"homeworld"` reserved for the 3D collector/RU strand in Task 19 Part C)
+- New pure `Runtime/RtsStyle.cs` reads it and exposes the flags the planners ask about, so no
+  manager hard-codes a game name: `IncomeModel` (`Workers` / `OreTrucks` / `Passive`),
+  `PowerModel` (`None` / `Plants`), `SupplyModel` (`Depots` / `Cap` / `RUs`),
+  `ProductionModel` (`PerBuildingQueue` / `GlobalSidebar`), `DefenceModel`, `TechDepth`
+- **StarCraft flavour:** workers mine minerals and gas, supply depots/pylons gate units, per-
+  building production and a two- or three-tier tech tree (Barracks → Factory → Starport),
+  expansions on mineral patches, AI attacks in waves when `AttackUnits` and a tech timing are met
+- **Red Alert flavour:** ore fields with ore trucks that drive themselves back to a refinery,
+  power plants feeding `Power` (a deficit slows production — Task 19 Part B), sidebar-style base
+  building, static defences (turrets, tesla coil) and superweapon timers, AI rushes with cheap
+  units and forward-builds defences
+- Everything in Parts A–G is shared; the style only changes which income/supply/production rules
+  apply and which data file supplies the names: `GameFiles/AiStarCraft.events` and
+  `GameFiles/AiRedAlert.events` (same `set` global pattern), so a game can mix a Red Alert economy
+  with StarCraft units if it wants to
+- Acceptance: the same brain runs both styles on the same test scene, each reaches its first
+  attack inside the test window, and a test asserts the style flags (Red Alert builds a power
+  plant before its first production building; StarCraft trains a worker before its first barracks)
+
+### Open questions for this task
+- Map bounds for expansion — a global `MapMinX/Z`/`MapMaxX/Z`, or the fog's known extent?
+- Multiple difficulties / personalities in v1, or one balanced profile first?
+- Does the human player's economy also switch with `GameStyle`, or is the style AI-only until
+  Task 19's content exists? (Design intent: both, one economy per game.)
+- Homeworld's 3D movement and RU collectors — a third style flag set now, or after Task 19 Part C?
+- Rename the hardcoded actor conventions (`Player`, `Camera`) to globals now, or when a second
+  playable scene needs different names?
 
 ---
 
