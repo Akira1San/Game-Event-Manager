@@ -3977,14 +3977,15 @@ namespace Game
                 DisableCamerasIn(scene, target);
             }
             // The switched camera is now in control — release all explicit camera targets.
-            ContextFreeCamera(context);
+            ExitFreeCamera(context);
             CameraFollowTarget = null;
             CameraLookAtTarget = null;
             CameraAtTarget = null;
             CameraAtOffset = Vector3.Zero;
         }
 
-        private static void ContextFreeCamera(EventContext context)
+        /// <summary>Leaves free-pan mode: a follow/snap/aim/switch owns the camera again.</summary>
+        private static void ExitFreeCamera(EventContext context)
         {
             context.Runtime.Variables.SetGlobal(CameraRig.FreeVariable, ValueBox.OfNumber(0));
         }
@@ -3997,8 +3998,19 @@ namespace Game
         /// </summary>
         private static void FreeCamera(EventContext context)
         {
+            EnterFreeCamera(context.Runtime);
+        }
+
+        /// <summary>
+        /// Enters free-pan mode without a sheet: the minimap's click-to-pan uses the same path
+        /// (Task 24), so both agree on targets, defaults and placement.
+        /// </summary>
+        internal static void EnterFreeCamera(EventRuntime runtime)
+        {
+            if (runtime == null)
+                return;
             StopCameraFollow();
-            EventVariables variables = context.Runtime.Variables;
+            EventVariables variables = runtime.Variables;
             double height = variables.GetGlobal("CameraHeight").AsNumber();
             double depth = variables.GetGlobal("CameraDepth").AsNumber();
 
@@ -4025,7 +4037,7 @@ namespace Game
                 variables.SetGlobal(CameraRig.EdgeThicknessVariable, ValueBox.OfNumber(CameraRig.DefaultEdgeThickness));
             if (!variables.HasGlobal(CameraRig.PanSpeedVariable))
                 variables.SetGlobal(CameraRig.PanSpeedVariable, ValueBox.OfNumber(CameraRig.DefaultPanSpeed));
-            ApplyFreeCamera(context.Runtime);
+            ApplyFreeCamera(runtime);
         }
 
         /// <summary>

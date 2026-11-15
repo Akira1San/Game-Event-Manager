@@ -551,6 +551,9 @@ namespace Game
             // Free-pan (Task 26) last of all: it owns the camera only in free mode, and it needs
             // this tick's mouse and key state.
             UpdateCameraPan(delta);
+            // The minimap (Task 24) samples fog, terrain and the selection after the tick, so
+            // its dots and fog match what the scene is showing this frame.
+            MinimapView.Update(Runtime);
         }
 
         /// <summary>

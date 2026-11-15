@@ -332,18 +332,43 @@ spot, watch them fan out) still pending.
 
 ---
 
-## Task 24 — RTS Minimap [ ]
+## Task 24 — RTS Minimap [x]
 
 Goal: add a minimap UI showing explored terrain, unit dots, and click-to-pan camera control.
 
-### Part A — Minimap UI [ ]
+### Part A — Minimap UI [x]
 - Second camera rendering to a small render texture
+  → **deliberately not a render texture.** The minimap is drawn from data instead: a
+`MinimapPanel` UI control fills one block per sampled cell from `TerrainMap` and
+`FogOfWarManager`, which already know exactly what the player may see. No second camera, texture
+or material to wire up, and the fog can never disagree with the panel because there is nothing to
+capture. Authoring: a UI Control actor named `Minimap` with control type `MinimapPanel` (Flax's
+documented custom-control workflow).
 - Terrain and unit markers drawn on the minimap
+  → `Runtime/Minimap.cs` builds a `MinimapSnapshot` per tick (cells, unit dots with player and
+selection, camera view rectangle); `Bridge/MinimapView.cs` draws it and feeds the actors in.
 - Fog of war reflected on minimap (unexplored = hidden)
+  → each cell stores the `FogState` for `Fog.LocalPlayer`: unexplored is near-black, explored is
+dimmed remembered terrain, visible is full colour. Units are only plotted when
+`Fog.IsVisibleTo` lets the local player see them.
 
-### Part B — Minimap interaction [ ]
+### Part B — Minimap interaction [x]
 - Click on minimap pans the main camera to that world position
+  → `MinimapView.PanTo` maps the pixel back to a world point and focuses the free camera there
+(entering free-pan mode the same way `camera free` does, Task 26), so a click also releases a
+follow.
 - Drag to select area on minimap
+  → a press that moves past 4 px is a drag: `Minimap.DragRect` clips it to the panel and
+`Selection.ReplaceSelection` selects the local player's visible units inside it.
+
+### Notes
+- Globals: `Minimap` (0 hides), `MinimapExtent` (2000), `MinimapSize` (220) and `MinimapGrid`
+(32, capped at 96). The camera view rectangle is an approximation from `CameraHeight`, not a
+frustum projection.
+- The bridge half (custom control, mouse capture, drawing, selecting actors) compiles but has no
+unit tests; the mapping, clipping, sampling and snapshot assembly are covered by `Tests/`. Editor
+play-check still pending (assign the control type, click, drag).
+
 
 ---
 

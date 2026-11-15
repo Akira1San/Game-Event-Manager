@@ -5426,6 +5426,74 @@ Check(cameraContext.ReadMy("camera position").AsText() == "120, 0, -80",
       "`my camera position` reads the pan focus as x, 0, z");
 
 // ------------------------------------------------------------------
+// Task 24: RTS minimap
+// ------------------------------------------------------------------
+
+var minimapVars = new EventVariables();
+Check(Minimap.Enabled(minimapVars) &&
+      Math.Abs(Minimap.ExtentFrom(minimapVars) - Minimap.DefaultExtent) < 0.0001 &&
+      Math.Abs(Minimap.SizeFrom(minimapVars) - Minimap.DefaultSize) < 0.0001 &&
+      Minimap.GridFrom(minimapVars) == Minimap.DefaultGrid,
+      "the minimap starts on, 2000 world units across, 220 pixels and 32 cells per side");
+minimapVars.SetGlobal(Minimap.EnabledVariable, ValueBox.OfNumber(0));
+Check(!Minimap.Enabled(minimapVars), "`set Minimap to 0` hides the panel");
+minimapVars.SetGlobal(Minimap.GridVariable, ValueBox.OfNumber(999));
+Check(Minimap.GridFrom(minimapVars) == Minimap.MaxGrid, "the minimap grid is clamped");
+
+Minimap.WorldToPanel(0, 0, 0, 0, 200, 1000, out double mapCenterX, out double mapCenterY);
+Check(Math.Abs(mapCenterX - 100) < 0.0001 && Math.Abs(mapCenterY - 100) < 0.0001,
+      "the world centre is the middle of the minimap");
+Minimap.WorldToPanel(0, 1000, 0, 0, 200, 1000, out _, out double mapNorthY);
+Check(Math.Abs(mapNorthY) < 0.0001, "world +Z runs up the minimap");
+Minimap.WorldToPanel(1000, 0, 0, 0, 200, 1000, out double mapEastX, out _);
+Check(Math.Abs(mapEastX - 200) < 0.0001, "world +X runs right across the minimap");
+Minimap.PanelToWorld(150, 50, 0, 0, 200, 1000, out double mapRoundX, out double mapRoundZ);
+Check(Math.Abs(mapRoundX - 500) < 0.0001 && Math.Abs(mapRoundZ - 500) < 0.0001,
+      "a minimap point maps back to its world point");
+Check(Minimap.InPanel(10, 190, 200) && !Minimap.InPanel(-1, 10, 200),
+      "minimap points outside the panel are rejected");
+
+Minimap.DragRect(150, 150, 50, 50, 0, 0, 200, 1000,
+    out double dragMinX, out double dragMinZ, out double dragMaxX, out double dragMaxZ);
+Check(Math.Abs(dragMinX + 500) < 0.0001 && Math.Abs(dragMaxX - 500) < 0.0001 &&
+      Math.Abs(dragMinZ + 500) < 0.0001 && Math.Abs(dragMaxZ - 500) < 0.0001,
+      "a minimap drag works from either corner");
+Minimap.DragRect(100, 100, 300, 300, 0, 0, 200, 1000,
+    out double clippedMinX, out double clippedMinZ, out double clippedMaxX, out double clippedMaxZ);
+Check(Math.Abs(clippedMinX) < 0.0001 && Math.Abs(clippedMaxX - 1000) < 0.0001 &&
+      Math.Abs(clippedMaxZ) < 0.0001 && Math.Abs(clippedMinZ + 1000) < 0.0001,
+      "a drag that leaves the panel is clipped to what the panel shows");
+Check(Minimap.InRect(-10, -10, 10, 10, 0, 0) && !Minimap.InRect(-10, -10, 10, 10, 20, 0),
+      "a world rectangle knows what it contains");
+
+// Terrain, fog and units become one drawable frame.
+var minimapTerrain = new TerrainMap();
+minimapTerrain.MarkArea(0, 0, 200, UnitTypes.Ground.Water);
+var minimapFog = new FogOfWarManager();
+minimapFog.RevealArea(0, 0, 0, 200);
+var minimapUnits = new[]
+{
+    new MinimapUnit(100, 100, 0, true),
+    new MinimapUnit(9000, 0, 1, false),
+};
+var minimapShot = Minimap.Build(minimapVars, minimapTerrain, minimapFog, 0, 0, 0, 400, 300, minimapUnits);
+Check(minimapShot.Columns == Minimap.MaxGrid &&
+      minimapShot.Cells.Length == minimapShot.Columns * minimapShot.Rows,
+      "a minimap frame samples one cell per grid square");
+Check(minimapShot.CellAt(minimapShot.Columns / 2, minimapShot.Rows / 2).Water,
+      "marked water shows up on the minimap");
+Check(minimapShot.CellAt(minimapShot.Columns / 2, minimapShot.Rows / 2).Fog != FogState.Unexplored,
+      "the area the fog was revealed for is lit on the minimap");
+Check(minimapShot.CellAt(0, 0).Fog == FogState.Unexplored,
+      "unexplored ground stays dark on the minimap");
+Check(minimapShot.Units.Count == 1 && minimapShot.Units[0].Selected,
+      "units outside the panel are dropped and selection is kept");
+Check(minimapShot.ViewWidth > 0 && minimapShot.ViewHeight > 0 &&
+      Math.Abs(minimapShot.ViewX - (minimapShot.PanelSize - minimapShot.ViewWidth) * 0.5) < 0.0001 &&
+      Math.Abs(minimapShot.ViewY - (minimapShot.PanelSize - minimapShot.ViewHeight) * 0.5) < 0.0001,
+      "the camera view rectangle sits centred on the panel");
+
+// ------------------------------------------------------------------
 // Task 15 Part H: moveplatform (moving platforms)
 // ------------------------------------------------------------------
 
