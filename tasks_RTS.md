@@ -264,7 +264,7 @@ it, fly an air unit over it) still pending.
 
 ---
 
-## Task 23 — RTS Combat Matchups & Formations [~]
+## Task 23 — RTS Combat Matchups & Formations [x]
 
 Goal: add close vs range attack, attack matchup matrix, and formation movement for grouped units.
 
@@ -307,15 +307,28 @@ cannot fight *before* it reaches the target's sheet, so no health change, no `ac
 and no last-attacker bookkeeping. A message with no sender counts as a land attacker, so nothing
 that existed before changes behaviour (all of it is land on land).
 
-### Part C — Formation movement [ ]
+### Part C — Formation movement [x]
 - When multiple units are selected and given `goto`/`attack-move`, they arrange in formation (line, wedge, column)
+  → `Runtime/Formations.cs`: `Slot(kind, index, count, spacing, heading)` returns each unit's
+offset in the group's local frame. The shape is the `Formation` global (`line` default, `wedge`,
+`column`; `row`/`v`/`file` also parse) and the gap is `FormationSpacing` (default 80). No new verb:
+`FlaxActions.FormationSlot` reads the acting unit's index in `Runtime.Selection` and offsets the
+destination of any **ground** order — `goto there` and `attack-move to there` both go through it
+(`BeginOrderMove` for orders, the `goto there` branch for click-walks).
 - Each unit walks to its offset position, not all to the same point
+  → line spreads across the direction of travel, wedge trails two flankers per rank, column
+files behind the point; a lone unit, an unselected one, or `FormationSpacing` 0 gets no offset,
+so every existing single-unit command is unchanged. Actor targets are deliberately untouched:
+units converge on the actor and an attack order's stop distance is measured from it.
 - Units maintain spacing while moving
+  → slots are `FormationSpacing` apart and the destination itself moved, so the units' paths
+target different points; there is no per-tick separation pass (units may still bunch up passing a
+narrow gap).
 
-### Part C — Formation movement [ ]
-- When multiple units are selected and given `goto`/`attack-move`, they arrange in formation (line, wedge, column)
-- Each unit walks to its offset position, not all to the same point
-- Units maintain spacing while moving
+### Notes
+- The bridge half (selection index → offset destination) has no unit tests; the pure slot maths
+and the global readers are covered by `Tests/`. Editor play-check (select three units, click a
+spot, watch them fan out) still pending.
 
 ---
 

@@ -450,6 +450,8 @@
       <span class="kw">my name</span> &nbsp;— the actor’s own name, so one sheet can read which actor it is running on (<code>enemy type my name</code> takes the type from an actor called <code>Pistolboy</code>)<br>
       <span class="kw">my unit type</span> &nbsp;— <code>land</code>, <code>air</code> or <code>sea</code>; unset reads as <code>land</code><br>
       <span class="kw">my attack type</span> &nbsp;— <code>melee</code> or <code>ranged</code>; unset reads as <code>melee</code><br>
+      <span class="kw">Formation</span> &nbsp;— a global: <code>"line"</code> (default), <code>"wedge"</code> or <code>"column"</code>. When several units are selected and each runs the same ground order (<code>goto there</code>, <code>attack-move to there</code>), every unit walks to its own slot in that shape instead of stacking on the point — a line is a row across the direction of travel, a wedge a V with the leader on the point, a column a single file trailing behind. Actor targets (an enemy, a rally actor) still converge on the actor, and a lone or unselected unit keeps the exact point, so single-unit commands behave as before<br>
+      <span class="kw">FormationSpacing</span> &nbsp;— a global: the gap between formation slots in world units, <b>80</b> when unset<br>
       <span class="placeholder">&lt;var&gt;</span> <span class="kw">op</span> <span class="placeholder">&lt;var&gt;</span> &nbsp;— one-op math (+ − * /)
     </div>
   </section>

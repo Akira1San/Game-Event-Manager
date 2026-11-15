@@ -5245,6 +5245,66 @@ Check(matchupGateEngine.Variables.GetLocal(matchupTarget, "Hits").AsNumber() == 
       "the same damage lands once the matchup allows the pair");
 
 // ------------------------------------------------------------------
+// Task 23 Part C: formation movement
+// ------------------------------------------------------------------
+
+Check(Formations.TryParse("wedge", out FormationKind wedgeKind) && wedgeKind == FormationKind.Wedge &&
+      Formations.TryParse("COLUMN", out FormationKind columnKind) && columnKind == FormationKind.Column &&
+      Formations.TryParse("row", out FormationKind rowKind) && rowKind == FormationKind.Line &&
+      !Formations.TryParse("blob", out _),
+      "line/row, wedge and column/file name the three formations");
+
+var formationVars = new EventVariables();
+Check(Formations.KindFrom(formationVars) == FormationKind.Line &&
+      Math.Abs(Formations.SpacingFrom(formationVars) - Formations.DefaultSpacing) < 0.0001,
+      "an unset Formation reads as line with the default spacing");
+formationVars.SetGlobal(Formations.Variable, ValueBox.OfText("wedge"));
+formationVars.SetGlobal(Formations.SpacingVariable, ValueBox.OfNumber(120));
+Check(Formations.KindFrom(formationVars) == FormationKind.Wedge &&
+      Math.Abs(Formations.SpacingFrom(formationVars) - 120) < 0.0001,
+      "`set Formation to \"wedge\"` and `FormationSpacing` 120 are read back");
+formationVars.SetGlobal(Formations.Variable, ValueBox.OfText("blob"));
+Check(Formations.KindFrom(formationVars) == FormationKind.Line,
+      "an unknown formation falls back to line");
+
+// A line is a row across the direction of travel (+X heading), centred on the destination.
+Formations.Slot(FormationKind.Line, 0, 3, 100, 1, 0, out double lineX0, out double lineZ0);
+Formations.Slot(FormationKind.Line, 1, 3, 100, 1, 0, out double lineX1, out double lineZ1);
+Formations.Slot(FormationKind.Line, 2, 3, 100, 1, 0, out double lineX2, out double lineZ2);
+Check(Math.Abs(lineX0) < 0.0001 && Math.Abs(lineX1) < 0.0001 && Math.Abs(lineX2) < 0.0001,
+      "a line never steps along the direction of travel");
+Check(Math.Abs(Math.Abs(lineZ0) - 100) < 0.0001 && Math.Abs(lineZ1) < 0.0001 &&
+      Math.Abs(Math.Abs(lineZ2) - 100) < 0.0001 && Math.Sign(lineZ0) != Math.Sign(lineZ2),
+      "a line of three spaces the units one gap apart, centred on the point");
+
+Formations.Slot(FormationKind.Column, 0, 3, 100, 0, 1, out double colX0, out double colZ0);
+Formations.Slot(FormationKind.Column, 2, 3, 100, 0, 1, out double colX2, out double colZ2);
+Check(Math.Abs(colX0) < 0.0001 && Math.Abs(colZ0) < 0.0001 &&
+      Math.Abs(colX2) < 0.0001 && Math.Abs(colZ2 + 200) < 0.0001,
+      "a column trails one gap behind the point for each unit");
+
+Formations.Slot(FormationKind.Wedge, 0, 3, 100, 0, 1, out double wedgeX0, out double wedgeZ0);
+Formations.Slot(FormationKind.Wedge, 1, 3, 100, 0, 1, out double wedgeX1, out double wedgeZ1);
+Formations.Slot(FormationKind.Wedge, 2, 3, 100, 0, 1, out double wedgeX2, out double wedgeZ2);
+Check(Math.Abs(wedgeX0) < 0.0001 && Math.Abs(wedgeZ0) < 0.0001,
+      "a wedge keeps its leader on the point");
+Check(Math.Abs(wedgeX1 - 100) < 0.0001 && Math.Abs(wedgeZ1 + 100) < 0.0001 &&
+      Math.Abs(wedgeX2 + 100) < 0.0001 && Math.Abs(wedgeZ2 + 100) < 0.0001,
+      "a wedge puts two flankers one gap out and one gap back");
+
+Formations.Slot(FormationKind.Wedge, 0, 1, 100, 0, 1, out double loneX, out double loneZ);
+Check(loneX == 0 && loneZ == 0, "a lone unit keeps the exact point it was given");
+Formations.Slot(FormationKind.Line, 5, 3, 100, 0, 1, out double badX, out double badZ);
+Check(badX == 0 && badZ == 0, "an index outside the group gets no offset");
+Formations.Slot(FormationKind.Line, 1, 3, 0, 0, 1, out double noGapX, out double noGapZ);
+Check(noGapX == 0 && noGapZ == 0, "zero spacing leaves the group on one point");
+
+// The heading is what turns a row: the same line along +Z spreads over X instead of Z.
+Formations.Slot(FormationKind.Line, 2, 3, 100, 0, 1, out double turnedX, out double turnedZ);
+Check(Math.Abs(Math.Abs(turnedX) - 100) < 0.0001 && Math.Abs(turnedZ) < 0.0001,
+      "a line turns with the direction the group is heading");
+
+// ------------------------------------------------------------------
 // Task 15 Part H: moveplatform (moving platforms)
 // ------------------------------------------------------------------
 

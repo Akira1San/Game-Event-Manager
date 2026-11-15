@@ -817,7 +817,10 @@ namespace Game
                             WarnOnce("\u201Cgoto there\u201D needs a clicked position first — click somewhere in the scene to set it.");
                             break;
                         }
-                        if (!Navigation.FindPath(me.Position, clickPos.Value, out Vector3[] clickPath) || clickPath == null || clickPath.Length == 0)
+                        // Selected units take their own formation slot around the click
+                        // (Task 23 Part C) instead of all walking to one point.
+                        Vector3 clickTarget = FormationSlot(context.Runtime, me, clickPos.Value);
+                        if (!Navigation.FindPath(me.Position, clickTarget, out Vector3[] clickPath) || clickPath == null || clickPath.Length == 0)
                         {
                             WarnOnce($"No NavMesh path from \u201C{me.Name}\u201D to the clicked spot — bake a NavMesh for this level first.");
                             break;
@@ -827,7 +830,7 @@ namespace Game
                             Subject = me,
                             Goto = true,
                             HasPositionTarget = true,
-                            PositionTarget = clickPos.Value,
+                            PositionTarget = clickTarget,
                             Path = clickPath,
                             PathIndex = 0,
                             Speed = spec.Number,
@@ -2325,6 +2328,37 @@ namespace Game
         }
 
         /// <summary>
+        /// A selected unit's own slot around a group destination (Task 23 Part C). A unit that is
+        /// not selected, or is the whole selection, keeps the point unchanged.
+        /// </summary>
+        private static Vector3 FormationSlot(EventRuntime runtime, Actor me, Vector3 destination)
+        {
+            Selection selection = runtime?.Selection;
+            if (selection == null || selection.Count <= 1)
+                return destination;
+            IReadOnlyList<object> selected = selection.Selected;
+            int index = -1;
+            for (int i = 0; i < selected.Count; i++)
+            {
+                if (ReferenceEquals(selected[i], me))
+                {
+                    index = i;
+                    break;
+                }
+            }
+            if (index < 0)
+                return destination;
+            Formations.Slot(Formations.KindFrom(runtime.Variables), index, selected.Count,
+                Formations.SpacingFrom(runtime.Variables),
+                destination.X - me.Position.X, destination.Z - me.Position.Z,
+                out double offsetX, out double offsetZ);
+            if (offsetX == 0 && offsetZ == 0)
+                return destination;
+            return new Vector3(destination.X + (float)offsetX, destination.Y,
+                destination.Z + (float)offsetZ);
+        }
+
+        /// <summary>
         /// <c>mark water around Mouse by 300</c> / <c>mark land at Mouse</c> — paints the terrain
         /// grid used by movement and building placement (Task 22 Part B).
         /// </summary>
@@ -2372,6 +2406,7 @@ namespace Game
             Actor targetActor = order.Target as Actor;
             Vector3 destination;
             bool positionTarget = order.HasPositionTarget || order.TargetName == "there";
+            bool groupOrder = positionTarget;
             bool snapToTarget = false;
             bool arrivesAtThere = true;
             if (targetActor != null && targetActor.Scene != null)
@@ -2397,6 +2432,11 @@ namespace Game
             }
             else
                 return;
+
+            // A group's ground order spreads over a formation so the units don't stack on one
+            // point (Task 23 Part C). Actor targets keep converging on the actor.
+            if (groupOrder)
+                destination = FormationSlot(runtime, me, destination);
 
             // A destination this unit's type can never stand on is a blocked path, not a walk
             // that stalls at the shoreline (Task 22 Part B).
