@@ -480,6 +480,59 @@ namespace Game
             return false;
         }
 
+        // ---- RTS state (Task 18 Part H) ----
+        // The live EventRuntime owns the selection, resources, fog, construction progress and
+        // order queues, so the world forwards these queries to it. Before the manager exists
+        // (a bare scene, a tool window) every query answers empty.
+
+        private static EventRuntime LiveRuntime => EventsManager.Instance == null ? null : EventsManager.Instance.Runtime;
+
+        public IReadOnlyList<object> GetSelection()
+        {
+            EventRuntime runtime = LiveRuntime;
+            return runtime == null ? Array.Empty<object>() : runtime.SelectedActors;
+        }
+
+        public int GetSelectedCount()
+        {
+            EventRuntime runtime = LiveRuntime;
+            return runtime == null ? 0 : runtime.SelectedCount;
+        }
+
+        public double GetResource(string name)
+        {
+            EventRuntime runtime = LiveRuntime;
+            return runtime == null ? 0 : runtime.ResourceValue(name);
+        }
+
+        public bool IsRevealed(object actor, int playerId)
+        {
+            EventRuntime runtime = LiveRuntime;
+            return runtime != null && runtime.IsRevealedFor(actor, playerId);
+        }
+
+        public void RevealArea(int playerId, double x, double z, double radius)
+        {
+            LiveRuntime?.RevealArea(playerId, x, z, radius);
+        }
+
+        public void HideArea(int playerId, double x, double z, double radius)
+        {
+            LiveRuntime?.HideArea(playerId, x, z, radius);
+        }
+
+        public double GetBuildProgress(object building)
+        {
+            EventRuntime runtime = LiveRuntime;
+            return runtime == null ? 0 : runtime.BuildProgressOf(building);
+        }
+
+        public IReadOnlyList<string> GetOrderQueue(object unit)
+        {
+            EventRuntime runtime = LiveRuntime;
+            return runtime == null ? Array.Empty<string>() : runtime.OrderQueueOf(unit);
+        }
+
         private static void Collect(Actor node, List<object> found)
         {
             foreach (Actor child in node.Children)

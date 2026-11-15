@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Game
@@ -63,6 +64,38 @@ namespace Game
         /// descendant in the scene hierarchy — so a contact poll skips the actor's own child
         /// colliders instead of testing them as foreign contact targets.</summary>
         bool IsDescendantOf(object child, object root);
+
+        // ---- RTS state (Task 18 Part H) ----
+        // The same live state the event language reads, exposed as one query surface: a HUD,
+        // minimap or AI layer asks the world instead of reaching into Selection,
+        // ResourceManager, FogOfWarManager, ConstructionManager or OrderManager directly.
+
+        /// <summary>The actors currently selected, in click order.</summary>
+        IReadOnlyList<object> GetSelection();
+
+        /// <summary>How many actors are selected (0 when nothing is).</summary>
+        int GetSelectedCount();
+
+        /// <summary>One RTS resource's value by name (`Minerals`, `Supply Used`, …); an
+        /// unset resource reads as 0, like a fresh scene.</summary>
+        double GetResource(string name);
+
+        /// <summary>True when <paramref name="playerId"/> can see <paramref name="actor"/> in
+        /// the fog grid. Player 0 is the local player's grid (the view the bridge renders).</summary>
+        bool IsRevealed(object actor, int playerId);
+
+        /// <summary>Explicitly reveals a world circle for one player. The cells stay visible
+        /// until <see cref="HideArea"/> or a reset, and are remembered as explored.</summary>
+        void RevealArea(int playerId, double x, double z, double radius);
+
+        /// <summary>Explicitly hides a world circle for one player.</summary>
+        void HideArea(int playerId, double x, double z, double radius);
+
+        /// <summary>Construction progress 0–100, or 0 for an actor that is not building.</summary>
+        double GetBuildProgress(object building);
+
+        /// <summary>The unit's order names, active order first (empty when it has none).</summary>
+        IReadOnlyList<string> GetOrderQueue(object unit);
     }
 
     public class DefaultEventWorld : IEventWorld
@@ -180,6 +213,49 @@ namespace Game
         public bool IsDescendantOf(object child, object root)
         {
             return ReferenceEquals(child, root);
+        }
+
+        // ---- RTS state (Task 18 Part H) ----
+        // A bare world has no economy, selection or vision of its own: every query answers
+        // empty. Tests and tools that need real state implement IEventWorld (or drive an
+        // EventRuntime, which owns it).
+
+        public IReadOnlyList<object> GetSelection()
+        {
+            return Array.Empty<object>();
+        }
+
+        public int GetSelectedCount()
+        {
+            return 0;
+        }
+
+        public double GetResource(string name)
+        {
+            return 0;
+        }
+
+        public bool IsRevealed(object actor, int playerId)
+        {
+            return false;
+        }
+
+        public void RevealArea(int playerId, double x, double z, double radius)
+        {
+        }
+
+        public void HideArea(int playerId, double x, double z, double radius)
+        {
+        }
+
+        public double GetBuildProgress(object building)
+        {
+            return 0;
+        }
+
+        public IReadOnlyList<string> GetOrderQueue(object unit)
+        {
+            return Array.Empty<string>();
         }
     }
 }

@@ -6460,6 +6460,58 @@ Check(multiEngine.Variables.GetLocal(ogre, "Shield").AsNumber() == 10 &&
       HealthManager.Read(multiEngine.Variables, ogre, HealthManager.MaxShield) == 10,
       "`set my Shield to 40` clamps at the multiword `my Max Shield`");
 
+// ------------------------------------------------------------------
+// Task 18 Part H: extended IEventWorld (RTS state queries)
+// ------------------------------------------------------------------
+
+// A bare world has no economy, selection or vision: every query answers empty.
+var bareWorld = new DefaultEventWorld();
+Check(bareWorld.GetSelectedCount() == 0 && bareWorld.GetSelection().Count == 0 &&
+      bareWorld.GetResource("Minerals") == 0 && !bareWorld.IsRevealed(null, 1) &&
+      bareWorld.GetBuildProgress(null) == 0 && bareWorld.GetOrderQueue(null).Count == 0,
+      "the default world answers the RTS queries with empty/no-op values");
+
+// The runtime owns the state the world reports.
+var apiEngine = FreshEngine(new FakeWorld());
+var apiMarine = new FakeActor("Marine");
+apiEngine.AddSheet(apiMarine, parser.Parse("when me appears\n  set my Health to 10"));
+apiEngine.Tick(0);
+Check(apiEngine.SelectedCount == 0 && apiEngine.SelectedActors.Count == 0,
+      "`GetSelection` is empty before anything is selected");
+apiEngine.SelectActor(apiMarine);
+Check(apiEngine.SelectedCount == 1 && ReferenceEquals(apiEngine.SelectedActors[0], apiMarine),
+      "`GetSelection` reports the selected actor");
+
+apiEngine.Variables.SetGlobal("Minerals", ValueBox.OfNumber(325));
+Check(apiEngine.ResourceValue("minerals") == 325 && apiEngine.ResourceValue("Supply Used") == 0,
+      "`GetResource` reads a resource by any spelling and defaults to 0");
+
+apiEngine.Fog.CellSize = 10;
+var apiRaider = new FakeActor("Raider");
+apiEngine.Fog.SetActor(apiRaider, 1, 15, 0, 0);
+apiEngine.RevealArea(0, 15, 0, 5);
+Check(apiEngine.IsRevealedFor(apiRaider, 0),
+      "`RevealArea` makes an enemy visible to that player");
+apiEngine.HideArea(0, 15, 0, 5);
+Check(!apiEngine.IsRevealedFor(apiRaider, 0),
+      "`HideArea` takes the enemy back out of that player's vision");
+
+var apiBarracks = new FakeActor("Barracks");
+apiEngine.Construction.RegisterPlaced(apiBarracks, "Barracks", apiEngine.Variables);
+apiEngine.Construction.SetProgress(apiEngine.Variables, apiBarracks, 40);
+Check(apiEngine.BuildProgressOf(apiBarracks) == 40 && apiEngine.BuildProgressOf(apiMarine) == 0,
+      "`GetBuildProgress` reads the placed building's progress (0 for a non-building)");
+
+var apiScout = new FakeActor("Scout");
+apiEngine.Orders.StartOrder(apiEngine.Variables, apiEngine, apiScout,
+    new UnitOrder { Kind = UnitOrderKind.Move, Name = "move", TargetName = "there" });
+apiEngine.Orders.AddOrder(apiEngine.Variables, apiEngine, apiScout,
+    new UnitOrder { Kind = UnitOrderKind.Attack, Name = "attack", TargetName = "Raider" });
+var apiQueue = apiEngine.OrderQueueOf(apiScout);
+Check(apiQueue.Count == 2 && apiQueue[0] == "move" && apiQueue[1] == "attack" &&
+      apiEngine.OrderQueueOf(apiMarine).Count == 0,
+      "`GetOrderQueue` lists the unit's orders, active first");
+
 // ---- Task 16 Part I: the rest of TK4's enemy cast (data-driven) ----
 
 // `wander speed my Speed` takes the pace from the actor's own stat, so a sheet can follow a
@@ -6994,6 +7046,17 @@ class FakeWorld : IEventWorld
     {
         return ReferenceEquals(child, root);
     }
+
+    // Task 18 Part H: the RTS queries are answered by the runtime in these tests, not by the
+    // fake world, so the world keeps the same empty defaults as DefaultEventWorld.
+    public IReadOnlyList<object> GetSelection() => Array.Empty<object>();
+    public int GetSelectedCount() => 0;
+    public double GetResource(string name) => 0;
+    public bool IsRevealed(object actor, int playerId) => false;
+    public void RevealArea(int playerId, double x, double z, double radius) { }
+    public void HideArea(int playerId, double x, double z, double radius) { }
+    public double GetBuildProgress(object building) => 0;
+    public IReadOnlyList<string> GetOrderQueue(object unit) => Array.Empty<string>();
 
     /// <summary>Blocks (walls) or unblocks the straight line between two actors, both directions.</summary>
     public void SetBlocking(object a, object b, bool on)

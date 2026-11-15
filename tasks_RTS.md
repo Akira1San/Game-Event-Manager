@@ -96,7 +96,7 @@ zero breaking changes to existing `.events` files.
   `add 5 to Max Health`, `set my Max Shield to 10` and the bare forms all resolve, clamp, and
   read back through `my MaxHealth` (and vice versa).
 
-### Part H — Extended `IEventWorld` [ ]
+### Part H — Extended `IEventWorld` [x]
 - `GetSelection()` → list of selected actors
 - `GetSelectedCount()` → int
 - `GetResource(string name)` → value
@@ -104,6 +104,13 @@ zero breaking changes to existing `.events` files.
 - `RevealArea(center, radius)` / `HideArea(...)`
 - `GetBuildProgress(building)` → float
 - `GetOrderQueue(unit)` → list
+
+All eight are on `IEventWorld` now. `FlaxWorld` forwards them to the live `EventRuntime`
+(null-safe), `DefaultEventWorld` answers empty/no-op, and the runtime exposes the shared
+accessors (`SelectedActors`, `SelectedCount`, `ResourceValue`, `IsRevealedFor`, `RevealArea`,
+`HideArea`, `BuildProgressOf`, `OrderQueueOf`). Fog areas take engine-free `(playerId, x, z,
+radius)` instead of a `Vector3` so the interface stays usable from tests; `GetOrderQueue`
+returns order names, active first (`OrderManager.OrderNames`).
 
 ---
 

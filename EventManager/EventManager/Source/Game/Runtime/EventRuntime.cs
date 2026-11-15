@@ -448,6 +448,37 @@ namespace Game
             return Selection.SelectControlGroup(group);
         }
 
+        // ---------------- RTS state queries (Task 18 Part H) ----------------
+        // The event language reads this state directly; the world exposes it to bridge code,
+        // tools and AI through IEventWorld (see FlaxWorld), which forwards here.
+
+        /// <summary>The actors currently selected, in click order.</summary>
+        public IReadOnlyList<object> SelectedActors => Selection.Selected;
+
+        /// <summary>How many actors are selected.</summary>
+        public int SelectedCount => Selection.Selected.Count;
+
+        /// <summary>One RTS resource's value; an unset resource reads as 0.</summary>
+        public double ResourceValue(string name) => ResourceManager.ReadNumber(Variables, name);
+
+        /// <summary>True when <paramref name="playerId"/> can see <paramref name="actor"/>
+        /// in the fog grid. Player 0 is the local player's grid.</summary>
+        public bool IsRevealedFor(object actor, int playerId) => Fog.IsVisibleTo(playerId, actor);
+
+        /// <summary>Explicitly reveals a world circle for one player.</summary>
+        public bool RevealArea(int playerId, double x, double z, double radius)
+            => Fog.RevealArea(playerId, x, z, radius);
+
+        /// <summary>Explicitly hides a world circle for one player.</summary>
+        public bool HideArea(int playerId, double x, double z, double radius)
+            => Fog.HideArea(playerId, x, z, radius);
+
+        /// <summary>Construction progress 0–100, or 0 when the actor is not building.</summary>
+        public double BuildProgressOf(object building) => Construction.ProgressOf(building);
+
+        /// <summary>The unit's order names, active order first.</summary>
+        public IReadOnlyList<string> OrderQueueOf(object unit) => Orders.OrderNames(unit);
+
         public void PushContact(TriggerKind kind, object a, object b)
         {
             foreach (var sheet in sheets)

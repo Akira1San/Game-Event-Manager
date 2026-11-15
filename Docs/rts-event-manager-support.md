@@ -485,14 +485,18 @@ Visibility grid per player, reveal/hide operations, unit vision updates.
 ### H. Health Manager (`HealthManager.cs`) ✅ Implemented
 Per-unit health bounds and the damage pipeline (armor → shield → health), plus `MessagePattern.cs` for template message triggers (`"damage <amount>"`). Pure logic with no Flax types, so the event runtime and the tests drive it directly.
 
-### F. Extended EventWorld (`IEventWorld`)
-- `GetSelection()` → list of selected actors
-- `GetSelectedCount()` → int
-- `GetResource(string name)` → value
-- `IsRevealed(object actor, int playerId)` → bool
-- `RevealArea(Vector3 center, float radius)` / `HideArea(...)`
-- `GetBuildProgress(object building)` → float
-- `GetOrderQueue(object unit)` → list
+### F. Extended EventWorld (`IEventWorld`) ✅ Implemented
+
+The RTS state the event language already reads is exposed as one query surface, so a HUD, minimap or AI layer asks the world instead of reaching into the managers:
+- `GetSelection()` → `IReadOnlyList<object>`, in click order
+- `GetSelectedCount()` → `int`
+- `GetResource(string name)` → `double` (any spelling; an unset resource is 0)
+- `IsRevealed(object actor, int playerId)` → `bool` (player 0 is the local player's grid)
+- `RevealArea(int playerId, double x, double z, double radius)` / `HideArea(...)` → explicit circle for one player, engine-free coordinates instead of a `Vector3` so the interface stays testable
+- `GetBuildProgress(object building)` → `double` 0–100, 0 for a non-building
+- `GetOrderQueue(object unit)` → `IReadOnlyList<string>`, active order first
+
+`DefaultEventWorld` answers empty/no-op, `FlaxWorld` forwards to the live `EventRuntime` (null-safe before the manager exists), and the runtime keeps thin accessors (`SelectedActors`, `SelectedCount`, `ResourceValue`, `IsRevealedFor`, `RevealArea`, `HideArea`, `BuildProgressOf`, `OrderQueueOf`) that both paths share.
 
 ### G. New TriggerKind Additions
 Add to `TriggerKind` enum:

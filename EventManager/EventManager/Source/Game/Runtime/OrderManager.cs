@@ -88,6 +88,18 @@ namespace Game
             return unit != null && _queues.TryGetValue(unit, out UnitOrderQueue queue) ? queue.Items.Count : 0;
         }
 
+        /// <summary>The unit's order names, active order first (Task 18 Part H:
+        /// <c>GetOrderQueue</c>). Empty when it has no orders.</summary>
+        public IReadOnlyList<string> OrderNames(object unit)
+        {
+            var names = new List<string>();
+            if (unit == null || !_queues.TryGetValue(unit, out UnitOrderQueue queue))
+                return names;
+            foreach (UnitOrder order in queue.Items)
+                names.Add(order.Name);
+            return names;
+        }
+
         public bool IsHolding(object unit)
         {
             return unit != null && _queues.TryGetValue(unit, out UnitOrderQueue queue) && queue.IdleOrder == "hold";
