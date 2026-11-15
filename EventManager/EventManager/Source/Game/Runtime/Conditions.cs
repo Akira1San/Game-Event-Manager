@@ -54,6 +54,8 @@ namespace Game
         CurrentOrderIs,
         // Attack range (Task 21 Part A)
         InRangeOf,
+        // RTS unit types (Task 22 Part A)
+        UnitTypeIs,
         // RTS fog of war & visibility (Task 18 Part F)
         IsVisibleToEnemy,
         IsHidden,
@@ -443,6 +445,16 @@ namespace Game
                 }
             }
 
+            // ---- RTS unit types (Task 22 Part A) ----
+            // `me is land` / `me is air` / `me is sea` — what the unit moves over.
+            if (texts.Length == 3 && texts[0] == "me" && texts[1] == "is" &&
+                UnitTypes.Canonical(texts[2]) != null)
+            {
+                node.Kind = ConditionKind.UnitTypeIs;
+                node.Name = UnitTypes.Canonical(texts[2]);
+                return node;
+            }
+
             // ---- attack range (Task 21 Part A) ----
             // `my attack range is 120` — the same multiword stat `set` joins, so a sheet can
             // read back the range it declared.
@@ -639,6 +651,8 @@ namespace Game
                         return false;
                     return context.World.Distance2D(anchor, thing) <= node.Distance;
                 }
+                case ConditionKind.UnitTypeIs:
+                    return UnitTypes.Is(context, node.Name);
                 case ConditionKind.InRangeOf:
                 {
                     object target = FindTarget(node.Thing, context);

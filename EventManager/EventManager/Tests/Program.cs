@@ -4893,6 +4893,162 @@ Check(Math.Abs(closeX) < 0.0001 && Math.Abs(closeZ) < 0.0001,
       "a target already inside the range is never walked past");
 
 // ------------------------------------------------------------------
+// Task 22 Part A: unit types (land / air / sea)
+// ------------------------------------------------------------------
+
+var landCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  me is land").Events[0].Body[0].Words);
+Check(landCondition.Kind == ConditionKind.UnitTypeIs && landCondition.Name == "land",
+      "`me is land` parses to UnitTypeIs");
+var airCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  me is air").Events[0].Body[0].Words);
+var seaCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  me is sea").Events[0].Body[0].Words);
+Check(airCondition.Kind == ConditionKind.UnitTypeIs && airCondition.Name == "air" &&
+      seaCondition.Kind == ConditionKind.UnitTypeIs && seaCondition.Name == "sea",
+      "`me is air` and `me is sea` parse to UnitTypeIs");
+
+var typeWorld = new FakeWorld();
+var typeUnit = new FakeActor("Marine");
+typeWorld.AddActor(typeUnit);
+var typeEngine = FreshEngine(typeWorld);
+typeEngine.AddSheet(typeUnit, parser.Parse("when me appears\n  set my unit type to \"air\""));
+typeEngine.Tick(0);
+var typeContext = new EventContext
+{
+    Variables = typeEngine.Variables,
+    World = typeWorld,
+    Me = typeUnit,
+    Runtime = typeEngine,
+};
+Check(Conditions.Evaluate(airCondition, typeContext) && !Conditions.Evaluate(landCondition, typeContext) &&
+      !Conditions.Evaluate(seaCondition, typeContext),
+      "`set my unit type to \"air\"` makes `me is air` true and the others false");
+Check(typeContext.ReadMy("unit type").AsText() == "air",
+      "`my unit type` reads back what the sheet wrote");
+
+var defaultTypeVars = new EventVariables();
+var defaultTypeUnit = new FakeActor("Zombie");
+Check(UnitTypes.TypeOf(defaultTypeVars, defaultTypeUnit) == "land",
+      "a unit that never wrote `my unit type` is a land unit");
+defaultTypeVars.SetLocal(defaultTypeUnit, "unit type", ValueBox.OfText("boat"));
+Check(UnitTypes.TypeOf(defaultTypeVars, defaultTypeUnit) == "land",
+      "an unknown unit type falls back to land");
+defaultTypeVars.SetLocal(defaultTypeUnit, "UnitType", ValueBox.OfText("Sea"));
+Check(UnitTypes.TypeOf(defaultTypeVars, defaultTypeUnit) == "sea",
+      "the run-together `UnitType` spelling works, case-insensitively");
+
+int typeWarnings = 0;
+var typeWarnWorld = new FakeWorld();
+var typeWarnUnit = new FakeActor("Marine");
+typeWarnWorld.AddActor(typeWarnUnit);
+var typeWarnEngine = FreshEngine(typeWarnWorld);
+typeWarnEngine.OnRuntimeWarning = message =>
+{
+    if (message.Contains("unit type", StringComparison.OrdinalIgnoreCase))
+        typeWarnings++;
+};
+typeWarnEngine.AddSheet(typeWarnUnit, parser.Parse("when me appears\n  set my unit type to \"boat\""));
+typeWarnEngine.Tick(0);
+Check(typeWarnings == 1,
+      "an unknown unit type warns once instead of silently landing the unit");
+
+// What each type may cross (Task 22 Part B feeds this the terrain map).
+Check(UnitTypes.CanCross("land", UnitTypes.Ground.Land) &&
+      !UnitTypes.CanCross("land", UnitTypes.Ground.Water),
+      "ground units walk on land and are blocked by water");
+Check(UnitTypes.CanCross("air", UnitTypes.Ground.Land) &&
+      UnitTypes.CanCross("air", UnitTypes.Ground.Water),
+      "air units ignore the ground under them");
+Check(UnitTypes.CanCross("sea", UnitTypes.Ground.Water) &&
+      !UnitTypes.CanCross("sea", UnitTypes.Ground.Land),
+      "sea units are restricted to water");
+Check(UnitTypes.CanCross("", UnitTypes.Ground.Land) &&
+      !UnitTypes.CanCross("", UnitTypes.Ground.Water),
+      "a unit with no type crosses like a land unit");
+Check(!UnitTypes.CanCross("land", UnitTypes.Ground.Air) &&
+      !UnitTypes.CanCross("sea", UnitTypes.Ground.Air) &&
+      UnitTypes.CanCross("air", UnitTypes.Ground.Air),
+      "open air cells only air units cross");
+
+// ------------------------------------------------------------------
+// Task 22 Part B: terrain passability
+// ------------------------------------------------------------------
+
+var markProg = parser.Parse("when game starts\n  mark water around Mouse by 300\n  mark land at Mouse");
+var markAreaSpec = ActionWords.Parse(((RawActionNode)markProg.Events[0].Body[0].Statement).Words, null);
+Check(markAreaSpec.Verb == ActionVerb.MarkTerrain && markAreaSpec.Thing == "water" &&
+      markAreaSpec.To == "Mouse" && markAreaSpec.HasNumber && markAreaSpec.Number == 300,
+      "`mark water around Mouse by 300` parses to MarkTerrain with a size");
+var markCellSpec = ActionWords.Parse(((RawActionNode)markProg.Events[0].Body[1].Statement).Words, null);
+Check(markCellSpec.Verb == ActionVerb.MarkTerrain && markCellSpec.Thing == "land" &&
+      markCellSpec.To == "Mouse" && !markCellSpec.HasNumber,
+      "`mark land at Mouse` marks one cell");
+var markBadSpec = ActionWords.Parse(parser.Parse("when game starts\n  mark lava at Mouse").Events[0].Body[0].Words, null);
+Check(markBadSpec.Verb == ActionVerb.Unknown, "an unknown terrain word makes `mark` unknown");
+
+var terrain = new TerrainMap();
+Check(terrain.KindAt(10, 10) == UnitTypes.Ground.Land && terrain.MarkedCells == 0,
+      "an unmarked terrain map is land everywhere");
+Check(terrain.IsPassable("land", 10, 10) && !terrain.IsPassable("sea", 10, 10),
+      "sea units cannot stand on unmarked (land) ground");
+
+int waterCells = terrain.MarkArea(1000, 1000, 200, UnitTypes.Ground.Water);
+Check(waterCells > 0 && terrain.KindAt(1000, 1000) == UnitTypes.Ground.Water,
+      "`mark water around` stores water cells");
+Check(!terrain.IsPassable("land", 1000, 1000) && terrain.IsPassable("sea", 1000, 1000) &&
+      terrain.IsPassable("air", 1000, 1000),
+      "water blocks ground units, carries sea units and never blocks air");
+Check(terrain.IsPassable("land", 5000, 5000),
+      "ground outside the marked circle stays land");
+terrain.MarkArea(1000, 1000, 200, UnitTypes.Ground.Land);
+Check(terrain.IsPassable("land", 1000, 1000), "`mark land` clears the water back");
+
+// One step at a time, and a unit already in water can always climb out.
+var stepMap = new TerrainMap();
+stepMap.Mark(0, 0, UnitTypes.Ground.Water);
+Check(!stepMap.CanStep("land", -200, -200, 0, 0),
+      "a ground unit cannot step into water");
+Check(stepMap.CanStep("land", 0, 0, 300, 300),
+      "a ground unit standing in water may walk out");
+Check(!stepMap.CanStep("sea", 0, 0, 300, 300),
+      "a sea unit cannot leave the water");
+Check(stepMap.CanStep("air", -200, -200, 0, 0),
+      "an air unit flies over water");
+
+var voidMap = new TerrainMap();
+voidMap.Mark(100, 100, UnitTypes.Ground.Air);
+Check(!voidMap.IsPassable("land", 100, 100) && !voidMap.IsPassable("sea", 100, 100) &&
+      voidMap.IsPassable("air", 100, 100),
+      "an air cell only air units cross");
+
+var sizedTerrainVars = new EventVariables();
+sizedTerrainVars.SetGlobal(TerrainMap.CellSizeVariable, ValueBox.OfNumber(100));
+var sizedMap = new TerrainMap();
+sizedMap.ResolveCellSize(sizedTerrainVars);
+sizedMap.Mark(150, 150, UnitTypes.Ground.Water);
+Check(sizedMap.KindAt(199, 199) == UnitTypes.Ground.Water &&
+      sizedMap.KindAt(99, 99) == UnitTypes.Ground.Land,
+      "the TerrainCellSize global changes the grid");
+
+var offMap = new TerrainMap { Enabled = false };
+offMap.Mark(0, 0, UnitTypes.Ground.Water);
+Check(offMap.IsPassable("land", 0, 0) && offMap.CanStep("land", -200, -200, 0, 0),
+      "terrain blocking can be switched off");
+
+// The actor's own `my unit type` drives the answer.
+var terrainVars = new EventVariables();
+var landUnit = new FakeActor("Marine");
+var airUnit = new FakeActor("Bomber");
+terrainVars.SetLocal(airUnit, "unit type", ValueBox.OfText("air"));
+var typeMap = new TerrainMap();
+typeMap.Mark(0, 0, UnitTypes.Ground.Water);
+Check(!typeMap.IsPassableFor(landUnit, terrainVars, 0, 0) &&
+      typeMap.IsPassableFor(airUnit, terrainVars, 0, 0),
+      "`my unit type` decides who may cross a water cell");
+
+
+// ------------------------------------------------------------------
 // Task 15 Part H: moveplatform (moving platforms)
 // ------------------------------------------------------------------
 

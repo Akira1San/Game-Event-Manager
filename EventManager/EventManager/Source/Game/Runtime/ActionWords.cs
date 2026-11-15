@@ -83,6 +83,8 @@ namespace Game
         RevealArea,
         HideArea,
         SetVisibility,
+        // RTS terrain passability (Task 22 Part B)
+        MarkTerrain,
         // Random-angle wander and still mode (Task 16 Part A)
         Wander,
         Still,
@@ -361,6 +363,44 @@ namespace Game
                         return Finish(spec, ActionVerb.Navigate, words, 2);
                     }
                     return Unknown(spec, words, "\u201Cnavigate\u201D needs a direction, like \u201Cnavigate down\u201D (up, down, left or right)", warn);
+                }
+
+                case "mark":
+                {
+                    // `mark water around Mouse by 300` / `mark land at Mouse` — paints the
+                    // terrain grid (Task 22 Part B).
+                    UnitTypes.Ground? markGround = words.Count >= 2 ? UnitTypes.GroundFrom(words[1].Text) : null;
+                    if (markGround == null)
+                        return Unknown(spec, words, "\u201Cmark\u201D marks land, water or air, like \u201Cmark water around Mouse by 300\u201D", warn);
+                    spec.Thing = UnitTypes.GroundName(markGround.Value);
+                    int markIndex = 2;
+                    bool markAround = false;
+                    if (markIndex < words.Count && words[markIndex].Text == "around")
+                    {
+                        markAround = true;
+                        markIndex++;
+                    }
+                    else if (markIndex < words.Count && words[markIndex].Text == "at")
+                        markIndex++;
+                    else
+                        return Unknown(spec, words, "\u201Cmark\u201D goes \u201Cat <spot>\u201D or \u201Caround <spot> by <size>\u201D, like \u201Cmark water around Mouse by 300\u201D", warn);
+
+                    string markTarget = ThingAt(words, markIndex, out int markUsed);
+                    if (markTarget == null)
+                        return Unknown(spec, words, "a terrain mark needs a place, like \u201Cmark water around Mouse by 300\u201D", warn);
+                    spec.To = markTarget;
+                    markIndex += markUsed;
+                    if (markAround)
+                    {
+                        if (markIndex + 1 >= words.Count || words[markIndex].Text != "by")
+                            return Unknown(spec, words, "\u201Cmark water around Mouse\u201D needs a size, like \u201Cby 300\u201D", warn);
+                        spec.AmountNode = ValueNodeAt(words, markIndex + 1, out int markRadiusUsed);
+                        spec.HasNumber = words[markIndex + 1].Type == TokenType.Number;
+                        if (spec.HasNumber)
+                            spec.Number = words[markIndex + 1].Number;
+                        markIndex += 1 + markRadiusUsed;
+                    }
+                    return Finish(spec, ActionVerb.MarkTerrain, words, markIndex);
                 }
 
                 case "attack-move":

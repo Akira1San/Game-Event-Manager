@@ -634,6 +634,14 @@ namespace Game
                         return new VariableValue { Line = t.Line, Owner = "my", Name = pair };
                     }
                 }
+                // `my unit type` — RTS land/air/sea (Task 22 Part A).
+                if (index + 2 < words.Count && words[index + 1].Type == TokenType.Word &&
+                    words[index + 2].Type == TokenType.Word &&
+                    words[index + 1].Text == "unit" && words[index + 2].Text == "type")
+                {
+                    index += 3;
+                    return new VariableValue { Line = t.Line, Owner = "my", Name = UnitTypes.Variable };
+                }
                 // `my attack range` — the distance an attack stops at (Task 21 Part A).
                 if (index + 2 < words.Count && words[index + 1].Type == TokenType.Word &&
                     words[index + 2].Type == TokenType.Word &&

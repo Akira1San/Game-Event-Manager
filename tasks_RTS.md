@@ -217,19 +217,50 @@ pure parts (`ApproachPoint`, attack-range read, `InRangeOf`, order queue edges) 
 
 ---
 
-## Task 22 — RTS Unit Types & Terrain [ ]
+## Task 22 — RTS Unit Types & Terrain [x]
 
 Goal: add land / air / sea unit types and per-terrain passability so units respect what they can walk/fly/swim on.
 
-### Part A — Unit type [ ]
+### Part A — Unit type [x]
 - Per-unit variable: `my unit type` (`land`, `air`, `sea`)
+  → ordinary per-actor local (`Runtime/UnitTypes.cs`), written with
+`set my unit type to "air"` (the parser joins the multiword name, like `my attack range`) and
+readable as a value (`set TypeLabel to my unit type`, `set text of TypeLabel to my unit type`). Both
+spellings (`unit type`, `UnitType`) resolve. A unit that never wrote one — every sheet older
+than this word — reads as `land`. An unknown spelling still writes, so a sheet can correct
+itself, but warns once listing the three types.
 - Conditions: `me is land`, `me is air`, `me is sea`
+  → `ConditionKind.UnitTypeIs`, canonicalised so `me is Sea` and `me is sea` agree
 - Ground units blocked by water; air units ignore ground obstacles; sea units restricted to water
+  → the rules live in `UnitTypes.CanCross(type, UnitTypes.Ground.Land/Water/Air)` and are
+enforced by Part B's map for `move`, `goto`, orders and `place`.
 
-### Part B — Walkable area / terrain [ ]
+### Part B — Walkable area / terrain [x]
 - Terrain passability map (land/water/air cells)
-- Movement (`goto`, `move`) consults terrain per unit type
+  → `Runtime/TerrainMap.cs`: a sparse grid of 64-unit cells (override with the
+`TerrainCellSize` global) whose ground is `land` (default), `water` or `air`. Nothing is stored
+until a sheet marks a cell, so an unmarked scene behaves exactly as before. Authored with two
+word shapes: `mark water at Mouse` (one cell) and `mark water around Mouse by 300` (every cell
+whose centre is in the circle); `land` marks clear a cell back. `TerrainMap.MarkedCells` and
+`KindAt` are queryable for HUDs.
+- Movement (`goto`, `move`) consults terrain per unit type — `UnitTypes.CanCross` is the rule
+  → `FlaxActions.TerrainBlocksStep` runs before every step of `MoveSubject` (all four move
+modes), before an order's path starts (`BeginOrderMove` reports `when path blocked` instead of
+walking), and per waypoint on a `goto`/order path (the move ends and `when path blocked` fires).
+A unit already standing on impassable ground may always step out, so terrain marked under a
+unit never traps it. Air units pass everything; ground and sea units are stopped one cell early.
 - Buildings only placeable on valid terrain for their type
+  → `place` checks the spawned clone's cell against its own `my unit type` (read after its sheet
+ran, so a sea building can declare itself on `when me appears`). An invalid spot warns once, frees
+any grid reservation and destroys the clone.
+- Enforce Part A's blocking rules through the map (`me is land` units stop at water, air units
+ignore it, sea units stay on it) — done by the same `CanCross` table.
+
+### Notes
+- Bridge-side gating (stepping, blocked orders, placement refusal) has no unit tests; the pure
+map (`TerrainMap`, `CanStep`, the escape rule, cell-size override, off switch) and the `mark`
+parser are covered by `Tests/`. Editor play-check (paint water with `Mouse`, walk a land unit at
+it, fly an air unit over it) still pending.
 
 ---
 

@@ -518,6 +518,7 @@ namespace Game
             Runtime.Construction.Reset();
             Runtime.Orders.Reset();
             Runtime.Fog.Reset();
+            Runtime.Terrain.Reset();
             Runtime.Sounds.Clear();
             Runtime.RemoveAllSheets();
         }

@@ -377,6 +377,16 @@ namespace Game
                         continue;
                     }
                     Vector3 waypoint = move.Path[move.PathIndex];
+                    // A waypoint on ground this unit cannot cross ends the walk with
+                    // `when path blocked` instead of running into the water (Task 22 Part B).
+                    if (TerrainBlocksStep(move.Subject, waypoint))
+                    {
+                        var blockedRuntime = EventsManager.Instance?.Runtime;
+                        if (blockedRuntime != null)
+                            blockedRuntime.Orders.ReportPathBlocked(blockedRuntime, move.Subject);
+                        Moves.RemoveAt(i);
+                        continue;
+                    }
                     Vector3 delta = waypoint - move.Subject.Position;
                     float length = delta.Length;
                     bool reached = length < 0.001f ||
@@ -1054,6 +1064,9 @@ namespace Game
                 case ActionVerb.SetVisibility:
                     context.Runtime.Fog.SetVisionRadius(context.Me, ResolveNumber(context, spec));
                     break;
+                case ActionVerb.MarkTerrain:
+                    MarkTerrain(context, spec);
+                    break;
             }
         }
 
@@ -1433,6 +1446,10 @@ namespace Game
         private static void MoveSubject(Actor subject, Vector3 direction, double speed, PhysicsMoveMode mode)
         {
             float step = (float)speed * DeltaTime;
+            // Terrain (Task 22 Part B): a unit never steps onto ground its own type cannot cross.
+            // Checked for every mode, before the body is told to move.
+            if (TerrainBlocksStep(subject, subject.Position + direction * step))
+                return;
             switch (mode)
             {
                 case PhysicsMoveMode.Character:
@@ -1976,6 +1993,19 @@ namespace Game
 
             Level.SpawnActor(clone);
             EventsManager.Instance?.AttachSpawnedActor(clone);
+            // Terrain (Task 22 Part B): buildings only stand on ground their own type crosses —
+            // checked after the clone's sheet ran, so `set my unit type to "sea"` on that sheet
+            // counts (a shipyard on water, a barracks on land).
+            TerrainMap terrain = context.Runtime.Terrain;
+            terrain.ResolveCellSize(context.Variables);
+            string buildingType = UnitTypes.TypeOf(context.Runtime.Variables, clone);
+            if (!terrain.IsPassable(buildingType, clone.Position.X, clone.Position.Z))
+            {
+                WarnOnce($"\u201C{spec.Thing}\u201D is a {buildingType} building and that spot is {UnitTypes.GroundName(terrain.KindAt(clone.Position.X, clone.Position.Z))}, so it was not placed.");
+                context.Runtime.Construction.ReleaseCells(clone);
+                FlaxEngine.Object.Destroy(clone);
+                return;
+            }
             context.Runtime.Construction.RegisterPlaced(clone, spec.Thing, context.Variables);
             PlayConstructionAnimation(clone);
             context.Runtime.RaisePushAll(new PushSignal
@@ -2293,6 +2323,43 @@ namespace Game
             return true;
         }
 
+        /// <summary>
+        /// <c>mark water around Mouse by 300</c> / <c>mark land at Mouse</c> — paints the terrain
+        /// grid used by movement and building placement (Task 22 Part B).
+        /// </summary>
+        private static void MarkTerrain(EventContext context, ActionSpec spec)
+        {
+            UnitTypes.Ground? ground = UnitTypes.GroundFrom(spec.Thing);
+            if (ground == null)
+            {
+                WarnOnce($"I don't know the terrain \u201C{spec.Thing}\u201D \u2014 it is land, water or air, like `mark water around Mouse by 300`.");
+                return;
+            }
+            Vector3 point = ResolvePlacePosition(context, spec.To, out _);
+            double radius = spec.HasNumber ? System.Math.Max(0, spec.Number) : 0;
+            TerrainMap terrain = context.Runtime.Terrain;
+            terrain.ResolveCellSize(context.Variables);
+            int cells = terrain.MarkArea(point.X, point.Z, radius, ground.Value);
+            if (cells <= 0)
+                WarnOnce("That terrain mark covered no cells \u2014 give `around` a size, like `by 300`.");
+        }
+
+        /// <summary>
+        /// Whether the unit's own type may not step onto that point (Task 22 Part B). An
+        /// unmarked map answers "yes, walk", so a scene without terrain is untouched.
+        /// </summary>
+        private static bool TerrainBlocksStep(Actor subject, Vector3 next)
+        {
+            EventRuntime runtime = EventsManager.Instance?.Runtime;
+            TerrainMap terrain = runtime?.Terrain;
+            if (subject == null || runtime == null || terrain == null || !terrain.Enabled)
+                return false;
+            terrain.ResolveCellSize(runtime.Variables);
+            Vector3 now = subject.Position;
+            return !terrain.CanStep(UnitTypes.TypeOf(runtime.Variables, subject),
+                now.X, now.Z, next.X, next.Z);
+        }
+
         /// <summary>Starts NavMesh movement for an order; a blocked path raises
         /// <c>when path blocked</c> instead of walking through walls. <paramref name="stopDistance"/>
         /// shortens the walk to that distance from the target (attack range).</summary>
@@ -2329,6 +2396,14 @@ namespace Game
             }
             else
                 return;
+
+            // A destination this unit's type can never stand on is a blocked path, not a walk
+            // that stalls at the shoreline (Task 22 Part B).
+            if (TerrainBlocksStep(me, destination))
+            {
+                runtime.Orders.ReportPathBlocked(runtime, me);
+                return;
+            }
 
             if (!Navigation.FindPath(me.Position, destination, out Vector3[] path) || path == null || path.Length == 0)
             {

@@ -200,6 +200,8 @@ namespace Game
         public OrderManager Orders = new OrderManager();
         /// <summary>RTS per-player fog of war and visibility (Task 18 Part F).</summary>
         public FogOfWarManager Fog = new FogOfWarManager();
+        /// <summary>RTS terrain passability — land/water/air cells (Task 22 Part B).</summary>
+        public TerrainMap Terrain = new TerrainMap();
         /// <summary>Random-angle wander legs and still mode per actor (Task 16 Part A).</summary>
         public Wanderer Wander = new Wanderer();
         /// <summary>Per-player key / gamepad bindings (Task 16 input follow-ups).</summary>
@@ -1734,7 +1736,13 @@ namespace Game
             if (healthTarget && HealthManager.IsStat(set.Target.Name))
                 HealthManager.Set(context.Variables, context.Me, set.Target.Name, value.AsNumber());
             else if (set.Target.Owner == "my")
+            {
                 context.WriteMy(set.Target.Name, value);
+                // A typo must not quietly turn an air unit into a ground one (Task 22 Part A).
+                // The write still happens: the sheet may correct itself later.
+                if (UnitTypes.IsVariableName(set.Target.Name) && !UnitTypes.IsKnown(value.AsText()))
+                    OnRuntimeWarning($"I don't know the unit type \u201C{value.AsText()}\u201D \u2014 units are {UnitTypes.KnownNames()}, and a sheet that writes none counts as {UnitTypes.Default}.");
+            }
             else
                 context.WriteGlobal(set.Target.Name, value);
         }
