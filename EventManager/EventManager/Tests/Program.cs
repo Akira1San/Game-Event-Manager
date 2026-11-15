@@ -5154,6 +5154,97 @@ Check(UnitTypes.Is(mixedContext, "air") && AttackTypes.Is(mixedContext, "ranged"
       "unit type and attack type are independent (a ranged air unit)");
 
 // ------------------------------------------------------------------
+// Task 23 Part B: attack matchups
+// ------------------------------------------------------------------
+
+var canAttackCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  me can attack other").Events[0].Body[0].Words);
+Check(canAttackCondition.Kind == ConditionKind.CanAttackTarget && canAttackCondition.Thing == "other",
+      "`me can attack other` parses to CanAttackTarget");
+var namedMatchupCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  me can attack Bomber").Events[0].Body[0].Words);
+Check(namedMatchupCondition.Kind == ConditionKind.CanAttackTarget &&
+      namedMatchupCondition.Thing == "Bomber",
+      "`me can attack Bomber` names its target");
+
+Matchups.LoadData(null);
+Check(Matchups.CanAttack(null, "land", "land") && Matchups.CanAttack(null, "land", "sea") &&
+      !Matchups.CanAttack(null, "land", "air"),
+      "by default ground units fight ground and sea but not air");
+Check(Matchups.CanAttack(null, "sea", "sea") && !Matchups.CanAttack(null, "sea", "air"),
+      "by default sea units fight sea but cannot hit air");
+Check(Matchups.CanAttack(null, "air", "air") && Matchups.CanAttack(null, "air", "land") &&
+      Matchups.CanAttack(null, "air", "sea"),
+      "by default air units hit everything");
+
+var matchupVars = new EventVariables();
+matchupVars.SetGlobal(Matchups.VariableFor("land", "air"), ValueBox.OfBoolean(true));
+Check(Matchups.CanAttack(matchupVars, "land", "air"),
+      "`LandCanAttackAir` overrides the default at runtime");
+matchupVars.SetGlobal(Matchups.VariableFor("air", "sea"), ValueBox.OfNumber(0));
+Check(!Matchups.CanAttack(matchupVars, "air", "sea"),
+      "`AirCanAttackSea` 0 switches that pair off");
+
+Matchups.LoadData(parser.Parse(
+    "when game starts\n  set LandCanAttackAir to true\n  set AirCanAttackLand to false"));
+Check(Matchups.CanAttack(null, "land", "air") && !Matchups.CanAttack(null, "air", "land"),
+      "Matchups.events authors the table before any sheet runs");
+Matchups.LoadData(null);
+Check(!Matchups.CanAttack(null, "land", "air"),
+      "dropping the data file returns to the built-in defaults");
+Check(Matchups.TrySplit("LandCanAttackAir", out string splitAttacker, out string splitDefender) &&
+      splitAttacker == "land" && splitDefender == "air" &&
+      !Matchups.TrySplit("ZombieHealth", out _, out _),
+      "only `<Attacker>CanAttack<Defender>` names are read from the data file");
+
+// The condition reads both units' own types.
+var matchupWorld = new FakeWorld();
+var marineActor = new FakeActor("Marine");
+var bomberActor = new FakeActor("Bomber");
+matchupWorld.AddActor(marineActor);
+matchupWorld.AddActor(bomberActor);
+var matchupEngine = FreshEngine(matchupWorld);
+matchupEngine.AddSheet(marineActor, parser.Parse("# placeholder\n"));
+matchupEngine.AddSheet(bomberActor, parser.Parse("# placeholder\n"));
+matchupEngine.Variables.SetLocal(bomberActor, "unit type", ValueBox.OfText("air"));
+var matchupContext = new EventContext
+{
+    Variables = matchupEngine.Variables,
+    World = matchupWorld,
+    Me = marineActor,
+    Other = bomberActor,
+    Runtime = matchupEngine,
+};
+Check(!Conditions.Evaluate(canAttackCondition, matchupContext),
+      "a land unit cannot attack an air unit by default");
+matchupEngine.Variables.SetGlobal(Matchups.VariableFor("land", "air"), ValueBox.OfBoolean(true));
+Check(Conditions.Evaluate(canAttackCondition, matchupContext),
+      "allowing `LandCanAttackAir` makes the condition pass");
+
+// A mismatched shot is dropped before it reaches the target's sheet.
+var matchupGateWorld = new FakeWorld();
+var matchupShooter = new FakeActor("Marine");
+var matchupTarget = new FakeActor("Bomber");
+matchupGateWorld.AddActor(matchupShooter);
+matchupGateWorld.AddActor(matchupTarget);
+var matchupGateEngine = FreshEngine(matchupGateWorld);
+matchupGateEngine.AddSheet(matchupShooter, parser.Parse("# placeholder\n"));
+matchupGateEngine.AddSheet(matchupTarget,
+    parser.Parse("when message \"damage\" arrives\n  add 1 to my Hits"));
+matchupGateEngine.Variables.SetLocal(matchupTarget, "unit type", ValueBox.OfText("air"));
+matchupGateEngine.SendRawMessage(
+    new PushSignal { Kind = TriggerKind.Message, Name = "damage", Other = matchupShooter }, "Bomber");
+matchupGateEngine.Tick(0);
+Check(matchupGateEngine.Variables.GetLocal(matchupTarget, "Hits").IsNone(),
+      "damage from a type that cannot attack the target never reaches its sheet");
+matchupGateEngine.Variables.SetGlobal(Matchups.VariableFor("land", "air"), ValueBox.OfBoolean(true));
+matchupGateEngine.SendRawMessage(
+    new PushSignal { Kind = TriggerKind.Message, Name = "damage", Other = matchupShooter }, "Bomber");
+matchupGateEngine.Tick(1);
+Check(matchupGateEngine.Variables.GetLocal(matchupTarget, "Hits").AsNumber() == 1,
+      "the same damage lands once the matchup allows the pair");
+
+// ------------------------------------------------------------------
 // Task 15 Part H: moveplatform (moving platforms)
 // ------------------------------------------------------------------
 

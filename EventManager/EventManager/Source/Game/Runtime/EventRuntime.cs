@@ -536,6 +536,11 @@ namespace Game
         {
             if (sheet == null)
                 return;
+            // A mismatched attack does nothing at all (Task 23 Part B): damage between two unit
+            // types the matchup table says cannot fight never reaches the target's sheet.
+            if (signal.Kind == TriggerKind.Message && IsDamageMessage(signal.Name) &&
+                !Matchups.CanAttackBetween(Variables, signal.Other, sheet.Actor))
+                return;
             sheet.PushQueue.Enqueue(signal);
             if (signal.Kind == TriggerKind.Message && IsDamageMessage(signal.Name))
             {

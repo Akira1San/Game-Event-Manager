@@ -180,6 +180,9 @@ namespace Game
             // Weapon stats come from the data file too, so `spawn Bullet` already knows the
             // current weapon's bullet type on the first shot (Task 16 Part C).
             WeaponData.LoadData(ProgramNamed("WeaponData")?.File);
+            // Attack matchups come from their own data file, so `me can attack other` is settled
+            // before the first shot (Task 23 Part B).
+            Matchups.LoadData(ProgramNamed(Matchups.FileName)?.File);
             RememberSignatures(programs);
             SweepComponents();
             AttachPrograms(programs, startedNow: true);
@@ -254,6 +257,7 @@ namespace Game
             _programs = programs;
             EnemyTypes.LoadData(ProgramNamed("EnemyTypes")?.File);
             WeaponData.LoadData(ProgramNamed("WeaponData")?.File);
+            Matchups.LoadData(ProgramNamed(Matchups.FileName)?.File);
             _shownErrors.Clear();
             _missingShown.Clear();
             var byName = new Dictionary<string, EventFileResult>();

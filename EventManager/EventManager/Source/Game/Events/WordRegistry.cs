@@ -140,6 +140,7 @@ namespace Game
             new WordEntry { Kind = "condition", Word = "me has build queue", Example = "me has build queue" },
             new WordEntry { Kind = "condition", Word = "me is land", Example = "me is land", AltShape = "`me is air` / `me is sea` read `my unit type`, which defaults to land" },
             new WordEntry { Kind = "condition", Word = "me is melee", Example = "me is melee", AltShape = "`me is ranged` strikes from `my attack range`; reads `my attack type`, which defaults to melee" },
+            new WordEntry { Kind = "condition", Word = "me can attack <target>", Example = "me can attack other", AltShape = "the matchup table: `<Attacker>CanAttack<Defender>` globals, e.g. `LandCanAttackAir`" },
             new WordEntry { Kind = "action", Word = "set", Example = "set my unit type to \"air\"", AltShape = "unit types are land, air or sea — read back with `me is air`" },
             new WordEntry { Kind = "action", Word = "set", Example = "set my attack type to \"ranged\"", AltShape = "attack types are melee or ranged — a ranged unit's reach defaults to 300 until it writes `my attack range`" },
             new WordEntry { Kind = "action", Word = "mark", Example = "mark water around Mouse by 300", AltShape = "`mark land at Mouse` marks one cell · the map is all land until something marks it" },
@@ -291,6 +292,8 @@ namespace Game
         {
             "is", "has", "becomes", "changes", "exists", "does", "near", "chance", "afford",
             "enough", "under",
+            // `me can attack other` — the matchup condition (Task 23 Part B).
+            "can",
             // `me hears "gunshot" by 12` has no `is` to mark it, so the verb itself is the mark.
             "hears",
             // `reloading` on its own line is a condition too.

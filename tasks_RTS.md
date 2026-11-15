@@ -289,12 +289,23 @@ contact `"damage"`/`send message` lands. Ranged closes only to its attack range 
 leaving the strike to the sheet (`spawn Bullet`, `spawn <projectile>`, `send message "damage"`) —
 the engine has no projectile to fire by itself. Documented on `AttackTypes`.
 
-### Part B — Attack matchups [ ]
+### Part B — Attack matchups [x]
 - Data-driven table: which unit types can attack which (land vs land, land vs air, air vs land, air vs air)
-  → Part A's `my unit type` + `my attack type` are the two axes this hangs off; no matchup
-table exists yet, so a land unit can still shoot at an air unit.
+  → `Runtime/Matchups.cs` + a new `GameFiles/Matchups.events`. One global per pair named
+`<Attacker>CanAttack<Defender>` (`LandCanAttackLand`, `LandCanAttackAir`, `AirCanAttackLand`,
+`SeaCanAttackAir`, … nine in all). `CanAttack` reads the live global first (so any sheet can
+retune the table mid-game), then the file loaded by `EventsManager` at boot/reload, then the
+built-in default: land and sea fight each other but never air, air fights everything. The data
+file ships the defaults written out, so it is the obvious place to retune.
 - Condition `me can attack other` — consults the matchup table
+  → `ConditionKind.CanAttackTarget`. `other` or a named target (`me can attack Bomber`); both
+sides' own `my unit type` decide, so a ranged air unit answers for air. `can` was added to the
+parser's condition marks to let the line classify.
 - Mismatched attacks are ignored (no damage)
+  → `EventRuntime.DeliverToSheet` drops a `"damage"` / `"hurt"` message between two types that
+cannot fight *before* it reaches the target's sheet, so no health change, no `accuracy` credit
+and no last-attacker bookkeeping. A message with no sender counts as a land attacker, so nothing
+that existed before changes behaviour (all of it is land on land).
 
 ### Part C — Formation movement [ ]
 - When multiple units are selected and given `goto`/`attack-move`, they arrange in formation (line, wedge, column)

@@ -58,6 +58,8 @@ namespace Game
         UnitTypeIs,
         // RTS attack types (Task 23 Part A)
         AttackTypeIs,
+        // RTS attack matchups (Task 23 Part B)
+        CanAttackTarget,
         // RTS fog of war & visibility (Task 18 Part F)
         IsVisibleToEnemy,
         IsHidden,
@@ -353,6 +355,15 @@ namespace Game
                     node.Group = (int)tokens[groupStart + 2].Number;
                     return node;
                 }
+            }
+
+            // ---- RTS attack matchups (Task 23 Part B) ----
+            // `me can attack other` / `me can attack Enemy` — the data-driven matchup table.
+            if (texts.Length >= 4 && texts[0] == "me" && texts[1] == "can" && texts[2] == "attack")
+            {
+                node.Kind = ConditionKind.CanAttackTarget;
+                node.Thing = JoinTexts(texts, 3, texts.Length);
+                return node;
             }
 
             // ---- RTS resource economy (Task 18 Part B) ----
@@ -666,6 +677,8 @@ namespace Game
                     return UnitTypes.Is(context, node.Name);
                 case ConditionKind.AttackTypeIs:
                     return AttackTypes.Is(context, node.Name);
+                case ConditionKind.CanAttackTarget:
+                    return Matchups.CanAttackTarget(context, FindTarget(node.Thing, context));
                 case ConditionKind.InRangeOf:
                 {
                     object target = FindTarget(node.Thing, context);

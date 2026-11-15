@@ -1,0 +1,31 @@
+# ---------------- Matchups.events (Task 23 Part B) ----------------
+# Which unit type can hit which. One global per pair, named
+# <Attacker>CanAttack<Defender>: `set LandCanAttackAir to true` lets ground units shoot at
+# aircraft. `me can attack other` asks this table, and the runtime asks it too — a "damage"
+# or "hurt" message between two types that cannot fight never reaches the target's sheet,
+# so a mismatched attack does nothing.
+#
+# The values below are the engine's built-in defaults written out, so this file is the place
+# to retune the table: a land/air/sea RTS usually lets ground units hit air only when the
+# attacker carries an anti-air weapon (per-type rows, e.g. `set MarineCanAttackAir to true`,
+# arrive with the enemy-type work — this table is per unit type).
+#
+# SETUP (optional): nothing attaches this file. EventsManager reads it by name once per load,
+# so the table is settled before the first shot; attach a sheet to it only if a game wants
+# the same numbers as runnable events.
+
+when game starts
+  # ---- ground units: fight ground and sea, never the sky ----
+  set LandCanAttackLand to true
+  set LandCanAttackSea to true
+  set LandCanAttackAir to false
+
+  # ---- sea units: fight sea and land, never the sky ----
+  set SeaCanAttackSea to true
+  set SeaCanAttackLand to true
+  set SeaCanAttackAir to false
+
+  # ---- air units: fight everything, including other aircraft ----
+  set AirCanAttackAir to true
+  set AirCanAttackLand to true
+  set AirCanAttackSea to true
