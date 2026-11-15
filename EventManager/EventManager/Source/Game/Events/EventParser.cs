@@ -634,6 +634,17 @@ namespace Game
                         return new VariableValue { Line = t.Line, Owner = "my", Name = pair };
                     }
                 }
+                // `my camera zoom` / `my camera position` — the RTS camera state (Task 26
+                // Part D), read as one variable like `my attack range`.
+                if (index + 2 < words.Count && words[index + 1].Type == TokenType.Word &&
+                    words[index + 2].Type == TokenType.Word &&
+                    words[index + 1].Text == "camera" &&
+                    (words[index + 2].Text == "zoom" || words[index + 2].Text == "position"))
+                {
+                    string cameraName = "camera " + words[index + 2].Text;
+                    index += 3;
+                    return new VariableValue { Line = t.Line, Owner = "my", Name = cameraName };
+                }
                 // `my attack type` — RTS melee/ranged (Task 23 Part A).
                 if (index + 2 < words.Count && words[index + 1].Type == TokenType.Word &&
                     words[index + 2].Type == TokenType.Word &&

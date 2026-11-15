@@ -361,29 +361,58 @@ Goal: give enemy AI the ability to find and place buildings at valid empty spots
 
 ---
 
-## Task 26 — RTS Camera Controls [ ]
+## Task 26 — RTS Camera Controls [x]
 
 Goal: add RTS-style free camera — mouse-wheel zoom, mouse-edge panning, and arrow-key/WASD panning — so the player can look around the 3D map.
 
-### Part A — Mouse-wheel zoom [ ]
+### Part A — Mouse-wheel zoom [x]
 - New action: `zoom camera by <n>` / `camera zoom in` / `camera zoom out` — adjusts camera height/depth offset (or field of view)
+  → `Runtime/CameraRig.cs` (`ZoomBy`/`ZoomedIn`/`ZoomedOut`, `HeightFor`/`DepthFor`) plus the
+`ZoomCamera` verb in `ActionWords`/`FlaxActions`. Positive zooms in. The zoom multiplies the
+authored `CameraHeight`/`CameraDepth` by `1/zoom`, and applies to `camera follows` framings too.
 - Min/max zoom clamp so the camera cannot zoom into the floor or out to infinity
+  → `MinZoom` 0.25 / `MaxZoom` 4, and `HeightFor` never drops below `MinHeight` 30 (without
+pushing a scene that authored a lower camera up).
 - Bind `when wheel scrolls up/down` to increment/decrement zoom
+  → the trigger already existed; `zoom camera by 0.1` / `-0.1` is the body. Documented in
+`keywords.html` with the wheel example.
 
-### Part B — Mouse-edge panning [ ]
+### Part B — Mouse-edge panning [x]
 - When the mouse is within N pixels of a screen edge, pan the camera in that direction each tick
+  → `CameraRig.EdgeDirection` + `EventsManager.UpdateCameraPan` (unit vector, diagonals at the
+same speed as a straight edge). Each edge maps to the ground direction under it.
 - Panning releases any active `camera follows` target while the mouse is at the edge
+  → free-pan mode only exists after `camera free`, which releases every target; a follow/at/aim
+verb re-enters the old mode and turns free-pan off, so the two never fight.
 - Configurable edge thickness and scroll speed
+  → `CameraEdgeThickness` (12) and `CameraPanSpeed` (600/s at zoom 1); `CameraEdgePan` 0 turns
+edge panning off while keeping free mode.
 
-### Part C — Arrow-key / WASD panning [ ]
+### Part C — Arrow-key / WASD panning [x]
 - `when Left/Right/Up/Down is held` pans the camera in that direction each tick
+  → built into free-pan mode (no event needed) *and* available as
+`when Left Arrow is held → pan camera left by 12` for authored speeds.
 - WASD keys also pan the camera (camera-relative forward/back/left/right)
+  → A/D/W/S read alongside the arrows. There is no camera yaw in this project, so screen forward
+is world +Z and screen right +X.
 - Panning speed scales with zoom level (slower when zoomed in)
+  → `CameraRig.PanSpeedFor(base, zoom) = base / zoom`.
 
-### Part D — Camera state [ ]
+### Part D — Camera state [x]
 - `my camera zoom` / `my camera position` — readable camera state for events
+  → `my camera zoom` is a number, `my camera position` the pan focus as `"x, 0, z"`; both parse
+as one multiword variable (EventParser) and `if my camera zoom is 2` works (Conditions).
 - `camera free` releases follow and returns to free-pan mode
+  → `FreeCamera` clears the targets, arms free mode, seeds the pan focus from where the camera
+already is (no jump) and fills only the unset feeling globals.
 - `camera follows <unit>` locks onto a selected unit (already exists; works alongside free pan)
+  → unchanged, and it now scales its offset by the zoom.
+
+### Notes
+- The bridge half (mouse/keyboard reads, `UpdateCameraPan`, placing the camera) is compiled but
+not unit tested; the pure rules (clamps, edge/key directions, step maths, zoom-scaled offsets)
+are covered by `Tests/`. Editor play-check still pending: `camera free`, then wheel, edges and WASD.
+
 
 ---
 

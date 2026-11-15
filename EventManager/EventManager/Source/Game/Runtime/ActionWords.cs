@@ -37,6 +37,9 @@ namespace Game
         CameraAt,
         CameraSwitch,
         CameraFree,
+        // RTS camera controls (Task 26)
+        ZoomCamera,
+        PanCamera,
         Hide,
         Show,
         ShowText,
@@ -496,6 +499,53 @@ namespace Game
                     return Unknown(spec, words, "\u201Clook\u201D looks like this: \u201Clook at Player\u201D (or \u201Clook at nearest Enemy\u201D)", warn);
                 }
 
+                case "zoom":
+                {
+                    // `zoom camera by 0.2` / `zoom in` / `zoom out` (Task 26 Part A).
+                    int zoomIndex = 1;
+                    if (zoomIndex < words.Count && words[zoomIndex].Text == "camera")
+                        zoomIndex++;
+                    if (zoomIndex < words.Count &&
+                        (words[zoomIndex].Text == "in" || words[zoomIndex].Text == "out"))
+                    {
+                        spec.Dir = words[zoomIndex].Text;
+                        return Finish(spec, ActionVerb.ZoomCamera, words, zoomIndex + 1);
+                    }
+                    if (zoomIndex + 1 < words.Count && words[zoomIndex].Text == "by")
+                    {
+                        spec.AmountNode = ValueNodeAt(words, zoomIndex + 1, out int zoomUsed);
+                        spec.HasNumber = words[zoomIndex + 1].Type == TokenType.Number;
+                        if (spec.HasNumber)
+                            spec.Number = words[zoomIndex + 1].Number;
+                        return Finish(spec, ActionVerb.ZoomCamera, words, zoomIndex + 1 + zoomUsed);
+                    }
+                    return Unknown(spec, words, "\u201Czoom\u201D looks like \u201Czoom camera by 0.2\u201D, \u201Czoom in\u201D or \u201Czoom out\u201D", warn);
+                }
+
+                case "pan":
+                {
+                    // `pan camera left by 100` — a free-pan nudge (Task 26 Part B/C).
+                    int panIndex = 1;
+                    if (panIndex < words.Count && words[panIndex].Text == "camera")
+                        panIndex++;
+                    if (panIndex < words.Count &&
+                        CameraRig.TryDirection(words[panIndex].Text, out _, out _))
+                    {
+                        spec.Dir = words[panIndex].Text;
+                        panIndex++;
+                        if (panIndex + 1 < words.Count && words[panIndex].Text == "by")
+                        {
+                            spec.AmountNode = ValueNodeAt(words, panIndex + 1, out int panUsed);
+                            spec.HasNumber = words[panIndex + 1].Type == TokenType.Number;
+                            if (spec.HasNumber)
+                                spec.Number = words[panIndex + 1].Number;
+                            panIndex += 1 + panUsed;
+                        }
+                        return Finish(spec, ActionVerb.PanCamera, words, panIndex);
+                    }
+                    return Unknown(spec, words, "\u201Cpan\u201D goes left, right, forward or backward, like \u201Cpan camera left by 100\u201D", warn);
+                }
+
                 case "camera":
                 {
                     if (words.Count >= 3 && words[1].Text == "follows")
@@ -537,6 +587,23 @@ namespace Game
                     if (words.Count >= 2 && words[1].Text == "free")
                     {
                         return Finish(spec, ActionVerb.CameraFree, words, 2);
+                    }
+                    // `camera zoom in` / `camera zoom out` / `camera zoom by 0.2`.
+                    if (words.Count >= 3 && words[1].Text == "zoom")
+                    {
+                        if (words[2].Text == "in" || words[2].Text == "out")
+                        {
+                            spec.Dir = words[2].Text;
+                            return Finish(spec, ActionVerb.ZoomCamera, words, 3);
+                        }
+                        if (words.Count >= 5 && words[2].Text == "by")
+                        {
+                            spec.AmountNode = ValueNodeAt(words, 3, out int zoomUsed);
+                            spec.HasNumber = words[3].Type == TokenType.Number;
+                            if (spec.HasNumber)
+                                spec.Number = words[3].Number;
+                            return Finish(spec, ActionVerb.ZoomCamera, words, 3 + zoomUsed);
+                        }
                     }
                     return Unknown(spec, words, "\u201Ccamera\u201D looks like this: \u201Ccamera follows Player\u201D, \u201Ccamera looks at Chest\u201D, \u201Ccamera at CameraDoor\u201D, \u201Ccamera switch CameraDoor\u201D, or \u201Ccamera free\u201D", warn);
                 }

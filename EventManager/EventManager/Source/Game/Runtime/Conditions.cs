@@ -477,6 +477,19 @@ namespace Game
                 return node;
             }
 
+            // ---- RTS camera state (Task 26 Part D) ----
+            // `my camera zoom is 2` — reads the zoom the free-pan controls keep.
+            if (texts.Length >= 5 && texts[0] == "my" && texts[1] == "camera" &&
+                texts[2] == "zoom" && texts[3] == "is")
+            {
+                bool zoomNot = texts.Length >= 6 && texts[4] == "not";
+                node.Kind = zoomNot ? ConditionKind.NotEqual : ConditionKind.Equal;
+                node.Owner = "my";
+                node.Name = "camera zoom";
+                node.Right = ValueFrom(tokens, texts, zoomNot ? 5 : 4);
+                return node;
+            }
+
             // ---- attack range (Task 21 Part A) ----
             // `my attack range is 120` — the same multiword stat `set` joins, so a sheet can
             // read back the range it declared.

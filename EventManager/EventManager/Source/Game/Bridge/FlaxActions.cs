@@ -1020,7 +1020,13 @@ namespace Game
                     StartCameraSwitch(context, spec);
                     break;
                 case ActionVerb.CameraFree:
-                    StopCameraFollow();
+                    FreeCamera(context);
+                    break;
+                case ActionVerb.ZoomCamera:
+                    ZoomCamera(context, spec);
+                    break;
+                case ActionVerb.PanCamera:
+                    PanCamera(context, spec);
                     break;
                 case ActionVerb.Hide:
                     SetActive(context, spec.Thing, false);
@@ -3859,6 +3865,7 @@ namespace Game
             }
 
             CameraFollowTarget = target;
+            context.Runtime.Variables.SetGlobal(CameraRig.FreeVariable, ValueBox.OfNumber(0));
             // Use the default top-down framing (CameraHeight/CameraDepth globals) so
             // "camera follows Player" always returns to the normal player camera framing,
             // regardless of where the camera was snapped to before (e.g. by camera at).
@@ -3902,6 +3909,7 @@ namespace Game
             CameraLookAtTarget = target;
             // Aiming elsewhere releases the follow — the two must not fight each tick.
             CameraFollowTarget = null;
+            context.Runtime.Variables.SetGlobal(CameraRig.FreeVariable, ValueBox.OfNumber(0));
             Actor lookCamera = FlaxWorld.FindCamera();
             if (lookCamera != null)
                 LookAtNoRoll(lookCamera, target.Position);
@@ -3929,6 +3937,7 @@ namespace Game
             CameraAtTarget = target;
             // Snapping elsewhere releases the follow — position sources must not fight.
             CameraFollowTarget = null;
+            context.Runtime.Variables.SetGlobal(CameraRig.FreeVariable, ValueBox.OfNumber(0));
             // Capture the default top-down framing so "camera at" keeps consistent zoom
             // with "camera follows Player" instead of snapping to exact target position.
             float camHeight = (float)context.Runtime.Variables.GetGlobal("CameraHeight").AsNumber();
@@ -3968,10 +3977,132 @@ namespace Game
                 DisableCamerasIn(scene, target);
             }
             // The switched camera is now in control — release all explicit camera targets.
+            ContextFreeCamera(context);
             CameraFollowTarget = null;
             CameraLookAtTarget = null;
             CameraAtTarget = null;
             CameraAtOffset = Vector3.Zero;
+        }
+
+        private static void ContextFreeCamera(EventContext context)
+        {
+            context.Runtime.Variables.SetGlobal(CameraRig.FreeVariable, ValueBox.OfNumber(0));
+        }
+
+        /// <summary>
+        /// <c>camera free</c> (Task 26 Part D): release every camera target and enter free-pan
+        /// mode, starting the pan focus where the camera is centred right now so the view never
+        /// jumps. This is what turns the RTS controls on — a scene that never frees its camera
+        /// keeps the old follow/snap behaviour exactly.
+        /// </summary>
+        private static void FreeCamera(EventContext context)
+        {
+            StopCameraFollow();
+            EventVariables variables = context.Runtime.Variables;
+            double height = variables.GetGlobal("CameraHeight").AsNumber();
+            double depth = variables.GetGlobal("CameraDepth").AsNumber();
+
+            double focusX = variables.GetGlobal(CameraRig.PanXVariable).AsNumber();
+            double focusZ = variables.GetGlobal(CameraRig.PanZVariable).AsNumber();
+            Actor camera = FlaxWorld.FindCamera();
+            if (camera != null)
+            {
+                focusX = camera.Position.X;
+                focusZ = camera.Position.Z - depth;
+                camera.Orientation = Quaternion.Euler(
+                    (float)CameraFraming.ClampPitch(variables.GetGlobal("CameraPitch").AsNumber()), 0.0f, 0.0f);
+            }
+
+            variables.SetGlobal(CameraRig.PanXVariable, ValueBox.OfNumber(focusX));
+            variables.SetGlobal(CameraRig.PanZVariable, ValueBox.OfNumber(focusZ));
+            variables.SetGlobal(CameraRig.FreeVariable, ValueBox.OfNumber(1));
+            // Defaults only fill what the sheet left alone, so authored feel always wins.
+            if (!variables.HasGlobal(CameraRig.ZoomVariable))
+                variables.SetGlobal(CameraRig.ZoomVariable, ValueBox.OfNumber(CameraRig.DefaultZoom));
+            if (!variables.HasGlobal(CameraRig.EdgePanVariable))
+                variables.SetGlobal(CameraRig.EdgePanVariable, ValueBox.OfNumber(1));
+            if (!variables.HasGlobal(CameraRig.EdgeThicknessVariable))
+                variables.SetGlobal(CameraRig.EdgeThicknessVariable, ValueBox.OfNumber(CameraRig.DefaultEdgeThickness));
+            if (!variables.HasGlobal(CameraRig.PanSpeedVariable))
+                variables.SetGlobal(CameraRig.PanSpeedVariable, ValueBox.OfNumber(CameraRig.DefaultPanSpeed));
+            ApplyFreeCamera(context.Runtime);
+        }
+
+        /// <summary>
+        /// <c>zoom camera by &lt;n&gt;</c> / <c>camera zoom in</c> / <c>camera zoom out</c>
+        /// (Task 26 Part A): positive moves closer, negative further out, clamped so the camera
+        /// cannot sink into the floor or drift off to infinity.
+        /// </summary>
+        private static void ZoomCamera(EventContext context, ActionSpec spec)
+        {
+            EventVariables variables = context.Runtime.Variables;
+            double zoom = CameraRig.ZoomFrom(variables);
+            if (spec.HasNumber)
+                zoom = CameraRig.ZoomBy(zoom, spec.Number);
+            else if (spec.AmountNode != null)
+                zoom = CameraRig.ZoomBy(zoom, context.Evaluate(spec.AmountNode).AsNumber());
+            else if (string.Equals(spec.Dir, "out", StringComparison.OrdinalIgnoreCase))
+                zoom = CameraRig.ZoomedOut(zoom);
+            else
+                zoom = CameraRig.ZoomedIn(zoom);
+            variables.SetGlobal(CameraRig.ZoomVariable, ValueBox.OfNumber(zoom));
+            ApplyFreeCamera(context.Runtime);
+        }
+
+        /// <summary>
+        /// <c>pan camera left by 100</c> (Task 26 Parts B/C): nudge the free camera's focus, arming
+        /// free-pan mode first if the sheet never called <c>camera free</c>. A bare
+        /// <c>pan camera left</c> moves for a tenth of a second's worth, which is what a held-key
+        /// event wants.
+        /// </summary>
+        private static void PanCamera(EventContext context, ActionSpec spec)
+        {
+            if (!CameraRig.TryDirection(spec.Dir, out double directionX, out double directionZ))
+                return;
+            EventVariables variables = context.Runtime.Variables;
+            if (variables.GetGlobal(CameraRig.FreeVariable).AsNumber() <= 0)
+                FreeCamera(context);
+
+            double distance;
+            if (spec.HasNumber)
+                distance = spec.Number;
+            else if (spec.AmountNode != null)
+                distance = context.Evaluate(spec.AmountNode).AsNumber();
+            else
+                distance = CameraRig.DefaultPanSpeed / 10.0;
+
+            double focusX = variables.GetGlobal(CameraRig.PanXVariable).AsNumber();
+            double focusZ = variables.GetGlobal(CameraRig.PanZVariable).AsNumber();
+            CameraRig.Step(focusX, focusZ, directionX, directionZ, distance, out double x, out double z);
+            variables.SetGlobal(CameraRig.PanXVariable, ValueBox.OfNumber(x));
+            variables.SetGlobal(CameraRig.PanZVariable, ValueBox.OfNumber(z));
+            ApplyFreeCamera(context.Runtime);
+        }
+
+        /// <summary>
+        /// Places the free camera at its pan focus with the zoomed height/depth offsets. Shared
+        /// with the per-tick edge/key panning in <c>EventsManager</c>, which owns the mouse and
+        /// keyboard. Does nothing unless <c>camera free</c> armed free-pan mode and no follow /
+        /// snap / aim target owns the camera.
+        /// </summary>
+        internal static void ApplyFreeCamera(EventRuntime runtime)
+        {
+            if (runtime == null)
+                return;
+            EventVariables variables = runtime.Variables;
+            if (variables.GetGlobal(CameraRig.FreeVariable).AsNumber() <= 0)
+                return;
+            if (CameraFollowTarget != null || CameraLookAtTarget != null || CameraAtTarget != null)
+                return;
+            Actor camera = FlaxWorld.FindCamera();
+            if (camera == null)
+                return;
+            double zoom = CameraRig.ZoomFrom(variables);
+            double height = CameraRig.HeightFor(variables.GetGlobal("CameraHeight").AsNumber(), zoom);
+            double depth = CameraRig.DepthFor(variables.GetGlobal("CameraDepth").AsNumber(), zoom);
+            double x = variables.GetGlobal(CameraRig.PanXVariable).AsNumber();
+            double z = variables.GetGlobal(CameraRig.PanZVariable).AsNumber();
+            camera.Position = new Vector3((float)x, (float)height, (float)(z + depth));
         }
 
         /// <summary>

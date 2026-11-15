@@ -5305,6 +5305,127 @@ Check(Math.Abs(Math.Abs(turnedX) - 100) < 0.0001 && Math.Abs(turnedZ) < 0.0001,
       "a line turns with the direction the group is heading");
 
 // ------------------------------------------------------------------
+// Task 26: RTS camera controls
+// ------------------------------------------------------------------
+
+Check(Math.Abs(CameraRig.ClampZoom(0.01) - CameraRig.MinZoom) < 0.0001 &&
+      Math.Abs(CameraRig.ClampZoom(99) - CameraRig.MaxZoom) < 0.0001 &&
+      Math.Abs(CameraRig.ClampZoom(1.5) - 1.5) < 0.0001,
+      "camera zoom is clamped between the closest and furthest factors");
+Check(Math.Abs(CameraRig.ZoomedIn(1) - (1 + CameraRig.ZoomStep)) < 0.0001 &&
+      Math.Abs(CameraRig.ZoomedOut(1) - (1 - CameraRig.ZoomStep)) < 0.0001 &&
+      Math.Abs(CameraRig.ZoomBy(CameraRig.MaxZoom, 1) - CameraRig.MaxZoom) < 0.0001,
+      "zoom in/out step by one notch and stop at the clamp");
+
+// Zoom changes the framing without letting the camera reach the floor.
+Check(Math.Abs(CameraRig.HeightFor(260, 2) - 130) < 0.0001 &&
+      Math.Abs(CameraRig.HeightFor(260, 0.5) - 520) < 0.0001 &&
+      Math.Abs(CameraRig.HeightFor(20, 1) - 20) < 0.0001,
+      "zooming in halves the authored height, zooming out doubles it");
+Check(Math.Abs(CameraRig.HeightFor(260, CameraRig.MaxZoom) - 65) < 0.0001 &&
+      CameraRig.HeightFor(60, CameraRig.MaxZoom) >= CameraRig.MinHeight,
+      "zoom never pushes the camera into the floor");
+Check(Math.Abs(CameraRig.DepthFor(-170, 2) + 85) < 0.0001,
+      "the depth offset scales with the same zoom as the height");
+Check(Math.Abs(CameraRig.PanSpeedFor(600, 2) - 300) < 0.0001 &&
+      Math.Abs(CameraRig.PanSpeedFor(600, 0.5) - 1200) < 0.0001,
+      "panning is slower when zoomed in and faster when zoomed out");
+
+// Edge panning: each edge asks for the ground direction under it, diagonals normalised.
+Check(CameraRig.EdgeDirection(2, 400, 800, 800, 12, out double edgeLeftX, out double edgeLeftZ) &&
+      edgeLeftX < 0 && edgeLeftZ == 0,
+      "the left edge pans left");
+Check(CameraRig.EdgeDirection(798, 400, 800, 800, 12, out double edgeRightX, out _) && edgeRightX > 0,
+      "the right edge pans right");
+Check(CameraRig.EdgeDirection(400, 2, 800, 800, 12, out double edgeTopX, out double edgeTopZ) &&
+      edgeTopX == 0 && edgeTopZ > 0,
+      "the top edge pans forward");
+Check(CameraRig.EdgeDirection(400, 798, 800, 800, 12, out _, out double edgeBottomZ) && edgeBottomZ < 0,
+      "the bottom edge pans backward");
+Check(CameraRig.EdgeDirection(2, 2, 800, 800, 12, out double cornerX, out double cornerZ) &&
+      Math.Abs(Math.Sqrt(cornerX * cornerX + cornerZ * cornerZ) - 1) < 0.0001,
+      "a corner pans diagonally at the same speed as a straight edge");
+Check(!CameraRig.EdgeDirection(400, 400, 800, 800, 12, out _, out _),
+      "the middle of the screen does not pan");
+Check(!CameraRig.EdgeDirection(400, 400, 0, 800, 12, out _, out _),
+      "a zero-size viewport does not pan");
+
+Check(CameraRig.KeyDirection(false, true, false, false, out double keyRightX, out double keyRightZ) &&
+      keyRightX == 1 && keyRightZ == 0,
+      "holding right pans right");
+Check(!CameraRig.KeyDirection(true, true, true, true, out _, out _),
+      "opposite keys held together cancel out");
+Check(!CameraRig.KeyDirection(false, false, false, false, out _, out _),
+      "no keys held does not pan");
+Check(CameraRig.KeyDirection(true, false, true, false, out double diagX, out double diagZ) &&
+      Math.Abs(Math.Sqrt(diagX * diagX + diagZ * diagZ) - 1) < 0.0001,
+      "two keys held pan diagonally at the same speed");
+
+CameraRig.Step(100, 100, 1, 0, 60, out double stepX, out double stepZ);
+Check(Math.Abs(stepX - 160) < 0.0001 && Math.Abs(stepZ - 100) < 0.0001,
+      "a pan step moves the focus by the distance it was given");
+CameraRig.Step(100, 100, 1, 1, 60, out double diagStepX, out double diagStepZ);
+Check(Math.Abs(Math.Sqrt((diagStepX - 100) * (diagStepX - 100) + (diagStepZ - 100) * (diagStepZ - 100)) - 60) < 0.0001,
+      "a diagonal pan step moves 60 units in total, not 60 in each axis");
+CameraRig.Step(100, 100, 0, 0, 60, out double stillX, out double stillZ);
+Check(stillX == 100 && stillZ == 100, "no direction leaves the focus where it was");
+
+Check(CameraRig.TryDirection("left", out double wordLeftX, out _) && wordLeftX == -1 &&
+      CameraRig.TryDirection("Forward", out double wordForwardX, out double wordForwardZ) &&
+      wordForwardX == 0 && wordForwardZ == 1 &&
+      CameraRig.TryDirection("back", out _, out double wordBackZ) && wordBackZ == -1 &&
+      !CameraRig.TryDirection("sideways", out _, out _),
+      "pan words read left, right, forward and backward");
+
+var cameraVars = new EventVariables();
+Check(Math.Abs(CameraRig.ZoomFrom(cameraVars) - CameraRig.DefaultZoom) < 0.0001,
+      "camera zoom starts at the authored framing");
+cameraVars.SetGlobal(CameraRig.ZoomVariable, ValueBox.OfNumber(9));
+Check(Math.Abs(CameraRig.ZoomFrom(cameraVars) - CameraRig.MaxZoom) < 0.0001,
+      "an authored zoom beyond the clamp reads as the clamp");
+
+// The new words parse from sheets, including the multiword `my camera ...` variable.
+var zoomInEvent = parser.Parse("when me appears\n  camera zoom in\n");
+var zoomInSpec = ActionWords.Parse(((RawActionNode)zoomInEvent.Events[0].Body[0].Statement!).Words, _ => { });
+Check(zoomInSpec.Verb == ActionVerb.ZoomCamera && zoomInSpec.Dir == "in",
+      "`camera zoom in` parses to ZoomCamera");
+
+var zoomByEvent = parser.Parse("when me appears\n  zoom camera by 0.2\n");
+var zoomBySpec = ActionWords.Parse(((RawActionNode)zoomByEvent.Events[0].Body[0].Statement!).Words, _ => { });
+Check(zoomBySpec.Verb == ActionVerb.ZoomCamera && zoomBySpec.HasNumber &&
+      Math.Abs(zoomBySpec.Number - 0.2) < 0.000001,
+      "`zoom camera by 0.2` parses to ZoomCamera with its amount");
+
+var panEvent = parser.Parse("when me appears\n  pan camera left by 100\n");
+var panSpec = ActionWords.Parse(((RawActionNode)panEvent.Events[0].Body[0].Statement!).Words, _ => { });
+Check(panSpec.Verb == ActionVerb.PanCamera && panSpec.Dir == "left" && panSpec.Number == 100,
+      "`pan camera left by 100` parses to PanCamera");
+
+var zoomCondition = parser.Parse("when game starts\n  if my camera zoom is 2\n  set Zoomed to 1\n");
+Check(zoomCondition.Events.Count == 1,
+      "`if my camera zoom is 2` joins the multiword camera variable");
+
+// `my camera zoom` / `my camera position` read the free-pan state (Task 26 Part D).
+var cameraSheetActor = new FakeActor("Rifleman");
+var cameraWorld = new FakeWorld();
+cameraWorld.AddActor(cameraSheetActor);
+var cameraRuntime = new EventRuntime();
+var cameraContext = new EventContext
+{
+    Variables = new EventVariables(),
+    World = cameraWorld,
+    Me = cameraSheetActor,
+    Runtime = cameraRuntime,
+};
+cameraContext.Variables.SetGlobal(CameraRig.ZoomVariable, ValueBox.OfNumber(2));
+cameraContext.Variables.SetGlobal(CameraRig.PanXVariable, ValueBox.OfNumber(120));
+cameraContext.Variables.SetGlobal(CameraRig.PanZVariable, ValueBox.OfNumber(-80));
+Check(Math.Abs(cameraContext.ReadMy("camera zoom").AsNumber() - 2) < 0.0001,
+      "`my camera zoom` reads the zoom global");
+Check(cameraContext.ReadMy("camera position").AsText() == "120, 0, -80",
+      "`my camera position` reads the pan focus as x, 0, z");
+
+// ------------------------------------------------------------------
 // Task 15 Part H: moveplatform (moving platforms)
 // ------------------------------------------------------------------
 

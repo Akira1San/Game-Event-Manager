@@ -71,6 +71,19 @@ namespace Game
                 return ValueBox.OfText(Runtime.Orders.OrderTargetName(Me));
             if (name == "order queue" || name == "OrderQueue")
                 return ValueBox.OfNumber(Runtime.Orders.OrderCount(Me));
+            // `my camera zoom` / `my camera position` (Task 26 Part D): the state the free-pan
+            // controls keep, readable from any sheet — a HUD readout or a debug print. The
+            // position is the ground point the camera is centred on, as "x, 0, z".
+            if (name == "camera zoom" || name == "CameraZoom")
+                return ValueBox.OfNumber(CameraRig.ZoomFrom(Variables));
+            if (name == "camera position" || name == "CameraPosition")
+            {
+                var culture = System.Globalization.CultureInfo.InvariantCulture;
+                double x = Variables.GetGlobal(CameraRig.PanXVariable).AsNumber();
+                double z = Variables.GetGlobal(CameraRig.PanZVariable).AsNumber();
+                return ValueBox.OfText(x.ToString("0.##", culture) + ", 0, " +
+                    z.ToString("0.##", culture));
+            }
             // `my Ammo` is the held weapon's count, so one HUD line can show the selected
             // weapon and its rounds without the sheet mirroring a variable per weapon.
             if (string.Equals(name, "Ammo", StringComparison.OrdinalIgnoreCase))

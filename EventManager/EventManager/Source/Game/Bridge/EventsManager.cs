@@ -548,6 +548,66 @@ namespace Game
             // Follow last: the tick is what moves the player (`move forward` lands immediately),
             // so a camera snapped before it trailed the subject by one frame and shimmered.
             UpdateCameraFollow();
+            // Free-pan (Task 26) last of all: it owns the camera only in free mode, and it needs
+            // this tick's mouse and key state.
+            UpdateCameraPan(delta);
+        }
+
+        /// <summary>
+        /// RTS free-pan (Task 26 Parts B/C): once <c>camera free</c> armed free-pan mode, the
+        /// camera moves with the mouse parked at a screen edge and with the arrow keys / WASD,
+        /// at a speed that slows down as the player zooms in. Disabled edges and keys leave the
+        /// camera alone, and authored globals set the feel.
+        /// </summary>
+        private void UpdateCameraPan(float delta)
+        {
+            var variables = Runtime.Variables;
+            if (variables.GetGlobal(CameraRig.FreeVariable).AsNumber() <= 0)
+                return;
+
+            double zoom = CameraRig.ZoomFrom(variables);
+            double directionX = 0;
+            double directionZ = 0;
+
+            if (variables.GetGlobal(CameraRig.EdgePanVariable).AsNumber() > 0)
+            {
+                Float2 mouse = Input.MousePosition;
+                Float2 size = Screen.Size;
+                if (size.X > 0 && size.Y > 0 &&
+                    CameraRig.EdgeDirection(mouse.X, mouse.Y, size.X, size.Y,
+                        variables.GetGlobal(CameraRig.EdgeThicknessVariable).AsNumber(),
+                        out double edgeX, out double edgeZ))
+                {
+                    directionX += edgeX;
+                    directionZ += edgeZ;
+                }
+            }
+
+            bool left = _world.IsKeyHeld("Left Arrow") || _world.IsKeyHeld("A");
+            bool right = _world.IsKeyHeld("Right Arrow") || _world.IsKeyHeld("D");
+            bool forward = _world.IsKeyHeld("Up Arrow") || _world.IsKeyHeld("W");
+            bool backward = _world.IsKeyHeld("Down Arrow") || _world.IsKeyHeld("S");
+            if (CameraRig.KeyDirection(left, right, forward, backward,
+                out double keyX, out double keyZ))
+            {
+                directionX += keyX;
+                directionZ += keyZ;
+            }
+
+            if (directionX != 0 || directionZ != 0)
+            {
+                double focusX = variables.GetGlobal(CameraRig.PanXVariable).AsNumber();
+                double focusZ = variables.GetGlobal(CameraRig.PanZVariable).AsNumber();
+                double speed = CameraRig.PanSpeedFor(
+                    variables.GetGlobal(CameraRig.PanSpeedVariable).AsNumber(), zoom);
+                CameraRig.Step(focusX, focusZ, directionX, directionZ, speed * delta,
+                    out double x, out double z);
+                variables.SetGlobal(CameraRig.PanXVariable, ValueBox.OfNumber(x));
+                variables.SetGlobal(CameraRig.PanZVariable, ValueBox.OfNumber(z));
+            }
+
+            // Settles the position even when nothing moved, so a zoom change lands at once.
+            FlaxActions.ApplyFreeCamera(Runtime);
         }
 
         /// <summary>
@@ -623,11 +683,20 @@ namespace Game
             if (camera == null)
                 return;
 
+            // Free-pan mode (Task 26) owns the camera; UpdateCameraPan places it.
+            if (Runtime.Variables.GetGlobal(CameraRig.FreeVariable).AsNumber() > 0)
+                return;
+
             // Explicit follow: camera follows <thing> (set by StartCameraFollow).
             var target = FlaxActions.CameraFollowTarget;
             if (target != null && target.Scene != null)
             {
-                camera.Position = target.Position + FlaxActions.CameraFollowOffset;
+                // Zoom (Task 26 Part A) pulls the same framing closer or further away.
+                float scale = (float)CameraRig.ScaleFor(CameraRig.ZoomFrom(Runtime.Variables));
+                camera.Position = target.Position + new Vector3(
+                    FlaxActions.CameraFollowOffset.X,
+                    FlaxActions.CameraFollowOffset.Y * scale,
+                    FlaxActions.CameraFollowOffset.Z * scale);
                 return;
             }
 
@@ -637,9 +706,11 @@ namespace Game
             var player = Level.FindActor("Player") as Actor;
             if (player == null)
                 return;
+            double zoom = CameraRig.ZoomFrom(Runtime.Variables);
             float height = (float)Runtime.Variables.GetGlobal("CameraHeight").AsNumber();
             float depth = (float)Runtime.Variables.GetGlobal("CameraDepth").AsNumber();
-            camera.Position = player.Position + new Vector3(0f, height, depth);
+            float zoomScale = (float)CameraRig.ScaleFor(zoom);
+            camera.Position = player.Position + new Vector3(0f, height * zoomScale, depth * zoomScale);
         }
 
         private void UpdatePlayerLookAtMouse()
