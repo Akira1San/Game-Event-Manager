@@ -1742,6 +1742,8 @@ namespace Game
                 // The write still happens: the sheet may correct itself later.
                 if (UnitTypes.IsVariableName(set.Target.Name) && !UnitTypes.IsKnown(value.AsText()))
                     OnRuntimeWarning($"I don't know the unit type \u201C{value.AsText()}\u201D \u2014 units are {UnitTypes.KnownNames()}, and a sheet that writes none counts as {UnitTypes.Default}.");
+                if (AttackTypes.IsVariableName(set.Target.Name) && !AttackTypes.IsKnown(value.AsText()))
+                    OnRuntimeWarning($"I don't know the attack type \u201C{value.AsText()}\u201D \u2014 attacks are {AttackTypes.KnownNames()}, and a sheet that writes none counts as {AttackTypes.Default}.");
             }
             else
                 context.WriteGlobal(set.Target.Name, value);

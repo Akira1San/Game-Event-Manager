@@ -81,13 +81,46 @@ namespace Game
         }
 
         /// <summary>
+        /// The reach a <c>ranged</c> unit has before it declares <c>my attack range</c> (Task 23
+        /// Part A) — far enough to be worth calling ranged, near enough to feel like shooting.
+        /// </summary>
+        public const double DefaultRangedAttackRange = 300;
+
+        /// <summary>The reach of an attack type that declared no range: melee touch, ranged shot.</summary>
+        public static double DefaultRangeFor(string attackType)
+        {
+            return AttackTypes.IsRanged(attackType) ? DefaultRangedAttackRange : DefaultAttackRange;
+        }
+
+        /// <summary>
         /// The range an attacking condition asks about: the declared <c>my attack range</c>, else
-        /// <see cref="DefaultAttackRange"/>.
+        /// this unit's own attack type's default (melee 50, ranged 300).
         /// </summary>
         public static double AttackRangeOf(EventContext context)
         {
-            double declared = context == null ? 0 : DeclaredAttackRange(context.Variables, context.Me);
-            return declared > 0 ? declared : DefaultAttackRange;
+            if (context == null)
+                return DefaultAttackRange;
+            double declared = DeclaredAttackRange(context.Variables, context.Me);
+            return declared > 0
+                ? declared
+                : DefaultRangeFor(AttackTypes.TypeOf(context.Variables, context.Me));
+        }
+
+        /// <summary>
+        /// How far an <c>attack</c> order closes before it stops (Task 23 Part A): the declared
+        /// <c>my attack range</c>, else the ranged default for a <c>ranged</c> unit, else 0 — walk
+        /// into contact, which is what a melee unit and every older sheet expects.
+        /// </summary>
+        public static double StopDistanceFor(EventContext context)
+        {
+            if (context == null)
+                return 0;
+            double declared = DeclaredAttackRange(context.Variables, context.Me);
+            if (declared > 0)
+                return declared;
+            return AttackTypes.IsRanged(AttackTypes.TypeOf(context.Variables, context.Me))
+                ? DefaultRangedAttackRange
+                : 0;
         }
 
         /// <summary>

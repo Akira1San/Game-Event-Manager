@@ -264,19 +264,42 @@ it, fly an air unit over it) still pending.
 
 ---
 
-## Task 23 — RTS Combat Matchups & Formations [ ]
+## Task 23 — RTS Combat Matchups & Formations [~]
 
 Goal: add close vs range attack, attack matchup matrix, and formation movement for grouped units.
 
-### Part A — Attack types [ ]
+### Part A — Attack types [x]
 - Per-unit variable: `my attack type` (`melee` / `ranged`)
+  → ordinary per-actor local (`Runtime/AttackTypes.cs`), written with
+`set my attack type to "ranged"` (parser joins the multiword name) and readable as a value
+(`set TypeLabel to my attack type`). Both spellings (`attack type`, `AttackType`) resolve; a unit
+that never wrote one — every older sheet — is melee. An unknown spelling still writes but warns
+once, listing the two types. Conditions `me is melee` / `me is ranged` (`ConditionKind.AttackTypeIs`),
+which stack with the unit type: a ranged air unit answers both.
 - `my attack range` — distance at which ranged attacks can hit
+  → already first-class since Task 21 (`set my attack range to 120`, `my attack range is 120`,
+readable as a value, used by `me is in range of`). Part A adds the type-based default:
+`OrderManager.DefaultRangeFor` gives melee `DefaultAttackRange` (50) and ranged
+`DefaultRangedAttackRange` (300), so `AttackRangeOf` and the `attack` order
+(`OrderManager.StopDistanceFor`) do the right thing before a sheet writes a number. A declared
+range always wins.
 - Close combat: damage on contact; ranged combat: projectile flies to target
+  → melee keeps the old behaviour: `attack` walks into contact (stop distance 0), so a sheet's
+contact `"damage"`/`send message` lands. Ranged closes only to its attack range and stops there,
+leaving the strike to the sheet (`spawn Bullet`, `spawn <projectile>`, `send message "damage"`) —
+the engine has no projectile to fire by itself. Documented on `AttackTypes`.
 
 ### Part B — Attack matchups [ ]
 - Data-driven table: which unit types can attack which (land vs land, land vs air, air vs land, air vs air)
+  → Part A's `my unit type` + `my attack type` are the two axes this hangs off; no matchup
+table exists yet, so a land unit can still shoot at an air unit.
 - Condition `me can attack other` — consults the matchup table
 - Mismatched attacks are ignored (no damage)
+
+### Part C — Formation movement [ ]
+- When multiple units are selected and given `goto`/`attack-move`, they arrange in formation (line, wedge, column)
+- Each unit walks to its offset position, not all to the same point
+- Units maintain spacing while moving
 
 ### Part C — Formation movement [ ]
 - When multiple units are selected and given `goto`/`attack-move`, they arrange in formation (line, wedge, column)

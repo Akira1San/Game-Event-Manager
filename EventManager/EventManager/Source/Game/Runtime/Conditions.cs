@@ -56,6 +56,8 @@ namespace Game
         InRangeOf,
         // RTS unit types (Task 22 Part A)
         UnitTypeIs,
+        // RTS attack types (Task 23 Part A)
+        AttackTypeIs,
         // RTS fog of war & visibility (Task 18 Part F)
         IsVisibleToEnemy,
         IsHidden,
@@ -455,6 +457,15 @@ namespace Game
                 return node;
             }
 
+            // `me is melee` / `me is ranged` — RTS attack types (Task 23 Part A).
+            if (texts.Length == 3 && texts[0] == "me" && texts[1] == "is" &&
+                AttackTypes.Canonical(texts[2]) != null)
+            {
+                node.Kind = ConditionKind.AttackTypeIs;
+                node.Name = AttackTypes.Canonical(texts[2]);
+                return node;
+            }
+
             // ---- attack range (Task 21 Part A) ----
             // `my attack range is 120` — the same multiword stat `set` joins, so a sheet can
             // read back the range it declared.
@@ -653,6 +664,8 @@ namespace Game
                 }
                 case ConditionKind.UnitTypeIs:
                     return UnitTypes.Is(context, node.Name);
+                case ConditionKind.AttackTypeIs:
+                    return AttackTypes.Is(context, node.Name);
                 case ConditionKind.InRangeOf:
                 {
                     object target = FindTarget(node.Thing, context);

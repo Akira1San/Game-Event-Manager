@@ -5049,6 +5049,111 @@ Check(!typeMap.IsPassableFor(landUnit, terrainVars, 0, 0) &&
 
 
 // ------------------------------------------------------------------
+// Task 23 Part A: attack types (melee / ranged)
+// ------------------------------------------------------------------
+
+var meleeCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  me is melee").Events[0].Body[0].Words);
+Check(meleeCondition.Kind == ConditionKind.AttackTypeIs && meleeCondition.Name == "melee",
+      "`me is melee` parses to AttackTypeIs");
+var rangedCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  me is ranged").Events[0].Body[0].Words);
+Check(rangedCondition.Kind == ConditionKind.AttackTypeIs && rangedCondition.Name == "ranged",
+      "`me is ranged` parses to AttackTypeIs");
+
+var attackWorld = new FakeWorld();
+var attackUnit = new FakeActor("Marine");
+attackWorld.AddActor(attackUnit);
+var attackEngine = FreshEngine(attackWorld);
+attackEngine.AddSheet(attackUnit, parser.Parse("when me appears\n  set my attack type to \"ranged\""));
+attackEngine.Tick(0);
+var attackContext = new EventContext
+{
+    Variables = attackEngine.Variables,
+    World = attackWorld,
+    Me = attackUnit,
+    Runtime = attackEngine,
+};
+Check(Conditions.Evaluate(rangedCondition, attackContext) &&
+      !Conditions.Evaluate(meleeCondition, attackContext),
+      "`set my attack type to \"ranged\"` makes `me is ranged` true and `me is melee` false");
+Check(attackContext.ReadMy("attack type").AsText() == "ranged",
+      "`my attack type` reads back what the sheet wrote");
+
+var plainAttackVars = new EventVariables();
+var plainAttackUnit = new FakeActor("Zergling");
+Check(AttackTypes.TypeOf(plainAttackVars, plainAttackUnit) == "melee",
+      "a unit that never wrote `my attack type` strikes on contact (melee)");
+plainAttackVars.SetLocal(plainAttackUnit, "AttackType", ValueBox.OfText("RANGED"));
+Check(AttackTypes.TypeOf(plainAttackVars, plainAttackUnit) == "ranged",
+      "the run-together `AttackType` spelling works, case-insensitively");
+var oddAttackVars = new EventVariables();
+var oddAttackUnit = new FakeActor("Militia");
+oddAttackVars.SetLocal(oddAttackUnit, "attack type", ValueBox.OfText("sniper"));
+Check(AttackTypes.TypeOf(oddAttackVars, oddAttackUnit) == "melee",
+      "an unknown attack type falls back to melee");
+
+int attackWarnings = 0;
+var attackWarnWorld = new FakeWorld();
+var attackWarnUnit = new FakeActor("Marine");
+attackWarnWorld.AddActor(attackWarnUnit);
+var attackWarnEngine = FreshEngine(attackWarnWorld);
+attackWarnEngine.OnRuntimeWarning = message =>
+{
+    if (message.Contains("attack type", StringComparison.OrdinalIgnoreCase))
+        attackWarnings++;
+};
+attackWarnEngine.AddSheet(attackWarnUnit, parser.Parse("when me appears\n  set my attack type to \"sniper\""));
+attackWarnEngine.Tick(0);
+Check(attackWarnings == 1,
+      "an unknown attack type warns once instead of silently going melee");
+
+// The type decides the reach a unit has before it declares `my attack range`.
+var meleeRangeVars = new EventVariables();
+var meleeRangeUnit = new FakeActor("Zergling");
+var rangedRangeVars = new EventVariables();
+var rangedRangeUnit = new FakeActor("Marine");
+rangedRangeVars.SetLocal(rangedRangeUnit, "attack type", ValueBox.OfText("ranged"));
+EventContext RangeContext(EventVariables variables, object unit) => new EventContext
+{
+    Variables = variables,
+    World = new FakeWorld(),
+    Me = unit,
+    Runtime = null,
+};
+Check(Math.Abs(OrderManager.AttackRangeOf(RangeContext(meleeRangeVars, meleeRangeUnit)) -
+               OrderManager.DefaultAttackRange) < 0.0001,
+      "a melee unit that wrote no range reaches the melee default (50)");
+Check(Math.Abs(OrderManager.AttackRangeOf(RangeContext(rangedRangeVars, rangedRangeUnit)) -
+               OrderManager.DefaultRangedAttackRange) < 0.0001,
+      "a ranged unit that wrote no range reaches the ranged default (300)");
+rangedRangeVars.SetLocal(rangedRangeUnit, "attack range", ValueBox.OfNumber(120));
+Check(Math.Abs(OrderManager.AttackRangeOf(RangeContext(rangedRangeVars, rangedRangeUnit)) - 120) < 0.0001,
+      "a declared `my attack range` wins over the type's default");
+
+Check(OrderManager.StopDistanceFor(RangeContext(meleeRangeVars, meleeRangeUnit)) == 0,
+      "an `attack` order for a melee unit walks into contact (stop distance 0)");
+var rangedStopVars = new EventVariables();
+var rangedStopUnit = new FakeActor("Marine");
+rangedStopVars.SetLocal(rangedStopUnit, "attack type", ValueBox.OfText("ranged"));
+Check(Math.Abs(OrderManager.StopDistanceFor(RangeContext(rangedStopVars, rangedStopUnit)) -
+               OrderManager.DefaultRangedAttackRange) < 0.0001,
+      "an `attack` order for a ranged unit stops at its range instead of closing in");
+meleeRangeVars.SetLocal(meleeRangeUnit, "attack range", ValueBox.OfNumber(80));
+Check(Math.Abs(OrderManager.StopDistanceFor(RangeContext(meleeRangeVars, meleeRangeUnit)) - 80) < 0.0001,
+      "a melee unit that declared a range stops at it too");
+
+// The two type axes are independent: a ranged air unit is both.
+var mixedVars = new EventVariables();
+var mixedUnit = new FakeActor("Bomber");
+mixedVars.SetLocal(mixedUnit, "unit type", ValueBox.OfText("air"));
+mixedVars.SetLocal(mixedUnit, "attack type", ValueBox.OfText("ranged"));
+var mixedContext = RangeContext(mixedVars, mixedUnit);
+Check(UnitTypes.Is(mixedContext, "air") && AttackTypes.Is(mixedContext, "ranged") &&
+      !UnitTypes.Is(mixedContext, "land") && !AttackTypes.Is(mixedContext, "melee"),
+      "unit type and attack type are independent (a ranged air unit)");
+
+// ------------------------------------------------------------------
 // Task 15 Part H: moveplatform (moving platforms)
 // ------------------------------------------------------------------
 

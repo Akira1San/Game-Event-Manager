@@ -2202,9 +2202,10 @@ namespace Game
                 HasPositionTarget = isPosition,
             };
             context.Runtime.Orders.StartOrder(context.Variables, context.Runtime, me, order);
-            // A sheet that declared `my attack range` stops at that distance. Without one the
-            // old behaviour stays: walk into contact, so a melee unit still reaches its target.
-            double range = OrderManager.DeclaredAttackRange(context.Variables, me);
+            // A `ranged` unit (Task 23 Part A) stops at its attack range — declared, or the
+            // ranged default. A melee unit without a declared range keeps the old behaviour and
+            // walks into contact.
+            double range = OrderManager.StopDistanceFor(context);
             Actor targetActor = target as Actor;
             if (range > 0 && targetActor != null && targetActor.Scene != null)
             {
