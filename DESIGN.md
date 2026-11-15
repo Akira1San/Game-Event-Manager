@@ -1017,6 +1017,36 @@ window around a broken runtime.
   word — otherwise the NavMesh path and the direct vector fight. `sees` stays a trigger, not a
   condition; the `my mode` string carries the state. No `path exists` word exists (parked), so the
   movement verb itself is the NavMesh/no-NavMesh switch.
+- **Wall negotiation for the no-NavMesh chase (Task 7 G2, decided):** the chase rounds obstacles
+  through a **`move toward <thing> speed <n> around walls`** qualifier rather than a new action
+  word — one verb, one optional phrase, and every existing sheet still walks a straight line.
+  Mechanism: **corner sampling primary**, wall-tangent fallback. Each chasing tick casts one
+  straight probe toward the target (length `min(distance, 40)`, measured from the collider centre
+  plus the actor's half-width). When it is clear nothing else happens — **no fan rays**. When it
+  is blocked, a fan at ±15°, ±30°, ±45° … is sampled smallest-first for the first clear ray (the
+  tightest path), capped at **7 rays per tick including the probe**, so only ±15/30/45 fit at the
+  default budget. If no fan ray is clear, the hit normal gives the wall tangent
+  (`cross(up, normal)`, flipped toward the target) and that is driven for the same short window.
+  A chosen side is kept for **0.3 s** (hysteresis: no left/right vibration); an actor that moves
+  less than a quarter of its expected step for **0.4 s** forces one sampling cycle even when the
+  probe reads clear (shallow concave corners). The heading goes through the normal `MoveSubject`,
+  so transform, dynamic, kinematic and CharacterController movement all behave the same. Rules
+  live in `Runtime/Steering.cs` (pure, unit tested); `FlaxActions` only supplies the raycast.
+  Guards: it only runs for `move toward ... around walls` — never for `goto` (the NavMesh already
+  routes) and never for `hunt` (G1's arc); a plain `move` or `stop moving` forgets the committed
+  side; self/children and the chase target/children are ignored by every probe. Walls therefore
+  need colliders — the same requirement `me sees` already has — and probes run at the collider
+  centre height like the sight ray, so a low crate is not seen.
+  **Events-side note:** G1's sheet flips to `hunt` the instant the sight ray breaks, which is
+  exactly when a corner needs negotiating, so the G2 companion sheet (`Enemy_Walls.events`) adds a
+  short `round` state: sight lost → keep the wall-aware chase for 1.5 s → *then* hand over to the
+  blind `hunt` arc → patrol. `sees player` cancels the hand-off by flipping the mode back.
+  **Documented limit:** a deep U-shaped pocket can have a "clear" lateral ray that never leaves
+  the pocket; the chase then stalls and `hunt`/patrol takes over. Agent-to-agent avoidance,
+  separation/flocking and full local pathfinding stay out of scope (other actors are simply
+  obstacles to the probes). **Vocabulary friction:** there is still no ray/normal query word
+  (`me is blocked`, `path exists`), so this lives in C# while `sees` stays a trigger rather than
+  a condition; the qualifier reads well enough that `chase <thing> speed <n>` was not added.
 - **Pathfinding edge cases:** what happens when `goto` can't reach the target (player on a
   pillar, waypoint inside a wall)? Proposal: `goto` gives up after a few seconds and â€” for now â€”
   quietly stops walking; a `when path fails` trigger is parked for when a game actually needs it.

@@ -134,6 +134,10 @@ namespace Game
         public double SpawnOffset;
         /// <summary>True when the spawn wrote an <c>offset</c> at all.</summary>
         public bool HasSpawnOffset;
+        /// <summary><c>move toward &lt;thing&gt; ... around walls</c>: corner-sample and steer
+        /// around obstacles instead of walking into them (Task 7 Part G2). Opt-in, so every
+        /// existing sheet keeps the plain straight line.</summary>
+        public bool AroundWalls;
     }
 
     public static class ActionWords
@@ -1264,17 +1268,28 @@ namespace Game
                     int afterThing = 2 + used;
                     if (words.Count >= afterThing + 2 && words[afterThing].Text == "speed")
                     {
-                        spec.AmountNode = TrailingValue(words);
-                        spec.HasNumber = words[words.Count - 1].Type == TokenType.Number;
+                        // `speed 60` or `speed my Speed` — a `my` amount is two tokens, and the
+                        // value no longer has to be the last thing on the line (`around walls`).
+                        spec.AmountNode = ValueNodeAt(words, afterThing + 1, out int speedUsed);
+                        spec.HasNumber = words[afterThing + 1].Type == TokenType.Number;
                         if (spec.HasNumber)
-                            spec.Number = words[words.Count - 1].Number;
+                            spec.Number = words[afterThing + 1].Number;
+                        afterThing += 1 + speedUsed;
                     }
                     else
                     {
                         spec.Number = 5;
                         spec.HasNumber = true;
                     }
-                    return Finish(spec, ActionVerb.Move, words, words.Count);
+                    // `around walls` (Task 7 G2): the bridge corner-samples this chase instead of
+                    // walking straight into the obstacle. Absent = today's straight line.
+                    if (words.Count >= afterThing + 2 &&
+                        words[afterThing].Text == "around" && words[afterThing + 1].Text == "walls")
+                    {
+                        spec.AroundWalls = true;
+                        afterThing += 2;
+                    }
+                    return Finish(spec, ActionVerb.Move, words, afterThing);
                 }
                 return Unknown(spec, words, "\"move toward\" needs a target, like \"move toward Player speed 2\"", warn);
             }

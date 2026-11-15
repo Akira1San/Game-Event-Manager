@@ -610,13 +610,33 @@ namespace Game
                         var target = ResolveThing(context, spec.Thing) as Actor;
                         if (target != null)
                         {
-                            Vector3 delta = target.Position - me.Position;
-                            float length = delta.Length;
-                            if (length > 0.001f)
-                                MoveSubject(me, delta / length, ResolveNumber(context, spec), mode);
+                            double speed = ResolveNumber(context, spec);
+                            if (spec.AroundWalls)
+                            {
+                                // `move toward <thing> ... around walls` (Task 7 G2): steer around
+                                // what blocks the chase. One probe while clear; a short fan or a
+                                // wall tangent only when it is blocked.
+                                Vector3 steered = SteerAroundWalls(context, me, target, speed);
+                                if (steered != Vector3.Zero)
+                                    MoveSubject(me, steered, speed, mode);
+                            }
+                            else
+                            {
+                                // A plain chase ends any wall negotiation from an earlier line.
+                                context.Runtime.Steering.Clear(me);
+                                Vector3 delta = target.Position - me.Position;
+                                float length = delta.Length;
+                                if (length > 0.001f)
+                                    MoveSubject(me, delta / length, speed, mode);
+                            }
+                        }
+                        else
+                        {
+                            context.Runtime.Steering.Clear(me);
                         }
                         break;
                     }
+                    context.Runtime.Steering.Clear(me);
                     MoveSubject(me, DirectionOf(me, spec.Dir), ResolveNumber(context, spec), mode);
                     break;
                 }
@@ -630,6 +650,8 @@ namespace Game
                     if (mover != null && context.Sheet != null && context.Sheet.UsePhysicsMovement)
                         BrakeBody(mover);
                     context.Runtime.Wander.Clear(mover);
+                    // A cancelled chase forgets its committed side, so the next one starts fresh.
+                    context.Runtime.Steering.Clear(mover);
                     break;
                 }
                 case ActionVerb.Wander:
@@ -1516,6 +1538,117 @@ namespace Game
                         subject.Position = subject.Position + direction * step;
                     break;
             }
+        }
+
+        /// <summary>
+        /// `move toward &lt;thing&gt; ... around walls` (Task 7 Part G2): one steering tick for a
+        /// direct chase. The straight probe is the only ray while the way is clear; when it is
+        /// blocked (or the actor is stuck) the pure <see cref="WallSteering"/> rule picks a clear
+        /// fan deviation or the wall tangent, and the result goes through the normal
+        /// <see cref="MoveSubject"/>, so transform, dynamic, kinematic and character movement all
+        /// behave the same. Returns the heading to move along (the straight bearing when nothing
+        /// needs avoiding).
+        /// </summary>
+        private static Vector3 SteerAroundWalls(EventContext context, Actor me, Actor target, double speed)
+        {
+            WallSteering steering = context.Runtime.Steering;
+            Vector3 delta = target.Position - me.Position;
+            Vector3 bearing = new Vector3(delta.X, 0f, delta.Z);
+            float distance = bearing.Length;
+            if (distance < 0.001f)
+            {
+                steering.Clear(me);
+                return Vector3.Zero;
+            }
+            bearing = Vector3.Normalize(bearing);
+
+            // Probe by the actor's own half-width past the collider centre, so a box stops at the
+            // wall instead of sinking half into it (the same rule `wander` uses).
+            float radius = TryColliderFootprint(me, out float halfWidth, out _) ? halfWidth : 0f;
+            float probe = Math.Min(distance, (float)WallSteering.Probe + radius);
+            float lookahead = (float)WallSteering.Lookahead + radius;
+
+            bool directClear = !WallAhead(me, target, bearing, probe, out Vector3 normal);
+
+            Vector3 forward = Vector3.Transform(Vector3.Forward, me.Orientation);
+            Vector3 flatForward = new Vector3(forward.X, 0f, forward.Z);
+            if (flatForward.LengthSquared < 1e-8f)
+                flatForward = bearing;
+
+            var query = new SteerQuery
+            {
+                Actor = me,
+                DeltaTime = DeltaTime,
+                X = me.Position.X,
+                Z = me.Position.Z,
+                ForwardX = flatForward.X,
+                ForwardZ = flatForward.Z,
+                BearingX = bearing.X,
+                BearingZ = bearing.Z,
+                DirectClear = directClear,
+                HasHitNormal = !directClear,
+                HitNormalX = normal.X,
+                HitNormalZ = normal.Z,
+                // A fan ray is a wall probe at the same lookahead as the direct one: blocked only
+                // by something solid that is neither the chaser nor the thing it is chasing.
+                IsClear = deviation =>
+                    !WallAhead(me, target, RotateHeading(bearing, deviation), lookahead, out _),
+                // "Stuck" means moving less than a quarter of what this speed should cover, so a
+                // slow chaser is not called stuck just because its steps are short.
+                MinStep = Math.Max(0.001, Math.Abs(speed) * DeltaTime * 0.25),
+            };
+
+            SteerChoice choice = steering.Step(query);
+            if (!choice.Steer)
+                return bearing;
+            return new Vector3((float)choice.HeadingX, 0f, (float)choice.HeadingZ);
+        }
+
+        /// <summary>
+        /// One horizontal probe from the actor's collider centre. True when something that is
+        /// neither the actor (or its children) nor the chase target (or its children) is in the
+        /// way; <paramref name="normal"/> is the surface that blocked it, for the tangent fallback.
+        /// </summary>
+        private static bool WallAhead(
+            Actor me, Actor ignore, Vector3 heading, float distance, out Vector3 normal)
+        {
+            normal = Vector3.Up;
+            Vector3 flat = new Vector3(heading.X, 0f, heading.Z);
+            if (distance <= 0f || flat.LengthSquared < 1e-8f)
+                return false;
+            flat = Vector3.Normalize(flat);
+            Vector3 start = ColliderCastPoint(me);
+            if (!Physics.LineCastAll(start, start + flat * distance, out var hits, ~0u, true))
+                return false;
+            foreach (var hit in hits)
+            {
+                var hitActor = hit.Collider as Actor;
+                if (hitActor == null)
+                {
+                    normal = hit.Normal;
+                    return true; // geometry without an actor (terrain, a bare collider, ...)
+                }
+                if (IsAncestorOrSelf(me, hitActor))
+                    continue; // the chaser's own collider (or a child's)
+                if (ignore != null && IsAncestorOrSelf(ignore, hitActor))
+                    continue; // the target is not a wall
+                normal = hit.Normal;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>Rotates a ground heading by a signed number of degrees (+ = toward +X, the
+        /// actor's right when it faces +Z), matching <see cref="WallSteering"/>'s deviation sign.</summary>
+        private static Vector3 RotateHeading(Vector3 heading, double degrees)
+        {
+            double radians = degrees * Math.PI / 180.0;
+            float cos = (float)Math.Cos(radians);
+            float sin = (float)Math.Sin(radians);
+            return new Vector3(
+                heading.X * cos + heading.Z * sin,
+                0f,
+                heading.Z * cos - heading.X * sin);
         }
 
         /// <summary>
@@ -4232,6 +4365,8 @@ namespace Game
                 AnimStates.Remove(actor);
             }
             ParticleStates.Remove(actor);
+            // A destroyed actor's committed chase side must not outlive it in the steering table.
+            EventsManager.Instance?.Runtime?.Steering.Clear(actor);
         }
 
         /// <summary>Animation asset key/alias to asset id, built from the registry once per play session.</summary>

@@ -635,7 +635,7 @@ wants Variant 2 or NavMesh `goto`.
 - [ ] Editor play check in `TK4_LOS_Test` (bake the NavMesh once): patrol → chase in the open →
       wall breaks the ray → hunt reacquires → 6 s give-up → patrol — pending user's editor run.
 
-### Part G2 — Wall negotiation for the no-NavMesh chase (C#, proposed) `[ ]`
+### Part G2 — Wall negotiation for the no-NavMesh chase (C#, proposed) `[x]`
 Goal: let the line-of-sight chaser **round** an obstacle instead of walking into it or giving up, so
 Variant 1 also works in rooms and around corners without a baked NavMesh. This is the C# counterpart
 to Part G1's events-only `hunt` arc (a blind sweep, not route planning). Not a NavMesh replacement:
@@ -660,35 +660,56 @@ the normal. The bridge already owns the raycast for `me sees` (`FlaxWorld.HasLin
 need colliders — the same requirement the existing sight check already has.
 
 **Word contract (keep existing `.events` untouched):**
-- [ ] Qualifier `move toward <thing> speed <n> around walls` — `WordRegistry` + parser + an
+- [x] Qualifier `move toward <thing> speed <n> around walls` — `WordRegistry` + parser + an
       `ActionSpec` flag. Absent = today's straight line, so no existing file changes.
-- [ ] If the qualifier reads badly, fall back to a separate action word `chase <thing> speed <n>`.
-      Decide before implementing (record in DESIGN §9).
+- [x] If the qualifier reads badly, fall back to a separate action word `chase <thing> speed <n>`.
+      Decide before implementing (record in DESIGN §9). **Decision:** the qualifier reads well
+      (`move toward player speed 60 around walls`), so `chase` was not added.
 
 **Implementation plan**
-- [ ] Pure rules in `Runtime/Steering.cs` (no Flax, unit tested): pick the smallest clear deviation
+- [x] Pure rules in `Runtime/Steering.cs` (no Flax, unit tested): pick the smallest clear deviation
       from a per-degree clear/blocked fan, clamp the fan to a per-tick ray budget (≤7 rays), choose a
       wall tangent from a normal, and detect "stuck" (displacement below epsilon while a move is
       active for ~0.4 s).
-- [ ] Bridge in `FlaxActions`: blocked test = a straight probe toward the target (or `probe` units)
+- [x] Bridge in `FlaxActions`: blocked test = a straight probe toward the target (or `probe` units)
       via `Physics.LineCastAll`, ignoring self/descendants and the target; run **only** while a
-      `move toward` chase is active and only when that probe is blocked (zero rays when clear).
-- [ ] Steering output feeds the existing `MoveSubject`, so it works in every move mode
+      `move toward` chase is active and only when that probe is blocked (zero fan rays when clear).
+- [x] Steering output feeds the existing `MoveSubject`, so it works in every move mode
       (`Transform`, `Dynamic`, `Kinematic`, `CharacterController`).
-- [ ] Stuck fallback: if the actor barely moves for 0.4 s while chasing, force one sampling cycle
+- [x] Stuck fallback: if the actor barely moves for 0.4 s while chasing, force one sampling cycle
       even when the direct probe reads clear (concave corners).
-- [ ] Hysteresis: once a side is chosen, keep it for ~0.3 s so the actor cannot vibrate left/right.
-- [ ] Never run during `hunt` (G1's arc) or `goto` (the NavMesh already routes).
+- [x] Hysteresis: once a side is chosen, keep it for ~0.3 s so the actor cannot vibrate left/right.
+- [x] Never run during `hunt` (G1's arc) or `goto` (the NavMesh already routes).
 
 **Done-when**
 - [ ] Player steps behind one corner: the enemy rounds it and reacquires via `sees player` instead
-      of falling into `hunt`/patrol.
-- [ ] Head-on wall with both sides open: picks the smaller deviation, no left/right vibration.
-- [ ] No raycasts while the direct path is clear; ≤7 rays per blocked tick per actor.
+      of falling into `hunt`/patrol. **(editor run pending: `Enemy_Walls.events` on a second enemy
+      in `TK4_LOS_Test`)**
+- [x] Head-on wall with both sides open: picks the smaller deviation, no left/right vibration.
+      (pure checks: smallest-clear fan order, 0.3 s hysteresis, lean-aware tie-break)
+- [x] No raycasts while the direct path is clear; ≤7 rays per blocked tick per actor.
+      (one probe ray while clear, zero fan rays; 6 fan rays + the probe at the default budget)
 - [ ] Verified in all four move modes (transform, dynamic, kinematic, character).
-- [ ] Opt-in only: existing scenes and `.events` behave exactly as before.
-- [ ] Concave pockets (U-shapes) still fall back to `hunt`/patrol — documented limit, not a bug.
-- [ ] Record the corner-sampling vs wall-following decision and any vocabulary friction in DESIGN §9.
+      **Editor run pending** — the steering only produces a heading, so it reaches the body through
+      the existing `MoveSubject`; this is the same hand-off Task 12 tested per mode.
+- [x] Opt-in only: existing scenes and `.events` behave exactly as before.
+- [x] Concave pockets (U-shapes) still fall back to `hunt`/patrol — documented limit, not a bug.
+- [x] Record the corner-sampling vs wall-following decision and any vocabulary friction in DESIGN §9.
+
+**As shipped (2026-11-15):** `Runtime/Steering.cs` (`WallSteering` + `SteerQuery`/`SteerChoice`,
+per-actor `SteerState` on `EventRuntime.Steering`); `ActionSpec.AroundWalls` parsed by `ActionWords`
+(speed may be a literal or `my <name>`, the qualifier may follow either); `FlaxActions.SteerAroundWalls`
++ `WallAhead` probe (collider-centre start, self/children and target/children ignored, surface normal
+handed to the tangent fallback) feeding `MoveSubject`; cleared by a plain move, `stop moving`, and
+destroy. `WordRegistry` + `keywords.html` rows and the full decision record in DESIGN §9.
+**Companion sheet:** `Source/Game/GameFiles/Enemy_Walls.events` (new file; `Enemy_LOS.events` and
+`TK4Controls.scene` untouched) is G1's chase plus the qualifier and a 1.5 s `round` state, because
+G1 flips to `hunt` the moment the sight ray breaks — the sheet has to keep chasing while the C#
+rounds the corner, then hand over to the blind arc. **Tests:** 19 new pure checks (parser opt-in,
+fan order/budget, smallest deviation, both sides, hysteresis + expiry + tie-break, clear = one ray,
+stuck force-sampling and reset, tangent + flip, blind fan ray cap, clear/reset, companion sheet)
+→ **1340/1340 green**. Module build: 0 errors (7 pre-existing XML-doc warnings elsewhere) —
+**editor play checks still yours** (bake the NavMesh once for the patrol; the chase needs none).
 
 **Out of scope:** agent-to-agent avoidance, separation/flocking, and full local pathfinding.
 Variant 2 (waypoint graph) and NavMesh `goto` remain the answers for corridors and long routes.

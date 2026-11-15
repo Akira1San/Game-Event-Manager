@@ -7506,6 +7506,193 @@ foreach (var shippedEvent in shippedZombieSheet.Events)
             zombieReadsStats = true;
 Check(zombieReadsStats, "Zombie.events still gets its stats from `enemy type \"Zombie\"`");
 
+// ---- Task 7 Part G2: wall negotiation for the no-NavMesh chase (C# steering) ----
+
+// The word contract: an opt-in qualifier on the existing chase, so no sheet has to change.
+var wallsSpec = ActionWords.Parse(
+    RawWords(parser, "when me appears\n  move toward player speed 60 around walls\n"), _ => { });
+Check(wallsSpec.Verb == ActionVerb.Move && wallsSpec.Thing == "player" && wallsSpec.AroundWalls &&
+      wallsSpec.HasNumber && Math.Abs(wallsSpec.Number - 60) < 0.0001 && wallsSpec.Leftover.Count == 0,
+    "`move toward player speed 60 around walls` parses with the opt-in flag and its speed");
+
+var wallsDefaultSpeed = ActionWords.Parse(
+    RawWords(parser, "when me appears\n  move toward player around walls\n"), _ => { });
+Check(wallsDefaultSpeed.AroundWalls && wallsDefaultSpeed.HasNumber &&
+      Math.Abs(wallsDefaultSpeed.Number - 5) < 0.0001 && wallsDefaultSpeed.Leftover.Count == 0,
+    "`around walls` keeps the default speed 5 when no `speed` is written");
+
+var wallsMySpeed = ActionWords.Parse(
+    RawWords(parser, "when me appears\n  move toward player speed my Speed around walls\n"), _ => { });
+Check(wallsMySpeed.AroundWalls && wallsMySpeed.AmountNode is VariableValue wallsSpeedValue &&
+      wallsSpeedValue.Owner == "my" && wallsSpeedValue.Name == "Speed",
+    "`move toward ... speed my Speed around walls` reads the pace from a variable");
+
+var straightChase = ActionWords.Parse(
+    RawWords(parser, "when me appears\n  move toward player speed 60\n"), _ => { });
+Check(!straightChase.AroundWalls && straightChase.HasNumber &&
+      Math.Abs(straightChase.Number - 60) < 0.0001,
+    "the plain chase stays a straight line — wall negotiation is opt-in only");
+
+var gotoWalls = ActionWords.Parse(
+    RawWords(parser, "when me appears\n  goto player around walls\n"), _ => { });
+Check(gotoWalls.Verb == ActionVerb.Goto && !gotoWalls.AroundWalls &&
+      gotoWalls.Leftover.Any(token => token.Text == "walls"),
+    "`around walls` is not a `goto` qualifier — the NavMesh already routes");
+
+// The fan spends the whole per-tick budget on the innermost deviations, both sides.
+var fanAngles = WallSteering.FanCandidates(SteerSide.Right, WallSteering.MaxRaysPerTick);
+Check(fanAngles.Count == 6 &&
+      fanAngles[0] == 15 && fanAngles[1] == -15 &&
+      fanAngles[2] == 30 && fanAngles[3] == -30 &&
+      fanAngles[4] == 45 && fanAngles[5] == -45,
+    "the fan tries ±15/30/45 smallest-first within its 7-ray budget");
+
+// A blocked direct probe samples the fan and steers at the smallest clear deviation.
+static SteerQuery MakeSteerQuery(object actor, double x, double z, bool directClear, Func<double, bool> isClear)
+{
+    return new SteerQuery
+    {
+        Actor = actor,
+        DeltaTime = 0.1,
+        X = x,
+        Z = z,
+        ForwardX = 0,
+        ForwardZ = 1,
+        BearingX = 0,
+        BearingZ = 1,
+        DirectClear = directClear,
+        IsClear = isClear,
+        MinStep = 0.5,
+    };
+}
+
+var steerActor = new FakeActor("Enemy_Walls");
+var wallSteering = new WallSteering();
+var steeredAngles = new List<double>();
+var steerChoice = wallSteering.Step(MakeSteerQuery(steerActor, 0, 0, false, angle =>
+{
+    steeredAngles.Add(angle);
+    return Math.Abs(angle - 15) < 0.001;
+}));
+Check(steerChoice.Steer && Math.Abs(steerChoice.DeviationDegrees - 15) < 0.001 &&
+      steerChoice.Side == SteerSide.Right && steerChoice.RaysCast == 2 && steeredAngles.Count == 1 &&
+      Math.Abs(steerChoice.HeadingX - Math.Sin(Math.PI / 12)) < 0.001 &&
+      Math.Abs(steerChoice.HeadingZ - Math.Cos(Math.PI / 12)) < 0.001,
+    "a blocked chase picks the smallest clear deviation (15° right) after two rays");
+
+// Only the left side is clear: the same rule picks it.
+var leftActor = new FakeActor("Enemy_Walls_Left");
+var leftSteering = new WallSteering();
+var leftChoice = leftSteering.Step(MakeSteerQuery(leftActor, 0, 0, false, angle => angle < 0));
+Check(leftChoice.Steer && Math.Abs(leftChoice.DeviationDegrees + 15) < 0.001 &&
+      leftChoice.Side == SteerSide.Left && leftChoice.RaysCast == 3,
+    "a wall only on the right steers 15° left instead");
+
+// Hysteresis: once a side is chosen, an equally-clear tick keeps it (no vibration).
+var hysteresisTicks = new List<double>();
+for (int i = 0; i < 3; i++)
+    hysteresisTicks.Add(leftSteering.Step(MakeSteerQuery(leftActor, 0, 0, false, _ => true)).DeviationDegrees);
+Check(hysteresisTicks.All(deviation => deviation < 0) &&
+      Math.Abs(hysteresisTicks[0] + 15) < 0.001,
+    "the chosen side sticks for ~0.3 s even when both sides become clear");
+
+// ... and after the window the actor's own lean breaks the tie, so it may switch once.
+var leanedQuery = MakeSteerQuery(leftActor, 0, 0, false, _ => true);
+leanedQuery.ForwardX = -0.2588; // 15° left of the bearing
+leanedQuery.ForwardZ = 0.9659;
+var leanedChoice = leftSteering.Step(leanedQuery);
+Check(leanedChoice.Side == SteerSide.Left && leanedChoice.DeviationDegrees < 0,
+    "when both sides are equally clear the smaller turn (the actor's own lean) wins");
+
+// A clear direct path spends exactly the one probe ray and no fan rays.
+int fanRays = 0;
+var clearChoice = new WallSteering().Step(MakeSteerQuery(
+    new FakeActor("Enemy_Clear"), 0, 0, true, _ => { fanRays++; return true; }));
+Check(!clearChoice.Steer && clearChoice.RaysCast == 1 && fanRays == 0,
+    "a clear chase casts the probe only — zero fan rays");
+
+// Stuck fallback: standing still for 0.4 s forces a sampling cycle even though the probe is clear.
+var stuckActor = new FakeActor("Enemy_Stuck");
+var stuckSteering = new WallSteering();
+var stuckFirst = stuckSteering.Step(MakeSteerQuery(stuckActor, 0, 0, true, angle => Math.Abs(angle + 15) < 0.001));
+Check(!stuckFirst.Steer && stuckFirst.RaysCast == 1,
+    "a clear path does not sample before the stuck window elapses");
+for (int i = 0; i < 3; i++)
+    stuckSteering.Step(MakeSteerQuery(stuckActor, 0, 0, true, angle => Math.Abs(angle + 15) < 0.001));
+var stuckChoice = stuckSteering.Step(MakeSteerQuery(stuckActor, 0, 0, true, angle => Math.Abs(angle + 15) < 0.001));
+Check(stuckChoice.Stuck && stuckChoice.Steer &&
+      Math.Abs(stuckChoice.DeviationDegrees + 15) < 0.001 && stuckChoice.RaysCast == 3,
+    "a stuck chase (0.4 s without moving) samples the fan even when the probe reads clear");
+
+// Moving again clears the stuck timer.
+var unstuckActor = new FakeActor("Enemy_Unstuck");
+var unstuckSteering = new WallSteering();
+unstuckSteering.Step(MakeSteerQuery(unstuckActor, 0, 0, true, _ => true));
+unstuckSteering.Step(MakeSteerQuery(unstuckActor, 5, 0, true, _ => true));
+var unstuckChoice = unstuckSteering.Step(MakeSteerQuery(unstuckActor, 10, 0, true, _ => true));
+Check(!unstuckChoice.Steer && unstuckChoice.RaysCast == 1,
+    "walking again clears the stuck timer (no forced sampling)");
+
+// No fan ray clear: the wall tangent of the hit that blocked the probe is followed instead.
+var tangentQuery = MakeSteerQuery(new FakeActor("Enemy_Tangent"), 0, 0, false, _ => false);
+tangentQuery.HasHitNormal = true;
+tangentQuery.HitNormalX = 0;
+tangentQuery.HitNormalZ = 1; // a wall facing back along the +Z approach
+var tangentChoice = new WallSteering().Step(tangentQuery);
+Check(tangentChoice.Steer && tangentChoice.Tangent &&
+      Math.Abs(tangentChoice.DeviationDegrees - 90) < 0.001 &&
+      Math.Abs(tangentChoice.HeadingX - 1) < 0.001 && Math.Abs(tangentChoice.HeadingZ) < 0.001 &&
+      tangentChoice.RaysCast == WallSteering.MaxRaysPerTick,
+    "a wall wider than the fan falls back to its tangent, still within 7 rays");
+
+// The tangent flips to the side that makes progress toward a target behind the actor.
+var tangentBackQuery = MakeSteerQuery(new FakeActor("Enemy_Tangent_Back"), 0, 0, false, _ => false);
+tangentBackQuery.BearingX = -1;
+tangentBackQuery.BearingZ = 0;
+tangentBackQuery.ForwardX = -1;
+tangentBackQuery.HitNormalX = 0;
+tangentBackQuery.HitNormalZ = 1;
+tangentBackQuery.HasHitNormal = true;
+var tangentBackChoice = new WallSteering().Step(tangentBackQuery);
+Check(tangentBackChoice.Steer && Math.Abs(tangentBackChoice.HeadingX + 1) < 0.001,
+    "the wall tangent is flipped to the side that points at the target");
+
+// Nothing clear and no normal to follow: keep the straight bearing, but never overspend rays.
+var blindChoice = new WallSteering().Step(MakeSteerQuery(
+    new FakeActor("Enemy_Blind"), 0, 0, false, _ => false));
+Check(!blindChoice.Steer && blindChoice.RaysCast == WallSteering.MaxRaysPerTick,
+    "a fully blocked fan with no hit normal keeps the bearing after exactly 7 rays");
+
+// `stop moving` / a plain move forgets the committed side so the next chase starts fresh.
+var forgetActor = new FakeActor("Enemy_Forget");
+var forgetSteering = new WallSteering();
+forgetSteering.Step(MakeSteerQuery(forgetActor, 0, 0, false, _ => true));
+forgetSteering.Clear(forgetActor);
+var freshQuery = MakeSteerQuery(forgetActor, 0, 0, false, _ => true);
+freshQuery.ForwardX = -0.2588;
+freshQuery.ForwardZ = 0.9659;
+Check(forgetSteering.Step(freshQuery).DeviationDegrees < 0,
+    "clearing the steering state lets the smaller-turn tie-break decide again");
+
+// The G2 companion sheet: the chase carries the qualifier and the corner round-trip is events-only.
+var wallsProgram = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Enemy_Walls.events"));
+bool wallsChaseUsesQualifier = false;
+int wallsChaseBlocks = 0;
+foreach (var wallsEvent in wallsProgram.Events)
+{
+    foreach (var wallsLine in wallsEvent.Body)
+    {
+        if (wallsLine.Words.Count < 2 || wallsLine.Words[0].Text != "move" ||
+            wallsLine.Words[1].Text != "toward")
+            continue;
+        wallsChaseBlocks++;
+        if (wallsLine.Words.Any(word => word.Text == "walls"))
+            wallsChaseUsesQualifier = true;
+    }
+}
+Check(wallsProgram.Events.Count == 7 && wallsChaseBlocks == 1 && wallsChaseUsesQualifier,
+    "Enemy_Walls.events parses and its chase is the wall-aware move");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

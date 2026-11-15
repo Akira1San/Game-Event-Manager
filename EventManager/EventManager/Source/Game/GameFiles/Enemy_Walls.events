@@ -1,0 +1,68 @@
+# ---------------- Enemy_Walls.events (Task 7 Part G2: a chase that rounds corners) ----------------
+# The Part G1 line-of-sight chase with one opt-in qualifier:
+#
+#     move toward player speed 60 around walls
+#
+# While that chase runs, the C# bridge corner-samples: the straight probe toward the player is
+# tested first, and only when it is blocked (or the enemy is stuck) does a short ray fan or the
+# wall tangent pick a heading around the obstacle. Patrol still uses `goto` (NavMesh), so this
+# variant needs no baked NavMesh for the chase itself — but the walls DO need colliders, the
+# same requirement `me sees` already has.
+#
+# Difference from Enemy_LOS.events: losing the sight ray behind a corner no longer flips
+# straight to `hunt`. The sheet keeps chasing for 1.5 s while the steering rounds the corner;
+# `sees player` cancels the hand-off by switching the mode back to "chase". Only when there is
+# really no way round does it fall into G1's blind `hunt` arc, then back to patrol.
+#
+# Isolation: Enemy_LOS.events and TK4Controls.scene are untouched. Attach this sheet to a
+# second enemy (an explicit EventSheet component, or an actor named Enemy_Walls) to compare.
+
+when me appears
+  enemy type "Zombie"
+  set my mode to "patrol"
+  print "Enemy_Walls: patrol start"
+  goto random Waypoint speed 100 facing forward
+
+when me arrives at Waypoint
+  my mode is "patrol"                        # don't hijack a hunt or chase
+  my Speed is higher than 0
+  wait random 0.5 to 2 seconds
+  goto random Waypoint speed 100
+
+when me sees player by my SightDistance
+  set my mode to "chase"
+  stop moving                                # cancel the patrol goto — the chase is direct
+  print "Enemy_Walls: chase start"
+
+# ---- sight broke: round the corner first, hunt only if there is no way through ----
+when me stops seeing player
+  my mode is "chase"
+  set my mode to "round"
+  print "Enemy_Walls: sight broke, rounding the corner"
+  wait 1.5 seconds
+  my mode is "round"                         # still round (never reacquired)? hand over to hunt
+  set my mode to "hunt"
+  print "Enemy_Walls: no way round, hunting"
+  wait 6 seconds
+  my mode is "hunt"                          # still hunting? back to patrol
+  set my mode to "patrol"
+  print "Enemy_Walls: hunt gave up, back to patrol"
+  goto random Waypoint speed 100
+
+# G1's blind arc: not pathfinding, a sweep that reacquires the moment a ray clears.
+when every 0.5 seconds
+  my mode is "hunt"
+  turn left degrees 45
+  move forward speed 40
+
+# Chase AND round steer with the wall-aware move; patrol and hunt leave it alone.
+when every 0.02 seconds
+  my mode is not "patrol"
+  my mode is not "hunt"
+  my Speed is higher than 0                  # a rooted type stays still
+  move toward player speed 60 around walls
+
+when me is near player by 1.5
+  my mode is "chase"
+  my Hostile is true
+  send message "hurt" to nearest player

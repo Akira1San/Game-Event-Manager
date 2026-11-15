@@ -217,6 +217,9 @@ namespace Game
         public TerrainMap Terrain = new TerrainMap();
         /// <summary>Random-angle wander legs and still mode per actor (Task 16 Part A).</summary>
         public Wanderer Wander = new Wanderer();
+        /// <summary>Corner sampling / wall negotiation behind `move toward ... around walls`
+        /// (Task 7 Part G2). Per-actor state, cleared by a plain move or a destroyed actor.</summary>
+        public WallSteering Steering = new WallSteering();
         /// <summary>Per-player key / gamepad bindings (Task 16 input follow-ups).</summary>
         public PlayerInput Input = new PlayerInput();
         /// <summary>Recent sounds that `when me hears` / `me hears` poll (Task 16 Part B).</summary>
