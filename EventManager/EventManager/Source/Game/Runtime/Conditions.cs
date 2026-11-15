@@ -919,9 +919,13 @@ namespace Game
 
         private static VariableResolver ContextResolver(EventContext context)
         {
-            return variable => variable.Owner == "my"
-                ? context.ReadMy(variable.Name)
-                : context.ReadGlobal(variable.Name);
+            return variable =>
+            {
+                ValueBox value = variable.Owner == "my"
+                    ? context.ReadMy(variable.Name)
+                    : context.ReadGlobal(variable.Name);
+                return variable.Negated ? ValueBox.OfNumber(-value.AsNumber()) : value;
+            };
         }
     }
 }

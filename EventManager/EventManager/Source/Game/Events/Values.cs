@@ -27,6 +27,10 @@ namespace Game
     {
         public string Owner = "";
         public string Name = "";
+        /// <summary>Written with a leading minus (<c>-my DamageTaken</c>): the value is read
+        /// and then negated, so one action can spend a captured amount — like
+        /// <c>add -my DamageTaken to Health</c> (Task 18 Part G).</summary>
+        public bool Negated;
     }
 
     public class RandomRangeValue : ValueNode

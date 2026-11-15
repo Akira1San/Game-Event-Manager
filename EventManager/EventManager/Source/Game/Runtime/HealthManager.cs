@@ -47,6 +47,10 @@ namespace Game
 
         private static readonly Dictionary<string, string> Aliases = BuildAliases();
 
+        /// <summary>Every spelling a sheet may have stored a stat under, in read order. A sheet
+        /// that writes `my Max Health` keeps that spelling; the stat is still the same value.</summary>
+        private static readonly Dictionary<string, string[]> Spellings = BuildSpellings();
+
         private static Dictionary<string, string> BuildAliases()
         {
             var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -62,6 +66,25 @@ namespace Game
         {
             foreach (string name in names)
                 map[Normalize(name)] = stat;
+        }
+
+        private static Dictionary<string, string[]> BuildSpellings()
+        {
+            return new Dictionary<string, string[]>(StringComparer.Ordinal)
+            {
+                [Health] = new[] { "Health", "health", "HP", "hp", "Hit Points", "hit points" },
+                [MaxHealth] = new[]
+                {
+                    "MaxHealth", "maxhealth", "Max Health", "max health",
+                    "MaxHP", "maxhp", "Max HP", "max hp", "Max Hit Points", "max hit points",
+                },
+                [Shield] = new[] { "Shield", "shield", "Shields", "shields" },
+                [MaxShield] = new[]
+                {
+                    "MaxShield", "maxshield", "Max Shield", "max shield", "Max Shields", "max shields",
+                },
+                [Armor] = new[] { "Armor", "armor", "Armour", "armour" },
+            };
         }
 
         /// <summary>Trims, collapses whitespace and lowercases a written name for lookup.</summary>
@@ -247,7 +270,7 @@ namespace Game
         /// <summary>The spellings a canonical stat can have been stored under.</summary>
         private static string[] Candidate(string stat)
         {
-            return new[] { stat, stat.ToLowerInvariant() };
+            return Spellings.TryGetValue(stat, out string[] names) ? names : new[] { stat };
         }
 
         private static bool HasAny(EventVariables variables, object actor, string[] names)

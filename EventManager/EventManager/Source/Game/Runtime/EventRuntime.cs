@@ -92,17 +92,21 @@ namespace Game
             {
                 // `my bag` / `my state` / `my spawnedFrom` are computed inside ReadMy, so
                 // values and conditions share one implementation.
+                ValueBox value;
                 if (variable.Owner == "my" || variable.Owner == "me")
-                    return ReadMy(variable.Name);
-                if (variable.Owner == "other")
-                    return ReadOther(variable.Name);
+                    value = ReadMy(variable.Name);
+                else if (variable.Owner == "other")
+                    value = ReadOther(variable.Name);
                 // `Player's gold` — a named actor's `my` variable (read-only)
-                if (variable.Owner.Length > 0)
+                else if (variable.Owner.Length > 0)
                 {
                     var actor = Runtime.FindNamedActor(variable.Owner);
-                    return actor == null ? new ValueBox() : Variables.GetLocal(actor, variable.Name);
+                    value = actor == null ? new ValueBox() : Variables.GetLocal(actor, variable.Name);
                 }
-                return ReadGlobal(variable.Name);
+                else
+                    value = ReadGlobal(variable.Name);
+                // `-my DamageTaken` — read, then negate (Task 18 Part G).
+                return variable.Negated ? ValueBox.OfNumber(-value.AsNumber()) : value;
             };
 
         public ValueBox Evaluate(ValueNode node)

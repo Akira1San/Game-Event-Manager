@@ -532,6 +532,15 @@ namespace Game
             }
             if (t.Type == TokenType.Word)
             {
+                // `-my DamageTaken`, `-Score` — a negated value (Task 18 Part G): the lexer keeps
+                // the sign attached to the first word, so a captured damage number can be spent in
+                // one action, `add -my DamageTaken to Health`.
+                if (t.Text.Length > 1 && t.Text[0] == '-' && !char.IsDigit(t.Text[1]))
+                {
+                    var negated = ReadNegatedValue(words, ref index, flagLine);
+                    if (negated != null)
+                        return negated;
+                }
                 // `other's damage`, `Player's gold` — read another actor's `my` variable
                 if (t.Text.EndsWith("'s", StringComparison.Ordinal) && t.Text.Length > 2 &&
                     index + 1 < words.Count && words[index + 1].Type == TokenType.Word)
@@ -544,6 +553,48 @@ namespace Game
                 return ReadVariable(words, ref index, flagLine, "`set`");
             }
             throw new ParseException("a value was expected here — a number, quoted text, or a variable", t.Line);
+        }
+
+        /// <summary>
+        /// Reads a value written with a leading minus: <c>-my DamageTaken</c>, <c>-other's damage</c>
+        /// or a plain global like <c>-Score</c>. Returns null when the word after the sign is not a
+        /// variable the language knows, so the caller can report its usual error.
+        /// </summary>
+        private ValueNode ReadNegatedValue(List<Token> words, ref int index, int flagLine)
+        {
+            var token = words[index];
+            string stripped = token.Text.Substring(1);
+            var negated = new VariableValue { Line = token.Line, Negated = true };
+            if (stripped == "my" || stripped == "me")
+            {
+                if (index + 1 >= words.Count || words[index + 1].Type != TokenType.Word)
+                    throw new ParseException("`-my` needs a variable name right after it — like `-my DamageTaken`", token.Line);
+                negated.Owner = "my";
+                negated.Name = words[index + 1].Text;
+                index += 2;
+                return negated;
+            }
+            if (stripped == "other" || stripped == "other's")
+            {
+                if (stripped == "other's")
+                {
+                    if (index + 1 >= words.Count || words[index + 1].Type != TokenType.Word)
+                        throw new ParseException("`-other's` needs a variable name right after it — like `-other's damage`", token.Line);
+                    negated.Owner = "other";
+                    negated.Name = words[index + 1].Text;
+                    index += 2;
+                    return negated;
+                }
+                negated.Owner = "other";
+                negated.Name = "other";
+                index++;
+                return negated;
+            }
+            if (!char.IsLetter(stripped[0]) || !char.IsUpper(stripped[0]))
+                throw new ParseException($"I can't use \u201C-{stripped}\u201D as a value — after a minus comes `my`, `other's`, or a variable that starts with a capital letter", token.Line);
+            negated.Name = ResourceManager.CanonicalOrName(stripped);
+            index++;
+            return negated;
         }
 
         private ValueNode ReadRangeBound(List<Token> words, ref int index, int flagLine)
@@ -583,6 +634,16 @@ namespace Game
                         return new VariableValue { Line = t.Line, Owner = "my", Name = pair };
                     }
                 }
+                // `my Max Health` / `my Max Shield` — a multiword health stat is one variable
+                // (Task 18 Part G), so it is joined before the single-word rule takes `Max`.
+                if (index + 2 < words.Count && words[index + 1].Type == TokenType.Word &&
+                    words[index + 2].Type == TokenType.Word &&
+                    HealthManager.TryStat(words[index + 1].Text + " " + words[index + 2].Text, out _))
+                {
+                    string pairName = words[index + 1].Text + " " + words[index + 2].Text;
+                    index += 3;
+                    return new VariableValue { Line = t.Line, Owner = "my", Name = pairName };
+                }
                 if (index + 1 < words.Count && words[index + 1].Type == TokenType.Word)
                 {
                     var name = words[index + 1];
@@ -616,6 +677,15 @@ namespace Game
             {
                 index += statUsed;
                 return new VariableValue { Line = t.Line, Name = statName };
+            }
+            // `Max Health` / `Max Shield` — a multiword health stat used without `my` on a
+            // unit's own sheet (Task 18 Part G).
+            if (index + 1 < words.Count && words[index + 1].Type == TokenType.Word &&
+                HealthManager.TryStat(t.Text + " " + words[index + 1].Text, out _))
+            {
+                string statPair = t.Text + " " + words[index + 1].Text;
+                index += 2;
+                return new VariableValue { Line = t.Line, Name = statPair };
             }
             // The run-together spelling `Player1Score` reads as the same variable.
             if (Players.TryReadVariableName(t.Text, out string runTogetherVariable))

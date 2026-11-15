@@ -418,7 +418,7 @@ when order completes
 - `my Shield` / `my MaxShield`
 - `my Armor`
 
-They are ordinary per-actor variables; `HealthManager` only intervenes so writes stay in range. Spellings `Health`, `HP`, `Hit Points`, `Max Health`, `Shield`, `Shields`, `Max Shield`, `Armor`/`Armour` all resolve to the same stat, and the spelling the sheet already used (`my health` vs `my Health`) is preserved.
+They are ordinary per-actor variables; `HealthManager` only intervenes so writes stay in range. Spellings `Health`, `HP`, `Hit Points`, `Max Health`, `Max HP`, `Shield`, `Shields`, `Max Shield`, `Armor`/`Armour` all resolve to the same stat, and the spelling the sheet already used (`my health` vs `my Health`, `my Max Health` vs `my MaxHealth`) is preserved — the multiword and run-together forms both parse and clamp.
 
 **New triggers:**
 - `when my Health becomes 0` — already worked through the generic `when <var> becomes <value>` watcher; it is now guaranteed to fire once, because health clamps at 0.
@@ -456,12 +456,14 @@ when my Health becomes 0
   destroy me
 ```
 
-A single hit of any size can also be applied from the captured number:
+A single hit of any size is applied from the captured number with a negated value —
+`-my`, `-other's`, or a plain global (`-Score`):
 ```
 when message "damage <amount>" arrives
-  set my Health to my Health - my DamageTaken
+  add -my DamageTaken to Health   # armor, then shields, then health — the full pipeline
 ```
-(`set` assigns directly, clamped at 0; use `add -<n> to Health` when armor and shields should soak the hit.)
+`set my Health to my Health - my DamageTaken` also works when the sheet wants to assign
+directly (clamped at 0, but no armor/shield soaking).
 
 ## New Code Foundations Required
 

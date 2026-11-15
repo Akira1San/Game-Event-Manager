@@ -6405,6 +6405,61 @@ healthEngine.Tick(20);
 Check(healthEngine.Variables.GetGlobal("Died").AsNumber() == 1,
       "hits on a dead unit do not refire `when my Health becomes 0`");
 
+// Part G follow-up: a negated variable as a value, so one action can spend a captured amount.
+var negatedAdd = parser.Parse("when me appears\n  add -my DamageTaken to Health\n")
+    .Events[0].Body[0].Statement as AddNode;
+Check(negatedAdd?.Amount is VariableValue negatedAmount && negatedAmount.Owner == "my" &&
+      negatedAmount.Name == "DamageTaken" && negatedAmount.Negated,
+      "`add -my DamageTaken to Health` parses the negated amount");
+
+var negatedSet = parser.Parse("when me appears\n  set Score to -my DamageTaken\n")
+    .Events[0].Body[0].Statement as SetNode;
+Check(negatedSet?.Value is VariableValue negatedValue && negatedValue.Negated &&
+      negatedValue.Name == "DamageTaken",
+      "`set Score to -my DamageTaken` keeps the negation on the value");
+
+var negatedGlobalSet = parser.Parse("when me appears\n  set Debt to -Score\n")
+    .Events[0].Body[0].Statement as SetNode;
+Check(negatedGlobalSet?.Value is VariableValue negatedGlobal && negatedGlobal.Negated &&
+      negatedGlobal.Name == "Score",
+      "`set Debt to -Score` negates a plain global");
+
+var negatedEngine = FreshEngine(new FakeWorld());
+var gladiator = new FakeActor("Gladiator");
+negatedEngine.AddSheet(gladiator, parser.Parse(@"when me appears
+  set my MaxHealth to 40
+  set my Health to 40
+  set my MaxShield to 10
+  set my Shield to 10
+
+when message ""damage <amount>"" arrives
+  add -my DamageTaken to Health"));
+negatedEngine.Tick(0);
+negatedEngine.SendRawMessage(new PushSignal { Kind = TriggerKind.Message, Name = "damage 25" }, "Gladiator");
+negatedEngine.Tick(1);
+Check(negatedEngine.Variables.GetLocal(gladiator, "Health").AsNumber() == 25 &&
+      negatedEngine.Variables.GetLocal(gladiator, "Shield").AsNumber() == 0,
+      "`add -my DamageTaken to Health` spends 25 through the shield (10) and then health");
+
+// Part G follow-up: multiword health stat names keep their spelling and still clamp.
+var multiEngine = FreshEngine(new FakeWorld());
+var ogre = new FakeActor("Ogre");
+multiEngine.AddSheet(ogre, parser.Parse(@"when me appears
+  set my Max Health to 80
+  set my Health to 100
+  set my Max Shield to 10
+  set my Shield to 40
+  add 5 to Max Health"));
+multiEngine.Tick(0);
+Check(multiEngine.Variables.GetLocal(ogre, "Max Health").AsNumber() == 85 &&
+      HealthManager.Read(multiEngine.Variables, ogre, HealthManager.MaxHealth) == 85,
+      "`set my Max Health to 80` / `add 5 to Max Health` keep the written spelling");
+Check(multiEngine.Variables.GetLocal(ogre, "Health").AsNumber() == 80,
+      "`set my Health to 100` clamps at the multiword `my Max Health`");
+Check(multiEngine.Variables.GetLocal(ogre, "Shield").AsNumber() == 10 &&
+      HealthManager.Read(multiEngine.Variables, ogre, HealthManager.MaxShield) == 10,
+      "`set my Shield to 40` clamps at the multiword `my Max Shield`");
+
 // ---- Task 16 Part I: the rest of TK4's enemy cast (data-driven) ----
 
 // `wander speed my Speed` takes the pace from the actor's own stat, so a sheet can follow a

@@ -88,13 +88,13 @@ zero breaking changes to existing `.events` files.
   keep writing the global of that name. Sheets that never declared health keep the old arithmetic.
 - StarCraft unit HP/shields; Red Alert unit health; Homeworld subsystem damage
 
-#### Part G follow-ups (from implementation — not blocking) [ ]
-- [ ] `add -my <var> to Health` (a dynamic damage amount in one action) needs a negated-variable
-  value form; for now use `set my Health to my Health - my DamageTaken` (direct assignment, no
-  armor/shield soaking) or `add -<n> to Health` with a literal.
-- [ ] A multiword stat name (`Max Health`) is read but only `MaxHealth` / `maxhealth` spellings are
-  written by the ceiling logic, so pages that write `set my Max Health to 100` round-trip through
-  the canonical local.
+#### Part G follow-ups (from implementation — not blocking) [x]
+- [x] `add -my <var> to Health` works: values accept a leading minus (`-my DamageTaken`,
+  `-other's damage`, `-Score`), so the captured damage number runs the full armor → shield →
+  health pipeline in one action. `set X to -my Y` and conditions' right-hand values negate too.
+- [x] Multiword stat names parse and keep their spelling: `set my Max Health to 80`,
+  `add 5 to Max Health`, `set my Max Shield to 10` and the bare forms all resolve, clamp, and
+  read back through `my MaxHealth` (and vice versa).
 
 ### Part H — Extended `IEventWorld` [ ]
 - `GetSelection()` → list of selected actors
