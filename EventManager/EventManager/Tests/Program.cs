@@ -6283,6 +6283,128 @@ Check(Conditions.Evaluate(hiddenCondition, fogConditionContext),
 Check(!Conditions.Evaluate(visibleToEnemyCondition, fogConditionContext),
       "`me is visible to enemy` is false outside enemy vision");
 
+// ------------------------------------------------------------------
+// Task 18 Part G: damage & per-unit health
+// ------------------------------------------------------------------
+
+// Trigger classification: the `damage <amount>` message is a template, and the health
+// threshold is its own polled trigger.
+var damageMessageDesc = TriggerClassifier.Classify(parser.Parse(
+    "when message \"damage <amount>\" arrives\n  set Hit to 1\n").Events[0]);
+Check(damageMessageDesc.Kind == TriggerKind.Message && damageMessageDesc.MessagePattern &&
+      damageMessageDesc.RequireName == "damage <amount>",
+      "`when message \"damage <amount>\" arrives` classifies to a Message pattern");
+
+var plainDamageDesc = TriggerClassifier.Classify(parser.Parse(
+    "when message \"damage\" arrives\n  set Hit to 1\n").Events[0]);
+Check(plainDamageDesc.Kind == TriggerKind.Message && !plainDamageDesc.MessagePattern,
+      "a slot-less message name stays an exact match");
+
+var healthLowDesc = TriggerClassifier.Classify(parser.Parse(
+    "when my Health is lower than 30\n  set Wounded to 1\n").Events[0]);
+Check(healthLowDesc.Kind == TriggerKind.HealthLow && healthLowDesc.WatchName == "Health" &&
+      healthLowDesc.Threshold == 30,
+      "`when my Health is lower than 30` classifies to HealthLow with its threshold");
+
+var shieldLowDesc = TriggerClassifier.Classify(parser.Parse(
+    "when Shield is lower than 5\n  set Broken to 1\n").Events[0]);
+Check(shieldLowDesc.Kind == TriggerKind.HealthLow && shieldLowDesc.WatchName == "Shield",
+      "the bare `Shield is lower than 5` form listens to the acting unit's shield");
+
+Check(MessagePattern.IsPattern("damage <amount>") && !MessagePattern.IsPattern("damage"),
+      "only quoted text with a <slot> is a message pattern");
+Check(MessagePattern.TryMatch("damage <amount>", "damage 25", out var damageCaptures) &&
+      damageCaptures.Count == 1 && damageCaptures[0].Key == "amount" && damageCaptures[0].Value == 25,
+      "`damage 25` matches `damage <amount>` and captures 25");
+Check(!MessagePattern.TryMatch("damage <amount>", "damage big", out _) &&
+      !MessagePattern.TryMatch("damage <amount>", "hurt 25", out _) &&
+      !MessagePattern.TryMatch("damage <amount>", "damage 25 now", out _),
+      "non-numeric, wrongly named and longer messages do not match a pattern");
+
+// Per-unit health: assignment clamps, damage spends armor then shields then health.
+var healthState = new EventVariables();
+var marineUnit = new FakeActor("Marine");
+HealthManager.Set(healthState, marineUnit, "MaxHealth", 100);
+HealthManager.Set(healthState, marineUnit, "Health", 60);
+Check(HealthManager.Read(healthState, marineUnit, HealthManager.Health) == 60,
+      "`set Health to 60` writes the unit's own health");
+HealthManager.Set(healthState, marineUnit, "Health", 500);
+Check(HealthManager.Read(healthState, marineUnit, HealthManager.Health) == 100,
+      "`set Health to` clamps at MaxHealth");
+HealthManager.Set(healthState, marineUnit, "Health", -5);
+Check(HealthManager.Read(healthState, marineUnit, HealthManager.Health) == 0,
+      "`set Health to` clamps at 0");
+HealthManager.Set(healthState, marineUnit, "Health", 50);
+HealthManager.Set(healthState, marineUnit, "MaxShield", 20);
+HealthManager.Set(healthState, marineUnit, "Shield", 20);
+HealthManager.Set(healthState, marineUnit, "Armor", 5);
+var armorHit = HealthManager.Damage(healthState, marineUnit, 30);
+Check(armorHit.Mitigated == 25 && armorHit.AbsorbedByShield == 20 &&
+      HealthManager.Read(healthState, marineUnit, HealthManager.Shield) == 0 &&
+      HealthManager.Read(healthState, marineUnit, HealthManager.Health) == 45,
+      "damage spends armor, then the shield, then health (30 - 5 armor, 20 shield, 5 health)");
+HealthManager.Add(healthState, marineUnit, "Health", -10);
+Check(HealthManager.Read(healthState, marineUnit, HealthManager.Health) == 40,
+      "`add -10 to Health` goes through armor (5) and takes 5 health");
+HealthManager.Add(healthState, marineUnit, "Health", 1000);
+Check(HealthManager.Read(healthState, marineUnit, HealthManager.Health) == 100,
+      "healing clamps at MaxHealth");
+HealthManager.Set(healthState, marineUnit, "MaxHealth", 30);
+Check(HealthManager.Read(healthState, marineUnit, HealthManager.Health) == 30,
+      "lowering MaxHealth pulls the current health down with it");
+
+// An actor that never declared health keeps the old plain arithmetic (and no clamping).
+var legacyState = new EventVariables();
+var legacyUnit = new FakeActor("OldTimer");
+HealthManager.Add(legacyState, legacyUnit, "health", -1);
+Check(HealthManager.Read(legacyState, legacyUnit, "health") == -1,
+      "an actor with no health variables keeps the plain arithmetic");
+
+// Runtime: a `damage 25` message hands its number to the sheet and damage clamps at 0.
+var healthEngine = FreshEngine(new FakeWorld());
+var soldier = new FakeActor("Marine");
+var marineHealthProgram = parser.Parse(@"when me appears
+  set my MaxHealth to 60
+  set my Health to 60
+  set my Armor to 0
+  set my Shield to 10
+  set my MaxShield to 10
+
+when message ""damage <amount>"" arrives
+  add -10 to my Health
+
+when my Health is lower than 30
+  set Wounded to 1
+
+when my Health becomes 0
+  set Died to Died + 1");
+healthEngine.AddSheet(soldier, marineHealthProgram);
+healthEngine.Tick(0);
+Check(healthEngine.Variables.GetLocal(soldier, "Health").AsNumber() == 60,
+      "the Marine sheet seeds its own health from data");
+healthEngine.SendRawMessage(new PushSignal { Kind = TriggerKind.Message, Name = "damage 25" }, "Marine");
+healthEngine.Tick(1);
+Check(healthEngine.Variables.GetLocal(soldier, "DamageTaken").AsNumber() == 25 &&
+      healthEngine.Variables.GetLocal(soldier, "amount").AsNumber() == 25,
+      "a `damage 25` message binds `my DamageTaken` and the slot name on the receiver");
+Check(healthEngine.Variables.GetLocal(soldier, "Health").AsNumber() == 60,
+      "the damage event ran (`add -10 to my Health`: the 10 shield absorbed all of it)");
+for (int hit = 2; hit <= 9; hit++)
+{
+    healthEngine.SendRawMessage(new PushSignal { Kind = TriggerKind.Message, Name = "damage 25" }, "Marine");
+    healthEngine.Tick(hit);
+}
+Check(healthEngine.Variables.GetLocal(soldier, "Health").AsNumber() == 0,
+      "`add -<n> to Health` never takes health below 0");
+Check(healthEngine.Variables.GetGlobal("Wounded").AsNumber() == 1,
+      "`when my Health is lower than 30` fires once on the way down");
+Check(healthEngine.Variables.GetGlobal("Died").AsNumber() == 1,
+      "`when my Health becomes 0` fires exactly once");
+healthEngine.SendRawMessage(new PushSignal { Kind = TriggerKind.Message, Name = "damage 25" }, "Marine");
+healthEngine.Tick(20);
+Check(healthEngine.Variables.GetGlobal("Died").AsNumber() == 1,
+      "hits on a dead unit do not refire `when my Health becomes 0`");
+
 // ---- Task 16 Part I: the rest of TK4's enemy cast (data-driven) ----
 
 // `wander speed my Speed` takes the pace from the actor's own stat, so a sheet can follow a

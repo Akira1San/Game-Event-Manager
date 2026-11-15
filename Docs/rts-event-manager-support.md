@@ -411,40 +411,57 @@ when order completes
 - Buildings reveal their footprint
 - Explored areas persist; unexplored = fog
 
-### 7. Damage & Per-Unit Health
+### 7. Damage & Per-Unit Health ✅ Implemented
 
-**Extend existing:**
-- `my Health` / `my MaxHealth` per-unit variables
-- `my Shield` / `my Armor` (optional)
+**Per-unit variables:**
+- `my Health` / `my MaxHealth`
+- `my Shield` / `my MaxShield`
+- `my Armor`
+
+They are ordinary per-actor variables; `HealthManager` only intervenes so writes stay in range. Spellings `Health`, `HP`, `Hit Points`, `Max Health`, `Shield`, `Shields`, `Max Shield`, `Armor`/`Armour` all resolve to the same stat, and the spelling the sheet already used (`my health` vs `my Health`) is preserved.
 
 **New triggers:**
-- `when my Health becomes 0`
-- `when my Health is lower than <n>`
-- `when message "damage <amount>" arrives`
+- `when my Health becomes 0` — already worked through the generic `when <var> becomes <value>` watcher; it is now guaranteed to fire once, because health clamps at 0.
+- `when my Health is lower than <n>` — a downward edge (also `my Shield` / `my Armor`, and the bare `Health is lower than <n>` form on a unit's own sheet). The first tick sets the baseline, and a heal back above the threshold re-arms it.
+- `when message "damage <amount>" arrives` — the quoted text is a template: each `<slot>` captures one number from the arriving message and is written onto the receiving sheet as `my <slot>` plus `my DamageTaken`. A slot-less `"damage"` stays an exact name match.
 
 **New actions:**
-- `set Health to <n>`
-- `add -<n> to Health`
-- `add <n> to Shield`
-- `set Shield to <n>`
+- `set Health to <n>` — clamped to `0..MaxHealth` (`set MaxHealth to <n>` lowers the current health with it)
+- `add -<n> to Health` — the damage path: `my Armor` is subtracted, `my Shield` absorbs what is left, then the remainder comes off `my Health`, which never goes below 0
+- `deduct <n> from Health` — the same damage path
+- `add <n> to Health` — heals, clamped at `MaxHealth`
+- `add <n> to Shield` / `set Shield to <n>` — clamped to `0..MaxShield`
+- `set Armor to <n>` / `add <n> to Armor` — clamped at 0
+
+The bare `Health` / `Shield` / `Armor` names address the acting unit's own stat; on a global sheet they still write the global variable of that name. A unit whose sheet never set any health variable keeps the old plain arithmetic (no clamping, no warnings), so existing `.events` files are unchanged.
 
 **Example pattern:**
 ```
 when me appears
-  set my Health to 60
   set my MaxHealth to 60
+  set my Health to 60
   set my Armor to 1
+  set my MaxShield to 10
+  set my Shield to 10
 
-when message "damage" arrives   # enemy sends amount implicitly
-  add -10 to my Health
-  unless my Health is higher than 0
-  destroy me
+when message "damage <amount>" arrives
+  add -10 to my Health        # damage: armor, then shields, then health
   spawn Explosion at me
   play sound "explosion"
 
 when my Health is lower than 30
   play anim "Damaged"
+
+when my Health becomes 0
+  destroy me
 ```
+
+A single hit of any size can also be applied from the captured number:
+```
+when message "damage <amount>" arrives
+  set my Health to my Health - my DamageTaken
+```
+(`set` assigns directly, clamped at 0; use `add -<n> to Health` when armor and shields should soak the hit.)
 
 ## New Code Foundations Required
 
@@ -462,6 +479,9 @@ Building placement validation, build-time progress, construction completion even
 
 ### E. Fog of War Manager (`FogOfWarManager.cs`)
 Visibility grid per player, reveal/hide operations, unit vision updates.
+
+### H. Health Manager (`HealthManager.cs`) ✅ Implemented
+Per-unit health bounds and the damage pipeline (armor → shield → health), plus `MessagePattern.cs` for template message triggers (`"damage <amount>"`). Pure logic with no Flax types, so the event runtime and the tests drive it directly.
 
 ### F. Extended EventWorld (`IEventWorld`)
 - `GetSelection()` → list of selected actors
@@ -487,6 +507,7 @@ AreaRevealed,
 AreaHidden,
 ResourceChanges,
 SupplyChanges,
+HealthLow,          // when my Health is lower than <n>
 ```
 
 ### H. New ConditionKind Additions

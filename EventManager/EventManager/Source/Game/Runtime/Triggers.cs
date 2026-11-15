@@ -72,6 +72,8 @@ namespace Game
         AreaRevealed,
         AreaHidden,
         EntersFog,
+        // RTS damage & per-unit health (Task 18 Part G)
+        HealthLow,
         // Local multiplayer (Task 16 Part F)
         PlayerJoins,
         PlayerDies,
@@ -96,6 +98,10 @@ namespace Game
         /// <summary>For <c>when me touches &lt;material&gt;</c>: the physics-material name the
         /// touched actor's collider must carry (matched in addition to, or instead of, a name).</summary>
         public string RequireMaterial = "";
+        /// <summary>For <c>when message "damage &lt;amount&gt;" arrives</c>: the quoted text is a
+        /// template whose <c>&lt;slot&gt;</c> parts capture a number from the message
+        /// (see <see cref="MessagePattern"/>).</summary>
+        public bool MessagePattern;
         public double Distance;
         /// <summary>For `by my SightDistance`: the sheet actor's own variable to read the
         /// range from each poll (typed-enemy stats, Task 16 Part D).</summary>
@@ -107,6 +113,8 @@ namespace Game
         /// <summary>Additional conditions parsed from "and ..." clauses in trigger lines
         /// (e.g. "me is moving" in "when me touches Grass and me is moving").</summary>
         public List<ConditionNode> ExtraConditions = new List<ConditionNode>();
+        /// <summary>For <c>when my Health is lower than &lt;n&gt;</c>: the value the stat drops below.</summary>
+        public double Threshold;
         /// <summary>The player a <c>when player &lt;n&gt; ...</c> trigger listens to.</summary>
         public int Player;
         /// <summary>The victim of <c>when player &lt;n&gt; kills player &lt;m&gt;</c>.</summary>
@@ -257,6 +265,24 @@ namespace Game
                     Kind = TriggerKind.EntersFog,
                     RequireName = Join(trigger, 0, words.Length - 2),
                 };
+            // RTS damage & per-unit health (Task 18 Part G). `when my Health is lower than 30`
+            // is a polled threshold edge on a per-unit health stat; it sits before the generic
+            // `<var> is <value>` shapes so the stat is never read as a global variable.
+            int lowerIndex = IndexOf(words, "lower");
+            if (lowerIndex >= 2 && words[lowerIndex - 1] == "is" && lowerIndex + 2 < words.Length &&
+                words[lowerIndex + 1] == "than" && trigger[lowerIndex + 2].Type == TokenType.Number)
+            {
+                int subjectFrom = words[0] == "my" ? 1 : 0;
+                string subject = Join(trigger, subjectFrom, lowerIndex - 1);
+                if (HealthManager.TryStat(subject, out string stat))
+                    return new TriggerDescriptor
+                    {
+                        Kind = TriggerKind.HealthLow,
+                        WatchOwner = "my",
+                        WatchName = stat,
+                        Threshold = trigger[lowerIndex + 2].Number,
+                    };
+            }
             if (words.Length == 2 && words[0] == "selection" && words[1] == "changes")
                 return new TriggerDescriptor { Kind = TriggerKind.SelectionChanged };
             if (words.Length == 5 && words[0] == "control" && words[1] == "group" &&
@@ -336,7 +362,18 @@ namespace Game
             if (words.Length >= 3 && words[words.Length - 2] == "is" && words[words.Length - 1] == "clicked")
                 return new TriggerDescriptor { Kind = TriggerKind.Clicked, RequireName = Join(trigger, 0, words.Length - 2) };
             if (words.Length >= 3 && words[0] == "message")
-                return new TriggerDescriptor { Kind = TriggerKind.Message, RequireName = trigger[1].Text };
+            {
+                // `when message "damage <amount>" arrives` — the quoted text is a template whose
+                // `<slot>` parts capture a number from the message (Task 18 Part G). A slot-less
+                // text stays an exact name match, so old sheets are unchanged.
+                string messageName = trigger[1].Text;
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.Message,
+                    RequireName = messageName,
+                    MessagePattern = MessagePattern.IsPattern(messageName),
+                };
+            }
             if (words.Length >= 3 && words[0] == "anim")
                 return new TriggerDescriptor { Kind = TriggerKind.AnimEnd, RequireName = trigger[1].Text };
             if (words.Length >= 3 && words[0] == "particle" && words[words.Length - 1] == "ends")

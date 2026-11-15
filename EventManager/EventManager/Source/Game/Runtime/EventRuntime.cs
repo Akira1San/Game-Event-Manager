@@ -1001,6 +1001,10 @@ namespace Game
                         var pushEv = sheet.Program.Events[eventIndex];
                         if (pushEv.RequiredState.Length > 0 && sheet.CurrentState != pushEv.RequiredState)
                             continue;
+                        // A pattern message hands its captured numbers to the sheet before the
+                        // body runs: `my amount` (the slot's name) and `my DamageTaken`.
+                        if (sheet.Triggers[eventIndex].MessagePattern)
+                            BindMessageCaptures(sheet, sheet.Triggers[eventIndex], signal);
                         if (IsContactKind(signal.Kind) && signal.Other != null)
                         {
                             // A distance poll already fired this pair: ignore the collider's echo.
@@ -1171,6 +1175,11 @@ namespace Game
                 return descriptor.RequireName == "me" || descriptor.RequireName == "my"
                     ? ReferenceEquals(signal.Other, sheet.Actor)
                     : string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase);
+            // `when message "damage <amount>" arrives` — the quoted text is a template whose
+            // `<slot>` parts capture a number from the message (Task 18 Part G). The capture is
+            // written onto the receiving sheet's actor by BindMessageCaptures before the event runs.
+            if (descriptor.Kind == TriggerKind.Message && descriptor.MessagePattern)
+                return MessagePattern.TryMatch(descriptor.RequireName, signal.Name, out _);
             if (descriptor.RequireName.Length == 0)
                 return true;
             // `when me is selected` / `when me is deselected`: the signal is broadcast, so
@@ -1259,6 +1268,41 @@ namespace Game
             if (descriptor.RequireMaterial.Length > 0 && signal.Material == descriptor.RequireMaterial && ExtraConditionsMatch(descriptor, sheet, signal.Other))
                 return true;
             return false;
+        }
+
+        /// <summary>
+        /// True when a <c>set</c> / <c>add</c> / <c>deduct</c> statement addresses a
+        /// per-unit health stat (Task 18 Part G): either <c>my Health</c>, or the bare
+        /// <c>Health</c> / <c>Shield</c> / <c>Armor</c> form on an actor's own sheet. A global
+        /// sheet keeps writing the global variable of that name.
+        /// </summary>
+        private static bool IsOwnHealthTarget(EventContext context, VariableValue target)
+        {
+            if (target == null || !HealthManager.IsStat(target.Name))
+                return false;
+            if (context.Me == null || context.Me is GlobalHost)
+                return false;
+            return target.Owner == "my" || target.Owner == "me" || target.Owner.Length == 0;
+        }
+
+        /// <summary>
+        /// Writes a pattern message's captured numbers onto the receiving sheet's actor, under
+        /// each slot's own name, plus <c>my DamageTaken</c> for the last one (Task 18 Part G).
+        /// </summary>
+        private void BindMessageCaptures(SheetInstance sheet, TriggerDescriptor descriptor, PushSignal signal)
+        {
+            object actor = signal.MeOverride ?? sheet.Actor;
+            if (actor == null || actor is GlobalHost)
+                return;
+            if (!MessagePattern.TryMatch(descriptor.RequireName, signal.Name, out var captures) || captures.Count == 0)
+                return;
+            double last = 0;
+            foreach (var capture in captures)
+            {
+                Variables.SetLocal(actor, capture.Key, ValueBox.OfNumber(capture.Value));
+                last = capture.Value;
+            }
+            Variables.SetLocal(actor, HealthManager.DamageTakenVariable, ValueBox.OfNumber(last));
         }
 
         /// <summary>Resolves the optional <c>of &lt;building&gt;</c> target for a build-progress
@@ -1628,6 +1672,7 @@ namespace Game
         private void ExecuteSet(EventContext context, SetNode set)
         {
             ValueBox value = context.Evaluate(set.Value);
+            bool healthTarget = IsOwnHealthTarget(context, set.Target);
             if (set.Op != '\0' && set.Right != null)
             {
                 ValueBox right = context.Evaluate(set.Right);
@@ -1649,7 +1694,11 @@ namespace Game
                 }
                 value = result;
             }
-            if (set.Target.Owner == "my")
+            // Per-unit health (Task 18 Part G): `set my Health to 60` clamps to MaxHealth,
+            // and the bare `set Health to 60` form addresses the acting unit's own health.
+            if (healthTarget && HealthManager.IsStat(set.Target.Name))
+                HealthManager.Set(context.Variables, context.Me, set.Target.Name, value.AsNumber());
+            else if (set.Target.Owner == "my")
                 context.WriteMy(set.Target.Name, value);
             else
                 context.WriteGlobal(set.Target.Name, value);
@@ -1819,6 +1868,13 @@ namespace Game
                 return;
             }
             double amount = context.Evaluate(add.Amount).AsNumber();
+            // Per-unit health (Task 18 Part G): `add -10 to Health` / `add 20 to Shield` go
+            // through the health bounds (and a negative Health add is the damage path).
+            if (IsOwnHealthTarget(context, add.Target))
+            {
+                HealthManager.Add(context.Variables, context.Me, add.Target.Name, amount);
+                return;
+            }
             ValueBox current = add.Target.Owner == "my"
                 ? context.ReadMy(add.Target.Name)
                 : context.ReadGlobal(add.Target.Name);
@@ -1834,6 +1890,12 @@ namespace Game
         private void ExecuteDeduct(EventContext context, DeductNode deduct)
         {
             double amount = context.Evaluate(deduct.Amount).AsNumber();
+            // `deduct 10 from Health` is damage like `add -10 to Health` (Task 18 Part G).
+            if (IsOwnHealthTarget(context, deduct.Target))
+            {
+                HealthManager.Add(context.Variables, context.Me, deduct.Target.Name, -amount);
+                return;
+            }
             ValueBox current = deduct.Target.Owner == "my"
                 ? context.ReadMy(deduct.Target.Name)
                 : context.ReadGlobal(deduct.Target.Name);
@@ -2054,6 +2116,9 @@ namespace Game
                     break;
                 case TriggerKind.Hears:
                     PollHearing(sheet, eventIndex, descriptor);
+                    break;
+                case TriggerKind.HealthLow:
+                    TickHealthLow(sheet, eventIndex, descriptor);
                     break;
                 case TriggerKind.ReloadComplete:
                 {
@@ -2360,6 +2425,28 @@ namespace Game
             }
             state.Last = ValueBox.Copy(current);
             if (fires)
+                RunEvent(sheet, eventIndex, null);
+        }
+
+        /// <summary>
+        /// <c>when my Health is lower than &lt;n&gt;</c> (Task 18 Part G): a downward edge on a
+        /// per-unit health stat. The first tick establishes the baseline like the other
+        /// watchers, so loading a scene with a wounded unit does not fire it; it re-arms when
+        /// the stat comes back above the threshold.
+        /// </summary>
+        private void TickHealthLow(SheetInstance sheet, int eventIndex, TriggerDescriptor descriptor)
+        {
+            double current = HealthManager.Read(Variables, sheet.Actor, descriptor.WatchName);
+            WatchState state = sheet.Watches[eventIndex];
+            if (!state.Initialized)
+            {
+                state.Last = ValueBox.OfNumber(current);
+                state.Initialized = true;
+                return;
+            }
+            double last = state.Last.AsNumber();
+            state.Last = ValueBox.OfNumber(current);
+            if (last >= descriptor.Threshold && current < descriptor.Threshold)
                 RunEvent(sheet, eventIndex, null);
         }
 
