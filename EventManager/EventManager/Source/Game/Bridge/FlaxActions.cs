@@ -28,6 +28,9 @@ namespace Game
         public bool UsesPhysics => Mode != PhysicsMoveMode.Transform;
         /// <summary>True when reaching the last waypoint also finishes the unit's active order.</summary>
         public bool CompletesOrder;
+        /// <summary>True when arriving also raises <c>when me arrives at there</c>. An attack
+        /// that stops at range is a position move but not a click-to-walk arrival.</summary>
+        public bool ArrivesAtThere = true;
     }
 
     /// <summary>A <c>push ... for &lt;n&gt; seconds</c> that is still shoving its target —
@@ -1640,7 +1643,7 @@ namespace Game
                         PendingOrderMoves.Add(move.Subject);
                 }
             }
-            if (move.HasPositionTarget)
+            if (move.HasPositionTarget && move.ArrivesAtThere)
                 RaiseArriveAt(move.Subject, "there");
             ArriveAt(move);
         }
@@ -2146,8 +2149,9 @@ namespace Game
             BeginOrderMove(context.Runtime, me, order, 5);
         }
 
-        /// <summary><c>attack &lt;target&gt;</c> — move into contact with the target. The order
-        /// completes on arrival; combat itself stays in the event sheet.</summary>
+        /// <summary><c>attack &lt;target&gt;</c> — close to the edge of this unit's own attack
+        /// range and stop there; a target already in range is not walked into. The order stays
+        /// active so the sheet's <c>me is in range of …</c> line decides when to strike.</summary>
         private static void StartAttack(EventContext context, ActionSpec spec)
         {
             Actor me = context.Me as Actor;
@@ -2168,6 +2172,19 @@ namespace Game
                 HasPositionTarget = isPosition,
             };
             context.Runtime.Orders.StartOrder(context.Variables, context.Runtime, me, order);
+            // A sheet that declared `my attack range` stops at that distance. Without one the
+            // old behaviour stays: walk into contact, so a melee unit still reaches its target.
+            double range = OrderManager.DeclaredAttackRange(context.Variables, me);
+            Actor targetActor = target as Actor;
+            if (range > 0 && targetActor != null && targetActor.Scene != null)
+            {
+                double dx = me.Position.X - targetActor.Position.X;
+                double dz = me.Position.Z - targetActor.Position.Z;
+                if (System.Math.Sqrt(dx * dx + dz * dz) <= range)
+                    return;
+                BeginOrderMove(context.Runtime, me, order, 5, range);
+                return;
+            }
             BeginOrderMove(context.Runtime, me, order, 5);
         }
 
@@ -2277,16 +2294,34 @@ namespace Game
         }
 
         /// <summary>Starts NavMesh movement for an order; a blocked path raises
-        /// <c>when path blocked</c> instead of walking through walls.</summary>
-        private static void BeginOrderMove(EventRuntime runtime, Actor me, UnitOrder order, double speed)
+        /// <c>when path blocked</c> instead of walking through walls. <paramref name="stopDistance"/>
+        /// shortens the walk to that distance from the target (attack range).</summary>
+        private static void BeginOrderMove(EventRuntime runtime, Actor me, UnitOrder order, double speed,
+            double stopDistance = 0)
         {
             if (runtime == null || me == null || me.Scene == null || order == null)
                 return;
             Actor targetActor = order.Target as Actor;
             Vector3 destination;
+            bool positionTarget = order.HasPositionTarget || order.TargetName == "there";
+            bool snapToTarget = false;
+            bool arrivesAtThere = true;
             if (targetActor != null && targetActor.Scene != null)
+            {
                 destination = targetActor.Position;
-            else if (order.HasPositionTarget || order.TargetName == "there")
+                if (stopDistance > 0)
+                {
+                    OrderManager.ApproachPoint(me.Position.X, me.Position.Z,
+                        targetActor.Position.X, targetActor.Position.Z, stopDistance,
+                        out double stopX, out double stopZ);
+                    destination = new Vector3((float)stopX, targetActor.Position.Y, (float)stopZ);
+                    positionTarget = true;
+                    arrivesAtThere = false;
+                }
+                else
+                    snapToTarget = true;
+            }
+            else if (positionTarget)
             {
                 if (!LastClickPosition.HasValue)
                     return;
@@ -2304,15 +2339,16 @@ namespace Game
             Remember(new OngoingMove
             {
                 Subject = me,
-                Target = targetActor,
+                Target = snapToTarget ? targetActor : null,
                 Goto = true,
-                HasPositionTarget = targetActor == null,
+                HasPositionTarget = positionTarget,
                 PositionTarget = destination,
                 Path = path,
                 PathIndex = 0,
                 Speed = speed,
                 Mode = ResolveMoveMode(me, runtime.FindSheetFor(me)?.UsePhysicsMovement ?? false),
                 CompletesOrder = true,
+                ArrivesAtThere = arrivesAtThere,
             });
         }
 

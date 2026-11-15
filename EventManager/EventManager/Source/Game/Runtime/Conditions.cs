@@ -52,6 +52,8 @@ namespace Game
         HasBuildQueue,
         // RTS orders & attack-move (Task 18 Part E)
         CurrentOrderIs,
+        // Attack range (Task 21 Part A)
+        InRangeOf,
         // RTS fog of war & visibility (Task 18 Part F)
         IsVisibleToEnemy,
         IsHidden,
@@ -441,6 +443,28 @@ namespace Game
                 }
             }
 
+            // ---- attack range (Task 21 Part A) ----
+            // `my attack range is 120` — the same multiword stat `set` joins, so a sheet can
+            // read back the range it declared.
+            if (texts.Length >= 5 && texts[0] == "my" && texts[1] == "attack" &&
+                texts[2] == "range" && texts[3] == "is")
+            {
+                bool rangeNot = texts.Length >= 6 && texts[4] == "not";
+                node.Kind = rangeNot ? ConditionKind.NotEqual : ConditionKind.Equal;
+                node.Owner = "my";
+                node.Name = "attack range";
+                node.Right = ValueFrom(tokens, texts, rangeNot ? 5 : 4);
+                return node;
+            }
+            // `me is in range of Enemy` — is the target inside this unit's own attack range?
+            if (texts.Length >= 6 && texts[0] == "me" && texts[1] == "is" && texts[2] == "in" &&
+                texts[3] == "range" && texts[4] == "of")
+            {
+                node.Kind = ConditionKind.InRangeOf;
+                node.Thing = JoinTexts(texts, 5, texts.Length);
+                return node;
+            }
+
             // ---- level progression & statistics (Task 16 Part G) ----
             // `level number is 3`, `level is "Level2"`, `kills Zombie is 5`, `accuracy is
             // lower than 50` … The statistic names are multiword, so they are read here
@@ -614,6 +638,13 @@ namespace Game
                     if (thing == null)
                         return false;
                     return context.World.Distance2D(anchor, thing) <= node.Distance;
+                }
+                case ConditionKind.InRangeOf:
+                {
+                    object target = FindTarget(node.Thing, context);
+                    if (target == null || context.Me == null)
+                        return false;
+                    return context.World.Distance2D(context.Me, target) <= OrderManager.AttackRangeOf(context);
                 }
                 case ConditionKind.Moving:
                     return context.World.IsMoving(context.Me);

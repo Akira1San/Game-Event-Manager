@@ -634,6 +634,14 @@ namespace Game
                         return new VariableValue { Line = t.Line, Owner = "my", Name = pair };
                     }
                 }
+                // `my attack range` — the distance an attack stops at (Task 21 Part A).
+                if (index + 2 < words.Count && words[index + 1].Type == TokenType.Word &&
+                    words[index + 2].Type == TokenType.Word &&
+                    words[index + 1].Text == "attack" && words[index + 2].Text == "range")
+                {
+                    index += 3;
+                    return new VariableValue { Line = t.Line, Owner = "my", Name = "attack range" };
+                }
                 // `my Max Health` / `my Max Shield` — a multiword health stat is one variable
                 // (Task 18 Part G), so it is joined before the single-word rule takes `Max`.
                 if (index + 2 < words.Count && words[index + 1].Type == TokenType.Word &&

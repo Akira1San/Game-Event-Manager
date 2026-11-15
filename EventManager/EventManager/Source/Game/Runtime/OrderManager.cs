@@ -50,7 +50,67 @@ namespace Game
     /// </summary>
     public class OrderManager
     {
+        /// <summary>
+        /// The reach a unit has before it writes <c>my attack range</c> (Task 21 Part A): close
+        /// enough to be a melee hit, so `me is in range of …` means something on day one.
+        /// </summary>
+        public const double DefaultAttackRange = 50;
+
+        /// <summary>Both spellings the language accepts for the range the sheet declares.</summary>
+        private static readonly string[] AttackRangeNames = { "attack range", "AttackRange" };
+
         private readonly Dictionary<object, UnitOrderQueue> _queues = new Dictionary<object, UnitOrderQueue>();
+
+        /// <summary>
+        /// The unit's own <c>my attack range</c>, or 0 when the sheet never declared one. Read
+        /// without the unset-variable warning, so probing a sheet that has no range is silent.
+        /// </summary>
+        public static double DeclaredAttackRange(EventVariables variables, object unit)
+        {
+            if (variables == null || unit == null)
+                return 0;
+            foreach (string name in AttackRangeNames)
+            {
+                if (!variables.HasLocal(unit, name))
+                    continue;
+                double declared = variables.GetLocal(unit, name).AsNumber();
+                if (declared > 0)
+                    return declared;
+            }
+            return 0;
+        }
+
+        /// <summary>
+        /// The range an attacking condition asks about: the declared <c>my attack range</c>, else
+        /// <see cref="DefaultAttackRange"/>.
+        /// </summary>
+        public static double AttackRangeOf(EventContext context)
+        {
+            double declared = context == null ? 0 : DeclaredAttackRange(context.Variables, context.Me);
+            return declared > 0 ? declared : DefaultAttackRange;
+        }
+
+        /// <summary>
+        /// Where a unit stands to attack a target it cannot reach yet: on the straight line, one
+        /// range short of it. A target already inside the range answers the unit's own position,
+        /// so an approach never walks past it.
+        /// </summary>
+        public static void ApproachPoint(double fromX, double fromZ, double targetX, double targetZ,
+            double range, out double x, out double z)
+        {
+            double dx = targetX - fromX;
+            double dz = targetZ - fromZ;
+            double distance = System.Math.Sqrt(dx * dx + dz * dz);
+            if (range <= 0 || distance <= range || distance <= 0.0001)
+            {
+                x = fromX;
+                z = fromZ;
+                return;
+            }
+            double scale = (distance - range) / distance;
+            x = fromX + dx * scale;
+            z = fromZ + dz * scale;
+        }
 
         /// <summary>True when the unit has an active order or one waiting behind it.</summary>
         public bool HasOrders(object unit)

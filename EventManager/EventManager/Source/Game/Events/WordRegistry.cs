@@ -138,6 +138,7 @@ namespace Game
             new WordEntry { Kind = "condition", Word = "<building> is idle", Example = "Barracks is idle" },
             new WordEntry { Kind = "condition", Word = "queue count is <n>", Example = "queue count is 0" },
             new WordEntry { Kind = "condition", Word = "me has build queue", Example = "me has build queue" },
+            new WordEntry { Kind = "condition", Word = "me is in range of <target>", Example = "me is in range of Enemy", AltShape = "compared with `my attack range`, which defaults to 50" },
             new WordEntry { Kind = "condition", Word = "my current order is <order>", Example = "my current order is attack-move" },
             new WordEntry { Kind = "condition", Word = "my order target is <target>", Example = "my order target is Enemy" },
             new WordEntry { Kind = "condition", Word = "my order queue is <n>", Example = "my order queue is 2" },

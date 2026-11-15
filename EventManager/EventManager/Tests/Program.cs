@@ -4812,6 +4812,87 @@ Check(Conditions.Evaluate(liveQueueCondition, orderFlowContext),
       "`my order queue is 1` matches the live queue size");
 
 // ------------------------------------------------------------------
+// Task 21 Part A: attack range (`me is in range of <target>`)
+// ------------------------------------------------------------------
+
+var inRangeCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  me is in range of Enemy").Events[0].Body[0].Words);
+Check(inRangeCondition.Kind == ConditionKind.InRangeOf && inRangeCondition.Thing == "Enemy",
+      "`me is in range of Enemy` parses to InRangeOf");
+
+var rangeWorld = new FakeWorld();
+var rangeUnit = new FakeActor("Marine");
+var rangeEnemy = new FakeActor("Enemy");
+rangeWorld.AddActor(rangeUnit);
+rangeWorld.AddActor(rangeEnemy);
+rangeWorld.SetDistance(rangeUnit, rangeEnemy, 40);
+var rangeEngine = FreshEngine(rangeWorld);
+rangeEngine.AddSheet(rangeUnit, parser.Parse("# placeholder\n"));
+rangeEngine.AddSheet(rangeEnemy, parser.Parse("# placeholder\n"));
+var rangeContext = new EventContext
+{
+    Variables = rangeEngine.Variables,
+    World = rangeWorld,
+    Me = rangeUnit,
+    Runtime = rangeEngine,
+};
+Check(Conditions.Evaluate(inRangeCondition, rangeContext),
+      "a unit that never wrote `my attack range` still reaches a target 40 away (default 50)");
+rangeEngine.Variables.SetLocal(rangeUnit, "attack range", ValueBox.OfNumber(80));
+rangeWorld.SetDistance(rangeUnit, rangeEnemy, 60);
+Check(Conditions.Evaluate(inRangeCondition, rangeContext),
+      "`my attack range` 80 reaches a target 60 away");
+rangeWorld.SetDistance(rangeUnit, rangeEnemy, 120);
+Check(!Conditions.Evaluate(inRangeCondition, rangeContext),
+      "a target beyond `my attack range` reads out of range");
+
+// The range is written and read by the language, not just by the manager.
+var rangeSetWorld = new FakeWorld();
+var rangeSetUnit = new FakeActor("Marine");
+var rangeSetEnemy = new FakeActor("Enemy");
+rangeSetWorld.AddActor(rangeSetUnit);
+rangeSetWorld.AddActor(rangeSetEnemy);
+rangeSetWorld.SetDistance(rangeSetUnit, rangeSetEnemy, 100);
+var rangeSetEngine = FreshEngine(rangeSetWorld);
+rangeSetEngine.AddSheet(rangeSetUnit, parser.Parse("when me appears\n  set my attack range to 120"));
+rangeSetEngine.AddSheet(rangeSetEnemy, parser.Parse("# placeholder\n"));
+rangeSetEngine.Tick(0);
+Check(Math.Abs(OrderManager.DeclaredAttackRange(rangeSetEngine.Variables, rangeSetUnit) - 120) < 0.0001,
+      "`set my attack range to 120` stores the multiword range");
+var rangeSetContext = new EventContext
+{
+    Variables = rangeSetEngine.Variables,
+    World = rangeSetWorld,
+    Me = rangeSetUnit,
+    Runtime = rangeSetEngine,
+};
+Check(Conditions.Evaluate(inRangeCondition, rangeSetContext),
+      "`me is in range of Enemy` uses the range the sheet declared");
+var rangeReadCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  my attack range is 120").Events[0].Body[0].Words);
+Check(rangeReadCondition.Kind == ConditionKind.Equal && rangeReadCondition.Owner == "my" &&
+      rangeReadCondition.Name == "attack range",
+      "`my attack range is 120` reads the declared range back");
+Check(Conditions.Evaluate(rangeReadCondition, rangeSetContext),
+      "`my attack range is 120` matches what the sheet set");
+
+var noRangeVars = new EventVariables();
+var noRangeUnit = new FakeActor("Marine");
+Check(OrderManager.DeclaredAttackRange(noRangeVars, noRangeUnit) == 0,
+      "a sheet with no attack range declares 0 (and reads it silently)");
+noRangeVars.SetLocal(noRangeUnit, "AttackRange", ValueBox.OfNumber(150));
+Check(Math.Abs(OrderManager.DeclaredAttackRange(noRangeVars, noRangeUnit) - 150) < 0.0001,
+      "the run-together `AttackRange` spelling declares the range too");
+
+// `attack` walks to the edge of the range instead of into the target.
+OrderManager.ApproachPoint(0, 0, 100, 0, 30, out double stopX, out double stopZ);
+Check(Math.Abs(stopX - 70) < 0.0001 && Math.Abs(stopZ) < 0.0001,
+      "an attack order stops at the edge of the unit's range");
+OrderManager.ApproachPoint(0, 0, 10, 0, 30, out double closeX, out double closeZ);
+Check(Math.Abs(closeX) < 0.0001 && Math.Abs(closeZ) < 0.0001,
+      "a target already inside the range is never walked past");
+
+// ------------------------------------------------------------------
 // Task 15 Part H: moveplatform (moving platforms)
 // ------------------------------------------------------------------
 

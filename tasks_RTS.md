@@ -170,24 +170,50 @@ attack-move, and fog of war.
 
 ---
 
-## Task 21 — RTS Command Panel & Orders [ ]
+## Task 21 — RTS Command Panel & Orders [x]
 
 Goal: add attack-move, attack, stop, hold position, rally point, and per-unit order queue so a command panel can issue real RTS orders.
 
-### Part A — Attack-move & attack [ ]
+The verbs, triggers and per-unit state landed with Task 18 Part E (`OrderManager.cs`, `ActionWords`,
+`Triggers`, `FlaxActions`). Task 21 filled the two gaps that kept a panel from being written against
+it: the range condition, and `attack` walking into its target instead of stopping at range.
+
+### Part A — Attack-move & attack [x]
 - New action verb: `attack-move to <target>` — move toward target, engaging any enemy that enters range along the way
+  → `ActionVerb.AttackMove`, `OrderManager.StartOrder` + `FlaxActions.BeginOrderMove`; the
+target is an actor or `there`, and the sheet's own `me is in range of Enemy` block is what
+engages along the way (the bridge has no notion of "enemy")
 - New action verb: `attack <target>` — stop moving and attack the named target in range
+  → `ActionVerb.AttackOrder`. Stops at `my attack range` (`OrderManager.ApproachPoint` walks to
+the line, one range short) and leaves the order active; a target already in range is not walked
+into. A sheet that never declared a range keeps the old contact behaviour, so melee units still
+reach their target.
 - New trigger: `when order completes`, `when queued order starts`
+  → `TriggerKind.OrderCompletes` / `OrderStarts`, raised by `OrderManager.Complete` / a promoted
+queue entry, plus the `<order> order completes` name filter
 - New condition: `me is in range of <target>` (compares distance to my attack range)
+  → `ConditionKind.InRangeOf`; XZ distance against `my attack range` (`DeclaredAttackRange`,
+spellings `attack range` / `AttackRange`), defaulting to `OrderManager.DefaultAttackRange` (50)
+so an existing melee sheet works as written. `set my attack range to <n>` and
+`my attack range is <n>` parse the multiword name like the health stats.
 
-### Part B — Stop & hold position [ ]
-- `stop` — cancel current order and go idle
-- `hold position` — freeze in place, do not pursue
-- `clear orders`, `add order to queue`
-- Per-unit order state: `my current order`, `my order target`
+### Part B — Stop & hold position [x]
+- `stop` — cancel current order and go idle (`stop moving` + `Orders.Stop`, reads `stop`)
+- `hold position` — freeze in place, do not pursue (`still` + `Orders.Hold`, reads `hold`)
+- `clear orders`, `add order to queue` (copy of the active order behind it; an idle unit starts it)
+- Per-unit order state: `my current order`, `my order target`, `my order queue` (also
+`GetOrderQueue` on `IEventWorld`)
 
-### Part C — Rally point [ ]
-- `set rally point to <target>` — newly trained units auto-move there on spawn
+### Part C — Rally point [x]
+- `set rally point to <target>` — newly trained units auto-move there on spawn: the rally target
+lives on the building's `UnitOrderQueue` and `FlaxActions.SpawnClone` issues the new unit a normal
+`move` order to it (`ApplyRally`), so it reads `my current order` = `move` and arrives like any
+other move
+
+### Notes
+- Bridge-side behaviour (NavMesh approach, rally spawn, stop/hold bodies) has no unit tests — the
+pure parts (`ApproachPoint`, attack-range read, `InRangeOf`, order queue edges) are covered by the
+`Tests/` suite. Editor play-check of a command panel is still Task 20/22 work.
 
 ---
 
