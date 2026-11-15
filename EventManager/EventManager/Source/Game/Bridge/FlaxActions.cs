@@ -1271,9 +1271,12 @@ namespace Game
                 double step = leg.Speed * DeltaTime + WanderProbe;
                 if (WanderBlocked(actor, direction, (float)step))
                 {
-                    // New heading next tick, plus a turn in place so it doesn't moonwalk.
+                    // New heading next tick. Turn to face it only when it is walkable: turning on
+                    // every blocked tick is what made a body pinned to a wall spin in place.
                     leg.AngleDegrees = Wanderer.RandomAngle();
-                    actor.LookAt(actor.Position + WanderDirection(leg));
+                    Vector3 next = WanderHeading(actor, leg);
+                    if (!WanderBlocked(actor, next, (float)step))
+                        actor.LookAt(actor.Position + next);
                     continue;
                 }
 
@@ -1293,7 +1296,91 @@ namespace Game
         private const float WanderNavMeshLeash = 50f;
 
         /// <summary>Extra distance probed ahead of a wander step, so it stops before the wall.</summary>
-        private const float WanderProbe = 8f;
+        private const float WanderProbe = 2f;
+
+        /// <summary>
+        /// Half the widest horizontal extent of an actor's collider, and the height of the
+        /// collider's middle above the actor's origin. 0 means "no collider" — a plain mesh
+        /// actor keeps moving exactly as before.
+        ///
+        /// Transform movement writes <c>Position</c>, so PhysX never resolves anything for it: an
+        /// actor carrying a box walks that box straight into a wall. The old guard probed a fixed
+        /// 8 cm ahead, which is smaller than half a zombie's box, so the body still sank in — and
+        /// a RigidBody under it then got ejected and spun while it freed itself. Probing by the
+        /// actor's own size is what stops the box at the surface instead.
+        /// </summary>
+        private static bool TryColliderFootprint(Actor actor, out float radius, out float centreY)
+        {
+            radius = 0f;
+            centreY = 0f;
+            if (actor == null)
+                return false;
+            GatherCollider(actor, ref radius, ref centreY);
+            return radius > 0f;
+        }
+
+        private static void GatherCollider(Actor node, ref float radius, ref float centreY)
+        {
+            if (node == null || !node.IsActive)
+                return;
+            if (node is BoxCollider box)
+            {
+                float halfWidth = Math.Max(Math.Abs(box.Size.X * node.Scale.X), Math.Abs(box.Size.Z * node.Scale.Z)) * 0.5f;
+                if (halfWidth > radius)
+                {
+                    radius = halfWidth;
+                    float localY = node.Parent == null ? 0f : node.Position.Y - node.Parent.Position.Y;
+                    centreY = localY + box.Center.Y * node.Scale.Y;
+                }
+            }
+            else if (node is SphereCollider sphere)
+            {
+                float sphereRadius = Math.Abs(sphere.Radius * node.Scale.X);
+                if (sphereRadius > radius)
+                {
+                    radius = sphereRadius;
+                    centreY = node.Parent == null ? 0f : node.Position.Y - node.Parent.Position.Y;
+                }
+            }
+            foreach (Actor child in node.Children)
+                GatherCollider(child, ref radius, ref centreY);
+        }
+
+        /// <summary>The point a wall probe should start from: the middle of the actor's collider.</summary>
+        private static Vector3 ColliderCastPoint(Actor actor)
+        {
+            return TryColliderFootprint(actor, out _, out float centreY)
+                ? actor.Position + Vector3.Up * centreY
+                : actor.Position;
+        }
+
+        /// <summary>
+        /// True when a transform step of <paramref name="step"/> along <paramref name="direction"/>
+        /// would push the actor's own collider into something solid. Actors without a collider are
+        /// never blocked (nothing of theirs can intersect); the step is measured from the collider's
+        /// centre and includes its radius, so the box stops at the wall instead of overlapping it.
+        /// </summary>
+        private static bool StepBlocked(Actor actor, Vector3 direction, float step)
+        {
+            if (!TryColliderFootprint(actor, out float radius, out _))
+                return false;
+            var heading = new Vector3(direction.X, 0f, direction.Z);
+            if (heading.LengthSquared < 1e-6f)
+                return false;
+            heading = Vector3.Normalize(heading);
+            Vector3 start = ColliderCastPoint(actor);
+            if (!Physics.LineCastAll(start, start + heading * (step + radius), out var hits, ~0u, true))
+                return false;
+            foreach (var hit in hits)
+            {
+                var hitActor = hit.Collider as Actor;
+                if (hitActor == null)
+                    return true; // geometry without an actor (terrain, a static collider, ...)
+                if (!ReferenceEquals(hitActor, actor) && !IsAncestorOrSelf(actor, hitActor))
+                    return true;
+            }
+            return false;
+        }
 
         /// <summary>The world heading for one wander leg.</summary>
         private static Vector3 WanderDirection(WanderLeg leg)
@@ -1320,9 +1407,13 @@ namespace Game
         }
 
         /// <summary>True when something that is not this actor (a wall, a prop) sits within
-        /// <paramref name="distance"/> along <paramref name="heading"/>.</summary>
+        /// <paramref name="distance"/> along <paramref name="heading"/>. An actor with a collider
+        /// is probed from the middle of that collider and by its own half-width
+        /// (<see cref="StepBlocked"/>), so the box stops at the wall instead of half inside it.</summary>
         private static bool WanderBlocked(Actor actor, Vector3 heading, float distance)
         {
+            if (TryColliderFootprint(actor, out _, out _))
+                return StepBlocked(actor, heading, distance);
             if (!Physics.LineCastAll(actor.Position, actor.Position + heading * distance, out var hits, ~0u, true))
                 return false;
             foreach (var hit in hits)
@@ -1388,7 +1479,12 @@ namespace Game
                     break;
                 }
                 default:
-                    subject.Position = subject.Position + direction * step;
+                    // `Position +=` is a teleport: PhysX never stops it, so a collider-bearing
+                    // actor would end up inside the wall (and a RigidBody under it would be
+                    // ejected with a spin). Stop at the surface instead; the owner (`wander`,
+                    // `goto`) re-aims on its next tick, so it walks away rather than through.
+                    if (!StepBlocked(subject, direction, step))
+                        subject.Position = subject.Position + direction * step;
                     break;
             }
         }
