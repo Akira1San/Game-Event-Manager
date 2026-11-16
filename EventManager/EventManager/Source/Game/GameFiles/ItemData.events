@@ -1,0 +1,32 @@
+# ---------------- ItemData.events (Task 9 E7: item bases) ----------------
+# Item bases for the affix generator. `spawn Ring at me rarity "Rare" level 12` looks the base up
+# here, rolls the rarity's affixes from AffixData.events and writes the result onto the spawned
+# clone as its own `my` variables (my damage, my FireResist, my Rarity, my ItemName, my ItemLevel).
+#
+# HOW IT LOADS: read by name — ItemData.events — when events load and on hot reload, before any
+# actor's `me appears`, exactly like WeaponData.events and EnemyTypes.events.
+#
+# FIELDS (per base, one variable each — the base name plus the field):
+#   <Base>Slot        the equip slot this base wants (`my RingSlot`, E5 is content only)
+#   <Base>Damage      base damage the item grants (applied on `equip`)
+#   <Base>Armor       base armor the item grants (applied on `equip`)
+#   <Base>ItemLevel   the item level this base is meant for (informational)
+#
+# A base that exists only as `<Base><Field>` globals is a valid base. Item names must be ONE
+# word: the bag and `equip` take single tokens (`Ring`, not `Rare Ring`).
+
+when game starts
+  set RingSlot to "ring"
+  set RingDamage to 0
+  set RingArmor to 0
+  set RingItemLevel to 1
+
+  set AmuletSlot to "amulet"
+  set AmuletDamage to 0
+  set AmuletArmor to 0
+  set AmuletItemLevel to 1
+
+  set SwordSlot to "weapon"
+  set SwordDamage to 12
+  set SwordArmor to 0
+  set SwordItemLevel to 1

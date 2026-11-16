@@ -1,0 +1,110 @@
+# ---------------- AffixData.events (Task 9 E7: rarity + affixes) ----------------
+# Two tables in one data file: how many affixes each rarity rolls, and the affix pool itself.
+#
+# HOW IT LOADS: read by name — AffixData.events — when events load and on hot reload, before any
+# actor's `me appears`, exactly like WeaponData.events.
+#
+# RARITY ROWS  (built-in counts: Common 0, Magic 1-2, Rare 1-3, Unique 3-4 — these rows win)
+#   <Rarity>MinAffixes / <Rarity>MaxAffixes
+#
+# AFFIX ROWS
+#   <Affix>Stat        which `my` variable it grants — must be one of the names in ItemStats
+#                      (damage, armor, FireResist, ColdResist, PoisonResist, Strength, Dexterity,
+#                      Vitality, Energy, MaxHealth, MaxMana). A typo is skipped with a warning
+#                      rather than creating a variable nothing ever reads.
+#   <Affix>Min / Max   the roll range at the affix's own item level
+#   <Affix>ItemLevel   the lowest item level this affix can appear on
+#   <Affix>Word        the adjective used in the name ("Fiery Ring"), defaults to the affix name
+#   <Affix>Suffix      true renders it after the base name ("Ring of the Fox") instead
+#
+# Values grow 5% per item level above <Affix>ItemLevel, so a level-20 ring beats a level-1 one.
+
+when game starts
+  # ---- rarities ---------------------------------------------------------------------------
+  set CommonMinAffixes to 0
+  set CommonMaxAffixes to 0
+  set MagicMinAffixes to 1
+  set MagicMaxAffixes to 2
+  set RareMinAffixes to 1
+  set RareMaxAffixes to 3
+  set UniqueMinAffixes to 3
+  set UniqueMaxAffixes to 4
+
+  # ---- affixes: one stat each, flavour word for the item's name ---------------------------
+  set FieryStat to "FireResist"
+  set FieryMin to 5
+  set FieryMax to 15
+  set FieryItemLevel to 1
+  set FieryWord to "Fiery"
+  set FierySuffix to false
+
+  set ChillingStat to "ColdResist"
+  set ChillingMin to 5
+  set ChillingMax to 15
+  set ChillingItemLevel to 1
+  set ChillingWord to "Chilling"
+  set ChillingSuffix to false
+
+  set VenomousStat to "PoisonResist"
+  set VenomousMin to 4
+  set VenomousMax to 12
+  set VenomousItemLevel to 3
+  set VenomousWord to "Venomous"
+  set VenomousSuffix to false
+
+  set StrongStat to "Strength"
+  set StrongMin to 2
+  set StrongMax to 6
+  set StrongItemLevel to 1
+  set StrongWord to "Strong"
+  set StrongSuffix to false
+
+  set NimbleStat to "Dexterity"
+  set NimbleMin to 2
+  set NimbleMax to 6
+  set NimbleItemLevel to 1
+  set NimbleWord to "Nimble"
+  set NimbleSuffix to false
+
+  set VitalStat to "Vitality"
+  set VitalMin to 2
+  set VitalMax to 8
+  set VitalItemLevel to 1
+  set VitalWord to "Vital"
+  set VitalSuffix to false
+
+  set WiseStat to "Energy"
+  set WiseMin to 2
+  set WiseMax to 8
+  set WiseItemLevel to 1
+  set WiseWord to "Wise"
+  set WiseSuffix to false
+
+  set ToughStat to "armor"
+  set ToughMin to 3
+  set ToughMax to 10
+  set ToughItemLevel to 1
+  set ToughWord to "Tough"
+  set ToughSuffix to false
+
+  set CruelStat to "damage"
+  set CruelMin to 2
+  set CruelMax to 8
+  set CruelItemLevel to 1
+  set CruelWord to "Cruel"
+  set CruelSuffix to false
+
+  set HealthyStat to "MaxHealth"
+  set HealthyMin to 10
+  set HealthyMax to 25
+  set HealthyItemLevel to 1
+  set HealthyWord to "Sound"
+  set HealthySuffix to false
+
+  # A late-game suffix: only rolls on item level 10 and up, and it reads as "... of the Fox".
+  set FoxyStat to "Dexterity"
+  set FoxyMin to 6
+  set FoxyMax to 14
+  set FoxyItemLevel to 10
+  set FoxyWord to "Fox"
+  set FoxySuffix to true

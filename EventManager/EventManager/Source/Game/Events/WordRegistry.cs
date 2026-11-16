@@ -206,6 +206,8 @@ namespace Game
             new WordEntry { Kind = "action", Word = "spawn", Example = "spawn Bullet at me offset 30" },
             new WordEntry { Kind = "action", Word = "spawn", Example = "spawn prefab \"Hero\" at SpawnPoint" },
             new WordEntry { Kind = "action", Word = "spawn", Example = "spawn scene \"HeroScene\" at SpawnPoint" },
+            new WordEntry { Kind = "action", Word = "spawn", Example = "spawn Ring at me rarity \"Rare\" level 12", AltShape = "rolls the item's base stats plus the rarity's affixes (Common none, Magic 1-2, Rare 1-3) from AffixData.events, writes them as the item's own `my` variables and applies them to the wearer on `equip`" },
+            new WordEntry { Kind = "action", Word = "cast", Example = "cast \"Fireball\"", AltShape = "cast \"Heal\" at player · spends `my Mana`, refuses while the spell's cooldown is live, then spawns the spell's bullet (stamping `my damage`, `my blast`, `my Element`) or, for a spell with no bullet, sends the message \"cast <Spell>\" so events decide what happens · `my <Spell>Cooldown` reads the seconds left" },
             new WordEntry { Kind = "action", Word = "place", Example = "place Barracks at Mouse" },
             new WordEntry { Kind = "action", Word = "place", Example = "place Barracks at Mouse on grid" },
             new WordEntry { Kind = "action", Word = "place", Example = "place Barracks at Mouse on grid by 32" },

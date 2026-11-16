@@ -1,0 +1,50 @@
+# ---------------- SpellData.events (Task 9 E3: spell data table) ----------------
+# Spell definitions, data-driven. `cast "Fireball"` reads these numbers: it spends `my Mana`,
+# refuses while the spell's own cooldown is live, then clones <Spell>Bullet at the caster (or at
+# `cast "..." at <thing>`) with the spell's damage/blast/speed/life stamped onto the bullet, plus
+# `my Element` so E4's resistance messages have something to read.
+#
+# A spell with an EMPTY Bullet has no projectile: `cast` sends the message "cast <Spell>" to the
+# target (or to the caster for a self spell) and the events decide what happens —
+# `when message "cast Heal" arrives` → `add 30 to my health`.
+#
+# HOW IT LOADS: the file is read when the game loads events (and on hot reload), by name —
+# SpellData.events — before any actor's `when me appears` runs, so a spell is complete on the
+# first tick. Attaching it to a sheet is optional; the `when game starts` block keeps it valid as
+# a normal event file.
+#
+# FIELDS (per spell, one variable each — the spell name plus the field):
+#   <Spell>Mana        mana one cast costs (`my Mana`)
+#   <Spell>Cooldown    seconds before the same actor may cast it again
+#   <Spell>Damage      damage stamped onto the projectile (`my damage`)
+#   <Spell>Blast       explosion radius in cm (`my blast`) — pair with an `explode` bullet sheet
+#   <Spell>Element     damage type the projectile carries (`my Element`): fire, cold, poison, ...
+#   <Spell>Bullet      actor template the cast clones; empty = the message branch, no projectile
+#   <Spell>Speed       projectile speed in cm/s (`my BulletSpeed`)
+#   <Spell>Life        projectile lifetime in seconds (`my Life` / `my TimeLeft`)
+#   <Spell>Sound       sound played by the caster when it goes off
+#
+# The bullet template is a scene actor, exactly like `spawn Bullet`: a spell whose template is
+# missing warns once when it is first cast. `my <Spell>Cooldown` reads the seconds left, so a HUD
+# can `bind FireballLabel to my FireballCooldown`.
+
+when game starts
+  # --- Fireball: a damage spell with a projectile ---
+  set FireballMana to 10
+  set FireballCooldown to 1.2
+  set FireballDamage to 20
+  set FireballBlast to 180
+  set FireballElement to "fire"
+  set FireballBullet to "Fireball"
+  set FireballSpeed to 420
+  set FireballLife to 2.5
+  set FireballSound to "fireball"
+
+  # --- Heal: no projectile, the message branch does the work ---
+  set HealMana to 15
+  set HealCooldown to 2
+  set HealDamage to 0
+  set HealBlast to 0
+  set HealElement to "holy"
+  set HealBullet to ""
+  set HealSound to "heal"

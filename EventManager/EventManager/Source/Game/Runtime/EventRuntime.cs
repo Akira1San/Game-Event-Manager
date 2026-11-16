@@ -88,6 +88,17 @@ namespace Game
             // weapon and its rounds without the sheet mirroring a variable per weapon.
             if (string.Equals(name, "Ammo", StringComparison.OrdinalIgnoreCase))
                 return ValueBox.OfNumber(WeaponData.ReadAmmo(this, ReadMy(WeaponData.CurrentWeaponVariable).AsText()));
+            // `my FireballCooldown` (Task 9 E3): seconds left on that spell's cooldown, computed
+            // like `my Ammo` so a HUD bind reads live without the sheet mirroring a timer. Only
+            // names that really are a spell are treated this way, so an ordinary `my Cooldown`
+            // variable still reads as a variable.
+            if (name.Length > 8 && name.EndsWith("Cooldown", StringComparison.OrdinalIgnoreCase))
+            {
+                string spellName = name.Substring(0, name.Length - 8);
+                string canonical = SpellData.CanonicalFor(Variables, spellName);
+                if (canonical != null)
+                    return ValueBox.OfNumber(Runtime.Spells.Remaining(Me, canonical, Runtime.Time));
+            }
             return Variables.GetLocal(Me, name);
         }
 
@@ -226,6 +237,10 @@ namespace Game
         public SoundBus Sounds = new SoundBus();
         /// <summary>Per-actor reload timers behind `reload` / `reloading` (Task 16 Part C).</summary>
         public WeaponClock Weapons = new WeaponClock();
+        /// <summary>Per actor + spell cooldowns behind `cast` (Task 9 E3).</summary>
+        public SpellClock Spells = new SpellClock();
+        /// <summary>Rolled item instances and what they added to their wearer (Task 9 E7).</summary>
+        public ItemAffixes Affixes = new ItemAffixes();
         /// <summary>Level order, current level and run statistics (Task 16 Part G).</summary>
         public Levels Levels = new Levels();
         /// <summary>The bridge loads the scene `next level` picks; a test can just record it.</summary>
@@ -270,6 +285,13 @@ namespace Game
         /// <summary>actor -> the prefab / scene / template that spawned it (`my spawnedFrom`).</summary>
         private readonly Dictionary<object, string> spawnSources = new Dictionary<object, string>();
         private readonly Dictionary<object, Dictionary<string, int>> bags = new Dictionary<object, Dictionary<string, int>>();
+        /// <summary>
+        /// owner -> item name -> the actors that were put in the bag, in pickup order (Task 9 E7).
+        /// The bag itself still counts by name, so `my bag` reads `Ring x2`; this list is what
+        /// lets `equip Ring` apply the affix roll of one specific dropped ring instead of guessing.
+        /// </summary>
+        private readonly Dictionary<object, Dictionary<string, List<object>>> bagItems =
+            new Dictionary<object, Dictionary<string, List<object>>>();
         /// <summary>wearer -> set of item names currently equipped on that wearer.</summary>
         private readonly Dictionary<object, HashSet<string>> equipped = new Dictionary<object, HashSet<string>>();
         /// <summary>Per-player join/die/score edges behind the Part F triggers, indexed 1..2.</summary>
@@ -967,23 +989,77 @@ namespace Game
 
         public void BagAdd(object owner, string thing)
         {
+            BagAdd(owner, thing, null);
+        }
+
+        /// <summary><c>add &lt;thing&gt; to my bag</c>. <paramref name="item"/> is the actor the
+        /// name came from when one was resolved, so a rolled item keeps its own affixes; pass
+        /// null for a plain name (hand-authored items work exactly as before).</summary>
+        public void BagAdd(object owner, string thing, object item)
+        {
             var bag = BagOf(owner);
             bag.TryGetValue(thing, out int count);
             bag[thing] = count + 1;
+            if (item != null)
+            {
+                if (!bagItems.TryGetValue(owner, out var carried))
+                {
+                    carried = new Dictionary<string, List<object>>(StringComparer.OrdinalIgnoreCase);
+                    bagItems[owner] = carried;
+                }
+                if (!carried.TryGetValue(thing, out var list))
+                {
+                    list = new List<object>();
+                    carried[thing] = list;
+                }
+                list.Add(item);
+            }
         }
 
         public void BagRemove(object owner, string thing)
         {
-            if (!bags.TryGetValue(owner, out var bag))
-                return;
-            if (bag.TryGetValue(thing, out int count))
+            TakeBagItem(owner, thing, out _);
+        }
+
+        /// <summary>
+        /// Takes one <paramref name="thing"/> out of the bag (count and carried instance), reporting
+        /// whether the bag had one and which actor it came from. <c>equip</c> uses this so the
+        /// wearer gets the stats of the ring that was actually picked up.
+        /// </summary>
+        public bool TakeBagItem(object owner, string thing, out object item)
+        {
+            item = null;
+            if (!bags.TryGetValue(owner, out var bag) || !bag.TryGetValue(thing, out int count))
+                return false;
+            count--;
+            if (count <= 0)
+                bag.Remove(thing);
+            else
+                bag[thing] = count;
+            if (bagItems.TryGetValue(owner, out var carried) && carried.TryGetValue(thing, out var list) && list.Count > 0)
             {
-                count--;
-                if (count <= 0)
-                    bag.Remove(thing);
-                else
-                    bag[thing] = count;
+                item = list[0];
+                list.RemoveAt(0);
+                if (list.Count == 0)
+                    carried.Remove(thing);
             }
+            // Hand-authored items are often only a name in the bag; fall back to the actor that
+            // carries that name so its `gets equipped` sheet (and any roll) still resolves.
+            if (item == null)
+                item = FindNamedActor(thing);
+            return true;
+        }
+
+        /// <summary>The actor a bag name refers to right now, or null.</summary>
+        public object BagItemFor(EventContext context, string thing)
+        {
+            if (context == null || string.IsNullOrEmpty(thing))
+                return null;
+            if (string.Equals(thing, "other", StringComparison.OrdinalIgnoreCase))
+                return context.Other;
+            if (string.Equals(thing, "me", StringComparison.OrdinalIgnoreCase))
+                return context.Me;
+            return FindThing(thing, context.Me);
         }
 
         public bool BagHas(object owner, string thing)
@@ -999,12 +1075,24 @@ namespace Game
         /// <summary>Record that <paramref name="wearer"/> is now wearing <paramref name="thing"/>.</summary>
         public void EquipItem(object wearer, string thing)
         {
+            EquipItem(wearer, thing, null);
+        }
+
+        /// <summary>
+        /// Wears <paramref name="thing"/>, applying any rolled affixes from the item actor
+        /// <paramref name="item"/> (Task 9 E7). Hand-authored items pass null and keep doing their
+        /// stat push in their own `when me gets equipped` sheet.
+        /// </summary>
+        public void EquipItem(object wearer, string thing, object item)
+        {
             if (!equipped.TryGetValue(wearer, out var set))
             {
                 set = new HashSet<string>();
                 equipped[wearer] = set;
             }
             set.Add(thing);
+            if (item != null)
+                Affixes.Apply(Variables, wearer, thing, item);
         }
 
         /// <summary>Record that <paramref name="wearer"/> is no longer wearing <paramref name="thing"/>.</summary>
@@ -1016,6 +1104,8 @@ namespace Game
                 if (set.Count == 0)
                     equipped.Remove(wearer);
             }
+            // Take back exactly the stats this item added, never a recomputed guess.
+            Affixes.Remove(Variables, wearer, thing);
         }
 
         public bool IsEquipped(object wearer, string thing)
@@ -1953,7 +2043,8 @@ namespace Game
                     _ => null,
                 };
                 if (thing != null && thing.Length > 0)
-                    context.Runtime.BagAdd(context.Me, thing);
+                    context.Runtime.BagAdd(context.Me, thing,
+                        context.Runtime.BagItemFor(context, thing));
                 return;
             }
             double amount = context.Evaluate(add.Amount).AsNumber();
@@ -2003,11 +2094,11 @@ namespace Game
         private void ExecuteEquip(EventContext context, EquipNode node)
         {
             string thing = node.Thing;
-            // `equip <thing>` takes the item from the bag and links the item's sheet to me.
-            if (!context.Runtime.BagHas(context.Me, thing))
+            // `equip <thing>` takes the item from the bag and links the item's sheet to me. The
+            // actor that was carried out with it is the one whose affix roll applies (Task 9 E7).
+            if (!context.Runtime.TakeBagItem(context.Me, thing, out object item))
                 return;
-            context.Runtime.BagRemove(context.Me, thing);
-            context.Runtime.EquipItem(context.Me, thing);
+            context.Runtime.EquipItem(context.Me, thing, item);
             // the item's `gets equipped` event runs with the wearer as `me`
             foreach (var sheet in context.Runtime.SheetsUsingSource(thing))
                 sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.Equipped, MeOverride = context.Me });

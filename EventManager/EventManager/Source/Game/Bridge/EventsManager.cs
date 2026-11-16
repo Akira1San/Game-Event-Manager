@@ -184,6 +184,12 @@ namespace Game
             // Weapon stats come from the data file too, so `spawn Bullet` already knows the
             // current weapon's bullet type on the first shot (Task 16 Part C).
             WeaponData.LoadData(ProgramNamed("WeaponData")?.File);
+            // Spell definitions (Task 9 E3) and the item/affix tables (Task 9 E7) load the same
+            // way, so `cast "Fireball"` and `spawn Ring rarity "Rare"` are complete on the first
+            // tick and a data edit takes effect on the next reload.
+            SpellData.LoadData(ProgramNamed(SpellData.FileName)?.File);
+            ItemData.LoadData(ProgramNamed(ItemData.FileName)?.File);
+            AffixData.LoadData(ProgramNamed(AffixData.FileName)?.File);
             // Attack matchups come from their own data file, so `me can attack other` is settled
             // before the first shot (Task 23 Part B).
             Matchups.LoadData(ProgramNamed(Matchups.FileName)?.File);
@@ -263,6 +269,9 @@ namespace Game
             ResourceManager.LoadData(EventFiles.LoadOne(_gameFilesFolder, ResourceManager.FileName)?.File);
             EnemyTypes.LoadData(ProgramNamed("EnemyTypes")?.File);
             WeaponData.LoadData(ProgramNamed("WeaponData")?.File);
+            SpellData.LoadData(ProgramNamed(SpellData.FileName)?.File);
+            ItemData.LoadData(ProgramNamed(ItemData.FileName)?.File);
+            AffixData.LoadData(ProgramNamed(AffixData.FileName)?.File);
             Matchups.LoadData(ProgramNamed(Matchups.FileName)?.File);
             _shownErrors.Clear();
             _missingShown.Clear();

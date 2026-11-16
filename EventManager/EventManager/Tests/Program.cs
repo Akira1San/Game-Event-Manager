@@ -8232,6 +8232,263 @@ climbEngine.Tick(2);
 Check(climbEngine.Variables.GetGlobal("ClimbTicks").AsNumber() == 1,
     "`me is climbing` goes false again once the actor lets go");
 
+// ------------------------------------------------------------------
+// Task 9 E3: spell data table + `cast`
+// ------------------------------------------------------------------
+
+var castProg = parser.Parse("when every 0 seconds\n  cast \"Fireball\"\n");
+var castSpec = ActionWords.Parse(castProg.Events[0].Body[0].Words, null);
+Check(castSpec.Verb == ActionVerb.Cast && castSpec.Spell == "Fireball" && castSpec.Thing == "Fireball",
+    "`cast \"Fireball\"` parses to ActionVerb.Cast with its spell name");
+
+var castAtProg = parser.Parse("when every 0 seconds\n  cast \"Heal\" at player\n");
+var castAtSpec = ActionWords.Parse(castAtProg.Events[0].Body[0].Words, null);
+Check(castAtSpec.Verb == ActionVerb.Cast && castAtSpec.Spell == "Heal" && castAtSpec.To == "player",
+    "`cast \"Heal\" at player` carries the spell and the target");
+
+string castWarning = "";
+var bareCastProg = parser.Parse("when every 0 seconds\n  cast Fireball\n");
+var bareCastSpec = ActionWords.Parse(bareCastProg.Events[0].Body[0].Words, message => castWarning = message);
+Check(bareCastSpec.Verb == ActionVerb.Unknown && castWarning.Contains("quotes"),
+    "`cast` without a quoted spell name explains the quotes instead of guessing a target");
+
+Check(Array.Exists(WordRegistry.All, entry => entry.Word == "cast"),
+    "the word registry lists `cast` (docs, autocomplete and typo suggestions)");
+
+// The table: `<Spell><Field>` globals, exactly like weapon data.
+var spellParser = new EventParser();
+SpellData.LoadData(spellParser.Parse(@"when game starts
+  set FireballMana to 10
+  set FireballCooldown to 1.2
+  set FireballDamage to 20
+  set FireballBlast to 180
+  set FireballElement to ""fire""
+  set FireballBullet to ""Fireball""
+  set FireballSpeed to 420
+"));
+Check(SpellData.TryGet(null, "fireball", out SpellStats fireball) &&
+      fireball.Name == "Fireball" && fireball.Mana == 10 && Math.Abs(fireball.Cooldown - 1.2) < 1e-9 &&
+      fireball.Damage == 20 && fireball.Blast == 180 && fireball.Element == "fire" &&
+      fireball.Bullet == "Fireball" && fireball.Speed == 420,
+    "`<Spell><Field>` globals define a spell (casing-insensitive lookup)");
+Check(!SpellData.TryGet(null, "Banana", out _), "a spell nobody defined is not invented");
+Check(SpellData.KnownNames(null).Contains("Fireball"), "the unknown-spell help lists what the project has");
+
+// Cooldowns: per actor AND per spell, so two spells on one sheet are independent.
+var spellClock = new SpellClock();
+var mage = new FakeActor("Mage");
+spellClock.Start(mage, "Fireball", 1.2, 5);
+Check(spellClock.IsCooling(mage, "Fireball", 5.5) &&
+      Math.Abs(spellClock.Remaining(mage, "Fireball", 5.5) - 0.7) < 1e-9,
+    "a started cooldown is live and reports the seconds left");
+Check(!spellClock.IsCooling(mage, "Heal", 5.5), "another spell on the same actor is still ready");
+Check(!spellClock.IsCooling(mage, "Fireball", 6.3), "the cooldown expires on its own");
+spellClock.Start(mage, "Fireball", 1.2, 7);
+spellClock.Clear(mage);
+Check(!spellClock.IsCooling(mage, "Fireball", 7.1), "a destroyed actor's cooldowns are cleared");
+
+// `my <Spell>Cooldown` is a computed readout (like `my Ammo`), never a stored live timer.
+var spellWorld = new FakeWorld();
+var spellMage = new FakeActor("Mage");
+spellWorld.AddActor(spellMage);
+var spellEngine = FreshEngine(spellWorld);
+spellEngine.AddSheet(spellMage, spellParser.Parse("when game starts\n  set Mana to 30\n"));
+spellEngine.Tick(0);
+spellEngine.Spells.Start(spellMage, "Fireball", 1.2, 0);
+var spellContext = new EventContext { Runtime = spellEngine, Variables = spellEngine.Variables, Me = spellMage };
+Check(Math.Abs(spellContext.ReadMy("FireballCooldown").AsNumber() - 1.2) < 1e-9,
+    "`my FireballCooldown` reads the live seconds left");
+Check(!spellEngine.Variables.HasLocal(spellMage, "FireballCooldown"),
+    "the cooldown readout is computed, not a mirrored variable");
+
+// The shipped data file defines the two spells the task names.
+var spellDataEvents = spellParser.Parse(File.ReadAllText("Source/Game/GameFiles/SpellData.events"));
+Check(spellDataEvents.Events.Count == 1, "SpellData.events parses (one `when game starts` block)");
+SpellData.LoadData(spellDataEvents);
+SpellData.TryGet(null, "Fireball", out SpellStats fileFireball);
+SpellData.TryGet(null, "Heal", out SpellStats fileHeal);
+Check(fileFireball != null && fileFireball.Mana == 10 && Math.Abs(fileFireball.Cooldown - 1.2) < 1e-9 &&
+      fileFireball.Bullet == "Fireball" && fileFireball.Element == "fire",
+    "the shipped SpellData.events defines Fireball's mana, cooldown and element");
+Check(fileHeal != null && fileHeal.Bullet == "" && fileHeal.Mana == 15,
+    "Heal is a no-projectile spell (the message branch)");
+
+// ------------------------------------------------------------------
+// Task 9 E7: item rarity + affix generator
+// ------------------------------------------------------------------
+
+var rareSpawnProg = parser.Parse("when me appears\n  spawn Ring at me rarity \"Rare\" level 12\n");
+var rareSpawnSpec = ActionWords.Parse(rareSpawnProg.Events[0].Body[0].Words, null);
+Check(rareSpawnSpec.Verb == ActionVerb.Spawn && rareSpawnSpec.Thing == "Ring" &&
+      rareSpawnSpec.To == "me" && rareSpawnSpec.HasRarity && rareSpawnSpec.Rarity == "Rare" &&
+      rareSpawnSpec.HasItemLevel && Math.Abs(rareSpawnSpec.ItemLevel - 12) < 1e-9,
+    "`spawn Ring at me rarity \"Rare\" level 12` parses the item qualifiers");
+
+var plainSpawnProg = parser.Parse("when me appears\n  spawn Sword at me\n");
+var plainSpawnSpec = ActionWords.Parse(plainSpawnProg.Events[0].Body[0].Words, null);
+Check(plainSpawnSpec.Verb == ActionVerb.Spawn && !plainSpawnSpec.HasRarity && !plainSpawnSpec.HasItemLevel,
+    "a plain `spawn` rolls nothing, so every existing item sheet is untouched");
+
+var bothSpawnProg = parser.Parse("when me appears\n  spawn Ring at me offset 20 rarity \"Magic\"\n");
+var bothSpawnSpec = ActionWords.Parse(bothSpawnProg.Events[0].Body[0].Words, null);
+Check(bothSpawnSpec.HasSpawnOffset && Math.Abs(bothSpawnSpec.SpawnOffset - 20) < 1e-9 &&
+      bothSpawnSpec.HasRarity && bothSpawnSpec.Rarity == "Magic",
+    "`offset` and `rarity` may appear together, in either order");
+
+// Base + affix data and the generator's pure math.
+var itemParser = new EventParser();
+ItemData.LoadData(itemParser.Parse(@"when game starts
+  set RingSlot to ""ring""
+  set RingArmor to 3
+"));
+Check(ItemData.TryGet(null, "ring", out ItemBase testRing) && testRing.Slot == "ring" && testRing.Armor == 3,
+    "`<Base><Field>` globals define an item base");
+
+AffixData.LoadData(itemParser.Parse(@"when game starts
+  set RareMinAffixes to 1
+  set RareMaxAffixes to 3
+  set FieryStat to ""FireResist""
+  set FieryMin to 5
+  set FieryMax to 15
+  set FieryItemLevel to 1
+  set FieryWord to ""Fiery""
+  set FoxyStat to ""Dexterity""
+  set FoxyMin to 6
+  set FoxyMax to 14
+  set FoxyItemLevel to 10
+  set FoxyWord to ""Fox""
+  set FoxySuffix to true
+"));
+var testRarity = AffixData.RarityFor(null, "rare");
+Check(testRarity != null && testRarity.MinAffixes == 1 && testRarity.MaxAffixes == 3,
+    "a rarity row sets its affix count range");
+Check(AffixData.RarityFor(null, "Common") != null && AffixData.RarityFor(null, "Rare").MaxAffixes == 3,
+    "built-in rarity counts survive when the data file has no row for them");
+Check(AffixData.RarityFor(null, "Legendary") == null, "an unknown rarity is reported, not invented");
+Check(ItemGenerator.AffixCount(testRarity, 5, 0.0) == 1 &&
+      ItemGenerator.AffixCount(testRarity, 5, 0.999) == 3,
+    "the affix count spans the rarity's range");
+Check(ItemGenerator.AffixCount(testRarity, 1, 0.9) == 1,
+    "the count is clamped to the eligible pool (a small pool never over-rolls)");
+var fieryDef = AffixData.DefOf(null, "Fiery");
+Check(fieryDef != null && fieryDef.Stat == "FireResist" && fieryDef.Min == 5 && fieryDef.Max == 15,
+    "an affix row reads its stat and roll range");
+Check(ItemGenerator.RollValue(fieryDef, 1, 0) == 5 && ItemGenerator.RollValue(fieryDef, 1, 1) == 15,
+    "an affix rolls inside its min..max range");
+Check(ItemGenerator.RollValue(fieryDef, 11, 0) > ItemGenerator.RollValue(fieryDef, 1, 0),
+    "higher item levels roll stronger affix values");
+Check(ItemGenerator.ComposeName(new ItemBase { Name = "Ring" }, new List<AffixDef>
+      {
+          new AffixDef { Name = "Fiery", Word = "Fiery" },
+          new AffixDef { Name = "Fox", Word = "Fox", Suffix = true },
+      }) == "Fiery Ring of the Fox",
+    "the item's display name puts prefixes before and suffixes after the base");
+Check(ItemGenerator.Roll(null, "Banana", "Rare", 1) == null, "a base nobody defined rolls nothing");
+
+// The shipped tables, and a real roll through them.
+var itemDataEvents = itemParser.Parse(File.ReadAllText("Source/Game/GameFiles/ItemData.events"));
+var affixDataEvents = itemParser.Parse(File.ReadAllText("Source/Game/GameFiles/AffixData.events"));
+Check(itemDataEvents.Events.Count == 1, "ItemData.events parses");
+Check(affixDataEvents.Events.Count == 1, "AffixData.events parses");
+ItemData.LoadData(itemDataEvents);
+AffixData.LoadData(affixDataEvents);
+Check(ItemData.TryGet(null, "Sword", out ItemBase dataSword) && dataSword.Damage == 12 && dataSword.Slot == "weapon",
+    "the shipped ItemData.events defines the Sword's base damage");
+Check(AffixData.All(null).Count == 11, "the shipped AffixData.events defines eleven affixes");
+Check(AffixData.RarityFor(null, "Rare").MaxAffixes == 3 && AffixData.RarityFor(null, "Common").MaxAffixes == 0,
+    "the shipped rarities read Common 0 / Rare 1-3");
+
+Rng.Seed(7);
+ItemRoll rareRoll = ItemGenerator.Roll(null, "Ring", "Rare", 12);
+Check(rareRoll != null && rareRoll.AffixNames.Count >= 1 && rareRoll.AffixNames.Count <= 3,
+    "a rare ring rolls 1-3 affixes");
+Check(rareRoll.Stats.Count == rareRoll.AffixNames.Count, "a ring with no base stats grants exactly its affixes");
+CheckStrings("Rare", rareRoll.Rarity, "the roll records its rarity");
+Check(rareRoll.DisplayName.Contains("Ring"), "the rolled item carries a display name");
+bool duplicateStat = false;
+for (int i = 0; i < rareRoll.Stats.Count; i++)
+    for (int j = i + 1; j < rareRoll.Stats.Count; j++)
+        if (rareRoll.Stats[i].Stat == rareRoll.Stats[j].Stat)
+            duplicateStat = true;
+Check(!duplicateStat, "the same stat never rolls twice on one item");
+
+Check(ItemGenerator.Roll(null, "Ring", "Common", 5).AffixNames.Count == 0,
+    "a common item rolls no affixes");
+
+Rng.Seed(42);
+ItemRoll repeatedA = ItemGenerator.Roll(null, "Ring", "Rare", 12);
+Rng.Seed(42);
+ItemRoll repeatedB = ItemGenerator.Roll(null, "Ring", "Rare", 12);
+CheckStrings(string.Join(",", repeatedA.AffixNames), string.Join(",", repeatedB.AffixNames),
+    "a seeded roll replays the exact same affixes");
+Check(repeatedA.Stats.Count == repeatedB.Stats.Count, "...and the same stat count");
+
+// Item-level gating: a level-1 roll never includes a level-10 affix.
+Rng.Seed(3);
+bool gatedAffixLeaked = false;
+for (int i = 0; i < 50; i++)
+{
+    ItemRoll lowRoll = ItemGenerator.Roll(null, "Ring", "Rare", 1);
+    foreach (string affixName in lowRoll.AffixNames)
+        if (AffixData.DefOf(null, affixName).ItemLevel > 1)
+            gatedAffixLeaked = true;
+}
+Check(!gatedAffixLeaked, "an affix above the item level never rolls");
+
+Rng.Seed(11);
+bool sawLateAffix = false;
+for (int i = 0; i < 200; i++)
+{
+    ItemRoll highRoll = ItemGenerator.Roll(null, "Ring", "Rare", 12);
+    if (highRoll.AffixNames.Contains("Foxy"))
+        sawLateAffix = true;
+}
+Check(sawLateAffix, "the level-10 affix does roll at item level 12");
+
+// Applying a roll: exactly the rolled numbers go on, and come back off.
+var affixStore = new ItemAffixes();
+var wearerVariables = new EventVariables();
+var wearer = new FakeActor("Player");
+var rolledRing = new FakeActor("Ring");
+var manualRoll = new ItemRoll { Base = "Ring", Rarity = "Rare", DisplayName = "Fiery Ring" };
+manualRoll.Stats.Add(new ItemStat("FireResist", 12));
+manualRoll.Stats.Add(new ItemStat("damage", 3));
+affixStore.Stamp(rolledRing, manualRoll);
+Check(affixStore.HasRoll(rolledRing), "a stamped item remembers its roll");
+Check(affixStore.Apply(wearerVariables, wearer, "Ring", rolledRing), "equipping a rolled item applies it");
+Check(wearerVariables.GetLocal(wearer, "FireResist").AsNumber() == 12 &&
+      wearerVariables.GetLocal(wearer, "damage").AsNumber() == 3,
+    "the wearer gains exactly the rolled stats");
+Check(affixStore.Remove(wearerVariables, wearer, "Ring"), "unequipping removes the roll");
+Check(wearerVariables.GetLocal(wearer, "FireResist").AsNumber() == 0 &&
+      wearerVariables.GetLocal(wearer, "damage").AsNumber() == 0,
+    "the wearer's stats go back to exactly what they were");
+Check(!affixStore.Apply(wearerVariables, wearer, "Sword", new FakeActor("Sword")),
+    "a hand-authored item with no roll applies nothing (its own sheet does the work)");
+
+// The bag keeps which actor was picked up, so `equip Ring` applies THAT ring's affixes.
+var ringBagWorld = new FakeWorld();
+var ringBagPlayer = new FakeActor("Player");
+ringBagWorld.AddActor(ringBagPlayer);
+var ringBagEngine = FreshEngine(ringBagWorld);
+var droppedRing = new FakeActor("Ring");
+ringBagEngine.Affixes.Stamp(droppedRing, manualRoll);
+ringBagEngine.BagAdd(ringBagPlayer, "Ring", droppedRing);
+Check(ringBagEngine.BagCount(ringBagPlayer, "Ring") == 1 && ringBagEngine.BagHas(ringBagPlayer, "Ring"),
+    "`add Ring to my bag` still counts by name (`my bag` reads `Ring`)");
+Check(ringBagEngine.TakeBagItem(ringBagPlayer, "Ring", out object takenRing) && ReferenceEquals(takenRing, droppedRing),
+    "the bag reports which ring was carried out");
+Check(ringBagEngine.BagCount(ringBagPlayer, "Ring") == 0, "taking an item decrements the count");
+ringBagEngine.BagAdd(ringBagPlayer, "Ring", droppedRing);
+ringBagEngine.TakeBagItem(ringBagPlayer, "Ring", out object wornRing);
+ringBagEngine.EquipItem(ringBagPlayer, "Ring", wornRing);
+Check(ringBagEngine.Variables.GetLocal(ringBagPlayer, "FireResist").AsNumber() == 12,
+    "`equip` applies the rolled ring's stats to the wearer");
+Check(ringBagEngine.IsEquipped(ringBagPlayer, "Ring"), "the wearer still records the item as worn");
+ringBagEngine.UnequipItem(ringBagPlayer, "Ring");
+Check(ringBagEngine.Variables.GetLocal(ringBagPlayer, "FireResist").AsNumber() == 0,
+    "unequipping takes back exactly the rolled stats");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

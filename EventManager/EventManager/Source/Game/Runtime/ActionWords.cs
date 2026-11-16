@@ -25,6 +25,8 @@ namespace Game
         Scale,
         Destroy,
         Spawn,
+        /// <summary><c>cast "&lt;spell&gt;"</c> / <c>cast "&lt;spell&gt;" at &lt;thing&gt;</c> (Task 9 E3).</summary>
+        Cast,
         PlaySound,
         StopSound,
         PlayAnim,
@@ -146,6 +148,15 @@ namespace Game
         /// around obstacles instead of walking into them (Task 7 Part G2). Opt-in, so every
         /// existing sheet keeps the plain straight line.</summary>
         public bool AroundWalls;
+        /// <summary><c>cast "&lt;spell&gt;"</c>: the spell's name (also kept in
+        /// <see cref="Thing"/> so warnings read the same as other actions).</summary>
+        public string Spell = "";
+        /// <summary><c>spawn Ring at me rarity "Rare"</c>: roll affixes on the clone (Task 9 E7).</summary>
+        public string Rarity = "";
+        public bool HasRarity;
+        /// <summary><c>... level 12</c>: the item level the affixes roll for.</summary>
+        public double ItemLevel = 1;
+        public bool HasItemLevel;
     }
 
     public static class ActionWords
@@ -770,6 +781,27 @@ namespace Game
                     }
                     return Unknown(spec, words, "\u201Cdestroy\u201D needs a thing, like \u201Cdestroy other\u201D", warn);
 
+                case "cast":
+                {
+                    // `cast "Fireball"` / `cast "Heal" at player` — the spell name is quoted, so
+                    // a spell called `Heal` can never be mistaken for a target.
+                    if (words.Count >= 2 && words[1].Type == TokenType.Str)
+                    {
+                        spec.Thing = words[1].Text;
+                        spec.Spell = words[1].Text;
+                        int index = 2;
+                        if (words.Count >= index + 2 && words[index].Text == "at")
+                        {
+                            string castTarget = TargetAt(words, index + 1, out int castUsed);
+                            if (castTarget == null)
+                                return Unknown(spec, words, "\u201Ccast\u201D looks like this: \u201Ccast \"Fireball\"\u201D or \u201Ccast \"Heal\" at player\u201D", warn);
+                            spec.To = castTarget;
+                            index += 1 + castUsed;
+                        }
+                        return Finish(spec, ActionVerb.Cast, words, index);
+                    }
+                    return Unknown(spec, words, "\u201Ccast\u201D needs a spell name in quotes, like \u201Ccast \"Fireball\"\u201D", warn);
+                }
                 case "spawn":
                     if (words.Count >= 2 && words[1].Text == "prefab")
                     {
@@ -809,20 +841,43 @@ namespace Game
                             spec.Thing = words[1].Text;
                             spec.To = cloneSpot;
                             int consumed = 3 + cloneSpotUsed;
-                            // `spawn Bullet at me offset 30`: the clone appears 30 units along
-                            // the spot's own forward axis (TK4's muzzle offset).
-                            if (words.Count >= consumed + 2 && words[consumed].Text == "offset")
+                            // Qualifiers, in any order after the spot:
+                            //   `offset 30`  — 30 units along the spot's forward axis
+                            //   `rarity "Rare"` / `level 12` — roll an affixed item (Task 9 E7)
+                            while (consumed < words.Count)
                             {
-                                spec.AmountNode = ValueNodeAt(words, consumed + 1);
-                                spec.HasSpawnOffset = true;
-                                if (words[consumed + 1].Type == TokenType.Number)
-                                    spec.SpawnOffset = words[consumed + 1].Number;
-                                consumed += 2;
+                                string qualifier = words[consumed].Text;
+                                if (qualifier == "offset" && !spec.HasSpawnOffset && consumed + 1 < words.Count)
+                                {
+                                    spec.AmountNode = ValueNodeAt(words, consumed + 1);
+                                    spec.HasSpawnOffset = true;
+                                    if (words[consumed + 1].Type == TokenType.Number)
+                                        spec.SpawnOffset = words[consumed + 1].Number;
+                                    consumed += 2;
+                                    continue;
+                                }
+                                if (qualifier == "rarity" && !spec.HasRarity &&
+                                    consumed + 1 < words.Count && words[consumed + 1].Type == TokenType.Str)
+                                {
+                                    spec.Rarity = words[consumed + 1].Text;
+                                    spec.HasRarity = true;
+                                    consumed += 2;
+                                    continue;
+                                }
+                                if (qualifier == "level" && !spec.HasItemLevel &&
+                                    consumed + 1 < words.Count && words[consumed + 1].Type == TokenType.Number)
+                                {
+                                    spec.ItemLevel = words[consumed + 1].Number;
+                                    spec.HasItemLevel = true;
+                                    consumed += 2;
+                                    continue;
+                                }
+                                break;
                             }
                             return Finish(spec, ActionVerb.Spawn, words, consumed);
                         }
                     }
-                    return Unknown(spec, words, "\u201Cspawn\u201D looks like this: \u201Cspawn Bullet at me\u201D, \u201Cspawn Bullet at me offset 30\u201D, \u201Cspawn prefab \"Hero\" at SpawnPoint\u201D or \u201Cspawn scene \"HeroScene\" at SpawnPoint\u201D", warn);
+                    return Unknown(spec, words, "\u201Cspawn\u201D looks like this: \u201Cspawn Bullet at me\u201D, \u201Cspawn Bullet at me offset 30\u201D, \u201Cspawn Ring at me rarity \"Rare\" level 12\u201D, \u201Cspawn prefab \"Hero\" at SpawnPoint\u201D or \u201Cspawn scene \"HeroScene\" at SpawnPoint\u201D", warn);
                 case "train":
                 {
                     // `train Marine at Barracks` — add a unit to that building's queue.

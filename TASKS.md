@@ -1154,18 +1154,42 @@ when Left Mouse is pressed
 - [ ] HUD: `bind ManaLabel to my Mana and my MaxMana format "Mana: {0}/{1}"`.
 - [ ] Done-when: a potion fills to the cap and never above it; mana regenerates while below the cap.
 
-**E3 — Spell data table + `cast` (C#, one word)**
+**E3 — Spell data table + `cast` (C#, one word)** `[x]`
 Same shape as `WeaponData`: `<Spell><Field>` globals in a new `SpellData.events`
-(`Mana, Cooldown, Damage, Blast, Element, Bullet, Speed`), plus one action word.
+(`Mana, Cooldown, Damage, Blast, Element, Bullet, Speed, Life, Sound`), plus one action word.
 
-- [ ] `SpellData.events`: `Fireball` (Mana 10, Cooldown 1.2, Damage 20, Blast 180, Element fire,
+- [x] `SpellData.events`: `Fireball` (Mana 10, Cooldown 1.2, Damage 20, Blast 180, Element fire,
       Bullet Fireball) and `Heal` (Mana 15, no projectile).
-- [ ] Words `cast "<spell>"` / `cast "<spell>" at <thing>` + registry entries + keywords.html rows.
-- [ ] Runtime: refuse when `my Mana` is short or the cooldown is live; otherwise spend, then spawn
+- [x] Words `cast "<spell>"` / `cast "<spell>" at <thing>` + registry entries + keywords.html rows.
+- [x] Runtime: refuse when `my Mana` is short or the cooldown is live; otherwise spend, then spawn
       the spell's bullet or run its non-projectile branch.
-- [ ] Cooldown state per spell (`my <Spell>Cooldown`), mirroring the reload timer.
-- [ ] Unit tests: mana refusal, cooldown refusal, one cast spends once, unknown spell warns once.
+- [x] Cooldown state per spell (`my <Spell>Cooldown`), mirroring the reload timer.
+- [x] Unit tests: mana refusal, cooldown refusal, one cast spends once, unknown spell warns once.
 - [ ] Done-when: two spells with different mana/cooldowns fire from the same player sheet.
+      **Editor run pending** — needs E2's `my Mana` block on the player sheet and a `Fireball`
+      actor in the scene to stage the projectile clones.
+
+**As shipped (2026-11-16):** `Runtime/Spells.cs` — `SpellStats`, `SpellData` (the
+`<Spell><Field>` table: `LoadData`, `TrySplitField`, `CanonicalFor`, `KnownNames`, `TryGet`,
+built-in-free so nothing exists that data did not author) and `SpellClock` (per **actor + spell**
+timers, `Start`/`IsCooling`/`Remaining`/`Clear`). `ActionVerb.Cast` + `ActionSpec.Spell` parse both
+shapes (`ActionWords`; a bare `cast Fireball` explains the quotes). `FlaxActions.CastSpell` refuses
+quietly while cooling down or short of `my Mana` (a shortage is normal play), spends the mana
+clamped at 0 in code (the language has no `min()`), starts the clock, plays the spell's sound, then
+**either** clones `Bullet` at the caster/the `at` target — oriented at the target, with
+`my damage`/`my blast`/`my BulletSpeed`/`my Life`/`my TimeLeft`/`my Element`/`my Spell` stamped on
+it — **or**, for a spell with an empty `Bullet`, sends the message `"cast <Spell>"` to the target
+(or the caster) so events decide what happens (`Heal` is the shipped example: no healing code in
+C#, just `when message "cast Heal" arrives`). `my <Spell>Cooldown` is a **computed** readout in
+`EventContext.ReadMy` (like `my Ammo`), so a HUD binds live without a mirrored timer, and only real
+spell names are intercepted — an ordinary `my Cooldown` variable still reads as one. Cooldowns are
+cleared when the actor is destroyed (`ForgetSubject`) so a clone never inherits a stale timer.
+`SpellData.LoadData` runs at both the first load and the hot reload, so a data edit takes effect
+mid-session. Decisions from the review: message-based non-projectile spells, engine clock exposed
+as a computed value, element stamped on the projectile (E4 is then content), no range field — the
+projectile's `Life`/`Speed` is the range. 25 new checks (parse both shapes + the bare-cast hint,
+table load/lookup/case, clock liveness/expiry/clear/per-spell isolation, computed cooldown read,
+shipped data file) → **1476/1476 green**; module build 0 errors.
 
 **E4 — Damage types and resistances (events-only)**
 - [ ] Messages carry the element: `"damage"`, `"fire"`, `"cold"`, `"poison"`.
@@ -1189,10 +1213,38 @@ Same shape as `WeaponData`: `<Spell><Field>` globals in a new `SpellData.events`
 - [ ] HUD bind plus a level-up message.
 - [ ] Done-when: clearing a room levels the player once and thresholds never re-fire.
 
-**E7 — Item rarity and affixes (C#, generator)**
-- [ ] Generator that composes an item's stats from a base plus N random affixes, driven by
+**E7 — Item rarity and affixes (C#, generator)** `[x]`
+- [x] Generator that composes an item's stats from a base plus N random affixes, driven by
       `ItemLevel` and rarity. Items stay hand-authored sheets until this exists.
 - [ ] Done-when: a dropped ring rolls 1–3 affixes and its `my` stats reflect them.
+      **Editor run pending** — place a `Ring` actor in the scene (the template the clone stages
+      from), add a sheet with `spawn Ring at me rarity "Rare" level 12`, and read the clone's
+      `my FireResist` / `my ItemName`.
+
+**As shipped (2026-11-16):** `Runtime/Items.cs` — `ItemBase`/`ItemData` (`<Base>Slot`,
+`Damage`, `Armor`, `ItemLevel` from `ItemData.events`), `AffixDef`/`RarityDef`/`AffixData`
+(`<Affix>Stat/Min/Max/ItemLevel/Word/Suffix` plus `<Rarity>MinAffixes/MaxAffixes`, built-in
+rarity counts Common 0 · Magic 1–2 · Rare 1–3 · Unique 3–4 from one `AffixData.events`),
+`ItemStats` (the stat whitelist — an affix whose stat is not a real variable name is skipped with
+a warning instead of quietly creating one), `ItemGenerator` (pure: pool filtered by item level,
+count clamped to the pool, stats never repeat, values roll inside min..max and grow 5% per level
+above the affix's own minimum, `ComposeName` builds “Fiery Ring of the Fox”), and `ItemAffixes`
+(per-instance rolls + exactly what each equip added). The word is a **qualifier on `spawn`**, not a
+new word: `spawn <thing> at <spot> [offset <n>] [rarity "<name>"] [level <n>]`, in any order, both
+optional — absent `rarity` keeps today's behaviour byte-for-byte. On a rolled spawn the clone gets
+its stats written as its own `my` variables (`my FireResist`, `my damage`, `my Rarity`,
+`my ItemName`, `my ItemLevel`) **before** its sheet attaches, so `when me appears` already sees
+them. Equip applies rolls engine-side: the bag now remembers **which actor** each name came from
+(`BagAdd(owner, thing, item)`, `TakeBagItem`, so `my bag` still reads `Ring x2`), `equip` takes
+that instance and `EquipItem` applies its recorded stats, `UnequipItem` subtracts exactly those
+numbers (recorded, never recomputed — no drift). Hand-authored items (`Sword.events` →
+`add 5 to my damage`) are untouched and compose with rolled ones; destroyed actors forget both
+their roll and their wearer records. The item level defaults to a global `ItemLevel` when the
+`level` qualifier is absent. 24 new checks (both spawn shapes + qualifier order + plain spawn
+unchanged, base/affix/rarity tables, count clamping, seeded determinism, no duplicate stats, item
+level gating in both directions, value growth, display name, apply/remove exactness, hand-authored
+item applies nothing, bag instance identity, equip/unequip through the runtime) →
+**1476/1476 green**; module build 0 errors (9 pre-existing XML-doc warnings).
 
 **Out of scope:** skill trees, synergies, runewords, set items, charms, crafting, vendors, gambling,
 mercenaries.

@@ -1035,6 +1035,9 @@ namespace Game
                 case ActionVerb.Spawn:
                     Spawn(context, spec);
                     break;
+                case ActionVerb.Cast:
+                    CastSpell(context, spec);
+                    break;
                 case ActionVerb.PlaceBuilding:
                     Place(context, spec);
                     break;
@@ -2364,6 +2367,10 @@ namespace Game
                         clone.Orientation = Quaternion.Multiply(clone.Orientation,
                             Quaternion.Euler(0, (float)yaws[i], 0));
                 }
+                // `spawn Ring at me rarity "Rare" level 12` (Task 9 E7): roll the affixes onto
+                // the clone before its sheet attaches, so `when me appears` already sees them.
+                if (spec.HasRarity)
+                    ApplyItemRoll(context, spec, clone);
                 EventsManager.Instance?.AttachSpawnedActor(clone);
                 // A shot or a blast is heard the moment it appears (Task 16 Part B): enemies react
                 // to gunfire without the shooter's sheet having to remember a `play sound` line.
@@ -2375,6 +2382,114 @@ namespace Game
                 if (spawnedSound != null)
                     EmitSound(spawnedSound, clone.Position, context.Me as Actor ?? clone);
             }
+        }
+
+        /// <summary>
+        /// <c>cast "&lt;spell&gt;"</c> / <c>cast "&lt;spell&gt;" at &lt;thing&gt;</c> (Task 9 E3): the one
+        /// action word of the spell system.
+        ///
+        /// Refuses quietly while the spell's cooldown is live or `my Mana` is short — a shortage
+        /// is normal play, not an error. A successful cast spends the mana (clamped at 0 here,
+        /// because the language has no `min()`), starts the cooldown, plays the spell's sound and
+        /// then either clones the spell's bullet with its stats stamped on it, or — for a spell
+        /// with no bullet — sends the message <c>"cast &lt;Spell&gt;"</c> so events decide what
+        /// happens (a heal, a buff, a teleport).
+        /// </summary>
+        private static void CastSpell(EventContext context, ActionSpec spec)
+        {
+            string named = string.IsNullOrEmpty(spec.Spell) ? spec.Thing : spec.Spell;
+            var me = context.Me as Actor;
+            if (me == null)
+                return;
+            EventVariables variables = context.Runtime != null ? context.Runtime.Variables : null;
+            if (!SpellData.TryGet(variables, named, out SpellStats spell))
+            {
+                string known = SpellData.KnownNames(variables);
+                WarnOnce(string.IsNullOrEmpty(known)
+                    ? $"I don't know the spell \u201C{named}\u201D — no SpellData.events defines any spells yet."
+                    : $"I don't know the spell \u201C{named}\u201D. This project has: {known}.");
+                return;
+            }
+            double now = context.Runtime != null ? context.Runtime.Time : 0;
+            if (context.Runtime != null && context.Runtime.Spells.IsCooling(me, spell.Name, now))
+                return;
+            // `my Mana` is the purse (Task 9 E2 writes it). Read it without the "never set"
+            // warning: a sheet that has not added the mana block yet simply cannot afford a spell.
+            double mana = variables != null && variables.HasLocal(me, "Mana") ? context.ReadMy("Mana").AsNumber() : 0;
+            if (mana < spell.Mana)
+                return;
+            context.WriteMy("Mana", ValueBox.OfNumber(Math.Max(0, mana - spell.Mana)));
+            context.Runtime?.Spells.Start(me, spell.Name, spell.Cooldown, now);
+            if (!string.IsNullOrEmpty(spell.Sound))
+                EmitSound(spell.Sound, me.Position, me);
+
+            object target = string.IsNullOrEmpty(spec.To) ? null : ResolveThing(context, spec.To);
+            if (string.IsNullOrEmpty(spell.Bullet))
+            {
+                // No projectile: the spell IS the message. `when message "cast Heal" arrives`
+                // runs on the target (or on the caster for a self spell).
+                context.Runtime?.RaisePush(target ?? me, new PushSignal
+                {
+                    Kind = TriggerKind.Message,
+                    Name = "cast " + spell.Name,
+                    Other = me,
+                });
+                return;
+            }
+
+            string spot = string.IsNullOrEmpty(spec.To) ? "me" : spec.To;
+            Actor clone = SpawnClone(context, spell.Bullet, spot, 0);
+            if (clone == null)
+                return;
+            if (target is Actor targetActor)
+                clone.LookAt(targetActor.Position);
+            if (variables != null)
+            {
+                variables.SetLocal(clone, "BulletSpeed", ValueBox.OfNumber(spell.Speed));
+                variables.SetLocal(clone, "Life", ValueBox.OfNumber(spell.Life));
+                variables.SetLocal(clone, "TimeLeft", ValueBox.OfNumber(spell.Life));
+                // lowercase `damage` is what `other's damage` reads on the victim's sheet.
+                variables.SetLocal(clone, "damage", ValueBox.OfNumber(spell.Damage));
+                variables.SetLocal(clone, "blast", ValueBox.OfNumber(spell.Blast));
+                variables.SetLocal(clone, "Element", ValueBox.OfText(spell.Element));
+                variables.SetLocal(clone, "Spell", ValueBox.OfText(spell.Name));
+                variables.SetLocal(clone, "shooter",
+                    ValueBox.OfText(context.Runtime != null ? context.Runtime.NameOfActor(me) : ""));
+            }
+            EventsManager.Instance?.AttachSpawnedActor(clone);
+        }
+
+        /// <summary>
+        /// Rolls a spawned actor's item stats (Task 9 E7): base stats plus the rarity's affixes,
+        /// written as the item's own `my` variables (so `my FireResist` reads on the item) and
+        /// recorded in <see cref="ItemAffixes"/> so `equip` applies exactly these numbers and
+        /// `drop`/unequip takes them back.
+        /// </summary>
+        private static void ApplyItemRoll(EventContext context, ActionSpec spec, Actor clone)
+        {
+            EventVariables variables = context.Runtime != null ? context.Runtime.Variables : null;
+            if (variables == null)
+                return;
+            double level = 1;
+            if (spec.HasItemLevel)
+                level = spec.ItemLevel;
+            else if (variables.HasGlobal("ItemLevel"))
+                level = variables.GetGlobal("ItemLevel").AsNumber();
+            ItemRoll roll = ItemGenerator.Roll(variables, spec.Thing, spec.Rarity, level);
+            if (roll == null)
+            {
+                bool knownBase = ItemData.TryGet(variables, spec.Thing, out _);
+                WarnOnce(knownBase
+                    ? $"I don't know the rarity \u201C{spec.Rarity}\u201D. Try one of: {string.Join(", ", AffixData.RarityNames(variables))}."
+                    : $"I don't know the item \u201C{spec.Thing}\u201D. Add its base to ItemData.events — it has: {ItemData.KnownNames()}.");
+                return;
+            }
+            foreach (ItemStat stat in roll.Stats)
+                variables.SetLocal(clone, stat.Stat, ValueBox.OfNumber(stat.Value));
+            variables.SetLocal(clone, "Rarity", ValueBox.OfText(roll.Rarity));
+            variables.SetLocal(clone, "ItemName", ValueBox.OfText(roll.DisplayName));
+            variables.SetLocal(clone, "ItemLevel", ValueBox.OfNumber(roll.ItemLevel));
+            context.Runtime.Affixes.Stamp(clone, roll);
         }
 
         /// <summary>
@@ -2484,6 +2599,11 @@ namespace Game
                 if (Pushes[i].Target == actor)
                     Pushes.RemoveAt(i);
             ClearActor(actor);
+            // A destroyed actor takes its spell cooldowns and item roll with it, so a clone born
+            // under the same name never inherits a stale timer or someone else's affixes.
+            context.Runtime.Spells.Clear(actor);
+            context.Runtime.Affixes.Forget(actor);
+            context.Runtime.Affixes.ForgetWearer(actor);
             context.Runtime.Selection.Forget(actor);
             ClearFogVisibility(actor);
         }
