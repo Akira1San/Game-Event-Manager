@@ -1161,6 +1161,11 @@ window around a broken runtime.
   `load scene`: the mixer remembers the track and playhead and the bridge respawns the source,
   because a Flax scene unload destroys every actor in it. `when music ends` fires once when a
   non-looping track stops (the optional `when music "<name>" ends` only answers that track).
+  Clip names are still literals, but `play music random from "a, b, c"` (and the `loop music`
+  form) resolves the quoted comma-separated list through the shared `Rng` and plays the chosen
+  one — a per-level random track without an if-block per track. `AudioMix.SplitChoices` trims the
+  names and drops empty parts, `PickChoice` clamps the roll so a list can never index out of
+  range, and the missing-clip warning reports the rolled name plus the imported clips.
   `play sound ... at <thing>` parents a one-shot to that actor with `AllowSpatialization` on and
   a 200-unit min distance; **Flax only attenuates a clip imported as a 3D sound**, so a 2D clip
   plays at the same volume from anywhere — that is an asset setting, not a missing word. Plain

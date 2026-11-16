@@ -237,6 +237,7 @@ namespace Game
             new WordEntry { Kind = "action", Word = "play step sound", Example = "play step sound \"Grass\"" },
             new WordEntry { Kind = "action", Word = "play sound", Example = "play sound \"shot\" at Enemy", AltShape = "a positional one-shot on that actor; plain `play sound` stays 2D" },
             new WordEntry { Kind = "action", Word = "play music", Example = "play music \"level1\"", AltShape = "one track at a time; starting a track fades it in from the current music level" },
+            new WordEntry { Kind = "action", Word = "play music random from", Example = "play music random from \"level1, level2\"", AltShape = "one clip chosen from the quoted list when the line runs · `loop music random from \"a, b\"` picks a looping track the same way" },
             new WordEntry { Kind = "action", Word = "loop music", Example = "loop music \"menu\"" },
             new WordEntry { Kind = "action", Word = "stop music", Example = "stop music" },
             new WordEntry { Kind = "action", Word = "fade", Example = "fade music to 0 in 2", AltShape = "`fade music to <n> in <s>`; n is 0-1, and a fade to 0 keeps the authored music level so the next track comes back" },

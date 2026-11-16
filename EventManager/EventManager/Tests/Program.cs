@@ -8726,6 +8726,61 @@ Check(WordRegistry.All.Any(entry => entry.Kind == "action" && entry.Word == "pla
                                         entry.Example == "duck music by 0.6 for 4"),
     "the word book lists the new audio words");
 
+// ---- `play music random from "a, b, c"` — a track picked out of a quoted list ----
+var playRandomMusic = ActionWords.Parse(
+    RawWords(actionParser, "when scene starts\n  play music random from \"track_a, track_b, track_c\""), null);
+Check(playRandomMusic.Verb == ActionVerb.PlayMusic && playRandomMusic.Thing.Length == 0 &&
+      playRandomMusic.Choices.Count == 3 && playRandomMusic.Choices[0] == "track_a" &&
+      playRandomMusic.Choices[2] == "track_c",
+    "`play music random from \"a, b, c\"` parses to PlayMusic with three choices");
+
+var loopRandomMusic = ActionWords.Parse(
+    RawWords(actionParser, "when scene starts\n  loop music random from \"menu,level1\""), null);
+Check(loopRandomMusic.Verb == ActionVerb.LoopMusic &&
+      loopRandomMusic.Choices.Count == 2 && loopRandomMusic.Choices[1] == "level1",
+    "`loop music random from` works the same way, with or without spaces");
+
+var spacedChoices = AudioMix.SplitChoices(" a , b , ");
+Check(spacedChoices.Count == 2 && spacedChoices[0] == "a" && spacedChoices[1] == "b",
+    "choice names are trimmed and a trailing comma is ignored");
+Check(AudioMix.SplitChoices("").Count == 0 && AudioMix.SplitChoices(null).Count == 0,
+    "an empty choice list has no names");
+
+var threeChoices = new List<string> { "a", "b", "c" };
+Check(AudioMix.PickChoice(threeChoices, 0) == "a", "a roll of 0 picks the first track");
+Check(AudioMix.PickChoice(threeChoices, 0.5) == "b", "a mid roll picks the middle track");
+Check(AudioMix.PickChoice(threeChoices, 0.999) == "c", "a high roll picks the last track");
+Check(AudioMix.PickChoice(threeChoices, 1) == "c", "a roll of exactly 1 still lands on the last track");
+Check(AudioMix.PickChoice(threeChoices, -1) == "a" && AudioMix.PickChoice(threeChoices, 2) == "c",
+    "an out-of-range roll is clamped, never an index error");
+Check(AudioMix.PickChoice(new List<string>(), 0.5) == "",
+    "an empty list picks nothing instead of throwing");
+bool everyRollPicked = true;
+for (int i = 0; i < 100; i++)
+{
+    string picked = AudioMix.PickChoice(threeChoices, i / 100.0);
+    if (picked != "a" && picked != "b" && picked != "c")
+        everyRollPicked = false;
+}
+Check(everyRollPicked, "every roll in 0-1 picks one of the listed tracks");
+
+string emptyChoicesHint = "";
+var emptyChoices = ActionWords.Parse(
+    RawWords(actionParser, "when scene starts\n  play music random from \"\""),
+    message => emptyChoicesHint = message);
+Check(emptyChoices.Verb == ActionVerb.Unknown && emptyChoicesHint.Contains("at least one clip name"),
+    "an empty random list is a friendly error that names the shape");
+
+string bareRandomHint = "";
+var bareRandomMusic = ActionWords.Parse(
+    RawWords(actionParser, "when scene starts\n  play music random"),
+    message => bareRandomHint = message);
+Check(bareRandomMusic.Verb == ActionVerb.Unknown && bareRandomHint.Contains("random from"),
+    "`play music random` without `from` explains the list shape");
+
+Check(WordRegistry.All.Any(entry => entry.Kind == "action" && entry.Word == "play music random from"),
+    "the word book lists the random music list form");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

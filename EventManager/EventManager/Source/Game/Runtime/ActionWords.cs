@@ -146,6 +146,9 @@ namespace Game
         /// Zero on a push means the historical single-tick nudge.</summary>
         public double Duration;
         public TweenEasing Easing = TweenEasing.Linear;
+        /// <summary><c>play music random from "a, b, c"</c>: the clip names to pick between
+        /// (Task 31 follow-up). Empty for the plain named forms.</summary>
+        public List<string> Choices = new List<string>();
         /// <summary><c>place &lt;building&gt; at &lt;target&gt; on grid</c>: snap to a cell
         /// and reserve its footprint. Free-form placement leaves this false.</summary>
         public bool OnGrid;
@@ -1104,20 +1107,38 @@ namespace Game
             }
             if (words.Count >= 2 && words[0].Text == "play" && words[1].Text == "sound")
                 return Unknown(spec, words, "\u201Cplay sound\u201D needs a file in quotes, like \u201Cplay sound \"Boing.wav\"\u201D", warn);
+            if (words.Count >= 5 && words[0].Text == "play" && words[1].Text == "music" &&
+                words[2].Text == "random" && words[3].Text == "from" && words[4].Type == TokenType.Str)
+            {
+                // `play music random from "a, b, c"` — one clip out of a quoted list, so a
+                // level can roll its own track without a chain of if-blocks.
+                spec.Choices.AddRange(AudioMix.SplitChoices(words[4].Text));
+                if (spec.Choices.Count == 0)
+                    return Unknown(spec, words, "\u201Cplay music random from\u201D needs at least one clip name, like \u201Cplay music random from \"menu, level1\"\u201D", warn);
+                return Finish(spec, ActionVerb.PlayMusic, words, 5);
+            }
             if (words.Count >= 3 && words[0].Text == "play" && words[1].Text == "music" && words[2].Type == TokenType.Str)
             {
                 spec.Thing = words[2].Text;
                 return Finish(spec, ActionVerb.PlayMusic, words, 3);
             }
             if (words.Count >= 2 && words[0].Text == "play" && words[1].Text == "music")
-                return Unknown(spec, words, "\u201Cplay music\u201D needs a clip name in quotes, like \u201Cplay music \"level1\"\u201D", warn);
+                return Unknown(spec, words, "\u201Cplay music\u201D needs a clip name in quotes, like \u201Cplay music \"level1\"\u201D, or a list: \u201Cplay music random from \"level1, level2\"\u201D", warn);
+            if (words.Count >= 5 && words[0].Text == "loop" && words[1].Text == "music" &&
+                words[2].Text == "random" && words[3].Text == "from" && words[4].Type == TokenType.Str)
+            {
+                spec.Choices.AddRange(AudioMix.SplitChoices(words[4].Text));
+                if (spec.Choices.Count == 0)
+                    return Unknown(spec, words, "\u201Cloop music random from\u201D needs at least one clip name, like \u201Cloop music random from \"menu, level1\"\u201D", warn);
+                return Finish(spec, ActionVerb.LoopMusic, words, 5);
+            }
             if (words.Count >= 3 && words[0].Text == "loop" && words[1].Text == "music" && words[2].Type == TokenType.Str)
             {
                 spec.Thing = words[2].Text;
                 return Finish(spec, ActionVerb.LoopMusic, words, 3);
             }
             if (words.Count >= 2 && words[0].Text == "loop" && words[1].Text == "music")
-                return Unknown(spec, words, "\u201Cloop music\u201D needs a clip name in quotes, like \u201Cloop music \"menu\"\u201D", warn);
+                return Unknown(spec, words, "\u201Cloop music\u201D needs a clip name in quotes, like \u201Cloop music \"menu\"\u201D, or a list: \u201Cloop music random from \"menu, level1\"\u201D", warn);
             if (words.Count >= 3 && words[0].Text == "play" && words[1].Text == "anim" && words[2].Type == TokenType.Str)
             {
                 spec.Thing = words[2].Text;

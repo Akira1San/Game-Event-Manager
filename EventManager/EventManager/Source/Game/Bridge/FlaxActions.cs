@@ -3879,16 +3879,23 @@ namespace Game
                     source.Volume = soundVolume;
         }
 
-        /// <summary>`play music "x"` / `loop music "x"`: one track at a time (Task 31 Part A).</summary>
+        /// <summary>
+        /// `play music "x"` / `loop music "x"` (one track at a time, Task 31 Part A), plus the
+        /// list form `play music random from "a, b, c"` — one clip is rolled when the line runs,
+        /// so a level can pick its own track without an if-block per track.
+        /// </summary>
         private static void StartMusic(EventContext context, ActionSpec spec, bool loop)
         {
-            if (string.IsNullOrEmpty(spec.Thing))
+            string clipName = spec.Thing;
+            if (spec.Choices.Count > 0)
+                clipName = AudioMix.PickChoice(spec.Choices, Rng.NextDouble());
+            if (string.IsNullOrEmpty(clipName))
             {
-                WarnOnce("\u201Cplay music\u201D needs a clip name, like \u201Cplay music \"level1\"\u201D.");
+                WarnOnce("\u201Cplay music\u201D needs a clip name, like \u201Cplay music \"level1\"\u201D, or a list: \u201Cplay music random from \"level1, level2\"\u201D.");
                 return;
             }
             AudioMix mix = context.Runtime.Audio;
-            string key = AssetNames.Key(spec.Thing);
+            string key = AssetNames.Key(clipName);
             // The same track already running is left alone, so a `when scene starts` line that
             // re-runs after a hot reload never restarts the song from the top.
             if (mix.Playing && mix.TrackLooping == loop &&
@@ -3896,17 +3903,18 @@ namespace Game
                 MusicSource != null && MusicSource.Scene != null)
                 return;
 
-            var clip = LoadAudioClip(spec.Thing);
+            var clip = LoadAudioClip(clipName);
             if (clip == null)
             {
-                WarnOnce($"Could not load music \u201C{spec.Thing}\u201D. Imported clips: {AvailableSoundNames()}.");
+                // The rolled name is the one reported, so a typo in a list is easy to spot.
+                WarnOnce($"Could not load music \u201C{clipName}\u201D. Imported clips: {AvailableSoundNames()}.");
                 return;
             }
 
             SpawnMusicSource(clip, loop, 0);
             // A new track owns the player: this also fades it in when the previous music was
             // faded out, which is the menu -> level hand-off with no extra line.
-            mix.StartMusic(spec.Thing, loop);
+            mix.StartMusic(clipName, loop);
             context.Runtime.Variables.SetGlobal(AudioMix.MusicVariable, ValueBox.OfNumber(mix.Music));
             MusicGlobalSeen = mix.Music;
         }

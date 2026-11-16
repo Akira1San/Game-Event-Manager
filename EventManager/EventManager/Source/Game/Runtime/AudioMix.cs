@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Game
 {
@@ -77,6 +78,45 @@ namespace Game
         public void SetMasterVolume(double value)
         {
             Master = Clamp01(value);
+        }
+
+        /// <summary>
+        /// <c>play music random from "a, b, c"</c> / <c>loop music random from "..."</c>: the
+        /// quoted list split into clip names. Each comma-separated part is trimmed (so
+        /// <c>"menu, level1"</c> and <c>"menu ,level1"</c> are the same list) and empty parts are
+        /// dropped, so a trailing comma is harmless.
+        /// </summary>
+        public static List<string> SplitChoices(string list)
+        {
+            var choices = new List<string>();
+            if (string.IsNullOrEmpty(list))
+                return choices;
+            foreach (string part in list.Split(','))
+            {
+                string name = part.Trim();
+                if (name.Length > 0)
+                    choices.Add(name);
+            }
+            return choices;
+        }
+
+        /// <summary>
+        /// The clip a roll picks out of the list. <paramref name="roll"/> is 0–1 (the shared
+        /// <see cref="Rng"/>); it is clamped, so a roll of exactly 1 (or anything out of range)
+        /// lands on the last choice instead of falling off the end.
+        /// </summary>
+        public static string PickChoice(IReadOnlyList<string> choices, double roll)
+        {
+            if (choices == null || choices.Count == 0)
+                return "";
+            if (double.IsNaN(roll) || roll < 0)
+                roll = 0;
+            if (roll > 1)
+                roll = 1;
+            int index = (int)(roll * choices.Count);
+            if (index >= choices.Count)
+                index = choices.Count - 1;
+            return choices[index] ?? "";
         }
 
         public void SetSoundVolume(double value)
