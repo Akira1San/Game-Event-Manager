@@ -359,6 +359,49 @@ namespace Game
         public static bool JumpLanded(double height, double velocityY)
             => height <= 0.0 && velocityY <= 0.0;
 
+        /// <summary>Default `climb` speed (cm/s) — a little slower than a walk, so a ladder is
+        /// visibly a climb and not a teleport.</summary>
+        public const double DefaultClimbSpeed = 150.0;
+
+        /// <summary>Climbable span used when the ladder actor has no collider to measure and the
+        /// sheet does not set `my LadderHeight`: four metres, the height of the test ladder.</summary>
+        public const double DefaultLadderHeight = 400.0;
+
+        /// <summary>
+        /// One tick of a climb: move <paramref name="speed"/> × dt in <paramref name="direction"/>
+        /// (+1 up, −1 down) and clamp to the ladder's span, so the climber never leaves it even if
+        /// the sheet keeps the word on a held key. Speed is a magnitude, direction is separate.
+        /// </summary>
+        public static double ClimbStep(
+            double y, double bottom, double top, double speed, int direction, double deltaTime)
+        {
+            if (top < bottom)
+            {
+                double swap = top;
+                top = bottom;
+                bottom = swap;
+            }
+            double step = Math.Abs(speed) * Math.Max(0.0, deltaTime) * (direction < 0 ? -1.0 : 1.0);
+            double next = y + step;
+            if (next > top)
+                next = top;
+            if (next < bottom)
+                next = bottom;
+            return next;
+        }
+
+        /// <summary>True once a climb has reached the end it was travelling toward.</summary>
+        public static bool ClimbFinished(double y, double bottom, double top, int direction)
+        {
+            if (top < bottom)
+            {
+                double swap = top;
+                top = bottom;
+                bottom = swap;
+            }
+            return direction < 0 ? y <= bottom + 0.001 : y >= top - 0.001;
+        }
+
         /// <summary>
         /// One tick of character motion with gravity and ground contact. Horizontal movement only
         /// applies while grounded (no air steering); airborne ticks fall straight down. An

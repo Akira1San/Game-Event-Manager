@@ -1127,6 +1127,21 @@ window around a broken runtime.
   global flag (`HasKey`) set on pickup instead of checking `Player's bag`. A cross-actor bag
   condition and `remove ... from <actor>'s bag` are parked for a later era.
 
+- **Ladders as one ownership handoff, not a physics mode:** G4 phase 4 adds `climb <thing>`,
+  `climb down <thing>` (optional `speed <n>` / `my ClimbSpeed`) and `stop climbing`, and the climb
+  simply owns the body for as long as it lasts: X/Z lock to the ladder actor's axis, `ClimbStep`
+  drives Y at the pace, and the span (from the ladder's Y to its collider height, or
+  `my LadderHeight`, or 400 cm) clamps both ends. Reaching the end the climb was heading toward
+  ends it, so a sheet steps off the top with `move forward`; `stop climbing` lets go anywhere and
+  hands Y back to gravity with the stored fall speed cleared. Starting a climb cancels the
+  actor's pending moves so a chase cannot fight it, and the words are opt-in per sheet — lane
+  enemies never climb because no lane sheet says so. Same route in every body mode (a
+  CharacterController moves itself, everything else writes `Position` and a dynamic body is held
+  at rest while it climbs). `me is climbing` exposes that state as a condition (through
+  `IEventWorld.IsClimbing`), so a climb loop gates on the ladder itself instead of a flag variable.
+  Parked: ladders you can shoot down, moving ladders, and a top-exit that picks the destination
+  platform automatically.
+
 - **Jumping without a jump system:** G4 phase 3 adds only a word and a query — `jump [strength n]`,
   `me is on ground`, `me is airborne` — and lets the existing body rules carry it. A
   CharacterController jumps by writing its stored fall speed (the number `CharacterStep` already

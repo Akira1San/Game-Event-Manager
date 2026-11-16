@@ -8154,6 +8154,84 @@ jumpEngine.Tick(2);
 Check(jumpEngine.Variables.GetGlobal("GroundTicks").AsNumber() == 2,
     "landing is detected — the on-ground gate goes true again");
 
+// ------------------------------------------------------------------
+// Task 7 G4 phase 4: `climb` / `climb down` / `stop climbing`
+// ------------------------------------------------------------------
+
+var climbProg = parser.Parse(@"when every 0 seconds
+  climb Ladder");
+var climbSpec = ActionWords.Parse(climbProg.Events[0].Body[0].Words, null);
+Check(climbSpec.Verb == ActionVerb.Climb && climbSpec.Thing == "Ladder" && climbSpec.Dir == "" &&
+      Math.Abs(climbSpec.Number - PhysicsMovement.DefaultClimbSpeed) < 1e-9,
+    "`climb Ladder` parses to ActionVerb.Climb with the default pace, climbing up");
+
+var fastClimbProg = parser.Parse(@"when every 0 seconds
+  climb Ladder speed 120");
+var fastClimbSpec = ActionWords.Parse(fastClimbProg.Events[0].Body[0].Words, null);
+Check(fastClimbSpec.Verb == ActionVerb.Climb && Math.Abs(fastClimbSpec.Number - 120) < 1e-9,
+    "`climb Ladder speed 120` keeps the authored pace");
+
+var downClimbProg = parser.Parse(@"when every 0 seconds
+  climb down Ladder");
+var downClimbSpec = ActionWords.Parse(downClimbProg.Events[0].Body[0].Words, null);
+Check(downClimbSpec.Verb == ActionVerb.Climb && downClimbSpec.Dir == "down" &&
+      downClimbSpec.Thing == "Ladder",
+    "`climb down Ladder` parses with the downward direction");
+
+var varClimbProg = parser.Parse(@"when every 0 seconds
+  climb Ladder speed my ClimbSpeed");
+var varClimbSpec = ActionWords.Parse(varClimbProg.Events[0].Body[0].Words, null);
+Check(varClimbSpec.Verb == ActionVerb.Climb &&
+      varClimbSpec.AmountNode is VariableValue climbAmount && climbAmount.Name == "ClimbSpeed",
+    "`climb Ladder speed my ClimbSpeed` reads the pace from the actor's variable");
+
+var letGoProg = parser.Parse(@"when every 0 seconds
+  stop climbing");
+var letGoSpec = ActionWords.Parse(letGoProg.Events[0].Body[0].Words, null);
+Check(letGoSpec.Verb == ActionVerb.StopClimbing, "`stop climbing` parses to ActionVerb.StopClimbing");
+
+// The climb math: a tick moves the authored distance, the span clamps both ends, and reaching
+// the end the climb was heading for is reported — that is what ends a climb at the top/bottom.
+Check(Math.Abs(PhysicsMovement.ClimbStep(0, 0, 400, 150, 1, 1.0) - 150) < 1e-9,
+    "a climb tick moves speed x deltaTime upward");
+Check(Math.Abs(PhysicsMovement.ClimbStep(150, 0, 400, 150, -1, 1.0) - 0) < 1e-9,
+    "`climb down` moves the same distance downward");
+Check(Math.Abs(PhysicsMovement.ClimbStep(390, 0, 400, 150, 1, 1.0) - 400) < 1e-9 &&
+      !PhysicsMovement.ClimbFinished(390, 0, 400, 1),
+    "the climb clamps at the ladder's top instead of overshooting it");
+Check(PhysicsMovement.ClimbFinished(400, 0, 400, 1) &&
+      PhysicsMovement.ClimbFinished(0, 0, 400, -1) &&
+      !PhysicsMovement.ClimbFinished(400, 0, 400, -1),
+    "a climb finishes at the end it was heading toward, not the one it started from");
+Check(Math.Abs(PhysicsMovement.ClimbStep(200, 0, 400, -150, 1, 1.0) - 350) < 1e-9,
+    "a negative pace is treated as a magnitude — direction comes from `down`");
+
+// `me is climbing` — the ladder state as a condition, so a sheet does not need its own flag.
+var climbingProg = parser.Parse(@"when every 0 seconds
+  me is climbing
+  add 1 to ClimbTicks");
+Check(Conditions.Parse(climbingProg.Events[0].Body[0].Words).Kind == ConditionKind.Climbing,
+    "`me is climbing` parses to ConditionKind.Climbing");
+
+var climbWorld = new FakeWorld();
+var climber = new FakeActor("Climber");
+climbWorld.AddActor(climber);
+var climbEngine = FreshEngine(climbWorld);
+climbEngine.AddSheet(climber, climbingProg);
+climbEngine.Tick(0);
+Check(climbEngine.Variables.GetGlobal("ClimbTicks").AsNumber() == 0,
+    "`me is climbing` is false for an actor standing on the ground");
+
+climbWorld.SetClimbing(climber, true);
+climbEngine.Tick(1);
+Check(climbEngine.Variables.GetGlobal("ClimbTicks").AsNumber() == 1,
+    "`me is climbing` fires while the actor holds a ladder");
+
+climbWorld.SetClimbing(climber, false);
+climbEngine.Tick(2);
+Check(climbEngine.Variables.GetGlobal("ClimbTicks").AsNumber() == 1,
+    "`me is climbing` goes false again once the actor lets go");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
@@ -8434,6 +8512,22 @@ class FakeWorld : IEventWorld
             grounded.Add(actor);
         else
             grounded.Remove(actor);
+    }
+
+    private readonly HashSet<object> climbing = new HashSet<object>();
+
+    public bool IsClimbing(object actor)
+    {
+        return climbing.Contains(actor);
+    }
+
+    /// <summary>Sets the ladder answer behind `me is climbing`.</summary>
+    public void SetClimbing(object actor, bool on)
+    {
+        if (on)
+            climbing.Add(actor);
+        else
+            climbing.Remove(actor);
     }
 
     private readonly HashSet<(object, string)> playingParticles = new HashSet<(object, string)>();

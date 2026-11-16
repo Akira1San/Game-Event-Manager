@@ -10,6 +10,10 @@ namespace Game
         StopMoving,
         /// <summary><c>jump</c> / <c>jump strength &lt;n&gt;</c> (Task 7 G4 phase 3).</summary>
         Jump,
+        /// <summary><c>climb &lt;thing&gt;</c> / <c>climb down &lt;thing&gt;</c> (Task 7 G4 phase 4).</summary>
+        Climb,
+        /// <summary><c>stop climbing</c> — let go of the ladder.</summary>
+        StopClimbing,
         Turn,
         LookAt,
         Face,
@@ -274,6 +278,8 @@ namespace Game
                         return Finish(spec, ActionVerb.StopOrder, words, 1);
                     if (words.Count >= 2 && words[1].Text == "moving")
                         return Finish(spec, ActionVerb.StopMoving, words, 2);
+                    if (words.Count >= 2 && words[1].Text == "climbing")
+                        return Finish(spec, ActionVerb.StopClimbing, words, 2);
                     if (words.Count >= 2 && words[1].Text == "sound")
                         return Finish(spec, ActionVerb.StopSound, words, 2);
                     if (words.Count >= 2 && words[1].Text == "anim")
@@ -285,7 +291,7 @@ namespace Game
                     }
                     if (words.Count >= 2 && words[1].Text == "particle")
                         return Unknown(spec, words, "\u201Cstop particle\u201D needs a name in quotes, like \u201Cstop particle \"smoke\"\u201D", warn);
-                    return Unknown(spec, words, "yes, a \u201Cstop\u201D line — I only know \u201Cstop sound\u201D, \u201Cstop anim\u201D, \u201Cstop moving\u201D, \u201Cstop particle\u201D, and \u201Cstop this event\u201D", warn);
+                    return Unknown(spec, words, "yes, a \u201Cstop\u201D line — I only know \u201Cstop sound\u201D, \u201Cstop anim\u201D, \u201Cstop moving\u201D, \u201Cstop climbing\u201D, \u201Cstop particle\u201D, and \u201Cstop this event\u201D", warn);
 
                 case "wander":
                 {
@@ -667,6 +673,38 @@ namespace Game
                         return Finish(spec, ActionVerb.Push, words, pushIndex);
                     }
                     return Unknown(spec, words, "\u201Cpush\u201D looks like this: \u201Cpush other up strength 10\u201D or \u201Cpush other back strength 100 for 0.2 seconds\u201D", warn);
+
+                case "climb":
+                {
+                    // `climb Ladder` / `climb Ladder speed 120` / `climb down Ladder`. No speed
+                    // means the default pace; `my ClimbSpeed` works like every other amount.
+                    int climbIndex = 1;
+                    if (words.Count >= 2 && words[1].Text == "down")
+                    {
+                        spec.Dir = "down";
+                        climbIndex = 2;
+                    }
+                    if (climbIndex < words.Count && IsThing(words[climbIndex]))
+                    {
+                        spec.Thing = words[climbIndex].Text;
+                        climbIndex++;
+                        if (words.Count >= climbIndex + 2 && words[climbIndex].Text == "speed")
+                        {
+                            spec.AmountNode = ValueNodeAt(words, climbIndex + 1, out int climbUsed);
+                            spec.HasNumber = words[climbIndex + 1].Type == TokenType.Number;
+                            if (spec.HasNumber)
+                                spec.Number = words[climbIndex + 1].Number;
+                            climbIndex += 1 + climbUsed;
+                        }
+                        else
+                        {
+                            spec.Number = PhysicsMovement.DefaultClimbSpeed;
+                            spec.HasNumber = true;
+                        }
+                        return Finish(spec, ActionVerb.Climb, words, climbIndex);
+                    }
+                    return Unknown(spec, words, "\u201Cclimb\u201D looks like this: \u201Cclimb Ladder\u201D or \u201Cclimb down Ladder speed 120\u201D", warn);
+                }
 
                 case "jump":
                 {

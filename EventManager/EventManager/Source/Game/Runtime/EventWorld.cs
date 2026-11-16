@@ -28,6 +28,9 @@ namespace Game
         /// other body, and false while a `jump` is still in the air. Backs `me is on ground` /
         /// `me is airborne` (Task 7 G4 phase 3).</summary>
         bool IsOnGround(object actor);
+        /// <summary>True while <paramref name="actor"/> is on a ladder because of `climb` — the
+        /// state `me is climbing` reads (Task 7 G4 phase 4).</summary>
+        bool IsClimbing(object actor);
         /// <summary>The physics-material name of <paramref name="actor"/>'s collider (e.g.
         /// "Grass", "Stone"), or empty when it has no collider or no material assigned.</summary>
         string MaterialOf(object actor);
@@ -150,6 +153,12 @@ namespace Game
             // A world with no physics cannot answer, so it reports grounded — an on-ground gate
             // then behaves like a plain "is this thing there" instead of blocking the sheet.
             return true;
+        }
+
+        public bool IsClimbing(object actor)
+        {
+            // No ladders exist without a bridge, so nothing is climbing in a bare world.
+            return false;
         }
 
         public string MaterialOf(object actor)

@@ -988,10 +988,27 @@ check still yours: jump onto and off a crate in `TK4_Arcade_Test` (or a fresh gr
 `me is airborne` flip while the actor is up, and hold the key to confirm only one take-off.
 
 **Phase 4 — Ladders (C#, new word)**
-- [ ] `climb <thing>` / `stop climbing`: locks X/Z to the ladder actor, drives Y at a climb speed,
+- [x] `climb <thing>` / `stop climbing`: locks X/Z to the ladder actor, drives Y at a climb speed,
       exits at top/bottom; AI uses `when me is near Ladder by 1 → climb Ladder`.
 - [ ] Done-when: the player climbs to a platform and can step off at the top; lane enemies ignore
       ladders unless their sheet opts in.
+
+**As shipped (2026-11-16):** `climb <thing>`, `climb down <thing>`, an optional `speed <n>` (literal
+or `my ClimbSpeed`) and `stop climbing` parse to `ActionVerb.Climb` / `StopClimbing`; the default
+pace is 150 cm/s (`PhysicsMovement.DefaultClimbSpeed`). A climb is an `OngoingClimb` keyed by
+the climber and advanced in `Step`: X/Z lock to the ladder actor's axis and
+`PhysicsMovement.ClimbStep` drives Y, clamped to the span — from the ladder's own Y up to its
+collider height, or `my LadderHeight`, or 400 cm (`DefaultLadderHeight`). Reaching the end the
+climb was heading toward ends it (so `move forward` steps off the top); `stop climbing` lets go
+anywhere, clearing the stored fall speed and putting a dynamic body at rest. Starting a climb
+cancels the actor's pending moves, and the words are opt-in per sheet, so lane sheets never
+climb. A CharacterController climbs through its own `Move`, everything else writes `Position`.
+`me is climbing` (new `ConditionKind.Climbing`, `IEventWorld.IsClimbing` → `FlaxActions.IsClimbing`
+over the `Climbs` map) lets a sheet gate on the ladder instead of tracking a flag variable. Tests:
+14 new checks (four climb parses, `stop climbing`, five `ClimbStep` / `ClimbFinished` cases, and the
+climbing → let-go loop for `me is climbing`) → **1419/1419 green**; module build clean. Editor check still yours: build a ladder prop in
+`TK4_Arcade_Test`, give the player `when me is near Ladder by 100 → climb Ladder`, and confirm it
+rises to the platform, ends at the top, and `climb down` / `stop climbing` behave.
 
 **Phase 5 — Camera-edge spawns (C# or markers)**
 Two routes; pick one per project:

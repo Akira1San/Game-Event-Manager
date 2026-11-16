@@ -44,6 +44,17 @@ namespace Game
         public double Remaining;
     }
 
+    /// <summary>An in-progress <c>climb</c>: the ladder it holds, the ladder's span, the pace and
+    /// the direction (+1 up, −1 down). Advanced every tick in <see cref="FlaxActions.Step"/>.</summary>
+    public class OngoingClimb
+    {
+        public Actor Ladder;
+        public double Speed = PhysicsMovement.DefaultClimbSpeed;
+        public int Direction = 1;
+        public double Bottom;
+        public double Top;
+    }
+
     public static class FlaxActions
     {
     public static float DeltaTime;
@@ -51,6 +62,9 @@ namespace Game
     /// <summary>Sustained pushes (<c>push &lt;thing&gt; &lt;dir&gt; strength &lt;n&gt; for &lt;s&gt;
     /// seconds</c>), applied every tick until their time runs out.</summary>
     public static readonly List<OngoingPush> Pushes = new List<OngoingPush>();
+    /// <summary>Actors on a ladder, keyed by climber. A climb owns X/Z and Y while it lasts:
+    /// every tick locks the actor onto the ladder's axis and drives its height.</summary>
+    public static readonly Dictionary<Actor, OngoingClimb> Climbs = new Dictionary<Actor, OngoingClimb>();
     /// <summary>In-flight moving platforms, ping-ponging along a world axis. Advanced each
     /// tick in <see cref="Step"/> and applied through each subject's <see cref="PhysicsMoveMode"/>.</summary>
     public static readonly List<PhysicsMovement.OngoingPlatform> Platforms = new List<PhysicsMovement.OngoingPlatform>();
@@ -241,6 +255,7 @@ namespace Game
             CharacterFallSpeeds.Clear();
             JumpingCharacters.Clear();
             ScriptedJumps.Clear();
+            Climbs.Clear();
             SoundIndexCache = null;
             AnimIndexCache = null;
             AnimFullNames = null;
@@ -451,6 +466,35 @@ namespace Game
                 }
             }
 
+            // Ladders: hold the climber on the ladder's axis and drive its height, clamped to the
+            // ladder's span. Reaching either end ends the climb so the sheet can step off.
+            if (Climbs.Count > 0)
+            {
+                var climbs = new List<KeyValuePair<Actor, OngoingClimb>>(Climbs);
+                foreach (var pair in climbs)
+                {
+                    Actor climber = pair.Key;
+                    OngoingClimb climb = pair.Value;
+                    if (climber == null || climber.Scene == null || climb.Ladder == null || climb.Ladder.Scene == null)
+                    {
+                        StopClimb(climber);
+                        continue;
+                    }
+                    double height = PhysicsMovement.ClimbStep(
+                        climber.Position.Y, climb.Bottom, climb.Top, climb.Speed, climb.Direction, DeltaTime);
+                    Vector3 ladderSpot = climb.Ladder.Position;
+                    Vector3 target = new Vector3(ladderSpot.X, (float)height, ladderSpot.Z);
+                    CharacterController character = EventSheet.FindCharacterController(climber);
+                    if (character != null && IsAncestorOrSelf(character, climber))
+                        character.Move(target - climber.Position);
+                    else
+                        climber.Position = target;
+                    MovedThisTick.Add(climber);
+                    if (PhysicsMovement.ClimbFinished(height, climb.Bottom, climb.Top, climb.Direction))
+                        StopClimb(climber);
+                }
+            }
+
             // Scripted jumps: an actor with no physics body (or a kinematic one) rises and falls
             // along its own little arc, so `jump` works in the plain transform mode too.
             if (ScriptedJumps.Count > 0)
@@ -638,6 +682,14 @@ namespace Game
             {
                 case ActionVerb.Jump:
                     Jump(context, spec);
+                    break;
+
+                case ActionVerb.Climb:
+                    StartClimb(context, spec);
+                    break;
+
+                case ActionVerb.StopClimbing:
+                    StopClimb(context.Me as Actor);
                     break;
 
                 case ActionVerb.Move:
@@ -1939,6 +1991,7 @@ namespace Game
             CharacterFallSpeeds.Remove(subject);
             JumpingCharacters.Remove(subject);
             ScriptedJumps.Remove(subject);
+            Climbs.Remove(subject);
 
             RigidBody body = FindBody(subject);
             if (body != null && !body.IsKinematic)
@@ -2157,6 +2210,90 @@ namespace Game
                     StartScriptedJump(me, strength);
                     break;
             }
+        }
+
+        /// <summary>
+        /// `climb &lt;thing&gt;` (Task 7 G4 phase 4): take hold of a ladder actor. X/Z lock to the
+        /// ladder's axis, Y is driven at the climb speed and clamped to the ladder's span, and
+        /// reaching either end ends the climb — a sheet steps off the top with `move forward`.
+        /// `climb down` reverses the drive; a sheet that keeps the word on a held key can also
+        /// climb back down because the span clamp keeps it on the ladder.
+        /// </summary>
+        private static void StartClimb(EventContext context, ActionSpec spec)
+        {
+            var me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Cclimb\u201D needs to run on an actor's sheet — the global Game sheet has nothing to climb with.");
+                return;
+            }
+            var ladder = ResolveThing(context, spec.Thing) as Actor;
+            if (ladder == null)
+            {
+                WarnOnce($"I couldn't find the ladder \u201C{spec.Thing}\u201D to climb.");
+                return;
+            }
+            double speed = Math.Abs(ResolveNumber(context, spec));
+            if (speed < 1.0)
+                speed = PhysicsMovement.DefaultClimbSpeed;
+            // The climb owns the body: a walk or chase still pending must not fight it.
+            StopMovingSubject(me);
+            double bottom = ladder.Position.Y;
+            Climbs[me] = new OngoingClimb
+            {
+                Ladder = ladder,
+                Speed = speed,
+                Direction = spec.Dir == "down" ? -1 : 1,
+                Bottom = bottom,
+                Top = bottom + LadderHeight(context, ladder),
+            };
+            MovedThisTick.Add(me);
+        }
+
+        /// <summary>True while the actor holds a ladder — the answer behind `me is climbing`.</summary>
+        public static bool IsClimbing(Actor actor)
+        {
+            return actor != null && Climbs.ContainsKey(actor);
+        }
+
+        /// <summary>Lets go of the ladder. A dynamic body is put at rest so the climb speed does
+        /// not carry over, and the character's stored fall speed starts fresh from let-go height.</summary>
+        private static void StopClimb(Actor climber)
+        {
+            if (climber == null || !Climbs.Remove(climber))
+                return;
+            CharacterFallSpeeds.Remove(climber);
+            RigidBody body = FindBody(climber);
+            if (body != null && !body.IsKinematic)
+                body.LinearVelocity = Vector3.Zero;
+        }
+
+        /// <summary>
+        /// How tall a ladder is: `my LadderHeight` when the sheet authored one (centimetres), else
+        /// the tallest collider under the ladder actor, else
+        /// <see cref="PhysicsMovement.DefaultLadderHeight"/>. The span runs from the ladder actor's
+        /// own Y upward, which matches how ladder props are placed (pivot at the base).
+        /// </summary>
+        private static double LadderHeight(EventContext context, Actor ladder)
+        {
+            double authored = context.ReadMy("LadderHeight").AsNumber();
+            if (authored > 0.0)
+                return authored;
+            float tallest = 0f;
+            GatherColliderHeight(ladder, ref tallest);
+            return tallest > 0f ? tallest : PhysicsMovement.DefaultLadderHeight;
+        }
+
+        private static void GatherColliderHeight(Actor node, ref float tallest)
+        {
+            if (node == null || !node.IsActive)
+                return;
+            if (node is BoxCollider box)
+                tallest = Math.Max(tallest, Math.Abs(box.Size.Y * node.Scale.Y));
+            else if (node is SphereCollider sphere)
+                tallest = Math.Max(tallest, Math.Abs(sphere.Radius * node.Scale.Y) * 2f);
+            foreach (Actor child in node.Children)
+                GatherColliderHeight(child, ref tallest);
         }
 
         /// <summary>Starts a scripted (no-body) jump arc from the actor's current height.</summary>
@@ -4661,6 +4798,7 @@ namespace Game
                 CharacterFallSpeeds.Remove(body);
                 JumpingCharacters.Remove(body);
                 ScriptedJumps.Remove(body);
+                Climbs.Remove(body);
             }
             if (AnimStates.TryGetValue(actor, out AnimState state))
             {

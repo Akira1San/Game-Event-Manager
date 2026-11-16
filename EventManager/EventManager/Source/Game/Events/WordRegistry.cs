@@ -97,6 +97,7 @@ namespace Game
             new WordEntry { Kind = "condition", Word = "<thing> exists", Example = "Key exists", AltShape = "<thing> does not exist" },
             new WordEntry { Kind = "condition", Word = "me is near <thing> by <dist>", Example = "me is near Player by 2" },
             new WordEntry { Kind = "condition", Word = "me is moving", Example = "me is moving" },
+            new WordEntry { Kind = "condition", Word = "me is climbing", Example = "me is climbing", AltShape = "true while the actor holds a ladder because of `climb` — gate a climb loop on it instead of tracking a flag variable" },
             new WordEntry { Kind = "condition", Word = "me is on ground", Example = "me is on ground", AltShape = "`me is airborne` is its opposite · the gate a `jump` needs, so holding the key cannot chain jumps" },
             new WordEntry { Kind = "condition", Word = "me hears \"<name>\" by <dist>", Example = "me hears \"gunshot\" by 12" },
             new WordEntry { Kind = "condition", Word = "level number is <n>", Example = "level number is 3", AltShape = "`level is \"<name>\"` compares the level's name" },
@@ -157,6 +158,7 @@ namespace Game
             new WordEntry { Kind = "directive", Word = "bind <label> to <variable> format \"<template>\"", Example = "bind HealthLabel to Health and MaxHealth format \"Health: {0}/{1}\"" },
 
             new WordEntry { Kind = "action", Word = "move", Example = "move forward speed 5" },            new WordEntry { Kind = "action", Word = "move", Example = "move toward Player speed 60 around walls facing forward", AltShape = "corner-samples around obstacles instead of walking into them — no NavMesh, but the walls need colliders; `facing forward` turns the body onto the heading it walks" },
+            new WordEntry { Kind = "action", Word = "climb", Example = "climb Ladder", AltShape = "climb down Ladder / `climb Ladder speed 120` (`my ClimbSpeed` works) · locks X/Z to the ladder actor and drives Y, stopping at the top or bottom; `stop climbing` lets go, and `my LadderHeight` (cm) overrides the measured/collider height or the 400 cm default" },
             new WordEntry { Kind = "action", Word = "jump", Example = "jump", AltShape = "jump strength 500 / `jump strength my JumpPower` · vertical take-off, refused while airborne; a CharacterController or RigidBody gets a real impulse, anything else a scripted arc, and a `Jump` clip plays when the model has one" },
             new WordEntry { Kind = "action", Word = "wander", Example = "wander speed 5", AltShape = "wander speed my Speed duration 2" },
             new WordEntry { Kind = "action", Word = "still", Example = "still" },
