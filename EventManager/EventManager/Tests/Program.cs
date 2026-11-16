@@ -1878,10 +1878,10 @@ when me is released
     // ------------------------------------------------------------------
 
     var arcadeEnemyProgram = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Arcade_Enemy.events"));
-    Check(arcadeEnemyProgram.Events.Count == 5, $"Arcade_Enemy.events parses into 5 events (got {arcadeEnemyProgram.Events.Count})");
+    Check(arcadeEnemyProgram.Events.Count == 7, $"Arcade_Enemy.events parses into 7 events (got {arcadeEnemyProgram.Events.Count})");
 
     var arcadeSpawnerProgram = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Arcade_Spawner.events"));
-    Check(arcadeSpawnerProgram.Events.Count == 2, $"Arcade_Spawner.events parses into 2 events (got {arcadeSpawnerProgram.Events.Count})");
+    Check(arcadeSpawnerProgram.Events.Count == 3, $"Arcade_Spawner.events parses into 3 events (got {arcadeSpawnerProgram.Events.Count})");
 
     // Contact: the `near 1.5` enter edge hurts once per approach, never once per tick.
     var arcadeWorld = new FakeWorld();
@@ -1953,10 +1953,80 @@ when me is released
     Check(spawnerEngine.Variables.GetGlobal("EnemiesAlive").AsNumber() == 4,
         $"the spawner fills to 4 alive and holds there (got {spawnerEngine.Variables.GetGlobal("EnemiesAlive").AsNumber()})");
 
-    spawnerWorld.SetDistance(spawner, spawnerPlayer, 200);
+    spawnerWorld.SetDistance(spawner, spawnerPlayer, 500);
     spawnerEngine.Tick(30);
     Check(spawnerEngine.Variables.GetGlobal("EnemiesAlive").AsNumber() == 4,
         $"the `me is near Player by 60` gate switches spawning off when the player walks away (got {spawnerEngine.Variables.GetGlobal("EnemiesAlive").AsNumber()})");
+
+    // ------------------------------------------------------------------
+    // Task 7 Part G4 phase 1: knockdown, stand-up and the Combo counter
+    // ------------------------------------------------------------------
+
+    var knockdownWorld = new FakeWorld();
+    var knockdownEnemy = new FakeActor("Arcade_Enemy");
+    var knockdownPlayer = new FakeActor("Player");
+    knockdownWorld.AddActor(knockdownEnemy);
+    knockdownWorld.AddActor(knockdownPlayer);
+    knockdownWorld.SetDistance(knockdownEnemy, knockdownPlayer, 400);
+    var knockdownEngine = FreshEngine(knockdownWorld);
+    var knockdownSheet = knockdownEngine.AddSheet(knockdownEnemy, arcadeEnemyProgram);
+    knockdownEngine.AddSheet(knockdownPlayer, parser.Parse("when message \"hurt\" arrives\n  set Hurts to Hurts + 1"));
+    var knockdownBullet = new FakeActor("Bullet");
+    knockdownWorld.AddActor(knockdownBullet);
+    knockdownEngine.Tick(0);
+    Check(knockdownSheet.CurrentState == "walk",
+        $"the lane enemy starts in the walk state (got {knockdownSheet.CurrentState})");
+
+    // First hit: damage lands and the state flips to down on the same tick.
+    knockdownEngine.PushContact(TriggerKind.Touches, knockdownEnemy, knockdownBullet);
+    knockdownEngine.Tick(0.1);
+    Check(knockdownSheet.CurrentState == "down",
+        $"a shot knocks the lane enemy down (got {knockdownSheet.CurrentState})");
+    Check(knockdownEngine.Variables.GetLocal(knockdownEnemy, "Health").AsNumber() == 40,
+        $"the knockdown shot still costs 10 health (got {knockdownEngine.Variables.GetLocal(knockdownEnemy, "Health").AsNumber()})");
+
+    // A downed enemy neither walks nor swings: standing in melee range does nothing.
+    knockdownWorld.SetDistance(knockdownEnemy, knockdownPlayer, 1);
+    knockdownEngine.Tick(0.2);
+    knockdownEngine.Tick(0.3);
+    Check(knockdownEngine.Variables.GetGlobal("Hurts").IsNone(), "a downed enemy cannot swing at the player");
+
+    // Re-hit mid-stun: more damage, but the wait blocks are not restarted (still down at 0.5).
+    knockdownEngine.PushContact(TriggerKind.Touches, knockdownEnemy, knockdownBullet);
+    knockdownEngine.Tick(0.4);
+    Check(knockdownEngine.Variables.GetLocal(knockdownEnemy, "Health").AsNumber() == 30,
+        $"a burst still hurts a downed enemy (got {knockdownEngine.Variables.GetLocal(knockdownEnemy, "Health").AsNumber()})");
+    knockdownEngine.Tick(0.5);
+    Check(knockdownSheet.CurrentState == "getup",
+        $"the enemy starts standing up 0.4 s after the first hit, not after the re-hit (got {knockdownSheet.CurrentState})");
+    knockdownEngine.Tick(0.7);
+    Check(knockdownSheet.CurrentState == "walk",
+        $"the enemy is walking again 0.6 s after the hit (got {knockdownSheet.CurrentState})");
+    Check(knockdownEngine.Variables.GetGlobal("Combo").AsNumber() == 1,
+        $"standing up counts one combo hit (got {knockdownEngine.Variables.GetGlobal("Combo").AsNumber()})");
+
+    // Two hits in a row: Combo 2, and the attack works again once the enemy is back on its feet.
+    knockdownWorld.SetDistance(knockdownEnemy, knockdownPlayer, 40);
+    knockdownEngine.Tick(0.8);
+    knockdownWorld.SetDistance(knockdownEnemy, knockdownPlayer, 1);
+    knockdownEngine.Tick(0.9);
+    knockdownEngine.Tick(1.0); // messages are delivered on the next tick
+    Check(knockdownEngine.Variables.GetGlobal("Hurts").AsNumber() == 1,
+        $"the attack resumes once the enemy is walking again (got {knockdownEngine.Variables.GetGlobal("Hurts").AsNumber()})");
+
+    knockdownEngine.PushContact(TriggerKind.Touches, knockdownEnemy, knockdownBullet);
+    knockdownEngine.Tick(1.1);
+    knockdownEngine.Tick(1.5); // 0.4 s down
+    knockdownEngine.Tick(1.7); // 0.2 s stand-up
+    Check(knockdownSheet.CurrentState == "walk" &&
+          knockdownEngine.Variables.GetGlobal("Combo").AsNumber() == 2,
+        $"two quick hits read Combo 2 (got {knockdownEngine.Variables.GetGlobal("Combo").AsNumber()})");
+
+    // Combo decays one point per two seconds, run by the single spawner actor.
+    spawnerEngine.Variables.SetGlobal("Combo", Game.ValueBox.OfNumber(3));
+    spawnerEngine.Tick(32);
+    Check(spawnerEngine.Variables.GetGlobal("Combo").AsNumber() == 2,
+        $"the lane decays Combo by one every 2 s (got {spawnerEngine.Variables.GetGlobal("Combo").AsNumber()})");
 
     // Condition lookups resolve player references the way triggers do (Task 7 G3 follow-up), so
     // the spawner's portable `me is near player by 60` works no matter what the hero is called.

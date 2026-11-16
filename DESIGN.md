@@ -1047,6 +1047,15 @@ window around a broken runtime.
   obstacles to the probes). **Vocabulary friction:** there is still no ray/normal query word
   (`me is blocked`, `path exists`), so this lives in C# while `sees` stays a trigger rather than
   a condition; the qualifier reads well enough that `chase <thing> speed <n>` was not added.
+- **Knockdown and combo ownership (Task 7 G4 phase 1):** the lane enemy's `my state` is the
+  switch — `walk` gates the walk and the swing, a hit flips it to `down` (0.4 s) then `getup`
+  (0.2 s) then back to `walk`, and standing up adds one `Combo`. Two details worth keeping:
+  the hit block deals damage first and only then gates the flip (`my state is not "down"`), so
+  a burst still hurts a downed enemy without restarting its wait blocks; and the `Combo`
+  decay lives on the single spawner actor, because a decay block in a shared enemy sheet runs
+  once per clone and would drain the global several times faster than one point per two
+  seconds. The knockdown is entered with `when state is down` (the state entry edge) so both
+  the shot and the melee `hurt` message feed one chain instead of duplicating the waits.
 - **Pathfinding edge cases:** what happens when `goto` can't reach the target (player on a
   pillar, waypoint inside a wall)? Proposal: `goto` gives up after a few seconds and â€” for now â€”
   quietly stops walking; a `when path fails` trigger is parked for when a game actually needs it.

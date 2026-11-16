@@ -1,7 +1,14 @@
-# ---------------- Arcade_Enemy.events (Task 7 Part G3: arcade lane enemy) ----------------
+# ---------------- Arcade_Enemy.events (Task 7 Part G3 + G4 phase 1) ----------------
 # No NavMesh, no rays, no waypoints: walk straight at the player on the floor, swing on contact.
 # This is the Double Dragon / Contra shape — one polled steering line plus a melee `near`, and
 # a spawner (Arcade_Spawner.events) refills the lane.
+#
+# Phase 1 (knockdown & combo): `my state` is the switch. Walking and swinging only run in
+# "walk"; a hit flips the enemy to "down" for 0.4 s, then "getup" for 0.2 s, then back to
+# "walk" and one point of Combo. A hit that lands while already down costs health but does not
+# restart the wait blocks (`my state is not "down"` gates the flip), so a burst cannot stack
+# stuns. Combo's decay lives on the spawner, which is one actor — in a shared sheet every clone
+# would decay the same global.
 #
 # SETUP (editor): the scene's `Arcade_Enemy` actor is the spawn template — give it an EventSheet
 # with Event File = Arcade_Enemy, a BoxCollider, and leave the actor inactive. `spawn Arcade_Enemy
@@ -13,13 +20,16 @@
 
 when me appears
   enemy type "Zombie"
+  set state walk
   print "Arcade_Enemy: walking in"
 
 when every 0.2 seconds
-  move toward player speed 100         # re-issued so it tracks a moving player
+  my state is "walk"                  # a downed enemy neither walks nor swings
+  move toward player speed 60         # re-issued so it tracks a moving player
   # loop anim "Walk"                 # simple meshes have no clips; armature enemies can
 
 when me is near player by 1.5
+  my state is "walk"
   my Hostile is true
   # play anim "Attack"
   send message "hurt" to nearest player
@@ -29,9 +39,28 @@ when me is near player by 1.5
 # the hit lands from this side instead: a shot that overlaps costs 10 of the zombie's 50 and is
 # used up. Same idea as Enemy.events' damage block, just keyed on the shot rather than a message,
 # because a lane full of clones has no single `Enemy` actor to message.
+# The damage lands either way; only the knockdown is gated, so a burst still hurts a downed enemy.
 when me touches Bullet
   add -10 to my Health
   destroy other
+  my state is not "down"
+  set state down
+
+# ---- a melee hit from the player (the phase-1 stun entry the listing describes) ----
+when message "hurt" arrives
+  my state is not "down"
+  set state down
+
+# ---- the knockdown itself: down 0.4 s, get up 0.2 s, then walk and count the combo hit ----
+when state is down
+  print "Arcade_Enemy: knocked down"
+  wait 0.4 seconds
+  my state is "down"                  # still down (not re-flipped)? stand up
+  set state getup
+  wait 0.2 seconds
+  my state is "getup"                 # not re-hit during the stand-up? back to the lane
+  set state walk
+  add 1 to Combo
 
 when my Health becomes 0
   add 1 to kills my Type

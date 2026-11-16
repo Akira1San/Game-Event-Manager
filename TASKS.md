@@ -912,10 +912,26 @@ when every 2 seconds
   add -1 to Combo
 ```
 
-- [ ] Movement/attack blocks gated by `my state is "walk"` so a downed enemy cannot walk or swing.
-- [ ] `Combo` is a global counter; hits raise it, `every 2 seconds` decays it by one.
-- [ ] Done-when: two quick hits show Combo 2, a hit stuns for ~0.6 s with no movement/attack, and the
+- [x] Movement/attack blocks gated by `my state is "walk"` so a downed enemy cannot walk or swing.
+- [x] `Combo` is a global counter; hits raise it, `every 2 seconds` decays it by one.
+- [x] Done-when: two quick hits show Combo 2, a hit stuns for ~0.6 s with no movement/attack, and the
       enemy returns to `walk`; being re-hit mid-stun does not multiply the wait blocks.
+
+**As shipped (2026-11-16, events only):** `Arcade_Enemy.events` gained `set state walk` on appear,
+the `my state is "walk"` gates, `when me touches Bullet` → `set state down` (after the damage),
+`when message "hurt" arrives` → `set state down` for melee hits, and one `when state is down`
+chain (down 0.4 s → getup 0.2 s → walk, `add 1 to Combo`). The knockdown is entered on the
+**state entry edge** so the shot and the melee message share one chain instead of duplicating the
+waits; a hit while down still costs health but cannot restart the chain (`my state is not
+"down"`). Two deviations from the sketch, both deliberate: the `Combo` decay moved to
+`Arcade_Spawner.events` (one actor) because in the shared enemy sheet every clone would decay the
+same global, and the spawner's `when me appears` now seeds `Combo` next to `EnemiesAlive` so the
+first read is not unset. Tests: 11 new checks (starts in `walk`, a shot flips to `down` and still
+costs 10, no swing while down, re-hit mid-stun adds damage but not a second wait chain, getup at
+0.4 s / walk at 0.6 s with Combo 1, attack resumes, two quick hits → Combo 2, spawner decays one
+per 2 s) → **1389/1389 green**; module build clean. Editor feel (0.4/0.2 timing, combo readout)
+still yours — the lane has no Combo HUD, so watch the `Arcade_Enemy: knocked down` print or
+`bind` a label to `Combo` when you want it on screen.
 
 **Phase 2 — Enemy variety (events-only)**
 Stats come from `EnemyTypes.events` (`<Type><Stat>` globals: `Speed`, `SightDistance`, `Health`,
