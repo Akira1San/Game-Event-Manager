@@ -75,6 +75,8 @@ namespace Game
                             return ValueBox.OfNumber(0);
                     }
                 }
+                case HelperValue helper:
+                    return EvaluateHelper(helper, resolve);
                 case FormatValue format:
                 {
                     // `format "Health: {0}/{1}"` — numbered placeholders filled from the args.
@@ -99,6 +101,59 @@ namespace Game
                 }
                 default:
                     return new ValueBox();
+            }
+        }
+
+        /// <summary>
+        /// The numeric helpers (Task 29 Part B). <c>clamp</c> takes its bounds either way round, so
+        /// writing them high-to-low still clamps instead of swallowing every value; <c>round</c>
+        /// rounds halves away from zero (2.5 reads 3, -2.5 reads -3) because an author rounding gold
+        /// or damage expects the bigger number; and <c>10% of X</c> is plain X times 0.1, left
+        /// unrounded so a caller can decide with <c>round</c>.
+        /// </summary>
+        private static ValueBox EvaluateHelper(HelperValue helper, VariableResolver resolve)
+        {
+            double first = Evaluate(helper.First, resolve).AsNumber();
+            switch (helper.Kind)
+            {
+                case ValueHelper.Clamp:
+                {
+                    double low = Evaluate(helper.Second, resolve).AsNumber();
+                    double high = Evaluate(helper.Third, resolve).AsNumber();
+                    if (low > high)
+                    {
+                        double swap = low;
+                        low = high;
+                        high = swap;
+                    }
+                    if (first < low)
+                        return ValueBox.OfNumber(low);
+                    if (first > high)
+                        return ValueBox.OfNumber(high);
+                    return ValueBox.OfNumber(first);
+                }
+                case ValueHelper.Min:
+                {
+                    double other = Evaluate(helper.Second, resolve).AsNumber();
+                    return ValueBox.OfNumber(first < other ? first : other);
+                }
+                case ValueHelper.Max:
+                {
+                    double other = Evaluate(helper.Second, resolve).AsNumber();
+                    return ValueBox.OfNumber(first > other ? first : other);
+                }
+                case ValueHelper.Round:
+                    return ValueBox.OfNumber(Math.Round(first, MidpointRounding.AwayFromZero));
+                case ValueHelper.Floor:
+                    return ValueBox.OfNumber(Math.Floor(first));
+                case ValueHelper.Ceil:
+                    return ValueBox.OfNumber(Math.Ceiling(first));
+                case ValueHelper.Abs:
+                    return ValueBox.OfNumber(Math.Abs(first));
+                case ValueHelper.PercentOf:
+                    return ValueBox.OfNumber(first * Evaluate(helper.Second, resolve).AsNumber() / 100.0);
+                default:
+                    return ValueBox.OfNumber(0);
             }
         }
     }

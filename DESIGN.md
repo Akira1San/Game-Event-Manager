@@ -718,6 +718,15 @@ sum in a helper variable on the line above, and a fourth operator is a friendly 
 error that names the first half to keep. Anything past that parks for Section 9 - a deliberate
 shape, not a hidden surprise.
 
+**Numeric helpers** are value forms too (Task 29 Part B), so a potion never needs an `if` and a HUD
+never shows 41.99999: `clamp my Mana to 0 and my MaxMana` (bounds work either way round),
+`min`/`max <a> and <b>`, `round`/`floor`/`ceil`/`abs <value>`, and `10% of my Gold` - the
+percentage is an ordinary operand, so `round 10% of 55` reads 6, and `add 10% of my Gold to my Gold`
+works because `add` takes any value. A helper wraps the single value after it, not a whole formula:
+`round my Gold * 1.1` rounds the gold and then multiplies, so store the product and round it on the
+next line. They read where the event parser reads a value (`set`, `add`, `deduct`, weapon/ammo/build
+forms, text) and they nest, but they deliberately do not leak into conditions or trigger matching.
+
 ### Point & click adventures (the composition showcase)
 
 The adventure genre is the system's proof of strength: almost everything a point & click game

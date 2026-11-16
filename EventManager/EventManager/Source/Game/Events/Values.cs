@@ -33,6 +33,35 @@ namespace Game
         public bool Negated;
     }
 
+    /// <summary>Which numeric helper a <see cref="HelperValue"/> is (Task 29 Part B).</summary>
+    public enum ValueHelper
+    {
+        Clamp,
+        Min,
+        Max,
+        Round,
+        Floor,
+        Ceil,
+        Abs,
+        PercentOf
+    }
+
+    /// <summary>
+    /// One numeric helper: <c>clamp &lt;v&gt; to &lt;min&gt; and &lt;max&gt;</c>,
+    /// <c>min &lt;a&gt; and &lt;b&gt;</c>, <c>max &lt;a&gt; and &lt;b&gt;</c>,
+    /// <c>round</c>/<c>floor</c>/<c>ceil</c>/<c>abs &lt;v&gt;</c> and <c>10% of &lt;v&gt;</c>.
+    /// <see cref="First"/> is the value being worked on and <see cref="Second"/> / <see cref="Third"/>
+    /// are the extra operands the two- and three-argument helpers take, so every helper is one node
+    /// type and the evaluator switch stays in one place.
+    /// </summary>
+    public class HelperValue : ValueNode
+    {
+        public ValueHelper Kind;
+        public ValueNode First = new NumberValue();
+        public ValueNode Second = new NumberValue();
+        public ValueNode Third = new NumberValue();
+    }
+
     public class RandomRangeValue : ValueNode
     {
         public ValueNode Min = new NumberValue();
@@ -101,6 +130,39 @@ namespace Game
 
     public static class Values
     {
+        /// <summary>The word a helper is written with — also used in its friendly errors.</summary>
+        public static string HelperWord(ValueHelper kind)
+        {
+            switch (kind)
+            {
+                case ValueHelper.Clamp: return "clamp";
+                case ValueHelper.Min: return "min";
+                case ValueHelper.Max: return "max";
+                case ValueHelper.Round: return "round";
+                case ValueHelper.Floor: return "floor";
+                case ValueHelper.Ceil: return "ceil";
+                case ValueHelper.Abs: return "abs";
+                default: return "percent";
+            }
+        }
+
+        private static string DescribeHelper(HelperValue helper)
+        {
+            switch (helper.Kind)
+            {
+                case ValueHelper.Clamp:
+                    return $"clamp {Describe(helper.First)} to {Describe(helper.Second)} and {Describe(helper.Third)}";
+                case ValueHelper.Min:
+                    return $"min {Describe(helper.First)} and {Describe(helper.Second)}";
+                case ValueHelper.Max:
+                    return $"max {Describe(helper.First)} and {Describe(helper.Second)}";
+                case ValueHelper.PercentOf:
+                    return $"{Describe(helper.First)}% of {Describe(helper.Second)}";
+                default:
+                    return $"{HelperWord(helper.Kind)} {Describe(helper.First)}";
+            }
+        }
+
         public static string Describe(ValueNode value)
         {
             switch (value)
@@ -117,6 +179,8 @@ namespace Game
                     return $"random {Describe(r.Min)} to {Describe(r.Max)}";
                 case MathValue m:
                     return $"{Describe(m.Left)} {m.Op} {Describe(m.Right)}";
+                case HelperValue h:
+                    return DescribeHelper(h);
                 case ExpressionValue e:
                 {
                     var text = new System.Text.StringBuilder();

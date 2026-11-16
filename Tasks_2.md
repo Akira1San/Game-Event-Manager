@@ -233,8 +233,13 @@ and reads 0, never a silent wrong number.
       exactly as before; two or three become an `ExpressionValue`. A fourth operator fails with
       “split it in two” and shows the first half to keep. Parentheses stay parked with the rest of
       Section 9.
-- [ ] **Part B — Numeric helpers.** `clamp`, `min`, `max`, `round`, `floor`, `ceil`, `abs`,
+- [x] **Part B — Numeric helpers.** `clamp`, `min`, `max`, `round`, `floor`, `ceil`, `abs`,
       `percent of`; all are value forms, usable anywhere a number is legal.
+      *Landed:* one `HelperValue` node and `ValueEvaluator.EvaluateHelper`; `clamp` accepts its bounds
+      either way round, `round` sends halves away from zero, `<n>% of <v>` is the percentage form of
+      `percent of` and stays unrounded (`round 10% of 55` reads 6). All operands go through the same
+      `ReadValue`, so helpers nest and take `random`, variables and other helpers. They read wherever
+      the event parser reads a value; conditions and trigger matching are untouched on purpose.
 - [ ] **Part C — Data lookup.** `field "<field>" of "<row>" in "<table>"`; the table prefix is the
       same one `WeaponData.events` / `EnemyTypes.events` / `UnitTypes.events` already use.
       Resolution is case-insensitive and ignores spaces in the row name the same way asset names do.

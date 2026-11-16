@@ -533,6 +533,8 @@ namespace Game
                 var max = ReadRangeBound(words, ref index, flagLine);
                 return new RandomRangeValue { Line = t.Line, Min = min, Max = max };
             }
+            if (IsHelperWord(t))
+                return ReadHelper(words, ref index, flagLine);
             if (t.Type == TokenType.Word)
             {
                 // `-my DamageTaken`, `-Score` — a negated value (Task 18 Part G): the lexer keeps
@@ -556,6 +558,98 @@ namespace Game
                 return ReadVariable(words, ref index, flagLine, "`set`");
             }
             throw new ParseException("a value was expected here — a number, quoted text, or a variable", t.Line);
+        }
+
+        /// <summary>Whether this token starts a numeric helper (Task 29 Part B): one of
+        /// <c>clamp</c>, <c>min</c>, <c>max</c>, <c>round</c>, <c>floor</c>, <c>ceil</c>, <c>abs</c>,
+        /// or a percentage like <c>10%</c>.</summary>
+        private static bool IsHelperWord(Token token)
+        {
+            if (token.Type != TokenType.Word)
+                return false;
+            switch (token.Text)
+            {
+                case "clamp":
+                case "min":
+                case "max":
+                case "round":
+                case "floor":
+                case "ceil":
+                case "abs":
+                    return true;
+            }
+            return token.Text.Length > 1 && token.Text.EndsWith("%", StringComparison.Ordinal);
+        }
+
+        /// <summary>
+        /// Reads a numeric helper as one value (Task 29 Part B). Every operand goes through
+        /// <see cref="ReadValue"/>, so helpers nest and take any value form: <c>clamp my Mana to 0</c>,
+        /// <c>max my BaseSpeed and 10</c>, <c>round random 1 to 6</c>, <c>clamp random 1 to 6 to 1 and 4</c>.
+        /// </summary>
+        private ValueNode ReadHelper(List<Token> words, ref int index, int flagLine)
+        {
+            var token = words[index];
+            string word = token.Text;
+            index++;
+
+            var helper = new HelperValue { Line = token.Line };
+            if (word.EndsWith("%", StringComparison.Ordinal))
+            {
+                string number = word.Substring(0, word.Length - 1);
+                if (!double.TryParse(number, System.Globalization.NumberStyles.Float,
+                                     System.Globalization.CultureInfo.InvariantCulture, out double percent))
+                    throw new ParseException(
+                        $"I can't read \u201C{word}\u201D as a percentage — write it like `10% of my Gold`",
+                        token.Line);
+                helper.Kind = ValueHelper.PercentOf;
+                helper.First = new NumberValue { Line = token.Line, Value = percent };
+                ExpectWord(words, ref index, "of", token.Line, $"`{word}` reads like `10% of my Gold`");
+                helper.Second = ReadValue(words, ref index, flagLine);
+                return helper;
+            }
+
+            if (word == "clamp")
+            {
+                helper.Kind = ValueHelper.Clamp;
+                helper.First = ReadValue(words, ref index, flagLine);
+                ExpectWord(words, ref index, "to", token.Line,
+                           "`clamp` reads `clamp <value> to <min> and <max>`, like `clamp my Mana to 0 and my MaxMana`");
+                helper.Second = ReadValue(words, ref index, flagLine);
+                ExpectWord(words, ref index, "and", token.Line,
+                           "`clamp` reads `clamp <value> to <min> and <max>`, like `clamp my Mana to 0 and my MaxMana`");
+                helper.Third = ReadValue(words, ref index, flagLine);
+                return helper;
+            }
+
+            if (word == "min" || word == "max")
+            {
+                helper.Kind = word == "min" ? ValueHelper.Min : ValueHelper.Max;
+                helper.First = ReadValue(words, ref index, flagLine);
+                ExpectWord(words, ref index, "and", token.Line,
+                           $"`{word}` reads `{word} <a> and <b>`, like `{word} my BaseSpeed and 10`");
+                helper.Second = ReadValue(words, ref index, flagLine);
+                return helper;
+            }
+
+            switch (word)
+            {
+                case "round": helper.Kind = ValueHelper.Round; break;
+                case "floor": helper.Kind = ValueHelper.Floor; break;
+                case "ceil": helper.Kind = ValueHelper.Ceil; break;
+                default: helper.Kind = ValueHelper.Abs; break;
+            }
+            if (index >= words.Count)
+                throw new ParseException($"`{word}` needs a value after it — like `{word} my Gold`", token.Line);
+            helper.First = ReadValue(words, ref index, flagLine);
+            return helper;
+        }
+
+        /// <summary>Consumes one expected word, or explains the shape the line should have.</summary>
+        private void ExpectWord(List<Token> words, ref int index, string word, int line, string shape)
+        {
+            if (index >= words.Count || words[index].Type != TokenType.Word || words[index].Text != word)
+                throw new ParseException($"{shape} — I expected \u201C{word}\u201D here", line);
+            index++;
         }
 
         /// <summary>

@@ -333,6 +333,126 @@ divideByZeroEngine.Tick(0);
 Check(divideByZeroEngine.Variables.GetGlobal("Ratio").AsNumber() == 1,
       "dividing by zero reads 0 inside an expression, like the one-operator line");
 
+// Task 29 Part B — numeric helpers as value forms.
+var helperParse = parser.Parse(@"when game starts
+  set Mana to clamp my Mana to 0 and my MaxMana
+  set Speed to min my BaseSpeed and 10
+  set Speed to max my BaseSpeed and 10
+  set Gold to round 2.5
+  set Mana to floor 2.9
+  set Mana to ceil 2.1
+  set Move to abs -3
+  set Tax to 10% of my Gold");
+var clampNode = ((SetNode)helperParse.Events[0].Body[0].Statement!).Value as HelperValue;
+var minNode = ((SetNode)helperParse.Events[0].Body[1].Statement!).Value as HelperValue;
+var maxNode = ((SetNode)helperParse.Events[0].Body[2].Statement!).Value as HelperValue;
+var roundNode = ((SetNode)helperParse.Events[0].Body[3].Statement!).Value as HelperValue;
+var floorNode = ((SetNode)helperParse.Events[0].Body[4].Statement!).Value as HelperValue;
+var ceilNode = ((SetNode)helperParse.Events[0].Body[5].Statement!).Value as HelperValue;
+var absNode = ((SetNode)helperParse.Events[0].Body[6].Statement!).Value as HelperValue;
+var percentNode = ((SetNode)helperParse.Events[0].Body[7].Statement!).Value as HelperValue;
+Check(clampNode != null && clampNode.Kind == ValueHelper.Clamp &&
+      clampNode.First is VariableValue clampValue && clampValue.Owner == "my" && clampValue.Name == "Mana" &&
+      clampNode.Second is NumberValue clampLow && clampLow.Value == 0 &&
+      clampNode.Third is VariableValue clampHigh && clampHigh.Owner == "my" && clampHigh.Name == "MaxMana",
+      "`clamp my Mana to 0 and my MaxMana` is a HelperValue with the value and both bounds");
+Check(minNode != null && minNode.Kind == ValueHelper.Min && maxNode != null && maxNode.Kind == ValueHelper.Max &&
+      roundNode != null && roundNode.Kind == ValueHelper.Round && floorNode != null && floorNode.Kind == ValueHelper.Floor &&
+      ceilNode != null && ceilNode.Kind == ValueHelper.Ceil && absNode != null && absNode.Kind == ValueHelper.Abs,
+      "`min`, `max`, `round`, `floor`, `ceil` and `abs` are their own helper kinds");
+Check(percentNode != null && percentNode.Kind == ValueHelper.PercentOf &&
+      percentNode.First is NumberValue percentAmount && percentAmount.Value == 10 &&
+      percentNode.Second is VariableValue percentTarget && percentTarget.Owner == "my" && percentTarget.Name == "Gold",
+      "`10% of my Gold` is a PercentOf helper reading 10 and the value after `of`");
+
+var helperEngine = FreshEngine(new FakeWorld());
+helperEngine.AddSheet(new GlobalHost(), parser.Parse(@"when game starts
+  set Gold to 250
+  add 10% of Gold to Gold
+  set Price to 50
+  set Tax to 20% of Price
+  set Mana to 80
+  set MaxMana to 60
+  set Mana to clamp Mana to 0 and MaxMana
+  set Low to clamp -5 to 0 and 10
+  set High to clamp 15 to 0 and 10
+  set Swapped to clamp 15 to 10 and 0
+  set Smallest to min 4 and 9
+  set Largest to max 4 and 9
+  set Rounded to round 2.5
+  set RoundedNegative to round -2.5
+  set Floored to floor 2.9
+  set Ceiled to ceil 2.1
+  set Absolute to abs -4
+  set Nested to clamp round 9.6 to 0 and 9
+  set InExpression to round 2.5 + 1
+  set PercentRounded to round 10% of 55"));
+helperEngine.SessionStarted();
+helperEngine.Tick(0);
+Check(helperEngine.Variables.GetGlobal("Gold").AsNumber() == 275,
+      "`add 10% of Gold to Gold` raises 250 by 25");
+Check(helperEngine.Variables.GetGlobal("Tax").AsNumber() == 10,
+      "`20% of Price` reads a tenth of the variable, unrounded (50 -> 10)");
+Check(helperEngine.Variables.GetGlobal("Mana").AsNumber() == 60,
+      "a potion over the cap clamps down to MaxMana (80 -> 60)");
+Check(helperEngine.Variables.GetGlobal("Low").AsNumber() == 0 &&
+      helperEngine.Variables.GetGlobal("High").AsNumber() == 10,
+      "`clamp` lifts a value under the low bound and pulls one over the high bound");
+Check(helperEngine.Variables.GetGlobal("Swapped").AsNumber() == 10,
+      "`clamp` bounds written high-to-low still clamp (15 with 10 and 0 reads 10)");
+Check(helperEngine.Variables.GetGlobal("Smallest").AsNumber() == 4 &&
+      helperEngine.Variables.GetGlobal("Largest").AsNumber() == 9,
+      "`min 4 and 9` reads 4 and `max 4 and 9` reads 9");
+Check(helperEngine.Variables.GetGlobal("Rounded").AsNumber() == 3 &&
+      helperEngine.Variables.GetGlobal("RoundedNegative").AsNumber() == -3,
+      "`round` sends halves away from zero (2.5 -> 3, -2.5 -> -3)");
+Check(helperEngine.Variables.GetGlobal("Floored").AsNumber() == 2 &&
+      helperEngine.Variables.GetGlobal("Ceiled").AsNumber() == 3,
+      "`floor 2.9` reads 2 and `ceil 2.1` reads 3");
+Check(helperEngine.Variables.GetGlobal("Absolute").AsNumber() == 4,
+      "`abs -4` reads 4");
+Check(helperEngine.Variables.GetGlobal("Nested").AsNumber() == 9,
+      "helpers nest: `clamp round 9.6 to 0 and 9` rounds to 10 then clamps to 9");
+Check(helperEngine.Variables.GetGlobal("InExpression").AsNumber() == 4,
+      "a helper is an ordinary operand inside a multi-operator line (round 2.5 + 1 = 4)");
+Check(helperEngine.Variables.GetGlobal("PercentRounded").AsNumber() == 6,
+      "`round 10% of 55` rounds the percentage (5.5 -> 6)");
+
+string clampShape = null;
+try
+{
+    parser.Parse("when game starts\n  set Mana to clamp 5 to 1\n");
+}
+catch (ParseException error)
+{
+    clampShape = error.Message;
+}
+Check(clampShape != null && clampShape.Contains("clamp <value> to <min> and <max>") &&
+      clampShape.Contains("\u201Cand\u201D"),
+      "a `clamp` missing its `and` bound explains the full shape");
+string minShape = null;
+try
+{
+    parser.Parse("when game starts\n  set Fast to min 5\n");
+}
+catch (ParseException error)
+{
+    minShape = error.Message;
+}
+Check(minShape != null && minShape.Contains("min <a> and <b>"),
+      "`min` without its second value explains the shape");
+string percentShape = null;
+try
+{
+    parser.Parse("when game starts\n  set Tax to 10% Price\n");
+}
+catch (ParseException error)
+{
+    percentShape = error.Message;
+}
+Check(percentShape != null && percentShape.Contains("10% of my Gold"),
+      "a percentage missing its `of` explains the shape");
+
 var hurt = parser.Parse("when me appears\n  add -1 to Lives\n  add Potion to my bag\n");
 var negative = (AddNode)hurt.Events[0].Body[0].Statement!;
 Check(negative.Amount is NumberValue av && av.Value == -1 && negative.Target.Name == "Lives",
