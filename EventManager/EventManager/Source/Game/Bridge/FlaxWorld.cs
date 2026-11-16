@@ -308,15 +308,30 @@ namespace Game
                 return true; // nothing between the two actors — sight is clear
             foreach (var hit in hits)
             {
-                // RayCastHit.Collider is the collider that was hit; its Actor is the scene actor.
-                // Only me or the target itself may be hit; anything else (a wall, ...) blocks sight.
+                // RayCastHit.Collider is the collider actor that was hit. A collider is almost
+                // always a CHILD of the body it belongs to (a BoxCollider on the zombie, a hull on
+                // a vehicle), so comparing it with the actor passed in only ever matched colliders
+                // sitting on the actor itself. When it did not match, a body blocked its own sight:
+                // a level chaser's foot-level ray clips the bottom of its own box and `me sees`
+                // went blind the instant `facing forward` levelled the model.
                 var hitActor = hit.Collider as Actor;
                 if (hitActor == null)
                     return false; // hit something without an actor — blocks sight
-                if (!ReferenceEquals(hitActor, first) && !ReferenceEquals(hitActor, second))
-                    return false; // hit something else (wall, ...) — blocks sight
+                if (BelongsToBody(hitActor, first) || BelongsToBody(hitActor, second))
+                    continue; // the seer's or the target's own collider (or a child's)
+                return false; // hit something else (wall, ...) — blocks sight
             }
             return true;
+        }
+
+        /// <summary>True when <paramref name="part"/> is <paramref name="body"/> itself or a
+        /// descendant of it (a collider/hull child actor).</summary>
+        private static bool BelongsToBody(Actor part, Actor body)
+        {
+            for (Actor node = part; node != null && !(node is Scene); node = node.Parent)
+                if (ReferenceEquals(node, body))
+                    return true;
+            return false;
         }
 
         public double DistanceToPoint(object from, double x, double z)
@@ -343,8 +358,9 @@ namespace Game
                 var hitActor = hit.Collider as Actor;
                 if (hitActor == null)
                     return false; // hit geometry without an actor — blocks the sound
-                if (!ReferenceEquals(hitActor, actor))
-                    return false; // a wall, a crate, anything else: the shot is muffled
+                if (BelongsToBody(hitActor, actor))
+                    continue; // the listener's own collider (or a child's)
+                return false; // a wall, a crate, anything else: the shot is muffled
             }
             return true;
         }

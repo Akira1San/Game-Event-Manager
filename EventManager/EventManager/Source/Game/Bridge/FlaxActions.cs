@@ -398,7 +398,7 @@ namespace Game
                         double speed = PhysicsMovement.PathSpeed(length, move.Speed, DeltaTime);
                         MoveSubject(move.Subject, delta / length, speed, move.Mode);
                         if (move.FaceForward)
-                            move.Subject.LookAt(waypoint);
+                            FaceHeading(move.Subject, delta);
                     }
                     if (reached)
                     {
@@ -623,7 +623,13 @@ namespace Game
                             {
                                 // A plain chase ends any wall negotiation from an earlier line.
                                 context.Runtime.Steering.Clear(me);
-                                Vector3 delta = target.Position - me.Position;
+                                // Ground chase: use the XZ delta only. A player standing higher than
+                                // the enemy (a raised platform, another actor's pivot at chest
+                                // height) would otherwise tilt the walk upward and lift the body off
+                                // the floor instead of closing the horizontal gap.
+                                var delta = new Vector3(
+                                    target.Position.X - me.Position.X, 0f,
+                                    target.Position.Z - me.Position.Z);
                                 float length = delta.Length;
                                 heading = length > 0.001f ? delta / length : Vector3.Zero;
                             }
@@ -1642,6 +1648,11 @@ namespace Game
         /// before that change, wedge against each other. The rule itself is pure
         /// (<see cref="Separation"/>); this only gathers the neighbours, skipping the chaser, its
         /// children and the thing it is chasing (an attacker still has to reach melee range).
+        ///
+        /// Only characters count. <see cref="IEventWorld.Actors"/> returns every actor in the scene,
+        /// so the floor and walls are in it too; they carry colliders whose extents are far larger
+        /// than a body (a wall's half-width can be 150 cm), which put every chaser "inside" their
+        /// spacing range and bent the chase away from the level instead of the player.
         /// </summary>
         private static Vector3 NudgeAroundNeighbours(EventContext context, Actor me, Actor target, Vector3 heading)
         {
@@ -1652,12 +1663,14 @@ namespace Game
             var neighbours = new List<SeparationNeighbour>();
             foreach (object item in actors)
             {
-                if (!(item is Actor other) || other == null || other.Scene == null)
+                if (!(item is Actor other) || other == null || other.Scene == null || !other.IsActive)
                     continue;
                 if (ReferenceEquals(other, me) || IsAncestorOrSelf(me, other))
                     continue;
                 if (target != null && (ReferenceEquals(other, target) || IsAncestorOrSelf(target, other)))
                     continue;
+                if (!IsCharacterActor(other))
+                    continue; // a wall or the floor: geometry is not a body to keep distance from
                 if (!TryColliderFootprint(other, out float radius, out _))
                     continue;
                 neighbours.Add(new SeparationNeighbour { X = other.Position.X, Z = other.Position.Z, Radius = radius });

@@ -750,6 +750,22 @@ the far side of the wall when it was stuck against one. Four separate causes, al
 frame step is clamped, one in `ArriveAt` when the arrival snap exceeds 2 units. Remove them once the
 editor run is clean; they exist to name the cause of any leftover jump instead of guessing.
 
+**Follow-up 2 (same day) — the chaser went blind when it started chasing.** The editor log showed
+both enemies reaching `chase start` and `sight broke` 33 ms (two frames) later, then hunting and
+giving up, so they never closed. `FlaxWorld.HasLineOfSight` allowed a hit only when
+`RayCastHit.Collider` **was** the actor it was asked about, but a collider is normally a *child* actor
+(`Enemy_LOS/BoxCollider`), so the seer's own box counted as an occluder. The sight ray starts at the
+actor's origin (feet) and the zombie's box starts 0.31 cm above it: while patrol pitched the body at
+the ground waypoint the origin sat inside the box (PhysX ignores a shape the ray starts in), and the
+instant `facing forward` levelled the body the ray entered the box and `me sees` went blind. Sight and
+sound now ignore any collider that belongs to the seer or the target (self or descendant), matching
+what `StepBlocked` already did. Two smaller fixes from the same review: the plain chase heading is
+flattened to XZ (a target whose pivot sits higher no longer lifts the body off the floor), and
+`Separation` only counts **character** actors — `World.Actors()` also returns the floor and walls,
+whose large collider extents put every chaser inside their spacing range and bent the chase away from
+the level. `goto ... facing forward` now uses the flattened `FaceHeading` too, so a ground waypoint
+cannot nose-dive the model.
+
 **Tests:** 19 new checks (both qualifiers and their fixed order, `facing forward` opt-in on `move
 toward` only, separation range/perpendicularity/behind/stack/weight/blend, `MoveStep` normal + both
 clamps + zero dt, both shipped sheets chasing with `facing forward`) → **1359/1359 green**. Module
