@@ -607,12 +607,25 @@ namespace Game
     ///
     /// Hand-authored items keep their own <c>when me gets equipped</c> sheets; a generated item
     /// additionally has a roll here, and both apply.
+    ///
+    /// Every applied record is keyed by the **item actor** (Task 9 F1). The bag's name is only a
+    /// label: two rolled rings are both called “Ring”, and keying by (wearer, name) made the second
+    /// equip overwrite the first, leaving its stats on the wearer forever. Records are kept in an
+    /// ordered list so removing by (wearer, name) — all <c>unequip</c> knows — takes back the first
+    /// one worn, and so a destroyed item can hand back exactly what it added.
     /// </summary>
     public class ItemAffixes
     {
+        private sealed class WornItem
+        {
+            public object Item;
+            public object Wearer;
+            public string Name = "";
+            public List<ItemStat> Stats = new List<ItemStat>();
+        }
+
         private readonly Dictionary<object, ItemRoll> rolls = new Dictionary<object, ItemRoll>();
-        private readonly Dictionary<(object Wearer, string Name), List<ItemStat>> applied =
-            new Dictionary<(object, string), List<ItemStat>>();
+        private readonly List<WornItem> applied = new List<WornItem>();
 
         /// <summary>Remember that this item actor carries a rolled item.</summary>
         public void Stamp(object item, ItemRoll roll)
@@ -635,6 +648,9 @@ namespace Game
         /// <summary>
         /// Apply the item's rolled stats to the wearer. Returns false (and changes nothing) when
         /// that item carries no roll — a hand-authored item's sheet does its own work.
+        ///
+        /// Idempotent for the same wearer, and a different wearer never double-stacks one instance:
+        /// the previous application is taken back first.
         /// </summary>
         public bool Apply(EventVariables variables, object wearer, string name, object item)
         {
@@ -642,54 +658,106 @@ namespace Game
                 return false;
             if (!rolls.TryGetValue(item, out ItemRoll roll))
                 return false;
-            var appliedStats = new List<ItemStat>();
+
+            WornItem existing = FindByItem(item);
+            if (existing != null)
+            {
+                if (ReferenceEquals(existing.Wearer, wearer))
+                    return true; // this instance is already on this wearer
+                Subtract(variables, existing);
+                applied.Remove(existing);
+            }
+
+            var record = new WornItem { Item = item, Wearer = wearer, Name = name ?? "" };
             foreach (ItemStat stat in roll.Stats)
             {
                 if (string.IsNullOrEmpty(stat.Stat) || stat.Value == 0)
                     continue;
                 double current = variables.GetLocal(wearer, stat.Stat).AsNumber();
                 variables.SetLocal(wearer, stat.Stat, ValueBox.OfNumber(current + stat.Value));
-                appliedStats.Add(new ItemStat(stat.Stat, stat.Value));
+                record.Stats.Add(new ItemStat(stat.Stat, stat.Value));
             }
-            applied[(wearer, name ?? "")] = appliedStats;
+            applied.Add(record);
             return true;
         }
 
-        /// <summary>Take back exactly what <see cref="Apply"/> added for this worn item.</summary>
+        /// <summary>
+        /// Take back exactly what <see cref="Apply"/> added for one worn item. `unequip` only knows
+        /// the wearer and the bag name, so this removes the first (oldest) record with that pair —
+        /// one call, one item, however many items share the name.
+        /// </summary>
         public bool Remove(EventVariables variables, object wearer, string name)
         {
             if (variables == null || wearer == null)
                 return false;
-            if (!applied.TryGetValue((wearer, name ?? ""), out List<ItemStat> appliedStats))
+            WornItem record = FindByWearerAndName(wearer, name);
+            if (record == null)
                 return false;
-            foreach (ItemStat stat in appliedStats)
-            {
-                double current = variables.GetLocal(wearer, stat.Stat).AsNumber();
-                variables.SetLocal(wearer, stat.Stat, ValueBox.OfNumber(current - stat.Value));
-            }
-            applied.Remove((wearer, name ?? ""));
+            Subtract(variables, record);
+            applied.Remove(record);
             return true;
         }
 
-        /// <summary>Forget a destroyed item actor (its roll and any wearer record keyed by it).</summary>
-        public void Forget(object item)
+        /// <summary>
+        /// Forget a destroyed item actor: its roll, and — when it was worn — the stats it added,
+        /// handed back to the wearer so a destroyed ring cannot leave a permanent bonus behind.
+        /// </summary>
+        public void Forget(EventVariables variables, object item)
         {
             if (item == null)
                 return;
+            WornItem record = FindByItem(item);
+            if (record != null)
+            {
+                if (variables != null)
+                    Subtract(variables, record);
+                applied.Remove(record);
+            }
             rolls.Remove(item);
         }
 
-        /// <summary>Forget everything a destroyed wearer was wearing.</summary>
+        /// <summary>Forget everything a destroyed wearer was wearing (its own variables are gone).</summary>
         public void ForgetWearer(object wearer)
         {
             if (wearer == null)
                 return;
-            var stale = new List<(object, string)>();
-            foreach (var key in applied.Keys)
-                if (ReferenceEquals(key.Item1, wearer))
-                    stale.Add(key);
-            foreach (var key in stale)
-                applied.Remove(key);
+            for (int i = applied.Count - 1; i >= 0; i--)
+                if (ReferenceEquals(applied[i].Wearer, wearer))
+                    applied.RemoveAt(i);
+        }
+
+        /// <summary>The wearer currently wearing this exact item instance, or null.</summary>
+        public object WearerOf(object item)
+        {
+            WornItem record = FindByItem(item);
+            return record == null ? null : record.Wearer;
+        }
+
+        private WornItem FindByItem(object item)
+        {
+            foreach (WornItem record in applied)
+                if (ReferenceEquals(record.Item, item))
+                    return record;
+            return null;
+        }
+
+        private WornItem FindByWearerAndName(object wearer, string name)
+        {
+            string wanted = name ?? "";
+            foreach (WornItem record in applied)
+                if (ReferenceEquals(record.Wearer, wearer) &&
+                    string.Equals(record.Name, wanted, System.StringComparison.OrdinalIgnoreCase))
+                    return record;
+            return null;
+        }
+
+        private static void Subtract(EventVariables variables, WornItem record)
+        {
+            foreach (ItemStat stat in record.Stats)
+            {
+                double current = variables.GetLocal(record.Wearer, stat.Stat).AsNumber();
+                variables.SetLocal(record.Wearer, stat.Stat, ValueBox.OfNumber(current - stat.Value));
+            }
         }
     }
 }

@@ -1249,6 +1249,113 @@ item applies nothing, bag instance identity, equip/unequip through the runtime) 
 **Out of scope:** skill trees, synergies, runewords, set items, charms, crafting, vendors, gambling,
 mercenaries.
 
+### Part F — D2 combat kit follow-ups (ranked) `[ ]`
+
+Review of E1–E7 (2026-11-16) produced this queue. Order is by value, not by phase: F1–F4 are
+correctness and vocabulary holes that make later phases cheaper, F5–F6 are the first slice of
+Task 37, F7–F12 are depth. Each item is scoped to be picked up alone; the E-phase it serves is in
+brackets.
+
+- [x] **F1 — Fix generated-item stat bookkeeping (C#, small) [E5/E7].** `ItemAffixes.applied` is
+      keyed `(wearer, name)` while the equipped set is a `HashSet<string>` of names, so two rare
+      rings (both `Ring`) overwrite each other: the first ring's stats stay on the wearer forever
+      and are never subtracted. A worn item that is destroyed also keeps its stats. Key the
+      record by the **item actor** (and store the name for display), and subtract on destroy.
+      Done-when: two different rolled rings equipped in sequence stack and unstack exactly; a worn
+      ring destroyed mid-session leaves the wearer's stats at baseline. Pure `Runtime` + tests.
+      **As shipped (2026-11-16):** `ItemAffixes` keeps an ordered `WornItem` list keyed by the item
+      actor (item, wearer, name, and the stats actually added). `Apply` is idempotent for the same
+      wearer and moves an instance between wearers without double-stacking; `Remove(variables,
+      wearer, name)` — all `unequip` knows — takes back the **oldest** record with that pair, so
+      two rings both called `Ring` unstack one at a time; `Forget(variables, item)` now subtracts
+      before dropping the roll, and `FlaxActions.ForgetSubject` passes the variables, so
+      destroying a worn item no longer leaves a permanent bonus. New `WearerOf(item)` for
+      tests/HUDs.
+      12 new checks (two same-named rings stack/unstack through the store *and* through
+      bag → `EquipItem` → `UnequipItem`, re-equip is idempotent, removing an unworn ring is a
+      no-op, a destroyed worn item returns the wearer to baseline and forgets its roll) →
+      **1488/1488 green**; module build 0 errors.
+- [ ] **F2 — A real damage path: `damage <target> by <n> <type>` (C#, medium) [E4, Task 37 C].**
+      `ExecuteSend` requires a literal message name, so a projectile stamped with `my Element`
+      cannot pick its message today; E4 written now means one `send message "fire"` block per
+      element per weapon. Add the action: resolve the target, subtract the victim's `<Type>Resist`,
+      then go through the existing armor/shield/health path and matchup gate. Keep `send message`
+      for scripted events. Done-when: a fireball hurts an unresisted zombie and barely scratches a
+      `FireResist 50` one with no per-element branches in any sheet; the same call with `steel`
+      ignores FireResist.
+- [ ] **F3 — Variables in numeric qualifiers (C#, small) [E1, E4].** `near Enemy by my Reach`
+      parses and then reads 0 (`Conditions.cs` wants a number token), which forces one melee block
+      per weapon and will bite spell range/cleave/aura sizes. Accept a number, a global or
+      `my <name>` everywhere a distance is read, in conditions and triggers. Done-when: a weapon
+      sheet with `by my Reach` reaches its authored distance, and `when me is near` by a variable
+      re-arms on the right edge.
+- [ ] **F4 — Mana bounds in the engine (C#, small) [E2, E3].** Health already clamps through
+      `HealthManager.Add` (`0..MaxHealth`, armor/shield first); do the same for `Mana`/
+      `MaxMana` so E2's potion and regen do not need a three-line `if` dance (there is no `min()`),
+      and `cast`'s manual clamp becomes the same rule instead of a special case. Done-when: a potion
+      fills to the cap and never past it; regen stops at `MaxMana`; the E3 cast spends through the
+      same path.
+- [ ] **F5 — One timer table + a ready edge (C#, medium) [Task 37 B].** `WeaponClock` has
+      completion edges, `SpellClock` does not, and Task 37 proposes `put "<name>" on cooldown for
+      <s>` — a second cooldown system over the one that ships. Generalize into a named-timer table
+      keyed `(actor, name)` used by `reload`, spells and future buffs; expose
+      `when "<spell>" is ready` and keep `my "<spell>" cooldown` as the readout. Done-when: a HUD
+      icon flips on the ready edge; `reload` and `cast` share one storage; an existing sheet's
+      behaviour is unchanged.
+- [ ] **F6 — Loot tables (C# + data, medium) [E7, Task 37 E].** A weighted table file
+      (`Loot.events`) resolved by `spawn item from "Loot" at <spot>` (and `roll "<rarity>" from
+      "Loot"`), choosing base + rarity + item level and then calling `ItemGenerator.Roll` — never
+      reimplementing the roll. `EnemyTypes` gains a `Level` stat so a death can pass its own level.
+      Done-when: a level-12 zombie drops a level-appropriate ring from a table, no drop numbers in
+      any enemy sheet, and `Foxy` (level 10+) actually appears in play.
+- [ ] **F7 — Cast feedback + HUD check (C#, small) [E3].** `cast` refuses silently on mana or
+      cooldown (right for play, wrong for feedback). Push `when cast fails "<spell>"` (or a
+      `"cast failed <Spell>"` message) so a sheet can flash a bar. Verify `bind <label> to my
+      <Spell>Cooldown` — the expanded `when <var> changes` watch re-reads the computed value every
+      tick, so it may work but churn the label 60×/s. Done-when: a failed cast triggers feedback;
+      the cooldown label updates without per-frame churn.
+- [ ] **F8 — Extract the cast decision (C#, small) [E3].** Move "unknown / cooling / short mana /
+      spend + start" out of `FlaxActions.CastSpell` into a pure `Runtime/SpellCasting.Decide(...)`
+      returning a verdict, matching how `Steering`/`PhysicsMovement`/`Separation` keep rules out of
+      the bridge. Done-when: mana refusal, cooldown refusal and one-spend-per-cast are unit tests
+      rather than a doc paragraph, and the bridge only executes the verdict.
+- [ ] **F9 — Equip slots from `ItemData.Slot` (C#, small) [E5].** `ItemData.events` already ships
+      `RingSlot`/`AmuletSlot`/`SwordSlot` and nothing reads them, so two rings both "work". Gate
+      `equip` on the slot variable and either refuse or auto-unequip the old item. Done-when: the
+      second ring is refused (or swaps the first, with its stats fully removed) and a sword cannot
+      sit in the ring slot.
+- [ ] **F10 — One `<Owner><Field>` table loader (C#, medium refactor) [all data systems].**
+      `WeaponData`, `SpellData`, `ItemData`, `AffixData`, `EnemyTypes` and `Matchups` are six copies
+      of the same split-literal-read logic; the next tables (Abilities, Buffs, Loot) would be
+      copies seven and eight. Extract a small generic table (field list, `LoadData`,
+      `CanonicalFor`, `KnownNames`, layered globals-over-data) with no behavior change. Done-when:
+      the six tables are thin classes over the helper, the suite is still green, and a new data
+      table is ~10 lines.
+- [ ] **F11 — Item identity the player can see (C# + data, medium) [E7, Task 34].** The bag tracks
+      which actor an item came from, but sheets still read `Ring x2` and `equip Ring` always takes
+      the first carried instance. Show instance names (`my bag items` / display names from
+      `my ItemName`), and allow choosing (`equip Ring 2`). Done-when: two different rings are
+      distinguishable and the intended one is equipped. The grid UI itself stays with Task 34.
+- [ ] **F12 — Data depth that costs no code (data only, small) [E4/E5/E7].** `AllResist`,
+      `FirePierce`, `CritChance`, `LifeLeech` are new names in `ItemStats.Names` plus affix rows;
+      base-specific affix pools (a ring should not roll weapon damage) via an `<Affix>Bases` field;
+      a proper tier ladder instead of one hand-placed late affix. Code for crit/leech/pierce
+      actually **spending** those stats belongs with F2. Done-when: the pool reflects the base and
+      slot, and every new stat is read by a real consumer.
+
+**Blocked / later (do not start from this list):** damage numbers and hit feedback (needs F2);
+crit/leech/penetration behavior (needs F2); save/load of rolled items — `ItemAffixes` is in-memory
+and actor-keyed while `save stats` stores globals (belongs with the save/load task); cast time /
+channel / interrupt, spell schools and spellbooks (nothing in the kit needs them yet); ground-
+targeted spells (`aim`), which need a point value first.
+
+**Where E3/E7 meet Task 37 (decide before starting Task 37):** Task 37 is the *primitives* (`put "x"
+on cooldown`, `damage <target> by <n> <type>`, `spawn item from "<table>"`); E3/E7 shipped the
+*composites*. Do not fold `cast` backwards — it is the right authoring shape and can become a thin
+composition later with no `.events` file changing. Instead: F5 gives Task 37 B its storage, F2 gives
+it C, F6 gives E its generator, and Task 37 A (buffs) should reuse the "apply exactly / remove
+exactly" bookkeeping from `ItemAffixes` (F1 is the prerequisite).
+
 ---
 
 ## Task 14 — Editor window (M3) `[ ]`

@@ -2602,7 +2602,9 @@ namespace Game
             // A destroyed actor takes its spell cooldowns and item roll with it, so a clone born
             // under the same name never inherits a stale timer or someone else's affixes.
             context.Runtime.Spells.Clear(actor);
-            context.Runtime.Affixes.Forget(actor);
+            // Passing the variables lets a destroyed *worn* item hand back the stats it added;
+            // otherwise a destroyed ring would leave a permanent bonus on its wearer.
+            context.Runtime.Affixes.Forget(context.Runtime.Variables, actor);
             context.Runtime.Affixes.ForgetWearer(actor);
             context.Runtime.Selection.Forget(actor);
             ClearFogVisibility(actor);

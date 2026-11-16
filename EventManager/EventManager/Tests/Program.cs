@@ -8489,6 +8489,82 @@ ringBagEngine.UnequipItem(ringBagPlayer, "Ring");
 Check(ringBagEngine.Variables.GetLocal(ringBagPlayer, "FireResist").AsNumber() == 0,
     "unequipping takes back exactly the rolled stats");
 
+// ---- Task 9 F1: applied stats are keyed by the item instance, not by (wearer, name) ----
+// Two rings are both called "Ring"; they must stack and unstack independently.
+var twoRingStore = new ItemAffixes();
+var twoRingVariables = new EventVariables();
+var twoRingWearer = new FakeActor("Player");
+var firstRing = new FakeActor("Ring");
+var secondRing = new FakeActor("Ring");
+var firstRoll = new ItemRoll { Base = "Ring", Rarity = "Rare", DisplayName = "Fiery Ring" };
+firstRoll.Stats.Add(new ItemStat("FireResist", 10));
+var secondRoll = new ItemRoll { Base = "Ring", Rarity = "Rare", DisplayName = "Strong Ring" };
+secondRoll.Stats.Add(new ItemStat("FireResist", 25));
+secondRoll.Stats.Add(new ItemStat("Strength", 4));
+twoRingStore.Stamp(firstRing, firstRoll);
+twoRingStore.Stamp(secondRing, secondRoll);
+Check(twoRingStore.Apply(twoRingVariables, twoRingWearer, "Ring", firstRing),
+    "the first of two same-named rings applies");
+Check(twoRingStore.Apply(twoRingVariables, twoRingWearer, "Ring", secondRing),
+    "the second ring applies instead of overwriting the first's record");
+Check(twoRingVariables.GetLocal(twoRingWearer, "FireResist").AsNumber() == 35 &&
+      twoRingVariables.GetLocal(twoRingWearer, "Strength").AsNumber() == 4,
+    "two same-named rings stack (10 + 25 fire resist, +4 strength)");
+Check(twoRingStore.Apply(twoRingVariables, twoRingWearer, "Ring", firstRing) &&
+      twoRingVariables.GetLocal(twoRingWearer, "FireResist").AsNumber() == 35,
+    "re-equipping the same instance is idempotent, not a second stack");
+Check(twoRingStore.Remove(twoRingVariables, twoRingWearer, "Ring") &&
+      twoRingVariables.GetLocal(twoRingWearer, "FireResist").AsNumber() == 25 &&
+      twoRingVariables.GetLocal(twoRingWearer, "Strength").AsNumber() == 4,
+    "unequipping one ring takes back only that ring's stats");
+Check(twoRingStore.Remove(twoRingVariables, twoRingWearer, "Ring") &&
+      twoRingVariables.GetLocal(twoRingWearer, "FireResist").AsNumber() == 0 &&
+      twoRingVariables.GetLocal(twoRingWearer, "Strength").AsNumber() == 0,
+    "unequipping the second ring returns the wearer to baseline");
+Check(!twoRingStore.Remove(twoRingVariables, twoRingWearer, "Ring"),
+    "unequipping a ring that is not worn removes nothing");
+
+// The same two rings through the real path: bag -> equip -> unequip.
+var twoRingWorld = new FakeWorld();
+var twoRingPlayer = new FakeActor("Player");
+var bagRingA = new FakeActor("Ring");
+var bagRingB = new FakeActor("Ring");
+twoRingWorld.AddActor(twoRingPlayer);
+var twoRingEngine = FreshEngine(twoRingWorld);
+twoRingEngine.Affixes.Stamp(bagRingA, firstRoll);
+twoRingEngine.Affixes.Stamp(bagRingB, secondRoll);
+twoRingEngine.BagAdd(twoRingPlayer, "Ring", bagRingA);
+twoRingEngine.BagAdd(twoRingPlayer, "Ring", bagRingB);
+twoRingEngine.TakeBagItem(twoRingPlayer, "Ring", out object equippedA);
+twoRingEngine.EquipItem(twoRingPlayer, "Ring", equippedA);
+twoRingEngine.TakeBagItem(twoRingPlayer, "Ring", out object equippedB);
+twoRingEngine.EquipItem(twoRingPlayer, "Ring", equippedB);
+Check(twoRingEngine.Variables.GetLocal(twoRingPlayer, "FireResist").AsNumber() == 35,
+    "two same-named rings from the bag both count while worn");
+twoRingEngine.UnequipItem(twoRingPlayer, "Ring");
+twoRingEngine.UnequipItem(twoRingPlayer, "Ring");
+Check(twoRingEngine.Variables.GetLocal(twoRingPlayer, "FireResist").AsNumber() == 0 &&
+      twoRingEngine.Variables.GetLocal(twoRingPlayer, "Strength").AsNumber() == 0,
+    "unequipping them in turn leaves no stats behind");
+
+// A worn item that is destroyed hands its stats back (destroy on a ring, or a scene unload).
+var brokenRingStore = new ItemAffixes();
+var brokenRingVariables = new EventVariables();
+var brokenRingWearer = new FakeActor("Player");
+var brokenRing = new FakeActor("Ring");
+var brokenRoll = new ItemRoll { Base = "Ring", Rarity = "Magic" };
+brokenRoll.Stats.Add(new ItemStat("MaxMana", 15));
+brokenRingStore.Stamp(brokenRing, brokenRoll);
+brokenRingStore.Apply(brokenRingVariables, brokenRingWearer, "Ring", brokenRing);
+Check(ReferenceEquals(brokenRingStore.WearerOf(brokenRing), brokenRingWearer) &&
+      brokenRingVariables.GetLocal(brokenRingWearer, "MaxMana").AsNumber() == 15,
+    "a worn instance reports its wearer");
+brokenRingStore.Forget(brokenRingVariables, brokenRing);
+Check(brokenRingVariables.GetLocal(brokenRingWearer, "MaxMana").AsNumber() == 0,
+    "destroying a worn item takes its stats back off the wearer");
+Check(!brokenRingStore.HasRoll(brokenRing),
+    "a destroyed item also forgets its roll");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
