@@ -185,6 +185,44 @@
     </div>
   </section>
 
+  <section id="music">
+    <h2>Audio — menu music, a level switch and dialogue ducking</h2>
+    <div class="card">
+      <h3>Menu track fades out, level track fades in</h3>
+      <p>There is one music player: starting a track replaces the old one, and a track started after a fade-out ramps itself back up. Fades are advanced by the event runtime each tick, so no coroutine or animation is involved.</p>
+      <div class="two-col">
+        <div>
+          <div class="syntax-box">
+            <span class="alt"># Menu.events</span><br>
+            <span class="kw">when scene starts</span><br>
+            &nbsp;&nbsp;<span class="kw">loop music "menu"</span><br>
+            <br>
+            <span class="kw">when PlayButton is clicked</span><br>
+            &nbsp;&nbsp;<span class="kw">fade music to 0 in 0.5</span><br>
+            &nbsp;&nbsp;<span class="kw">wait 0.5 seconds</span><br>
+            &nbsp;&nbsp;<span class="kw">load scene "Level1"</span>
+          </div>
+        </div>
+        <div>
+          <div class="syntax-box">
+            <span class="alt"># Level1.events — the music never stopped, only the volume did</span><br>
+            <span class="kw">when scene starts</span><br>
+            &nbsp;&nbsp;<span class="kw">loop music "level1"</span><br>
+            <br>
+            <span class="kw">when state becomes "boss"</span><br>
+            &nbsp;&nbsp;<span class="kw">duck music by 0.6 for 4</span><br>
+            &nbsp;&nbsp;<span class="kw">play sound "roar" at Boss</span><br>
+            <br>
+            <span class="kw">when music ends</span><br>
+            &nbsp;&nbsp;<span class="kw">print "the credits track finished"</span><br>
+            &nbsp;&nbsp;<span class="kw">loop music "menu"</span>
+          </div>
+        </div>
+      </div>
+      <p class="alt">Volumes are the globals <code>MusicVolume</code>, <code>SoundVolume</code> and <code>MasterVolume</code> (0–1), so a pause menu or settings screen writes them with the same <code>set</code> words and can <code>bind</code> a label to them. <code>play sound "roar" at Boss</code> parents a positional one-shot to that actor; Flax only attenuates a clip imported as a 3D sound.</p>
+    </div>
+  </section>
+
   <section id="collisions">
     <div class="card">
       <h3>Fireball hits a wall → wall crumbles + sound</h3>

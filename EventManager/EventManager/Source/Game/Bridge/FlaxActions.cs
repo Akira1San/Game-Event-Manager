@@ -99,6 +99,15 @@ namespace Game
         private static readonly Dictionary<Actor, ScriptedJump> ScriptedJumps = new Dictionary<Actor, ScriptedJump>();
         /// <summary>Sources spawned by <c>play sound</c>, with the actor whose sheet started them.</summary>
         private static readonly List<(Actor Owner, AudioSource Source)> ActiveSounds = new List<(Actor, AudioSource)>();
+        /// <summary>The single music player behind `play music` / `loop music` (Task 31). It is
+        /// recreated after a scene change, because a Flax scene unload takes its actors with it.</summary>
+        private static AudioSource MusicSource;
+        /// <summary>True once the current music source was seen playing: a track that then stops
+        /// has ended (rather than never having started), so `when music ends` fires exactly once.</summary>
+        private static bool MusicWasPlaying;
+        /// <summary>The music level this bridge last wrote to the `MusicVolume` global, so a sheet
+        /// (or a settings slider) writing the global directly is noticed as a change.</summary>
+        private static double MusicGlobalSeen = -1;
 
         /// <summary>One in-flight <c>tween</c> plus the control it writes to (UI tweens only).</summary>
         private sealed class LiveTween
@@ -251,6 +260,9 @@ namespace Game
             Pushes.Clear();
             Platforms.Clear();
             ActiveSounds.Clear();
+            StopMusicSource();
+            MusicWasPlaying = false;
+            MusicGlobalSeen = -1;
             LiveTweens.Clear();
             CharacterFallSpeeds.Clear();
             JumpingCharacters.Clear();
@@ -381,6 +393,7 @@ namespace Game
         {
             DeltaTime = deltaTime;
             MovedThisTick.Clear();
+            StepAudio(deltaTime);
             for (int i = ActiveSounds.Count - 1; i >= 0; i--)
                 if (ActiveSounds[i].Source == null)
                     ActiveSounds.RemoveAt(i);
@@ -1086,6 +1099,46 @@ namespace Game
                 case ActionVerb.PlaySound:
                     PlaySound(context, spec);
                     break;
+                case ActionVerb.PlayMusic:
+                    StartMusic(context, spec, false);
+                    break;
+                case ActionVerb.LoopMusic:
+                    StartMusic(context, spec, true);
+                    break;
+                case ActionVerb.StopMusic:
+                    StopMusicSource();
+                    context.Runtime.Audio.StopMusic();
+                    break;
+                case ActionVerb.FadeMusic:
+                    // The bridge advances the ramp each tick, so the music source's volume is
+                    // already the mix's level: no coroutine, no engine tween (Task 31 Part C).
+                    context.Runtime.Audio.FadeMusicTo(spec.Number, spec.Duration);
+                    break;
+                case ActionVerb.DuckMusic:
+                    context.Runtime.Audio.DuckMusic(spec.Number, spec.Duration);
+                    break;
+                case ActionVerb.SetMusicVolume:
+                {
+                    var mix = context.Runtime.Audio;
+                    mix.SetMusicVolume(ResolveNumber(context, spec));
+                    context.Runtime.Variables.SetGlobal(AudioMix.MusicVariable, ValueBox.OfNumber(mix.Music));
+                    MusicGlobalSeen = mix.Music;
+                    break;
+                }
+                case ActionVerb.SetSoundVolume:
+                {
+                    var mix = context.Runtime.Audio;
+                    mix.SetSoundVolume(ResolveNumber(context, spec));
+                    context.Runtime.Variables.SetGlobal(AudioMix.SoundVariable, ValueBox.OfNumber(mix.Sound));
+                    break;
+                }
+                case ActionVerb.SetMasterVolume:
+                {
+                    var mix = context.Runtime.Audio;
+                    mix.SetMasterVolume(ResolveNumber(context, spec));
+                    context.Runtime.Variables.SetGlobal(AudioMix.MasterVariable, ValueBox.OfNumber(mix.Master));
+                    break;
+                }
                 case ActionVerb.StopSound:
                 {
                     var me = context.Me as Actor;
@@ -3720,19 +3773,185 @@ namespace Game
             }
 
             var me = context.Me as Actor;
+            // `play sound "shot" at Enemy`: a positional source parented to that actor, so it
+            // follows it and attenuates with distance (Task 31 Part D). Flax only attenuates a
+            // clip imported as a 3D sound, so a 2D clip plays the same at any distance.
+            Actor at = null;
+            if (!string.IsNullOrEmpty(spec.To))
+            {
+                at = ResolveThing(context, spec.To) as Actor;
+                if (at == null)
+                    WarnOnce($"I couldn't find \u201C{spec.To}\u201D to play \u201C{spec.Thing}\u201D at — playing it on \u201C{me?.Name}\u201D instead.");
+            }
+
             var audio = new AudioSource
             {
                 HideFlags = HideFlags.DontSave,
-                Volume = 1,
+                Volume = (float)context.Runtime.Audio.EffectiveSoundVolume,
                 Clip = clip,
+                AllowSpatialization = at != null,
+                MinDistance = SpatialMinDistance,
                 Position = me != null ? me.Position : Vector3.Zero,
             };
             Level.SpawnActor(audio);
+            if (at != null)
+            {
+                audio.Parent = at;
+                audio.LocalPosition = Vector3.Zero;
+            }
             audio.Play();
             ActiveSounds.Add((me, audio));
             FlaxEngine.Object.Destroy(audio, clip.Length);
             // The clip is a world event too, so `when me hears "shot" by 12` can answer it.
             EmitSound(AssetNames.Key(spec.Thing), audio.Position, me);
+        }
+
+        /// <summary>Distance (world units) before a positional `play sound ... at` starts to fade.</summary>
+        private const float SpatialMinDistance = 200;
+
+        /// <summary>
+        /// The audio tick (Task 31): keeps the volume globals and <see cref="AudioMix"/> in step,
+        /// advances fades and ducks, resumes the track after a scene change, and applies the three
+        /// volume groups to every source this bridge owns.
+        /// </summary>
+        private static void StepAudio(float deltaTime)
+        {
+            var runtime = EventsManager.Instance?.Runtime;
+            if (runtime == null)
+                return;
+            AudioMix mix = runtime.Audio;
+            EventVariables variables = runtime.Variables;
+
+            // `set master volume` / `set sound volume` write the globals, and a sheet or a
+            // settings slider may write them directly, so the globals win each tick.
+            if (variables.HasGlobal(AudioMix.MasterVariable))
+                mix.SetMasterVolume(variables.GetGlobal(AudioMix.MasterVariable).AsNumber());
+            if (variables.HasGlobal(AudioMix.SoundVariable))
+                mix.SetSoundVolume(variables.GetGlobal(AudioMix.SoundVariable).AsNumber());
+            if (variables.HasGlobal(AudioMix.MusicVariable))
+            {
+                double authored = variables.GetGlobal(AudioMix.MusicVariable).AsNumber();
+                if (Math.Abs(authored - MusicGlobalSeen) > 0.0001)
+                    mix.SetMusicVolume(authored);
+            }
+
+            mix.Update(deltaTime);
+            // A fade writes its own level back out, so `bind` follows the ramp and the next tick
+            // does not mistake our own write for an authored change.
+            variables.SetGlobal(AudioMix.MusicVariable, ValueBox.OfNumber(mix.Music));
+            MusicGlobalSeen = mix.Music;
+
+            // A scene change destroys the music actor; the mix remembers the track and the
+            // playhead, so the soundtrack carries on instead of stopping at the level load.
+            if (mix.Playing && (MusicSource == null || MusicSource.Scene == null))
+                ResumeMusic(mix);
+
+            if (MusicSource != null && MusicSource.Scene != null)
+            {
+                if (MusicSource.State == AudioSource.States.Playing)
+                {
+                    MusicWasPlaying = true;
+                }
+                else if (MusicWasPlaying)
+                {
+                    // A non-looping track reached its end: `when music ends`.
+                    MusicWasPlaying = false;
+                    mix.Playing = false;
+                    string track = mix.Track;
+                    StopMusicSource();
+                    runtime.RaisePushAll(new PushSignal { Kind = TriggerKind.MusicEnd, Name = track });
+                    mix.Track = "";
+                }
+                else if (MusicSource != null)
+                {
+                    mix.Playhead = MusicSource.Time;
+                }
+            }
+
+            if (MusicSource != null && MusicSource.Scene != null)
+            {
+                mix.Playhead = MusicSource.Time;
+                MusicSource.Volume = (float)mix.EffectiveMusicVolume;
+            }
+            float soundVolume = (float)mix.EffectiveSoundVolume;
+            foreach (var (_, source) in ActiveSounds)
+                if (source != null && source.Scene != null)
+                    source.Volume = soundVolume;
+        }
+
+        /// <summary>`play music "x"` / `loop music "x"`: one track at a time (Task 31 Part A).</summary>
+        private static void StartMusic(EventContext context, ActionSpec spec, bool loop)
+        {
+            if (string.IsNullOrEmpty(spec.Thing))
+            {
+                WarnOnce("\u201Cplay music\u201D needs a clip name, like \u201Cplay music \"level1\"\u201D.");
+                return;
+            }
+            AudioMix mix = context.Runtime.Audio;
+            string key = AssetNames.Key(spec.Thing);
+            // The same track already running is left alone, so a `when scene starts` line that
+            // re-runs after a hot reload never restarts the song from the top.
+            if (mix.Playing && mix.TrackLooping == loop &&
+                string.Equals(AssetNames.Key(mix.Track), key, StringComparison.OrdinalIgnoreCase) &&
+                MusicSource != null && MusicSource.Scene != null)
+                return;
+
+            var clip = LoadAudioClip(spec.Thing);
+            if (clip == null)
+            {
+                WarnOnce($"Could not load music \u201C{spec.Thing}\u201D. Imported clips: {AvailableSoundNames()}.");
+                return;
+            }
+
+            SpawnMusicSource(clip, loop, 0);
+            // A new track owns the player: this also fades it in when the previous music was
+            // faded out, which is the menu -> level hand-off with no extra line.
+            mix.StartMusic(spec.Thing, loop);
+            context.Runtime.Variables.SetGlobal(AudioMix.MusicVariable, ValueBox.OfNumber(mix.Music));
+            MusicGlobalSeen = mix.Music;
+        }
+
+        /// <summary>Starts the one music source, replacing any previous track.</summary>
+        private static void SpawnMusicSource(AudioClip clip, bool loop, double startAt)
+        {
+            StopMusicSource();
+            var source = new AudioSource
+            {
+                HideFlags = HideFlags.DontSave,
+                Clip = clip,
+                IsLooping = loop,
+                AllowSpatialization = false,
+                Volume = 1,
+            };
+            Level.SpawnActor(source);
+            if (startAt > 0.01)
+                source.Time = (float)startAt;
+            source.Play();
+            MusicSource = source;
+            MusicWasPlaying = true;
+        }
+
+        /// <summary>Re-creates the music source after a scene change, resuming the playhead.</summary>
+        private static void ResumeMusic(AudioMix mix)
+        {
+            var clip = LoadAudioClip(mix.Track);
+            if (clip == null)
+            {
+                WarnOnce($"Could not resume music \u201C{mix.Track}\u201D after a scene change. Imported clips: {AvailableSoundNames()}.");
+                mix.Playing = false;
+                return;
+            }
+            SpawnMusicSource(clip, mix.TrackLooping, mix.Playhead);
+        }
+
+        private static void StopMusicSource()
+        {
+            if (MusicSource == null)
+                return;
+            MusicSource.Stop();
+            FlaxEngine.Object.Destroy(MusicSource);
+            MusicSource = null;
+            MusicWasPlaying = false;
         }
 
         /// <summary>
@@ -3933,8 +4152,9 @@ namespace Game
             var audio = new AudioSource
             {
                 HideFlags = HideFlags.DontSave,
-                Volume = 1,
+                Volume = (float)context.Runtime.Audio.EffectiveSoundVolume,
                 Clip = clip,
+                AllowSpatialization = false,
                 Position = me != null ? me.Position : Vector3.Zero,
             };
             Level.SpawnActor(audio);

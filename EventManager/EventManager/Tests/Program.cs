@@ -8565,6 +8565,167 @@ Check(brokenRingVariables.GetLocal(brokenRingWearer, "MaxMana").AsNumber() == 0,
 Check(!brokenRingStore.HasRoll(brokenRing),
     "a destroyed item also forgets its roll");
 
+// ------------------------------------------------------------------
+// Task 31: Audio — music, buses and fades
+// ------------------------------------------------------------------
+
+var musicSpec = ActionWords.Parse(RawWords(actionParser, "when scene starts\n  play music \"level1\""), null);
+Check(musicSpec.Verb == ActionVerb.PlayMusic && musicSpec.Thing == "level1",
+    "`play music \"level1\"` parses to PlayMusic");
+
+var loopMusicSpec = ActionWords.Parse(RawWords(actionParser, "when scene starts\n  loop music \"menu\""), null);
+Check(loopMusicSpec.Verb == ActionVerb.LoopMusic && loopMusicSpec.Thing == "menu",
+    "`loop music \"menu\"` parses to LoopMusic");
+
+var stopMusicSpec = ActionWords.Parse(RawWords(actionParser, "when scene starts\n  stop music"), null);
+Check(stopMusicSpec.Verb == ActionVerb.StopMusic && stopMusicSpec.Thing.Length == 0,
+    "`stop music` parses to StopMusic");
+
+var fadeMusicSpec = ActionWords.Parse(RawWords(actionParser, "when PlayButton is clicked\n  fade music to 0 in 0.5"), null);
+Check(fadeMusicSpec.Verb == ActionVerb.FadeMusic && fadeMusicSpec.Number == 0 &&
+      Math.Abs(fadeMusicSpec.Duration - 0.5) < 1e-9,
+    "`fade music to 0 in 0.5` parses the target and the seconds");
+
+var duckMusicSpec = ActionWords.Parse(RawWords(actionParser, "when NPC is clicked\n  duck music by 0.6 for 4"), null);
+Check(duckMusicSpec.Verb == ActionVerb.DuckMusic && Math.Abs(duckMusicSpec.Number - 0.6) < 1e-9 &&
+      Math.Abs(duckMusicSpec.Duration - 4) < 1e-9,
+    "`duck music by 0.6 for 4` parses the depth and the time");
+
+var setMusicVolumeSpec = ActionWords.Parse(RawWords(actionParser, "when game starts\n  set music volume to 0.4"), null);
+Check(setMusicVolumeSpec.Verb == ActionVerb.SetMusicVolume && Math.Abs(setMusicVolumeSpec.Number - 0.4) < 1e-9,
+    "`set music volume to 0.4` parses to SetMusicVolume");
+
+var setSoundVolumeSpec = ActionWords.Parse(RawWords(actionParser, "when game starts\n  set sound volume to 0.7"), null);
+Check(setSoundVolumeSpec.Verb == ActionVerb.SetSoundVolume && Math.Abs(setSoundVolumeSpec.Number - 0.7) < 1e-9,
+    "`set sound volume to 0.7` parses to SetSoundVolume");
+
+var setMasterVolumeSpec = ActionWords.Parse(RawWords(actionParser, "when game starts\n  set master volume to 0.8"), null);
+Check(setMasterVolumeSpec.Verb == ActionVerb.SetMasterVolume && Math.Abs(setMasterVolumeSpec.Number - 0.8) < 1e-9,
+    "`set master volume to 0.8` parses to SetMasterVolume");
+
+var setMusicFromVariableSpec = ActionWords.Parse(RawWords(actionParser, "when scene starts\n  set music volume to my SavedMusic"), null);
+Check(setMusicFromVariableSpec.Verb == ActionVerb.SetMusicVolume && !setMusicFromVariableSpec.HasNumber &&
+      setMusicFromVariableSpec.AmountNode != null,
+    "a volume word takes a value, not just a literal: `set music volume to my SavedMusic`");
+
+var positionalSoundSpec = ActionWords.Parse(RawWords(actionParser, "when Space is pressed\n  play sound \"shot\" at Enemy"), null);
+Check(positionalSoundSpec.Verb == ActionVerb.PlaySound && positionalSoundSpec.Thing == "shot" &&
+      positionalSoundSpec.To == "Enemy",
+    "`play sound \"shot\" at Enemy` keeps the clip and the place");
+
+var plainSoundSpec = ActionWords.Parse(RawWords(actionParser, "when Space is pressed\n  play sound \"shot\""), null);
+Check(plainSoundSpec.Verb == ActionVerb.PlaySound && plainSoundSpec.To.Length == 0,
+    "a plain `play sound` still has no positional target");
+
+string fadeHint = "";
+var badFade = ActionWords.Parse(RawWords(actionParser, "when game starts\n  fade music"), message => fadeHint = message);
+Check(badFade.Verb == ActionVerb.Unknown && fadeHint.Contains("fade music to 0 in 2"),
+    "a broken `fade` line explains the shape it wants");
+
+string playMusicHint = "";
+var badPlayMusic = ActionWords.Parse(RawWords(actionParser, "when game starts\n  play music"), message => playMusicHint = message);
+Check(badPlayMusic.Verb == ActionVerb.Unknown && playMusicHint.Contains("play music"),
+    "a bare `play music` explains that it needs a quoted clip name");
+
+var musicEndProg = parser.Parse("when music ends\n  set MusicDone to 1\n");
+var musicEndDesc = TriggerClassifier.Classify(musicEndProg.Events[0]);
+Check(musicEndDesc.Kind == TriggerKind.MusicEnd && musicEndDesc.RequireName.Length == 0,
+    "`when music ends` classifies to MusicEnd with no track filter");
+
+var musicEndEngine = FreshEngine(new FakeWorld());
+musicEndEngine.AddSheet(new FakeActor("Menu"), musicEndProg);
+musicEndEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.MusicEnd, Name = "menu" });
+musicEndEngine.Tick(0);
+Check(musicEndEngine.Variables.GetGlobal("MusicDone").AsNumber() == 1,
+    "`when music ends` fires for any track");
+
+var namedMusicProg = parser.Parse("when music \"boss\" ends\n  set BossDone to 1\n");
+var namedMusicDesc = TriggerClassifier.Classify(namedMusicProg.Events[0]);
+Check(namedMusicDesc.Kind == TriggerKind.MusicEnd && namedMusicDesc.RequireName == "boss",
+    "`when music \"boss\" ends` classifies to MusicEnd with the track name");
+var namedMusicEngine = FreshEngine(new FakeWorld());
+namedMusicEngine.AddSheet(new FakeActor("Arena"), namedMusicProg);
+namedMusicEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.MusicEnd, Name = "menu" });
+namedMusicEngine.Tick(0);
+Check(namedMusicEngine.Variables.GetGlobal("BossDone").AsNumber() == 0,
+    "a named music trigger ignores another track ending");
+namedMusicEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.MusicEnd, Name = "Boss" });
+namedMusicEngine.Tick(0);
+Check(namedMusicEngine.Variables.GetGlobal("BossDone").AsNumber() == 1,
+    "a named music trigger answers its own track, case-insensitively");
+
+// ---- the mix itself: volumes, fades, ducks (pure, no Flax) ----
+var mix = new AudioMix();
+Check(mix.EffectiveMusicVolume == 1 && mix.EffectiveSoundVolume == 1,
+    "a fresh mix plays everything at full volume");
+mix.SetMasterVolume(0.5);
+mix.SetMusicVolume(0.4);
+mix.SetSoundVolume(0.6);
+Check(Math.Abs(mix.EffectiveMusicVolume - 0.2) < 1e-9,
+    "music volume is master x music (0.5 x 0.4 = 0.2)");
+Check(Math.Abs(mix.EffectiveSoundVolume - 0.3) < 1e-9,
+    "sound volume is master x sound (0.5 x 0.6 = 0.3)");
+mix.SetMasterVolume(0);
+Check(mix.EffectiveMusicVolume == 0 && mix.EffectiveSoundVolume == 0,
+    "master at 0 silences music and effects");
+mix.SetMasterVolume(2);
+Check(mix.Master == 1, "volumes clamp at 1");
+mix.SetSoundVolume(-1);
+Check(mix.Sound == 0, "volumes clamp at 0");
+
+var fadeMix = new AudioMix();
+fadeMix.FadeMusicTo(0, 2);
+fadeMix.Update(1);
+Check(Math.Abs(fadeMix.Music - 0.5) < 1e-9 && fadeMix.Fading,
+    "a 2 s fade to 0 is halfway after 1 s");
+fadeMix.Update(1);
+Check(fadeMix.Music == 0 && !fadeMix.Fading,
+    "the fade lands exactly on its target and stops");
+Check(fadeMix.MusicSetting == 1,
+    "a fade to 0 keeps the authored music level for the next track");
+fadeMix.StartMusic("level1", true);
+Check(fadeMix.Fading && Math.Abs(fadeMix.FadeTarget - 1) < 1e-9,
+    "starting a track after a fade-out ramps back to the authored level");
+fadeMix.Update(AudioMix.CrossfadeSeconds);
+Check(Math.Abs(fadeMix.Music - 1) < 1e-9 && !fadeMix.Fading,
+    "the crossfade completes at the authored level");
+fadeMix.FadeMusicTo(0.4, 1);
+Check(Math.Abs(fadeMix.MusicSetting - 0.4) < 1e-9,
+    "a fade to an audible level becomes the authored level");
+
+var duckMix = new AudioMix();
+duckMix.DuckMusic(0.6, 4);
+duckMix.Update(AudioMix.DuckAttackSeconds);
+Check(Math.Abs(duckMix.DuckMultiplier - 0.4) < 1e-9 && duckMix.Ducking,
+    "duck 0.6 takes the music to 40% after the attack");
+Check(Math.Abs(duckMix.EffectiveMusicVolume - 0.4) < 1e-9,
+    "the duck reaches the music source's volume");
+duckMix.Update(2.0);
+Check(Math.Abs(duckMix.DuckMultiplier - 0.4) < 1e-9,
+    "the duck holds while dialogue runs");
+duckMix.Update(2.0);
+Check(duckMix.DuckMultiplier == 1 && !duckMix.Ducking,
+    "the duck restores the music when its time runs out");
+duckMix.DuckMusic(0.5, 0);
+Check(!duckMix.Ducking, "a duck with no time does nothing");
+
+var stopMix = new AudioMix();
+stopMix.StartMusic("menu", true);
+Check(stopMix.Playing && stopMix.Track == "menu" && stopMix.TrackLooping,
+    "`loop music` records the looping track");
+stopMix.StopMusic();
+Check(!stopMix.Playing && stopMix.Track == "",
+    "`stop music` clears the track");
+stopMix.StartMusic("boss", false);
+Check(stopMix.Playing && !stopMix.TrackLooping,
+    "`play music` records a one-shot track that `when music ends` can answer");
+
+Check(WordRegistry.All.Any(entry => entry.Kind == "action" && entry.Word == "play music") &&
+      WordRegistry.All.Any(entry => entry.Kind == "trigger" && entry.Word == "when music ends") &&
+      WordRegistry.All.Any(entry => entry.Kind == "action" && entry.Word == "duck" &&
+                                        entry.Example == "duck music by 0.6 for 4"),
+    "the word book lists the new audio words");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

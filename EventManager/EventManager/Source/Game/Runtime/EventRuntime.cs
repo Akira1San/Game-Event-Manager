@@ -235,6 +235,8 @@ namespace Game
         public PlayerInput Input = new PlayerInput();
         /// <summary>Recent sounds that `when me hears` / `me hears` poll (Task 16 Part B).</summary>
         public SoundBus Sounds = new SoundBus();
+        /// <summary>Music, volume groups, fades and ducking behind the audio words (Task 31).</summary>
+        public AudioMix Audio = new AudioMix();
         /// <summary>Per-actor reload timers behind `reload` / `reloading` (Task 16 Part C).</summary>
         public WeaponClock Weapons = new WeaponClock();
         /// <summary>Per actor + spell cooldowns behind `cast` (Task 9 E3).</summary>
@@ -1414,6 +1416,11 @@ namespace Game
             // Particle names match the same way: `play particle "Smoke"` answers `when particle "smoke" ends`.
             if (descriptor.Kind == TriggerKind.AnimEnd || descriptor.Kind == TriggerKind.ParticleEnd)
                 return string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase);
+            // `when music ends`: any track, or the one the trigger names. Music is global, so the
+            // signal is broadcast and a name-less trigger answers every sheet (Task 31).
+            if (descriptor.Kind == TriggerKind.MusicEnd)
+                return descriptor.RequireName.Length == 0 ||
+                       string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase);
             // `when tween me ends` belongs to the tweened actor's own sheet; a named form
             // (`when tween PausePanel ends`) may live on any sheet because the signal is broadcast.
             if (descriptor.Kind == TriggerKind.TweenEnd)

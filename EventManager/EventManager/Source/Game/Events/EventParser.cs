@@ -737,6 +737,17 @@ namespace Game
         private StatementNode ParseSet(BodyLineNode line)
         {
             var words = line.Words;
+            // `set music volume to 0.4`, `set sound volume to 0.7`, `set master volume to 0.8`
+            // — the audio volume groups (Task 31). They are action words, not a global called
+            // "music volume", so they go to the raw action parser.
+            if (words.Count >= 4 && words[1].Type == TokenType.Word && words[2].Type == TokenType.Word &&
+                words[2].Text == "volume" &&
+                (words[1].Text == "music" || words[1].Text == "sound" || words[1].Text == "master"))
+            {
+                var volumeRaw = new RawActionNode { Line = line.Line };
+                volumeRaw.Words.AddRange(words);
+                return volumeRaw;
+            }
             if (words.Count > 2 && words[1].Type == TokenType.Word && words[1].Text == "text" &&
                 words[2].Type == TokenType.Word && words[2].Text == "of")
                 return ParseSetText(line);

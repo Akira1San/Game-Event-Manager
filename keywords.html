@@ -252,6 +252,9 @@
         <tr><td><span class="kw">spawn scene</span></td><td><span class="kw">spawn scene "&lt;name&gt;" at &lt;spot&gt;</span></td><td><span class="example">spawn scene "HeroScene" at SpawnPoint</span><br><span class="alt">loads a <code>.scene</code> asset <b>on top of</b> the current scene (additive, unlike <code>load scene</code>) and moves only that scene's root actors to the spot — actors already in the level never move. Its actors get their sheets, so the spawned hero runs <code>when me appears</code>.</span></td></tr>
         <tr><td><span class="kw">place</span></td><td><span class="kw">place</span> <span class="placeholder">&lt;building&gt;</span> <span class="kw">at</span> <span class="placeholder">&lt;target&gt;</span> [<span class="kw">on grid</span> [<span class="kw">by</span> <span class="placeholder">&lt;n&gt;</span>]]</td><td><span class="example">place Barracks at Mouse</span><br><span class="example">place Barracks at Mouse on grid by 32</span><br><span class="alt">free-form by default · <code>on grid</code> snaps to cell centres and reserves the footprint · cell size from <code>BuildGridSize</code> (default 64) · footprint from <code>&lt;Building&gt;GridWidth</code> / <code>&lt;Building&gt;GridDepth</code> (default 1 each) · <code>Mouse</code> is the world point under the cursor</span></td></tr>
         <tr><td><span class="kw">play</span></td><td><span class="kw">play sound "hit.wav"</span> / <span class="kw">play anim "dragon_fire"</span></td><td><span class="example">play sound "hit.wav"</span><br><span class="example">play anim "dragon_fire"</span><br><span class="alt">one-shot: plays once and holds the last frame · see <a href="#animation">animation</a></span></td></tr>
+        <tr><td><span class="kw">play music</span> / <span class="kw">loop music</span></td><td><span class="kw">play music "level1"</span> / <span class="kw">loop music "menu"</span></td><td><span class="example">loop music "menu"</span><br><span class="alt">one track at a time; starting a track replaces the old one and fades in from the current music level · <code>play music</code> is a one-shot that fires <code>when music ends</code> · see <a href="#audio">audio</a></span></td></tr>
+        <tr><td><span class="kw">fade music</span> / <span class="kw">duck music</span></td><td><span class="kw">fade music to &lt;n&gt; in &lt;s&gt;</span> / <span class="kw">duck music by &lt;n&gt; for &lt;s&gt;</span></td><td><span class="example">fade music to 0 in 2</span><br><span class="example">duck music by 0.6 for 4</span><br><span class="alt">fade ramps the music level (0–1) and keeps the authored level when it fades to 0 · duck lowers the music by that share, holds, then ramps back up, without changing the level</span></td></tr>
+        <tr><td><span class="kw">set music/sound/master volume to</span></td><td><span class="kw">set music volume to &lt;n&gt;</span> / <span class="kw">set sound volume to &lt;n&gt;</span> / <span class="kw">set master volume to &lt;n&gt;</span></td><td><span class="example">set music volume to 0.4</span><br><span class="example">set master volume to 0.8</span><br><span class="alt">volumes are 0–1 · they write the <code>MusicVolume</code> / <code>SoundVolume</code> / <code>MasterVolume</code> globals, so a settings slider can bind them</span></td></tr>
         <tr><td><span class="kw">loop</span></td><td><span class="kw">loop anim "animation walk"</span></td><td><span class="example">loop anim "animation walk"</span><br><span class="alt">repeats forever · use for idle / walk / run · see <a href="#animation">animation</a></span></td></tr>
         <tr><td><span class="kw">stop</span></td><td><span class="kw">stop anim</span> / <span class="kw">stop moving</span> / <span class="kw">stop this event</span></td><td><span class="example">stop anim</span><br><span class="example">stop moving</span><br><span class="example">stop this event</span><br><span class="alt">stop anim restores the previous clip or the bind pose</span></td></tr>
         <tr><td><span class="kw">cancel build</span></td><td><span class="kw">cancel build</span></td><td><span class="example">cancel build</span><br><span class="alt">on a building's sheet: stops construction, clears progress and frees the grid cell · does not fire <code>when … is destroyed</code></span></td></tr>
@@ -415,6 +418,59 @@
       <br>
       <span class="kw">when anim "dragon_fire" ends</span><br>
       &nbsp;&nbsp;<span class="kw">loop anim "animation idle pose"</span>
+    </div>
+  </section>
+
+  <section id="audio">
+    <h2>Audio — <code>play sound</code> / <code>play music</code> / volumes</h2>
+    <p>There is one music player and two sound groups. <code>play sound</code> and <code>play step sound</code> are one-shots on the sound group; <code>play music</code> / <code>loop music</code> own the single music track. Clip names resolve like animation clip names: folder, <code>.flax</code> and the audio extension are ignored, and case does not matter — <code>"menu"</code>, <code>"Menu.wav"</code> and <code>"music/menu.flax"</code> are the same clip.</p>
+
+    <table>
+      <thead>
+        <tr><th style="width:26%">Word</th><th style="width:44%">What it does</th><th>Example</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="kw">play music</span> <span class="example">"&lt;clip&gt;"</span></td><td>Plays a track once. When it reaches the end it fires <code>when music ends</code>. Replaces any other track.</td><td><span class="example">play music "jingle"</span></td></tr>
+        <tr><td><span class="kw">loop music</span> <span class="example">"&lt;clip&gt;"</span></td><td>Plays a track forever. Replaces any other track. Never fires <code>when music ends</code>.</td><td><span class="example">loop music "menu"</span></td></tr>
+        <tr><td><span class="kw">stop music</span></td><td>Stops the track. The music level is left where it is, so the next track fades in from there.</td><td><span class="example">stop music</span></td></tr>
+        <tr><td><span class="kw">fade music to</span> <span class="placeholder">&lt;n&gt;</span> <span class="kw">in</span> <span class="placeholder">&lt;s&gt;</span></td><td>Ramps the music level to <code>n</code> (0–1) over <code>s</code> seconds. A fade to 0 keeps the authored level, so the next track comes back at full.</td><td><span class="example">fade music to 0 in 0.5</span></td></tr>
+        <tr><td><span class="kw">duck music by</span> <span class="placeholder">&lt;n&gt;</span> <span class="kw">for</span> <span class="placeholder">&lt;s&gt;</span></td><td>Lowers the music by that share (0.6 = 60% quieter) for <code>s</code> seconds, then ramps back up. The authored level never changes.</td><td><span class="example">duck music by 0.6 for 4</span></td></tr>
+        <tr><td><span class="kw">set music / sound / master volume to</span> <span class="placeholder">&lt;n&gt;</span></td><td>Sets one volume group (0–1). Master multiplies both others, so master 0 silences everything.</td><td><span class="example">set music volume to 0.4</span></td></tr>
+        <tr><td><span class="kw">play sound</span> <span class="example">"&lt;clip&gt;"</span> <span class="kw">at</span> <span class="placeholder">&lt;thing&gt;</span></td><td>Plays the clip positionally on that actor (parented to it). Flax only attenuates a clip imported as a 3D sound; a 2D clip sounds the same from anywhere. Plain <code>play sound</code> stays non-positional.</td><td><span class="example">play sound "shot" at Enemy</span></td></tr>
+        <tr><td><span class="kw">when music ends</span></td><td>Fires once when a <code>play music</code> one-shot finishes. <code>when music "&lt;name&gt;" ends</code> only answers that track.</td><td><span class="example">when music ends</span></td></tr>
+      </tbody>
+    </table>
+
+    <h3>Gotchas</h3>
+    <div class="how-it-works">
+      <ol>
+        <li><b>Music survives <code>load scene</code>.</b> The bridge remembers the track and where it was, and respawns the player after the scene changes, so a menu → level hand-off needs only <code>fade music to 0 in 0.5 → wait 0.5 seconds → load scene "Level1"</code>, then <code>loop music "level1"</code> in the level's <code>when scene starts</code>.</li>
+        <li><b><code>stop sound</code> never stops the music.</b> Sound is the one-shot group; music has its own word.</li>
+        <li><b>A missing clip warns once</b> and lists the clips the project actually imported, like <code>play sound</code> already does.</li>
+        <li><b>Volumes are globals.</b> <code>MusicVolume</code>, <code>SoundVolume</code> and <code>MasterVolume</code> start at 1, a fade writes <code>MusicVolume</code> every tick, and a settings UI can <code>bind</code> them or write them directly.</li>
+      </ol>
+    </div>
+
+    <h3>Quick example</h3>
+    <div class="syntax-box">
+      <span class="alt"># Menu scene</span><br>
+      <span class="kw">when scene starts</span><br>
+      &nbsp;&nbsp;<span class="kw">loop music "menu"</span><br>
+      <br>
+      <span class="kw">when PlayButton is clicked</span><br>
+      &nbsp;&nbsp;<span class="kw">fade music to 0 in 0.5</span><br>
+      &nbsp;&nbsp;<span class="kw">wait 0.5 seconds</span><br>
+      &nbsp;&nbsp;<span class="kw">load scene "Level1"</span><br>
+      <br>
+      <span class="alt"># Level1 scene — the new track fades itself in</span><br>
+      <span class="kw">when scene starts</span><br>
+      &nbsp;&nbsp;<span class="kw">loop music "level1"</span><br>
+      &nbsp;&nbsp;<span class="kw">set music volume to 0.7</span><br>
+      <br>
+      <span class="alt"># Dialogue lowers the music, then it comes back</span><br>
+      <span class="kw">when NPC is clicked</span><br>
+      &nbsp;&nbsp;<span class="kw">duck music by 0.6 for 4</span><br>
+      &nbsp;&nbsp;<span class="kw">show DialogPanel</span>
     </div>
   </section>
 

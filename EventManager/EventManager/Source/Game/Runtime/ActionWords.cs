@@ -29,6 +29,19 @@ namespace Game
         Cast,
         PlaySound,
         StopSound,
+        /// <summary><c>play music "&lt;name&gt;"</c> (Task 31).</summary>
+        PlayMusic,
+        /// <summary><c>loop music "&lt;name&gt;"</c> — the same player, repeating (Task 31).</summary>
+        LoopMusic,
+        /// <summary><c>stop music</c>.</summary>
+        StopMusic,
+        /// <summary><c>fade music to &lt;n&gt; in &lt;s&gt;</c>.</summary>
+        FadeMusic,
+        /// <summary><c>duck music by &lt;n&gt; for &lt;s&gt;</c> — lower the music, then restore it.</summary>
+        DuckMusic,
+        SetMusicVolume,
+        SetSoundVolume,
+        SetMasterVolume,
         PlayAnim,
         LoopAnim,
         StopAnim,
@@ -293,6 +306,8 @@ namespace Game
                         return Finish(spec, ActionVerb.StopClimbing, words, 2);
                     if (words.Count >= 2 && words[1].Text == "sound")
                         return Finish(spec, ActionVerb.StopSound, words, 2);
+                    if (words.Count >= 2 && words[1].Text == "music")
+                        return Finish(spec, ActionVerb.StopMusic, words, 2);
                     if (words.Count >= 2 && words[1].Text == "anim")
                         return Finish(spec, ActionVerb.StopAnim, words, 2);
                     if (words.Count >= 3 && words[1].Text == "particle" && words[2].Type == TokenType.Str)
@@ -302,7 +317,7 @@ namespace Game
                     }
                     if (words.Count >= 2 && words[1].Text == "particle")
                         return Unknown(spec, words, "\u201Cstop particle\u201D needs a name in quotes, like \u201Cstop particle \"smoke\"\u201D", warn);
-                    return Unknown(spec, words, "yes, a \u201Cstop\u201D line — I only know \u201Cstop sound\u201D, \u201Cstop anim\u201D, \u201Cstop moving\u201D, \u201Cstop climbing\u201D, \u201Cstop particle\u201D, and \u201Cstop this event\u201D", warn);
+                    return Unknown(spec, words, "yes, a \u201Cstop\u201D line — I only know \u201Cstop sound\u201D, \u201Cstop music\u201D, \u201Cstop anim\u201D, \u201Cstop moving\u201D, \u201Cstop climbing\u201D, \u201Cstop particle\u201D, and \u201Cstop this event\u201D", warn);
 
                 case "wander":
                 {
@@ -334,6 +349,38 @@ namespace Game
 
                 case "still":
                     return Finish(spec, ActionVerb.Still, words, 1);
+
+                case "fade":
+                {
+                    // `fade music to 0.4 in 2` — a volume ramp the bridge advances each tick
+                    // (Task 31). The target is the music level, 0-1.
+                    if (words.Count >= 6 && words[1].Text == "music" && words[2].Text == "to" &&
+                        words[3].Type == TokenType.Number && words[4].Text == "in" &&
+                        words[5].Type == TokenType.Number)
+                    {
+                        spec.Number = words[3].Number;
+                        spec.HasNumber = true;
+                        spec.Duration = words[5].Number;
+                        return Finish(spec, ActionVerb.FadeMusic, words, 6);
+                    }
+                    return Unknown(spec, words, "\u201Cfade\u201D looks like this: \u201Cfade music to 0 in 2\u201D", warn);
+                }
+
+                case "duck":
+                {
+                    // `duck music by 0.6 for 4` — lower the music under dialogue, then restore
+                    // it (Task 31). The amount is the share to remove: 0.6 = 60% quieter.
+                    if (words.Count >= 6 && words[1].Text == "music" && words[2].Text == "by" &&
+                        words[3].Type == TokenType.Number && words[4].Text == "for" &&
+                        words[5].Type == TokenType.Number)
+                    {
+                        spec.Number = words[3].Number;
+                        spec.HasNumber = true;
+                        spec.Duration = words[5].Number;
+                        return Finish(spec, ActionVerb.DuckMusic, words, 6);
+                    }
+                    return Unknown(spec, words, "\u201Cduck\u201D looks like this: \u201Cduck music by 0.6 for 4\u201D", warn);
+                }
 
                 case "bounce":
                     // `bounce` — a projectile reflects off the wall it just hit (Task 16 Part C.5).
@@ -958,6 +1005,21 @@ namespace Game
                 }
                 case "set":
                 {
+                    // Volume groups (Task 31): `set music volume to 0.4`, `set sound volume to
+                    // 0.7`, `set master volume to 0.8`. They write the globals a settings UI
+                    // binds, and the bridge applies them to every source it owns.
+                    if (words.Count >= 5 && words[2].Text == "volume" && words[3].Text == "to" &&
+                        (words[1].Text == "music" || words[1].Text == "sound" || words[1].Text == "master"))
+                    {
+                        ActionVerb volumeVerb = words[1].Text == "music" ? ActionVerb.SetMusicVolume
+                            : words[1].Text == "sound" ? ActionVerb.SetSoundVolume
+                            : ActionVerb.SetMasterVolume;
+                        spec.AmountNode = ValueNodeAt(words, 4, out int volumeUsed);
+                        spec.HasNumber = words[4].Type == TokenType.Number;
+                        if (spec.HasNumber)
+                            spec.Number = words[4].Number;
+                        return Finish(spec, volumeVerb, words, 4 + volumeUsed);
+                    }
                     if (words.Count >= 5 && words[1].Text == "light" && words[2].Text == "intensity" && words[3].Text == "to")
                     {
                         spec.AmountNode = ValueNodeAt(words, 4);
@@ -1008,7 +1070,7 @@ namespace Game
                             spec.Number = words[3].Number;
                         return Finish(spec, ActionVerb.SetVisibility, words, 3 + visUsed);
                     }
-                    return Unknown(spec, words, "yes, a \u201Cset\u201D line — I only know \u201Cset <variable> to <value>\u201D, \u201Cset text of\u201D, \u201Cset state\u201D, \u201Cset my control group\u201D, \u201Cset light\u201D, \u201Cset time scale\u201D, \u201Cset rally point\u201D, and \u201Cset visibility\u201D", warn);
+                    return Unknown(spec, words, "yes, a \u201Cset\u201D line — I only know \u201Cset <variable> to <value>\u201D, \u201Cset text of\u201D, \u201Cset state\u201D, \u201Cset my control group\u201D, \u201Cset light\u201D, \u201Cset music/sound/master volume to\u201D, \u201Cset time scale\u201D, \u201Cset rally point\u201D, and \u201Cset visibility\u201D", warn);
                 }
                 case "enable":
                     if (words.Count >= 2 && words[1].Text == "light")
@@ -1027,10 +1089,35 @@ namespace Game
             if (words.Count >= 3 && words[0].Text == "play" && words[1].Text == "sound" && words[2].Type == TokenType.Str)
             {
                 spec.Thing = words[2].Text;
-                return Finish(spec, ActionVerb.PlaySound, words, 3);
+                int soundIndex = 3;
+                // `play sound "shot" at Enemy` — a positional source on that actor (Task 31).
+                // Without `at` the sound stays non-positional, exactly as before.
+                if (words.Count >= soundIndex + 2 && words[soundIndex].Text == "at")
+                {
+                    string soundTarget = TargetAt(words, soundIndex + 1, out int soundUsed);
+                    if (soundTarget == null)
+                        return Unknown(spec, words, "\u201Cplay sound \u2026 at\u201D needs a place, like \u201Cplay sound \"shot\" at Enemy\u201D", warn);
+                    spec.To = soundTarget;
+                    soundIndex += 1 + soundUsed;
+                }
+                return Finish(spec, ActionVerb.PlaySound, words, soundIndex);
             }
             if (words.Count >= 2 && words[0].Text == "play" && words[1].Text == "sound")
                 return Unknown(spec, words, "\u201Cplay sound\u201D needs a file in quotes, like \u201Cplay sound \"Boing.wav\"\u201D", warn);
+            if (words.Count >= 3 && words[0].Text == "play" && words[1].Text == "music" && words[2].Type == TokenType.Str)
+            {
+                spec.Thing = words[2].Text;
+                return Finish(spec, ActionVerb.PlayMusic, words, 3);
+            }
+            if (words.Count >= 2 && words[0].Text == "play" && words[1].Text == "music")
+                return Unknown(spec, words, "\u201Cplay music\u201D needs a clip name in quotes, like \u201Cplay music \"level1\"\u201D", warn);
+            if (words.Count >= 3 && words[0].Text == "loop" && words[1].Text == "music" && words[2].Type == TokenType.Str)
+            {
+                spec.Thing = words[2].Text;
+                return Finish(spec, ActionVerb.LoopMusic, words, 3);
+            }
+            if (words.Count >= 2 && words[0].Text == "loop" && words[1].Text == "music")
+                return Unknown(spec, words, "\u201Cloop music\u201D needs a clip name in quotes, like \u201Cloop music \"menu\"\u201D", warn);
             if (words.Count >= 3 && words[0].Text == "play" && words[1].Text == "anim" && words[2].Type == TokenType.Str)
             {
                 spec.Thing = words[2].Text;

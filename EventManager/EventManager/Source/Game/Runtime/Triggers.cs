@@ -45,6 +45,8 @@ namespace Game
         WatchChanges,
         Message,
         AnimEnd,
+        /// <summary><c>when music ends</c> / <c>when music "&lt;name&gt;" ends</c> (Task 31).</summary>
+        MusicEnd,
         StateIs,
         ParticleEnd,
         TweenEnd,
@@ -376,6 +378,14 @@ namespace Game
             }
             if (words.Length >= 3 && words[0] == "anim")
                 return new TriggerDescriptor { Kind = TriggerKind.AnimEnd, RequireName = trigger[1].Text };
+            // `when music ends` — the one music player stopped. The optional quoted name only
+            // matches that track, so a menu can hear its own jingle end (Task 31).
+            if (words.Length >= 2 && words[0] == "music" && words[words.Length - 1] == "ends")
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.MusicEnd,
+                    RequireName = words.Length >= 3 ? trigger[1].Text : "",
+                };
             if (words.Length >= 3 && words[0] == "particle" && words[words.Length - 1] == "ends")
                 return new TriggerDescriptor { Kind = TriggerKind.ParticleEnd, RequireName = trigger[1].Text };
             if (words.Length >= 3 && words[0] == "tween" && words[words.Length - 1] == "ends")

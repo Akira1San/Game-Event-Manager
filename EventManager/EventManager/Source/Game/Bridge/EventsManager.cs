@@ -219,6 +219,14 @@ namespace Game
             // use; 90° is straight down (TK4). Centring needs depth = -height / tan(pitch).
             Runtime.Variables.SetGlobal("CameraPitch", ValueBox.OfNumber(CameraFraming.DefaultPitch));
             Runtime.Variables.SetGlobal("LookAtMouse", ValueBox.OfNumber(0));
+            // Volume groups (Task 31 Part B): authored globals so a settings UI can bind and
+            // write them; the bridge applies them to every source it owns each tick.
+            Runtime.Variables.SetGlobal(AudioMix.MasterVariable, ValueBox.OfNumber(1));
+            Runtime.Variables.SetGlobal(AudioMix.MusicVariable, ValueBox.OfNumber(1));
+            Runtime.Variables.SetGlobal(AudioMix.SoundVariable, ValueBox.OfNumber(1));
+            Runtime.Audio.SetMasterVolume(1);
+            Runtime.Audio.SetSoundVolume(1);
+            Runtime.Audio.SetMusicVolume(1);
         }
 
         private void RememberSignatures(List<EventFileResult> programs)

@@ -341,7 +341,13 @@ when Escape is pressed
 | `spawn prefab "<name>" at <thing>` | `spawn prefab "Hero" at SpawnPoint` | instantiates an imported `.prefab`; name ignores folder/extension/case; copies get unique names (`Hero`, `Hero 2`, …) and every actor inside runs its own `when me appears` |
 | `spawn scene "<name>" at <thing>` | `spawn scene "HeroScene" at SpawnPoint` | loads a `.scene` **on top of** the current scene (additive) and moves only that scene's root actors to the spot — existing actors never move |
 | `play sound "<file>"` | `play sound "hit.wav"` | clip **name** only: `"hit"`, `"hit.wav"`, `"sounds/hit"` are the same imported clip |
-| `stop sound` | `stop sound` | stops this object's playing clips (from a global sheet: every clip) |
+| `play sound "<file>" at <thing>` | `play sound "shot" at Enemy` | a positional one-shot parented to that actor (attenuates only for a clip imported as 3D) |
+| `stop sound` | `stop sound` | stops this object's playing clips (from a global sheet: every clip) — never the music |
+| `play music "<name>"` / `loop music "<name>"` | `loop music "menu"` | one track at a time; a new track fades in from the current music level |
+| `stop music` | `stop music` | stops the track and keeps the music level where it is |
+| `fade music to <n> in <s>` | `fade music to 0 in 2` | n is 0–1; a fade to 0 keeps the authored music level for the next track |
+| `duck music by <n> for <s>` | `duck music by 0.6 for 4` | lowers the music by that share, then ramps back up |
+| `set music/sound/master volume to <n>` | `set music volume to 0.4` | the three volume groups; they write `MusicVolume` / `SoundVolume` / `MasterVolume` globals |
 | `set <var> to <value>` | `set Score to 0` | |
 | `add <n> to <var>` | `add 1 to Score` | |
 | `send message "<name>" to <thing>` | `send message "die"` | broadcast if no target |
@@ -1141,6 +1147,26 @@ window around a broken runtime.
   `IEventWorld.IsClimbing`), so a climb loop gates on the ladder itself instead of a flag variable.
   Parked: ladders you can shoot down, moving ladders, and a top-exit that picks the destination
   platform automatically.
+
+- **Audio as one music player plus three volumes (Task 31):** there is exactly one music
+  `AudioSource` behind `play music` / `loop music`; a second track replaces the first rather than
+  stacking, and `stop sound` never touches it. The rules live in `Runtime/AudioMix.cs` (pure,
+  unit tested) and the bridge owns the source and applies `EffectiveMusicVolume` /
+  `EffectiveSoundVolume` every tick, so `Master × Music` and `Master × Sound` are the only
+  arithmetic. `set music volume` writes `MusicVolume` and the level; `fade music to <n> in <s>`
+  ramps the *current* level, and a fade to 0 deliberately keeps the setting so a scene change is
+  `fade music to 0 in 0.5 → wait → load scene → loop music "level1"`, where the new track fades
+  itself in over 0.35 s. `duck music by <n> for <s>` is a separate temporary multiplier (ramp,
+  hold, ramp back), so a dialogue duck cannot change the authored level. Music survives
+  `load scene`: the mixer remembers the track and playhead and the bridge respawns the source,
+  because a Flax scene unload destroys every actor in it. `when music ends` fires once when a
+  non-looping track stops (the optional `when music "<name>" ends` only answers that track).
+  `play sound ... at <thing>` parents a one-shot to that actor with `AllowSpatialization` on and
+  a 200-unit min distance; **Flax only attenuates a clip imported as a 3D sound**, so a 2D clip
+  plays at the same volume from anywhere — that is an asset setting, not a missing word. Plain
+  `play sound` and `play step sound` stay 2D. Parked: per-source pitch/pan words, audio themes
+  that persist across the whole game, and a real bus mixer asset (the three globals are the
+  interface a settings UI binds).
 
 - **Jumping without a jump system:** G4 phase 3 adds only a word and a query — `jump [strength n]`,
   `me is on ground`, `me is airborne` — and lets the existing body rules carry it. A
