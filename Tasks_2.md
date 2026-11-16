@@ -172,7 +172,7 @@ the fallback is `when every 0.2 seconds` + a `my LastCount` comparison for the f
 
 ---
 
-## Task 29 — Expressions & Data Lookup `[ ]`
+## Task 29 — Expressions & Data Lookup `[x]`
 
 Goal: remove the one-operator ceiling where it actually hurts: RPG damage formulas, XP curves,
 difficulty scaling, item stats and resistances. Also turn the existing naming-convention data
@@ -259,9 +259,15 @@ and reads 0, never a silent wrong number.
       lists the rows that do have the field and adds `Did you mean row "Zombie"?`; a name with no
       near match gets no guess. Part A's too-long `set` line names the operator to split at and shows
       the half to keep (`set running to 1 + 2`). All three are asserted together in the tests.
-- [ ] **Part E — Tests and docs.** Precedence, unary minus, clamp bounds written high-to-low,
+- [x] **Part E — Tests and docs.** Precedence, unary minus, clamp bounds written high-to-low,
       percent rounding, table reads for a shipped weapon and enemy type, missing row/field warnings,
       and a regression test that every existing `set` line in `GameFiles/*.events` still parses.
+      *Landed:* the regression test re-parses every `set` line in every `GameFiles/*.events` sheet
+      (including `test/`) on its own under a `when game starts` trigger — 468 lines today — and fails
+      with the file and message if one stops parsing. `keywords.html` now introduces the value forms
+      as one story ("a value can also be computed") before listing math, helpers and `field`;
+      `DESIGN.md` opens Part A-D with a four-line example that uses all three, then explains what each
+      does and where it stops.
 
 ### Done-when
 

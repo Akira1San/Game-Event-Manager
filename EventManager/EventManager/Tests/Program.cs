@@ -564,6 +564,38 @@ Check(typoWarnings.Count > 1 && typoWarnings[1].Contains("Did you mean row") &&
       typoWarnings[1].Contains("Rows with a"),
       "an unknown row lists and suggests the rows that exist");
 
+// Task 29 Part E — the grammar change must leave every shipped `set` line parsing exactly as it did.
+// Every `set` line in every GameFiles sheet is re-parsed on its own under a `when game starts`
+// trigger, so a grammar regression points at the file and the message instead of failing a scene.
+var setLineFailures = new List<string>();
+int setLineCount = 0;
+foreach (string sheetPath in Directory.GetFiles("Source/Game/GameFiles", "*.events", SearchOption.AllDirectories))
+{
+    var setBody = new System.Text.StringBuilder("when game starts\n");
+    foreach (string rawLine in File.ReadAllLines(sheetPath))
+    {
+        string trimmedSet = rawLine.Trim();
+        if (!trimmedSet.StartsWith("set ", StringComparison.Ordinal))
+            continue;
+        setLineCount++;
+        setBody.Append("  ").Append(trimmedSet).Append('\n');
+    }
+    if (setBody.Length == "when game starts\n".Length)
+        continue;
+    try
+    {
+        parser.Parse(setBody.ToString());
+    }
+    catch (ParseException error)
+    {
+        setLineFailures.Add(Path.GetFileName(sheetPath) + ": " + error.Message);
+    }
+}
+if (setLineFailures.Count > 0)
+    Console.WriteLine("  first shipped `set` line that stopped parsing: " + setLineFailures[0]);
+Check(setLineCount > 400 && setLineFailures.Count == 0,
+      $"every `set` line the shipped sheets use still parses ({setLineCount} lines across GameFiles)");
+
 var hurt = parser.Parse("when me appears\n  add -1 to Lives\n  add Potion to my bag\n");
 var negative = (AddNode)hurt.Events[0].Body[0].Statement!;
 Check(negative.Amount is NumberValue av && av.Value == -1 && negative.Target.Name == "Lives",

@@ -505,7 +505,10 @@
 
   <section id="values">
     <h2>Value forms</h2>
-    <p>Values appear on the right side of <code>set</code>/<code>add</code>, after <code>is</code>/<code>becomes</code>, and in math.</p>
+    <p>Values appear on the right side of <code>set</code>/<code>add</code>, after <code>is</code>/<code>becomes</code>, and in math.
+      A value can also be <b>computed</b>: math takes one to three operators (<code>* /</code> before <code>+ −</code>),
+      <code>clamp</code> / <code>min</code> / <code>max</code> / rounding and <code>&lt;n&gt;% of</code> shape a number, and
+      <code>field</code> reads a row out of a data file. All of them are values, so they go wherever a number does and nest inside each other.</p>
 
     <div class="syntax-box">
       <span class="kw">number</span> &nbsp;−1 &nbsp;0.5 &nbsp;20<br>

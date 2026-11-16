@@ -711,6 +711,21 @@ when message "damage" arrives
   add -(other's damage) to my health      # possessive read: the attacker's stat
 ```
 
+**A value can be computed (Task 29):** one idea grew three additions — three operators in place of the
+one-operator ceiling, numeric helpers in place of the `if` blocks around caps and rounding, and
+`field` in place of copying a data-file number into a sheet. Each one is a *value*, so they compose
+without new statements:
+
+```text
+when me appears
+  set my Damage to field "Damage" of "Sword" in "item" * 2 + my Strength   # a table row inside a formula
+  set my Health to clamp my Health to 0 and my MaxHealth                   # a potion can't overfill
+  set my Gold to my Gold * 1.1                                             # tax, then round it
+  set my Gold to round my Gold
+```
+
+What each addition does, and where it stops:
+
 **Math, narrowed but real:** a `set ... to ...` line takes up to **three** operators with normal
 precedence (`* /` before `+ -`), so `set my damage to my strength * 2 + weapon damage` is one
 readable line (Task 29 Part A). Grouping is still parked: `weapon * (1 + strength / 10)` needs the
