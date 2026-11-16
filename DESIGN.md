@@ -727,6 +727,14 @@ works because `add` takes any value. A helper wraps the single value after it, n
 next line. They read where the event parser reads a value (`set`, `add`, `deduct`, weapon/ammo/build
 forms, text) and they nest, but they deliberately do not leak into conditions or trigger matching.
 
+**Data lookup** (Task 29 Part C) reads a shipped table without inventing a format: `field "Damage" of
+"Sword" in "item"` is the `<Row><Field>` global `SwordDamage` that `ItemData.events` already sets, so
+editing the data file changes the game with no C# edit and no second copy of the numbers. Row and
+field match case-insensitively and ignore spaces (`field "FireRate" of "Shotgun Maniac"` reaches
+`ShotgunManiacFireRate`), the result is an ordinary value so it multiplies, rounds and nests, and a
+row or field that does not exist warns once - naming the global it looked for and listing the fields
+that row has, or the rows that have that field - then reads 0.
+
 ### Point & click adventures (the composition showcase)
 
 The adventure genre is the system's proof of strength: almost everything a point & click game

@@ -134,7 +134,26 @@ namespace Game
             };
 
         public ValueBox Evaluate(ValueNode node)
-            => ValueEvaluator.Evaluate(node, Resolver());
+            => ValueEvaluator.Evaluate(node, Resolver(), ReadField);
+
+        /// <summary>
+        /// <c>field "Damage" of "Sword" in "item"</c> (Task 29 Part C): reads the
+        /// <c>&lt;Row&gt;&lt;Field&gt;</c> global the data files already set — <c>SwordDamage</c> here —
+        /// matching case-insensitively and ignoring spaces in either name. A row or field that does
+        /// not exist warns once and reads 0, so a typo never becomes a silent wrong number.
+        /// </summary>
+        public ValueBox ReadField(FieldValue field)
+        {
+            string name = DataLookup.Name(field.Row, field.Field);
+            string actual = Variables.FindGlobalName(name);
+            if (actual != null)
+                return ReadGlobal(actual);
+            if (Runtime != null)
+                Runtime.WarnMissingField(field, name);
+            else
+                Variables.OnWarning(DataLookup.MissingMessage(field, name, Variables.GlobalNames));
+            return new ValueBox();
+        }
     }
 
     public class WatchState
@@ -265,6 +284,17 @@ namespace Game
         public static Action<object, object> ClearArrivalContact = (subject, target) => { };
 
         public Action<string> OnRuntimeWarning = message => { };
+
+        /// <summary>One warning per missing data field, so a per-tick read stays quiet after the first.</summary>
+        private readonly HashSet<string> warnedDataFields = new HashSet<string>();
+
+        /// <summary>The missing-row/field warning for <c>field "…" of "…" in "…"</c> (Task 29 Part C).</summary>
+        public void WarnMissingField(FieldValue field, string name)
+        {
+            if (!warnedDataFields.Add(name))
+                return;
+            OnRuntimeWarning(DataLookup.MissingMessage(field, name, Variables.GlobalNames));
+        }
         public Action<EventContext, List<Token>> OnRawAction = (context, words) => { };
         public Action<EventContext, string, ValueBox> OnSetText = (context, thing, value) => { };
         /// <summary>Play a step sound: <paramref name="material"/> is the surface name (e.g.

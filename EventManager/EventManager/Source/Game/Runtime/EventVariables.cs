@@ -26,6 +26,38 @@ namespace Game
         public void SetGlobal(string name, ValueBox value)
         {
             globals[name] = ValueBox.Copy(value);
+            lowerGlobalNames = null;
+        }
+
+        /// <summary>Every global name written so far, for the data lookup's row/field discovery.</summary>
+        public IEnumerable<string> GlobalNames { get { return globals.Keys; } }
+
+        private Dictionary<string, string> lowerGlobalNames;
+
+        /// <summary>
+        /// The global that holds a data field (Task 29 Part C), matched exactly first and then
+        /// case-insensitively, so <c>field "damage" of "sword"</c> still reaches <c>SwordDamage</c>.
+        /// Returns null when no global carries that name. The lowercase index is built on demand and
+        /// dropped whenever a new global is written.
+        /// </summary>
+        public string FindGlobalName(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return null;
+            if (globals.ContainsKey(name))
+                return name;
+            if (lowerGlobalNames == null)
+            {
+                lowerGlobalNames = new Dictionary<string, string>();
+                foreach (var key in globals.Keys)
+                {
+                    string lower = key.ToLowerInvariant();
+                    if (!lowerGlobalNames.ContainsKey(lower))
+                        lowerGlobalNames[lower] = key;
+                }
+            }
+            string actual;
+            return lowerGlobalNames.TryGetValue(name.ToLowerInvariant(), out actual) ? actual : null;
         }
 
         public bool HasGlobal(string name)
@@ -52,6 +84,7 @@ namespace Game
             foreach (var pair in savedStats)
                 globals[pair.Key] = ValueBox.Copy(pair.Value);
             warnedGlobalNames.Clear();
+            lowerGlobalNames = null;
             return true;
         }
 
@@ -60,6 +93,7 @@ namespace Game
         {
             globals.Clear();
             warnedGlobalNames.Clear();
+            lowerGlobalNames = null;
         }
 
         public ValueBox GetLocal(object host, string name)

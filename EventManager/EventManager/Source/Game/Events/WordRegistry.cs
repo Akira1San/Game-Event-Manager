@@ -290,6 +290,7 @@ namespace Game
             new WordEntry { Kind = "value", Word = "min <a> and <b>", Example = "set my Speed to min my BaseSpeed and 10", AltShape = "`max <a> and <b>` takes the bigger one instead" },
             new WordEntry { Kind = "value", Word = "round <value>", Example = "set my Gold to round my Gold * 1.1", AltShape = "`floor`, `ceil` and `abs` read the same way; `round` sends halves away from zero (2.5 reads 3)" },
             new WordEntry { Kind = "value", Word = "<n>% of <value>", Example = "add 10% of my Gold to my Gold", AltShape = "reads as value seconds n/100, left unrounded — wrap it in `round` for whole numbers" },
+            new WordEntry { Kind = "value", Word = "field \"<field>\" of \"<row>\" in \"<table>\"", Example = "set my Damage to field \"Damage\" of \"Sword\" in \"item\"", AltShape = "reads the `<Row><Field>` global the data files set (`SwordDamage`); case does not matter, spaces in the row are ignored, and a missing row or field warns once and reads 0" },
             new WordEntry { Kind = "value", Word = "-my <var>", Example = "add -my DamageTaken to Health", AltShape = "a negated value: `-my X`, `-other's damage`, `-Score`" },
             new WordEntry { Kind = "value", Word = "my DamageTaken", Example = "set my Health to my Health - my DamageTaken", AltShape = "the number a `damage <amount>` message pattern captured" },
             new WordEntry { Kind = "action", Word = "increase", Example = "increase Supply Max by 8" },

@@ -240,9 +240,16 @@ and reads 0, never a silent wrong number.
       `percent of` and stays unrounded (`round 10% of 55` reads 6). All operands go through the same
       `ReadValue`, so helpers nest and take `random`, variables and other helpers. They read wherever
       the event parser reads a value; conditions and trigger matching are untouched on purpose.
-- [ ] **Part C — Data lookup.** `field "<field>" of "<row>" in "<table>"`; the table prefix is the
+- [x] **Part C — Data lookup.** `field "<field>" of "<row>" in "<table>"`; the table prefix is the
       same one `WeaponData.events` / `EnemyTypes.events` / `UnitTypes.events` already use.
       Resolution is case-insensitive and ignores spaces in the row name the same way asset names do.
+      *Landed:* `FieldValue` + `Runtime/DataLookup.cs` (the `<Row><Field>` naming convention,
+      spaces dropped) and `EventContext.ReadField`, which resolves through
+      `EventVariables.FindGlobalName` (exact, then a cached case-insensitive index) and reads the
+      global, so `field "Damage" of "Sword" in "item"` is `ItemData.events`' `SwordDamage`.
+      A missing row or field warns once through `EventRuntime.WarnMissingField`, names the global it
+      looked for, lists the fields that row has (or the rows that have that field) and reads 0.
+      The table name is carried for those messages; resolution itself is the `<Row><Field>` global.
 - [ ] **Part D — Friendly errors.** Unknown field lists the fields the table actually has when it
       can be discovered; unknown row suggests the nearest row name; too-long expression points at
       the operator to split.

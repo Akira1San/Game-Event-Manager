@@ -535,6 +535,8 @@ namespace Game
             }
             if (IsHelperWord(t))
                 return ReadHelper(words, ref index, flagLine);
+            if (t.Type == TokenType.Word && t.Text == "field")
+                return ReadFieldValue(words, ref index, flagLine);
             if (t.Type == TokenType.Word)
             {
                 // `-my DamageTaken`, `-Score` — a negated value (Task 18 Part G): the lexer keeps
@@ -558,6 +560,38 @@ namespace Game
                 return ReadVariable(words, ref index, flagLine, "`set`");
             }
             throw new ParseException("a value was expected here — a number, quoted text, or a variable", t.Line);
+        }
+
+        /// <summary>
+        /// Reads <c>field "&lt;field&gt;" of "&lt;row&gt;" in "&lt;table&gt;"</c> (Task 29 Part C). All three
+        /// parts are quoted on purpose: they are data names, not variables, so a row called
+        /// <c>Supply Max</c> is written in full instead of being mistaken for a variable read.
+        /// </summary>
+        private ValueNode ReadFieldValue(List<Token> words, ref int index, int flagLine)
+        {
+            var token = words[index];
+            const string shape =
+                "`field` reads `field \"<field>\" of \"<row>\" in \"<table>\"`, like `field \"Damage\" of \"Sword\" in \"item\"`";
+            var node = new FieldValue { Line = token.Line };
+            index++;
+            node.Field = ReadFieldName(words, ref index, "field", token.Line, shape);
+            ExpectWord(words, ref index, "of", token.Line, shape);
+            node.Row = ReadFieldName(words, ref index, "row", token.Line, shape);
+            ExpectWord(words, ref index, "in", token.Line, shape);
+            node.Table = ReadFieldName(words, ref index, "table", token.Line, shape);
+            return node;
+        }
+
+        /// <summary>One quoted name inside a `field` lookup; an empty quote is a mistake, not a name.</summary>
+        private string ReadFieldName(List<Token> words, ref int index, string what, int line, string shape)
+        {
+            if (index >= words.Count || words[index].Type != TokenType.Str)
+                throw new ParseException($"after `{what}` comes a quoted name — {shape}", line);
+            string text = words[index].Text.Trim();
+            if (text.Length == 0)
+                throw new ParseException($"the {what} name inside `field` is empty — {shape}", line);
+            index++;
+            return text;
         }
 
         /// <summary>Whether this token starts a numeric helper (Task 29 Part B): one of

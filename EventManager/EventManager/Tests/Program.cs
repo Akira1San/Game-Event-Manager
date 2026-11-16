@@ -453,6 +453,80 @@ catch (ParseException error)
 Check(percentShape != null && percentShape.Contains("10% of my Gold"),
       "a percentage missing its `of` explains the shape");
 
+// Task 29 Part C — `field "<field>" of "<row>" in "<table>"` reads the <Row><Field> data global.
+var lookupParse = parser.Parse("when game starts\n  set Damage to field \"Damage\" of \"Sword\" in \"item\"\n");
+var fieldNode = ((SetNode)lookupParse.Events[0].Body[0].Statement!).Value as FieldValue;
+Check(fieldNode != null && fieldNode.Field == "Damage" && fieldNode.Row == "Sword" && fieldNode.Table == "item",
+      "`field \"Damage\" of \"Sword\" in \"item\"` parses into a FieldValue with all three names");
+string lookupShape = null;
+try
+{
+    parser.Parse("when game starts\n  set Damage to field \"Damage\" of \"Sword\"\n");
+}
+catch (ParseException error)
+{
+    lookupShape = error.Message;
+}
+Check(lookupShape != null && lookupShape.Contains("I expected \u201Cin\u201D") &&
+      lookupShape.Contains("field \"<field>\" of \"<row>\" in \"<table>\""),
+      "a `field` missing its `in \"<table>\"` explains the shape");
+
+// A real table read: the shipped data files define the values, the sheet only names the row.
+var dataEngine = FreshEngine(new FakeWorld());
+dataEngine.AddSheet(new GlobalHost(), parser.Parse(File.ReadAllText("Source/Game/GameFiles/ItemData.events")));
+dataEngine.AddSheet(new GlobalHost(), parser.Parse(File.ReadAllText("Source/Game/GameFiles/WeaponData.events")));
+dataEngine.AddSheet(new GlobalHost(), parser.Parse(File.ReadAllText("Source/Game/GameFiles/EnemyTypes.events")));
+dataEngine.AddSheet(new GlobalHost(), parser.Parse(@"when game starts
+  set SwordHit to field ""Damage"" of ""Sword"" in ""item""
+  set SwordSlotRead to field ""Slot"" of ""Sword"" in ""item""
+  set PistolBlastRead to field ""Blast"" of ""Pistol"" in ""weapon""
+  set Doubled to field ""Damage"" of ""Sword"" in ""item"" * 2
+  set RoundedRate to round field ""FireRate"" of ""Shotgun"" in ""weapon""
+  set ZombieHit to field ""Health"" of ""Zombie"" in ""enemy""
+  set SpacedRow to field ""Health"" of ""Shotgun Maniac"" in ""enemy""
+  set CasedNames to field ""damage"" of ""sword"" in ""item"""));
+dataEngine.SessionStarted();
+dataEngine.Tick(0);
+Check(dataEngine.Variables.GetGlobal("SwordHit").AsNumber() == 12,
+      "`field \"Damage\" of \"Sword\"` reads the SwordDamage ItemData.events ships (12)");
+Check(dataEngine.Variables.GetGlobal("SwordSlotRead").AsText() == "weapon",
+      "a text field reads as text (SwordSlot is \"weapon\")");
+Check(dataEngine.Variables.GetGlobal("PistolBlastRead").AsNumber() == 0,
+      "a zero field reads 0 instead of warning (PistolBlast)");
+Check(dataEngine.Variables.GetGlobal("Doubled").AsNumber() == 24,
+      "a data field works as an operand inside a multi-operator line (12 * 2)");
+Check(dataEngine.Variables.GetGlobal("RoundedRate").AsNumber() == 1,
+      "a data field nests inside a helper (round ShotgunFireRate 0.8 reads 1)");
+Check(dataEngine.Variables.GetGlobal("ZombieHit").AsNumber() == 50,
+      "`field \"Health\" of \"Zombie\"` reads EnemyTypes.events' ZombieHealth (50)");
+Check(dataEngine.Variables.GetGlobal("SpacedRow").AsNumber() == 55,
+      "spaces in the row name are ignored (`Shotgun Maniac` reaches ShotgunManiacHealth)");
+Check(dataEngine.Variables.GetGlobal("CasedNames").AsNumber() == 12,
+      "row and field names are matched case-insensitively (\"damage\" of \"sword\" reads SwordDamage)");
+
+var missingFieldWarnings = new List<string>();
+var missingFieldEngine = FreshEngine(new FakeWorld());
+missingFieldEngine.OnRuntimeWarning = message => missingFieldWarnings.Add(message);
+missingFieldEngine.AddSheet(new GlobalHost(), parser.Parse(@"when game starts
+  set SwordDamage to 12
+  set SwordSlot to ""weapon""
+  set Missing to field ""Armour"" of ""Sword"" in ""item""
+  set MissingAgain to field ""Armour"" of ""Sword"" in ""item""
+  set NoRow to field ""Damage"" of ""Hammer"" in ""item"""));
+missingFieldEngine.SessionStarted();
+missingFieldEngine.Tick(0);
+Check(missingFieldEngine.Variables.GetGlobal("Missing").AsNumber() == 0 &&
+      missingFieldEngine.Variables.GetGlobal("NoRow").AsNumber() == 0,
+      "a missing field or row reads 0, never a silent wrong number");
+Check(missingFieldWarnings.Count == 2,
+      "each missing field warns once, however many times the line reads it");
+Check(missingFieldWarnings.Count > 0 && missingFieldWarnings[0].Contains("SwordArmour") &&
+      missingFieldWarnings[0].Contains("has Damage and Slot"),
+      "the missing-field warning names the global it looked for and lists the fields the row has");
+Check(missingFieldWarnings.Count > 1 && missingFieldWarnings[1].Contains("HammerDamage") &&
+      missingFieldWarnings[1].Contains("Rows with a") && missingFieldWarnings[1].Contains("Sword"),
+      "a missing row suggests the rows that do have the field");
+
 var hurt = parser.Parse("when me appears\n  add -1 to Lives\n  add Potion to my bag\n");
 var negative = (AddNode)hurt.Events[0].Body[0].Statement!;
 Check(negative.Amount is NumberValue av && av.Value == -1 && negative.Target.Name == "Lives",

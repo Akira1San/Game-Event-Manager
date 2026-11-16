@@ -4,6 +4,10 @@ namespace Game
 {
     public delegate ValueBox VariableResolver(VariableValue variable);
 
+    /// <summary>Reads one <c>field "…" of "…" in "…"</c> (Task 29 Part C). The runtime supplies
+    /// this so a lookup can warn and suggest; evaluation itself stays pure.</summary>
+    public delegate ValueBox FieldResolver(FieldValue field);
+
     public static class Rng
     {
         private static Random random = new Random();
@@ -21,7 +25,7 @@ namespace Game
 
     public static class ValueEvaluator
     {
-        public static ValueBox Evaluate(ValueNode node, VariableResolver resolve)
+        public static ValueBox Evaluate(ValueNode node, VariableResolver resolve, FieldResolver fieldLookup = null)
         {
             switch (node)
             {
@@ -31,6 +35,8 @@ namespace Game
                     return ValueBox.OfText(text.Text);
                 case BooleanValue boolean:
                     return ValueBox.OfBoolean(boolean.Value);
+                case FieldValue field:
+                    return fieldLookup == null ? new ValueBox() : fieldLookup(field);
                 case VariableValue variable:
                 {
                     if (resolve == null)
@@ -39,8 +45,8 @@ namespace Game
                 }
                 case RandomRangeValue range:
                 {
-                    double min = Evaluate(range.Min, resolve).AsNumber();
-                    double max = Evaluate(range.Max, resolve).AsNumber();
+                    double min = Evaluate(range.Min, resolve, fieldLookup).AsNumber();
+                    double max = Evaluate(range.Max, resolve, fieldLookup).AsNumber();
                     if (min > max)
                     {
                         double swap = min;
@@ -59,8 +65,8 @@ namespace Game
                 }
                 case MathValue math:
                 {
-                    double left = Evaluate(math.Left, resolve).AsNumber();
-                    double right = Evaluate(math.Right, resolve).AsNumber();
+                    double left = Evaluate(math.Left, resolve, fieldLookup).AsNumber();
+                    double right = Evaluate(math.Right, resolve, fieldLookup).AsNumber();
                     switch (math.Op)
                     {
                         case '+':
@@ -75,8 +81,13 @@ namespace Game
                             return ValueBox.OfNumber(0);
                     }
                 }
+                case ExpressionValue expression:
+                {
+                    ValueBox box = Expressions.Fold(expression, part => Evaluate(part, resolve, fieldLookup));
+                    return box;
+                }
                 case HelperValue helper:
-                    return EvaluateHelper(helper, resolve);
+                    return EvaluateHelper(helper, resolve, fieldLookup);
                 case FormatValue format:
                 {
                     // `format "Health: {0}/{1}"` — numbered placeholders filled from the args.
@@ -90,7 +101,7 @@ namespace Game
                             if (end > i + 1 && int.TryParse(format.Template.Substring(i + 1, end - i - 1), out int argIndex) &&
                                 argIndex >= 0 && argIndex < format.Args.Count)
                             {
-                                text.Append(Evaluate(format.Args[argIndex], resolve).AsText());
+                                text.Append(Evaluate(format.Args[argIndex], resolve, fieldLookup).AsText());
                                 i = end;
                                 continue;
                             }
@@ -111,15 +122,15 @@ namespace Game
         /// or damage expects the bigger number; and <c>10% of X</c> is plain X times 0.1, left
         /// unrounded so a caller can decide with <c>round</c>.
         /// </summary>
-        private static ValueBox EvaluateHelper(HelperValue helper, VariableResolver resolve)
+        private static ValueBox EvaluateHelper(HelperValue helper, VariableResolver resolve, FieldResolver fieldLookup)
         {
-            double first = Evaluate(helper.First, resolve).AsNumber();
+            double first = Evaluate(helper.First, resolve, fieldLookup).AsNumber();
             switch (helper.Kind)
             {
                 case ValueHelper.Clamp:
                 {
-                    double low = Evaluate(helper.Second, resolve).AsNumber();
-                    double high = Evaluate(helper.Third, resolve).AsNumber();
+                    double low = Evaluate(helper.Second, resolve, fieldLookup).AsNumber();
+                    double high = Evaluate(helper.Third, resolve, fieldLookup).AsNumber();
                     if (low > high)
                     {
                         double swap = low;
@@ -134,12 +145,12 @@ namespace Game
                 }
                 case ValueHelper.Min:
                 {
-                    double other = Evaluate(helper.Second, resolve).AsNumber();
+                    double other = Evaluate(helper.Second, resolve, fieldLookup).AsNumber();
                     return ValueBox.OfNumber(first < other ? first : other);
                 }
                 case ValueHelper.Max:
                 {
-                    double other = Evaluate(helper.Second, resolve).AsNumber();
+                    double other = Evaluate(helper.Second, resolve, fieldLookup).AsNumber();
                     return ValueBox.OfNumber(first > other ? first : other);
                 }
                 case ValueHelper.Round:
@@ -151,7 +162,7 @@ namespace Game
                 case ValueHelper.Abs:
                     return ValueBox.OfNumber(Math.Abs(first));
                 case ValueHelper.PercentOf:
-                    return ValueBox.OfNumber(first * Evaluate(helper.Second, resolve).AsNumber() / 100.0);
+                    return ValueBox.OfNumber(first * Evaluate(helper.Second, resolve, fieldLookup).AsNumber() / 100.0);
                 default:
                     return ValueBox.OfNumber(0);
             }

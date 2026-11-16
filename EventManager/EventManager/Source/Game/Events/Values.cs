@@ -33,6 +33,19 @@ namespace Game
         public bool Negated;
     }
 
+    /// <summary>
+    /// <c>field "Damage" of "Sword" in "item"</c> — one value read out of a data table
+    /// (Task 29 Part C). The row and field name the global <c>SwordDamage</c> the data files
+    /// already set; the table name is where that row lives, kept for the warning that lists what
+    /// the table does have.
+    /// </summary>
+    public class FieldValue : ValueNode
+    {
+        public string Table = "";
+        public string Row = "";
+        public string Field = "";
+    }
+
     /// <summary>Which numeric helper a <see cref="HelperValue"/> is (Task 29 Part B).</summary>
     public enum ValueHelper
     {
@@ -181,6 +194,8 @@ namespace Game
                     return $"{Describe(m.Left)} {m.Op} {Describe(m.Right)}";
                 case HelperValue h:
                     return DescribeHelper(h);
+                case FieldValue f:
+                    return $"field \"{f.Field}\" of \"{f.Row}\" in \"{f.Table}\"";
                 case ExpressionValue e:
                 {
                     var text = new System.Text.StringBuilder();
