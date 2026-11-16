@@ -1873,6 +1873,150 @@ when me is released
     Check(losReacquireEngine.Variables.GetGlobal("Hurts").AsNumber() == 1,
         "Enemy_LOS sends `hurt` to the nearest player at melee range during a chase");
 
+    // ------------------------------------------------------------------
+    // Task 7 Part G3: arcade lane enemy + spawner (events only)
+    // ------------------------------------------------------------------
+
+    var arcadeEnemyProgram = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Arcade_Enemy.events"));
+    Check(arcadeEnemyProgram.Events.Count == 5, $"Arcade_Enemy.events parses into 5 events (got {arcadeEnemyProgram.Events.Count})");
+
+    var arcadeSpawnerProgram = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Arcade_Spawner.events"));
+    Check(arcadeSpawnerProgram.Events.Count == 2, $"Arcade_Spawner.events parses into 2 events (got {arcadeSpawnerProgram.Events.Count})");
+
+    // Contact: the `near 1.5` enter edge hurts once per approach, never once per tick.
+    var arcadeWorld = new FakeWorld();
+    var arcadeEnemy = new FakeActor("Arcade_Enemy");
+    var arcadePlayer = new FakeActor("Player");
+    arcadeWorld.AddActor(arcadeEnemy);
+    arcadeWorld.AddActor(arcadePlayer);
+    arcadeWorld.SetDistance(arcadeEnemy, arcadePlayer, 400);
+    var arcadeEngine = FreshEngine(arcadeWorld);
+    arcadeEngine.AddSheet(arcadeEnemy, arcadeEnemyProgram);
+    arcadeEngine.AddSheet(arcadePlayer, parser.Parse("when message \"hurt\" arrives\n  set Hurts to Hurts + 1"));
+    arcadeEngine.Tick(0);
+    Check(arcadeEngine.Variables.GetGlobal("Hurts").IsNone(), "a lane further than 1.5 away does not hurt");
+
+    arcadeWorld.SetDistance(arcadeEnemy, arcadePlayer, 1);
+    arcadeEngine.Tick(0.1);
+    arcadeEngine.Tick(0.2); // messages are delivered on the next tick
+    Check(arcadeEngine.Variables.GetGlobal("Hurts").AsNumber() == 1,
+        "the arcade enemy sends `hurt` on contact");
+    arcadeEngine.Tick(0.3);
+    Check(arcadeEngine.Variables.GetGlobal("Hurts").AsNumber() == 1, "standing in contact does not hurt again (enter edge)");
+
+    arcadeWorld.SetDistance(arcadeEnemy, arcadePlayer, 40);
+    arcadeEngine.Tick(0.4);
+    arcadeWorld.SetDistance(arcadeEnemy, arcadePlayer, 1);
+    arcadeEngine.Tick(0.5);
+    arcadeEngine.Tick(0.6);
+    Check(arcadeEngine.Variables.GetGlobal("Hurts").AsNumber() == 2, "a second approach hurts again");
+
+    // Bullets: five 10-damage shots drop a zombie's 50 health, and the lane loses one alive.
+    var arcadeBullet = new FakeActor("Bullet");
+    arcadeWorld.AddActor(arcadeBullet);
+    arcadeWorld.SetDistance(arcadeEnemy, arcadePlayer, 400); // out of melee, so only shots land
+    arcadeEngine.Tick(0.7);
+    Check(arcadeEngine.Variables.GetLocal(arcadeEnemy, "Health").AsNumber() == 50,
+        $"the Zombie type gives the lane enemy 50 hit points (got {arcadeEngine.Variables.GetLocal(arcadeEnemy, "Health").AsNumber()})");
+
+    for (int shot = 0; shot < 5; shot++)
+    {
+        arcadeEngine.PushContact(TriggerKind.Touches, arcadeEnemy, arcadeBullet);
+        arcadeEngine.Tick(0.8 + shot * 0.1);
+    }
+    arcadeEngine.Tick(1.4); // the `health becomes 0` watch settles on the next tick
+    Check(arcadeEngine.Variables.GetLocal(arcadeEnemy, "Health").AsNumber() == 0,
+        $"five 10-damage shots empty a zombie's 50 health (got {arcadeEngine.Variables.GetLocal(arcadeEnemy, "Health").AsNumber()})");
+    Check(arcadeEngine.Variables.GetGlobal("EnemiesAlive").AsNumber() == -1,
+        $"dying decrements EnemiesAlive (the lane counter the spawner caps, got {arcadeEngine.Variables.GetGlobal("EnemiesAlive").AsNumber()})");
+    Check(arcadeEngine.Variables.GetGlobal("Kills Zombie").AsNumber() == 1,
+        $"the kill is counted against the enemy's type (got {arcadeEngine.Variables.GetGlobal("Kills Zombie").AsNumber()})");
+
+    // Spawner: one enemy every 3 s while the player is near, and never past 4 alive.
+    // The player needs a sheet too: a condition's `near <thing>` lookup finds actors through
+    // the runtime's registered sheets (the same path `when me is near Player` takes in game).
+    var spawnerWorld = new FakeWorld();
+    var spawner = new FakeActor("Arcade_Spawner");
+    var spawnerPlayer = new FakeActor("Player");
+    spawnerWorld.AddActor(spawner);
+    spawnerWorld.AddActor(spawnerPlayer);
+    spawnerWorld.SetDistance(spawner, spawnerPlayer, 40);
+    var spawnerEngine = FreshEngine(spawnerWorld);
+    spawnerEngine.AddSheet(spawner, arcadeSpawnerProgram);
+    spawnerEngine.AddSheet(spawnerPlayer, parser.Parse(@"when game starts
+  set LaneReady to true"));
+    spawnerEngine.Tick(0);
+    Check(spawnerEngine.Variables.GetGlobal("EnemiesAlive").AsNumber() == 0, "the spawner zeroes the lane counter on appear");
+
+    for (int beat = 1; beat <= 6; beat++)
+        spawnerEngine.Tick(beat * 3);
+    Check(spawnerEngine.Variables.GetGlobal("EnemiesAlive").AsNumber() == 4,
+        $"the spawner fills to 4 alive and holds there (got {spawnerEngine.Variables.GetGlobal("EnemiesAlive").AsNumber()})");
+
+    spawnerWorld.SetDistance(spawner, spawnerPlayer, 200);
+    spawnerEngine.Tick(30);
+    Check(spawnerEngine.Variables.GetGlobal("EnemiesAlive").AsNumber() == 4,
+        $"the `me is near Player by 60` gate switches spawning off when the player walks away (got {spawnerEngine.Variables.GetGlobal("EnemiesAlive").AsNumber()})");
+
+    // Condition lookups resolve player references the way triggers do (Task 7 G3 follow-up), so
+    // the spawner's portable `me is near player by 60` works no matter what the hero is called.
+    var thingWorld = new FakeWorld();
+    var thingSeeker = new FakeActor("Seeker");
+    var thingFirst = new FakeActor("Player1");
+    var thingSecond = new FakeActor("Player2");
+    thingWorld.AddActor(thingSeeker);
+    thingWorld.AddActor(thingFirst);
+    thingWorld.AddActor(thingSecond);
+    thingWorld.SetDistance(thingSeeker, thingFirst, 5);
+    thingWorld.SetDistance(thingSeeker, thingSecond, 50);
+    var thingEngine = FreshEngine(thingWorld);
+    thingEngine.AddSheet(thingSeeker, parser.Parse(@"when every 1 seconds
+  me is near player by 10
+  add 1 to NearAny
+
+when every 1 seconds
+  me is near nearest player by 10
+  add 1 to NearNearest
+
+when every 1 seconds
+  me is near Player1 by 10
+  add 1 to NearNamed
+
+when every 1 seconds
+  me is near player 2 by 10
+  add 1 to NearSecond
+
+when every 1 seconds
+  me is near Player2 by 10
+  add 1 to NearSecondNamed
+
+when every 1 seconds
+  player exists
+  add 1 to PlayerExists
+
+when every 1 seconds
+  Ghost does not exist
+  add 1 to GhostMissing"));
+    thingEngine.AddSheet(thingFirst, parser.Parse(@"when game starts
+  set Ready to true"));
+    thingEngine.AddSheet(thingSecond, parser.Parse(@"when game starts
+  set Ready to true"));
+    thingEngine.Tick(0);
+    thingEngine.Tick(1);
+    Check(thingEngine.Variables.GetGlobal("NearAny").AsNumber() == 1,
+        "a condition resolves lowercase `player` to the nearest player (`me is near player by 10`)");
+    Check(thingEngine.Variables.GetGlobal("NearNearest").AsNumber() == 1,
+        "`me is near nearest player by 10` is a two-word player reference in a condition");
+    Check(thingEngine.Variables.GetGlobal("NearNamed").AsNumber() == 1,
+        "an ordinary actor name still resolves by name (`me is near Player1 by 10`)");
+    Check(thingEngine.Variables.GetGlobal("NearSecond").AsNumber() == 0 &&
+          thingEngine.Variables.GetGlobal("NearSecondNamed").AsNumber() == 0,
+        "`me is near player 2` / `Player2` measure the second player, not the nearest one");
+    Check(thingEngine.Variables.GetGlobal("PlayerExists").AsNumber() == 1,
+        "`player exists` answers through the same lookup");
+    Check(thingEngine.Variables.GetGlobal("GhostMissing").AsNumber() == 1,
+        "`Ghost does not exist` still reads a missing ordinary actor as missing");
+
     static List<Token> RawWords(EventParser parser, string source)
 {
     var program = parser.Parse(source);
@@ -7223,10 +7367,10 @@ Check(multiEngine.Variables.GetLocal(ogre, "Shield").AsNumber() == 10 &&
 // ------------------------------------------------------------------
 
 // A bare world has no economy, selection or vision: every query answers empty.
-var bareWorld = new DefaultEventWorld();
-Check(bareWorld.GetSelectedCount() == 0 && bareWorld.GetSelection().Count == 0 &&
-      bareWorld.GetResource("Minerals") == 0 && !bareWorld.IsRevealed(null, 1) &&
-      bareWorld.GetBuildProgress(null) == 0 && bareWorld.GetOrderQueue(null).Count == 0,
+var arcDebugWorld = new DefaultEventWorld();
+Check(arcDebugWorld.GetSelectedCount() == 0 && arcDebugWorld.GetSelection().Count == 0 &&
+      arcDebugWorld.GetResource("Minerals") == 0 && !arcDebugWorld.IsRevealed(null, 1) &&
+      arcDebugWorld.GetBuildProgress(null) == 0 && arcDebugWorld.GetOrderQueue(null).Count == 0,
       "the default world answers the RTS queries with empty/no-op values");
 
 // The runtime owns the state the world reports.

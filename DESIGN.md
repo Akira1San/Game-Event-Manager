@@ -1085,6 +1085,24 @@ window around a broken runtime.
 - **Negated possessive reads:** `add -(other's damage)` does not parse — the lexer gloms `-` onto
   `other's` as one token. Work around it with `set my LastDmg to other's damage` then
   `set my health to my health - my LastDmg` (note the `my` prefix on the right-hand read).
+- **Arcade lane enemy (Task 7 G3):** the cheapest variant — `when every 0.2 seconds` +
+  `move toward player speed 60` + `me is near player by 1.5` + a spawner with an
+  `EnemiesAlive` cap — needed no new words, but three runtime details surfaced. (1) A
+  **condition** `me is near <thing>` looks the actor up by exact name through the runtime's
+  registered sheets, so the portable lowercase `player` that triggers accept did not resolve
+  there (the spawner had to write `me is near Player by 60`). **Fixed in the G3 follow-up:**
+  conditions now look names up through `EventRuntime.FindThing` — `player` / `nearest player`
+  are the closest player to the condition's subject, `player 2` / `Player2` one local player,
+  everything else an ordinary name — and the near condition parses those two-word player
+  references, so `me is near player by 60` reads the same in a trigger and in a condition. (2) Health is the per-unit
+  stat: `add -10 to my health` canonicalises to `my Health`, but `when my health becomes 0`
+  watches the plain variable name, so a mixed-case sheet silently keeps two values — write
+  `my Health` on both lines (or make the watch read stats too). (3) `TK_Bullet`'s damage only
+  answers actors literally named `Enemy`, and a lane names its enemy `Arcade_Enemy`, so the
+  enemy takes the hit from its own sheet (`when me touches Bullet`); a tag- or group-shaped
+  contact (`when me touches something with tag Enemy`) is the general fix. A lane-clamp word
+  (`stay in lane <z> by <n>`) stays parked — the scene uses the design route instead (walls
+  and camera framing).
 - **Possessive bag checks across actors:** `my bag has <thing>` and `remove <thing> from my bag`
   only ever address the sheet's own actor (`me`). Another actor (a door, an NPC) cannot read or
   change Player's bag directly, so the locked-door puzzle (Task 9 C) tracks key possession with a

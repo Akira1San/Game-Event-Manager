@@ -593,6 +593,29 @@ namespace Game
             return null;
         }
 
+        /// <summary>
+        /// Resolves a name the way triggers do (Task 7 G3): <c>player</c> / <c>nearest player</c>
+        /// mean the closest player to <paramref name="from"/>, <c>player 2</c> / <c>Player2</c>
+        /// name one local player, and every other name is an ordinary actor lookup.
+        /// Conditions used to look names up literally, so the portable lowercase <c>player</c>
+        /// worked in `when me is near player by 1.5` but silently found nothing in
+        /// `me is near player by 60`.
+        /// </summary>
+        public object FindThing(string name, object from)
+        {
+            if (string.IsNullOrEmpty(name))
+                return null;
+            if (Players.IsNearestReference(name))
+                return NearestPlayer(from);
+            if (Players.TryReadNumber(name, out int number))
+            {
+                object player = FindPlayer(number);
+                if (player != null)
+                    return player;
+            }
+            return FindNamedActor(name);
+        }
+
         public SheetInstance FindActorSheet(string name)
         {
             foreach (var sheet in sheets)

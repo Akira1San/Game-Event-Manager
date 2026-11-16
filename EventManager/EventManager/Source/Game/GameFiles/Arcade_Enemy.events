@@ -1,0 +1,40 @@
+# ---------------- Arcade_Enemy.events (Task 7 Part G3: arcade lane enemy) ----------------
+# No NavMesh, no rays, no waypoints: walk straight at the player on the floor, swing on contact.
+# This is the Double Dragon / Contra shape — one polled steering line plus a melee `near`, and
+# a spawner (Arcade_Spawner.events) refills the lane.
+#
+# SETUP (editor): the scene's `Arcade_Enemy` actor is the spawn template — give it an EventSheet
+# with Event File = Arcade_Enemy, a BoxCollider, and leave the actor inactive. `spawn Arcade_Enemy
+# at SpawnAhead` clones it activated; the clone keeps the template's name (Flax allows duplicate
+# actor names), so this one sheet drives every enemy on the floor.
+#
+# No NavMesh bake is involved: `move toward` is a direct vector, the same word the Variant 1
+# chase uses. It walks into walls rather than around them — the documented con of the variant.
+
+when me appears
+  enemy type "Zombie"
+  print "Arcade_Enemy: walking in"
+
+when every 0.2 seconds
+  move toward player speed 100         # re-issued so it tracks a moving player
+  # loop anim "Walk"                 # simple meshes have no clips; armature enemies can
+
+when me is near player by 1.5
+  my Hostile is true
+  # play anim "Attack"
+  send message "hurt" to nearest player
+
+# ---- taking a shot ----
+# TK_Bullet.events reacts to actors named `Enemy`; the lane names its enemy `Arcade_Enemy`, so
+# the hit lands from this side instead: a shot that overlaps costs 10 of the zombie's 50 and is
+# used up. Same idea as Enemy.events' damage block, just keyed on the shot rather than a message,
+# because a lane full of clones has no single `Enemy` actor to message.
+when me touches Bullet
+  add -10 to my Health
+  destroy other
+
+when my Health becomes 0
+  add 1 to kills my Type
+  add -1 to EnemiesAlive
+  # play anim "Die"
+  destroy me

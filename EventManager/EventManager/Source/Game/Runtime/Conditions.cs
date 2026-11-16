@@ -582,7 +582,21 @@ namespace Game
                     node.Kind = ConditionKind.Near;
                     SetSubject(node, tokens, texts, isIndex);
                     if (nearIndex + 1 < tokens.Count)
+                    {
                         node.Thing = tokens[nearIndex + 1].Text;
+                        // Player references are two words, same as the trigger forms:
+                        // `me is near nearest player by 60` and `me is near player 2 by 60`.
+                        string thingWord = node.Thing;
+                        bool more = nearIndex + 2 < tokens.Count;
+                        string next = more ? tokens[nearIndex + 2].Text : "";
+                        if ((string.Equals(thingWord, "nearest", StringComparison.OrdinalIgnoreCase) ||
+                             string.Equals(thingWord, "all", StringComparison.OrdinalIgnoreCase)) &&
+                            string.Equals(next, "player", StringComparison.OrdinalIgnoreCase))
+                            node.Thing = thingWord.ToLowerInvariant() + " " + next;
+                        else if (string.Equals(thingWord, "player", StringComparison.OrdinalIgnoreCase) &&
+                                 more && tokens[nearIndex + 2].Type == TokenType.Number)
+                            node.Thing = "player " + tokens[nearIndex + 2].Number.ToString("0");
+                    }
                     int byIndex = Array.IndexOf(texts, "by");
                     if (byIndex >= 0 && byIndex + 1 < tokens.Count && tokens[byIndex + 1].Type == TokenType.Number)
                         node.Distance = tokens[byIndex + 1].Number;
@@ -675,12 +689,12 @@ namespace Game
                     return node.Kind == ConditionKind.Higher ? higher : !higher && left.AsNumber() < right.AsNumber();
                 }
                 case ConditionKind.ThingExists:
-                    return context.Runtime.FindNamedActor(node.Thing) != null;
+                    return context.Runtime.FindThing(node.Thing, context.Me) != null;
                 case ConditionKind.ThingMissing:
-                    return context.Runtime.FindNamedActor(node.Thing) == null;
+                    return context.Runtime.FindThing(node.Thing, context.Me) == null;
                 case ConditionKind.Near:
                 {
-                    object thing = context.Runtime.FindNamedActor(node.Thing);
+                    object thing = context.Runtime.FindThing(node.Thing, context.Me);
                     object anchor = node.Name == "other" && context.Other != null ? context.Other : context.Me;
                     if (thing == null)
                         return false;
@@ -808,7 +822,7 @@ namespace Game
                 {
                     object actor = node.Thing == "me"
                         ? context.Me
-                        : context.Runtime.FindNamedActor(node.Thing);
+                        : context.Runtime.FindThing(node.Thing, context.Me);
                     return context.Runtime.Construction.IsUnderConstruction(actor);
                 }
                 case ConditionKind.EnoughFor:
@@ -938,7 +952,7 @@ namespace Game
                 return context.Me;
             if (thing == "other")
                 return context.Other;
-            return context.Runtime.FindNamedActor(thing);
+            return context.Runtime.FindThing(thing, context.Me);
         }
 
         private static ValueNode ValueFrom(List<Token> tokens, string[] texts, int index)

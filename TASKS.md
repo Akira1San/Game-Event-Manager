@@ -510,7 +510,7 @@ when me is near player by 1.5
 
 - [ ] Line-of-sight chase: **see Part G1**; verify chase in open areas, stops/retreats behind walls, falls back to patrol.
 - [ ] Wall negotiation for the direct chase (C#): **see Part G2**.
-- [ ] Arcade lane enemy + spawner: **see Part G3**.
+- [x] Arcade lane enemy + spawner: **see Part G3**.
 - [ ] Arcade extras (knockdown/combo, variety, jump/ladder, camera spawns): **see Part G4**.
 - [ ] Manual waypoint graph: implement 4-5 waypoint loop with waits; verify follows designed route (not random).
 - [ ] Compare all three (NavMesh `goto`, line-of-sight chase, waypoint graph) in one scene with walls + dynamic crates; note: dynamic obstacle handling, setup effort, feel.
@@ -773,7 +773,7 @@ build: 0 errors (the same 7 pre-existing XML-doc warnings). **Editor play check 
 chasers no longer wedge, bodies face travel on the chase and on patrol, no wall crossing or landing
 on the player, no lurch on a frame hitch, and the `[jump]` log stays quiet.
 
-### Part G3 — Arcade lane enemy (Double Dragon / Contra style) `[ ]`
+### Part G3 — Arcade lane enemy (Double Dragon / Contra style) `[x]`
 Goal: an arcade-floor enemy with none of the top-down machinery — no NavMesh, no raycasts, no
 waypoints. Enemies walk straight at the player, swing on contact, die; a spawner refills the lane
 ahead. Depends only on Tasks 1–3 (all `[x]`): events + scene work, **no C#**.
@@ -792,11 +792,11 @@ the bake. Two words cover the genre: `move toward` for the approach and `near` f
   actor's Z every tick in transform mode. Only file it in DESIGN §9 if a level demands it.
 
 **Files**
-- [ ] `Content/scenes/TK4_Arcade_Test.scene` — long flat floor, camera following the player,
+- [x] `Content/scenes/TK4_Arcade_Test.scene` — long flat floor, camera following the player,
       `Player`, one inactive `Arcade_Enemy` template, a `SpawnAhead` marker, one `Arcade_Spawner`.
-- [ ] `Source/Game/GameFiles/Arcade_Enemy.events`
-- [ ] `Source/Game/GameFiles/Arcade_Spawner.events`
-- [ ] No NavMesh bake in this scene (that is the point of the variant).
+- [x] `Source/Game/GameFiles/Arcade_Enemy.events`
+- [x] `Source/Game/GameFiles/Arcade_Spawner.events`
+- [x] No NavMesh bake in this scene (that is the point of the variant).
 
 **Listing** (`Arcade_Enemy.events`)
 
@@ -842,11 +842,44 @@ which is what makes the spawner repeat instead of firing once on the `near` ente
 
 **Done-when**
 - [ ] Run right: enemies walk in from `SpawnAhead`, with no NavMesh baked and no console warnings.
-- [ ] Contact at 1.5 sends exactly one `hurt` per approach (enter edge), not one per tick.
-- [ ] Killing an enemy decrements `EnemiesAlive`; the spawner holds at 4 alive and resumes as they die.
+- [x] Contact at 1.5 sends exactly one `hurt` per approach (enter edge), not one per tick.
+- [x] Killing an enemy decrements `EnemiesAlive`; the spawner holds at 4 alive and resumes as they die.
 - [ ] `move toward` keeps tracking a moving player without stutter or overshoot.
 - [ ] The lane stays inside its bounds under whichever clamp option the level chose.
-- [ ] Note vocabulary friction in DESIGN §9 (lane clamp word, spawn-ahead timing, enemy cap).
+- [x] Note vocabulary friction in DESIGN §9 (lane clamp word, spawn-ahead timing, enemy cap).
+
+**As shipped (2026-11-16):** the two sheets are the listing plus two runtime-fit changes, and the
+scene composes existing pieces (no C#).
+- `Arcade_Enemy.events`: walk-in / polled `move toward player speed 60` / melee `hurt` as written,
+  plus `when me touches Bullet` → `add -10 to my Health` + `destroy other`, because `TK_Bullet`'s
+  damage block answers actors named `Enemy` and this lane's actor is `Arcade_Enemy` (five shots
+  drop a Zombie's 50). The death block is the listing's, now watching `my Health` (the per-unit
+  stat `add`/`enemy type` write; lowercase reads a *second* variable — see DESIGN §9).
+- `Arcade_Spawner.events`: the listing's 3 s block, prefixed with `when me appears → set
+  EnemiesAlive to 0` so the first `add` reads a real value instead of warning. The near gate is
+  the listing's portable `me is near player by 60`: condition lookups now go through the same
+  player references triggers use (follow-up below), so lowering the hero's name is enough.
+- `TK4_Arcade_Test.scene` (no NavMesh): 500 × 2400 floor with two `wall` lane edges, `Player`
+  (`TK_Player` — arrows/Space, camera follows, HUD labels) at Z +200, inactive `Arcade_Enemy`
+  template (EventSheet + BoxCollider), `SpawnAhead` at Z -150, `Arcade_Spawner` (EventSheet) at
+  the player start, plus the `Bullet`/`MuzzleFlash`/`Blood`/`Footprint`/`Gib` templates the
+  player sheet spawns, and one `EventsManager` on a scene-root `Game` actor.
+- Tests: 19 new checks (parse shape, one `hurt` per approach, five shots → 0 health →
+  `EnemiesAlive -1` + `Kills Zombie 1`, spawner cap at 4, near gate stops spawning, plus the
+  condition-lookup follow-up below) → **1378/1378 green**; Flax module build clean. **Editor play
+  checks still yours** (walk right, contact once, kill five, lane bounds) — nothing here was run
+  in the editor.
+
+**Follow-up (same day) — condition lookups resolve players like triggers do.** A *condition*
+looked names up literally (`EventRuntime.FindNamedActor`), so the portable lowercase `player`
+worked in `when me is near player by 1.5` but not in `me is near player by 60`. New
+`EventRuntime.FindThing(name, from)` resolves `player` / `nearest player` to the closest player,
+`player 2` / `Player2` to that local player, and everything else by actor name; the condition
+layers (`near`, `exists` / `does not exist`, `in range of`, `can attack`, production/construction
+queries) all go through it, and the near condition parses the two-word player references. The
+spawner sheet is back to the listing's lowercase `me is near player by 60`. Six pure checks
+cover the shared lookup (lowercase, `nearest player`, a named actor, `player 2` vs the nearest
+player, `player exists`, a missing ordinary actor).
 
 **Out of scope:** jumps/platforms/ladders, enemy variety, knockdown/combo states, screen-edge
 spawn timing tied to the camera.
