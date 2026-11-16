@@ -7,6 +7,9 @@ namespace Game
     {
         private static readonly string[] MathOps = { "+", "-", "*", "/" };
 
+        /// <summary>How many operators one `set` value may carry (Task 29 Part A).</summary>
+        private const int MaxSetOperators = 3;
+
         private List<Token> tokens = new List<Token>();
         private int pos;
 
@@ -973,12 +976,41 @@ namespace Game
                 throw new ParseException("a `set` line joins a variable and a value with `to` — `set Score to 0`", line.Line);
             index++;
             node.Value = ReadValue(words, ref index, line.Line);
-            if (index < words.Count && words[index].Type == TokenType.Word && words[index].Text.Length == 1 &&
-                Array.IndexOf(MathOps, words[index].Text) >= 0)
+            // Task 29 Part A: up to three operators on one `set` line. One operator keeps the
+            // older SetNode.Op/Right shape, so every sheet written before this already reads
+            // exactly as it did; two or three collect into an ExpressionValue, which the
+            // runtime folds with `* /` before `+ -` (see Expressions.Fold).
+            var extraOps = new List<char>();
+            var extraValues = new List<ValueNode>();
+            while (index < words.Count && words[index].Type == TokenType.Word &&
+                   words[index].Text.Length == 1 && Array.IndexOf(MathOps, words[index].Text) >= 0)
             {
-                node.Op = words[index].Text[0];
+                if (extraOps.Count >= MaxSetOperators)
+                {
+                    string firstPart = Values.Describe(node.Value) + " " + extraOps[0] + " " +
+                                       Values.Describe(extraValues[0]);
+                    throw new ParseException(
+                        $"this line does {extraOps.Count + 1} calculations and I can read " +
+                        $"{MaxSetOperators} — split it in two: work out the first part on the " +
+                        $"line above, like `set running to {firstPart}`, then use `running` here",
+                        words[index].Line);
+                }
+                extraOps.Add(words[index].Text[0]);
                 index++;
-                node.Right = ReadValue(words, ref index, line.Line);
+                extraValues.Add(ReadValue(words, ref index, line.Line));
+            }
+            if (extraOps.Count == 1)
+            {
+                node.Op = extraOps[0];
+                node.Right = extraValues[0];
+            }
+            else if (extraOps.Count > 1)
+            {
+                var expression = new ExpressionValue { Line = line.Line };
+                expression.Parts.Add(node.Value);
+                expression.Parts.AddRange(extraValues);
+                expression.Ops.AddRange(extraOps);
+                node.Value = expression;
             }
             CheckEndOfLine(words, index, line.Line, node.Target.Owner.Length == 0
                 ? $"set {node.Target.Name} to <value>"

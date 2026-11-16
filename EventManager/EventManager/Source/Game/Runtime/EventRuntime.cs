@@ -1849,7 +1849,11 @@ namespace Game
 
         private void ExecuteSet(EventContext context, SetNode set)
         {
-            ValueBox value = context.Evaluate(set.Value);
+            // A two- or three-operator line (Task 29 Part A) folds through Expressions, which
+            // keeps `* /` ahead of `+ -` and the same text-joining rule as the one-op path below.
+            ValueBox value = set.Value is ExpressionValue expression
+                ? Expressions.Fold(expression, context.Evaluate)
+                : context.Evaluate(set.Value);
             bool healthTarget = IsOwnHealthTarget(context, set.Target);
             if (set.Op != '\0' && set.Right != null)
             {

@@ -251,6 +251,7 @@ namespace Game
             new WordEntry { Kind = "action", Word = "stop", Example = "stop this event" },
             new WordEntry { Kind = "action", Word = "send", Example = "send message \"die\"" },
             new WordEntry { Kind = "action", Word = "set", Example = "set Score to 0" },
+            new WordEntry { Kind = "action", Word = "set <var> to <a> op <b> op <c>", Example = "set my Damage to my Strength * 2 + 5", AltShape = "two or three operators on one line, `* /` before `+ -` · no parentheses, and a fourth operator asks you to split the line" },
             new WordEntry { Kind = "action", Word = "set", Example = "set text of ScoreLabel to Score" },
             new WordEntry { Kind = "action", Word = "set", Example = "set my control group to 1" },
             new WordEntry { Kind = "action", Word = "set", Example = "set light intensity to 2" },

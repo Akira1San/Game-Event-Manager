@@ -224,9 +224,15 @@ and reads 0, never a silent wrong number.
 
 ### Parts
 
-- [ ] **Part A — Expression parser.** Allow 2–3 operators per value with precedence
+- [x] **Part A — Expression parser.** Allow 2–3 operators per value with precedence
       (`* /` before `+ -`), keep unary minus and the existing one-op forms working, and reject
       anything longer with a friendly “split this line” error. Existing files must parse unchanged.
+      *Landed:* `set` reads up to three operators, folded by `Runtime/Expressions.cs` (`*` and `/`
+      first, then `+ -` left to right with the old text-join and divide-by-zero rules). One
+      operator keeps the previous `SetNode.Op`/`Right` shape, so every shipped `.events` file parses
+      exactly as before; two or three become an `ExpressionValue`. A fourth operator fails with
+      “split it in two” and shows the first half to keep. Parentheses stay parked with the rest of
+      Section 9.
 - [ ] **Part B — Numeric helpers.** `clamp`, `min`, `max`, `round`, `floor`, `ceil`, `abs`,
       `percent of`; all are value forms, usable anywhere a number is legal.
 - [ ] **Part C — Data lookup.** `field "<field>" of "<row>" in "<table>"`; the table prefix is the

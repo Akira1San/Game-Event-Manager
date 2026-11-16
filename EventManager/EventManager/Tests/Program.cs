@@ -274,6 +274,65 @@ var mathSet = (SetNode)scoring.Events[0].Body[0].Statement!;
 Check(mathSet.Value is VariableValue && mathSet.Op == '+' && mathSet.Right is NumberValue rn && rn.Value == 1,
       "`set Score to Score + 1` keeps the one-op math shape");
 
+// Task 29 Part A — two or three operators on one `set` line, with `* /` before `+ -`.
+var expressionParse = parser.Parse("when game starts\n  set Damage to my Strength * 2 + 5\n");
+var expressionSet = (SetNode)expressionParse.Events[0].Body[0].Statement!;
+var expressionValue = expressionSet.Value as ExpressionValue;
+Check(expressionValue != null && expressionValue.Parts.Count == 3 && expressionValue.Ops.Count == 2 &&
+      expressionValue.Ops[0] == '*' && expressionValue.Ops[1] == '+' && expressionSet.Op == '\0',
+      "`set Damage to my Strength * 2 + 5` becomes a three-part expression and leaves the one-op slot empty");
+var threeParse = parser.Parse("when game starts\n  set Damage to 1 + 2 * 3 - 4\n");
+var threeSet = (SetNode)threeParse.Events[0].Body[0].Statement!;
+Check(threeSet.Value is ExpressionValue threeValue && threeValue.Ops.Count == 3,
+      "three operators on one line still parse");
+string tooManyOps = null;
+try
+{
+    parser.Parse("when game starts\n  set Damage to 1 + 2 + 3 + 4 + 5\n");
+}
+catch (ParseException error)
+{
+    tooManyOps = error.Message;
+}
+Check(tooManyOps != null && tooManyOps.Contains("4 calculations") && tooManyOps.Contains("split it in two") &&
+      tooManyOps.Contains("set running to 1 + 2"),
+      "a fourth operator asks for the line to be split, pointing at the first half to keep");
+
+var expressionEngine = FreshEngine(new FakeWorld());
+expressionEngine.AddSheet(new GlobalHost(), parser.Parse(@"when game starts
+  set Strength to 10
+  set WeaponDamage to 3
+  set Damage to Strength * 2 + WeaponDamage
+  set Precedence to 2 + 3 * 4
+  set LeftToRight to 10 - 2 - 3
+  set ThreeOps to 1 + 2 * 3 - 4
+  set Dividing to 20 / 2 / 5
+  set Negated to Strength * -1 + 10
+  set Greeting to ""Gold: "" + Strength + ""!"""));
+expressionEngine.SessionStarted();
+expressionEngine.Tick(0);
+Check(expressionEngine.Variables.GetGlobal("Damage").AsNumber() == 23,
+      "`set Damage to Strength * 2 + WeaponDamage` reads 23 for strength 10 and weapon damage 3");
+Check(expressionEngine.Variables.GetGlobal("Precedence").AsNumber() == 14,
+      "`*` runs before `+` (2 + 3 * 4 = 14)");
+Check(expressionEngine.Variables.GetGlobal("LeftToRight").AsNumber() == 5,
+      "`+` and `-` stay left to right (10 - 2 - 3 = 5)");
+Check(expressionEngine.Variables.GetGlobal("ThreeOps").AsNumber() == 3,
+      "three operators mix precedence and left-to-right (1 + 2 * 3 - 4 = 3)");
+Check(expressionEngine.Variables.GetGlobal("Dividing").AsNumber() == 2,
+      "division stays left to right (20 / 2 / 5 = 2)");
+Check(expressionEngine.Variables.GetGlobal("Negated").AsNumber() == 0,
+      "a negative number inside an expression reads as unary minus (10 * -1 + 10 = 0)");
+Check(expressionEngine.Variables.GetGlobal("Greeting").AsText() == "Gold: 10!",
+      "a `+` with text on either side still joins the texts inside an expression");
+
+var divideByZeroEngine = FreshEngine(new FakeWorld());
+divideByZeroEngine.AddSheet(new GlobalHost(), parser.Parse("when game starts\n  set Ratio to 10 / 0 + 1\n"));
+divideByZeroEngine.SessionStarted();
+divideByZeroEngine.Tick(0);
+Check(divideByZeroEngine.Variables.GetGlobal("Ratio").AsNumber() == 1,
+      "dividing by zero reads 0 inside an expression, like the one-operator line");
+
 var hurt = parser.Parse("when me appears\n  add -1 to Lives\n  add Potion to my bag\n");
 var negative = (AddNode)hurt.Events[0].Body[0].Statement!;
 Check(negative.Amount is NumberValue av && av.Value == -1 && negative.Target.Name == "Lives",

@@ -393,7 +393,7 @@ Repeat prefab spawns get numbered names (`Hero`, `Hero 2`, …) so each copy sta
 targetable; the sheet keeps the asset name, so `send message` and name lookups still reach it.
 
 Runtime knobs are okay as a single **speed/value** word â€” no math expressions, no nesting math.
-`Score + 1` is *only* legal inside `set Score to Score + 1` (one-op form: `+ - * /`).
+`Score + 1` is *only* legal inside `set Score to Score + 1` (up to three operators, `+ - * /`).
 
 ### Physics-native movement (opt-in)
 
@@ -711,10 +711,12 @@ when message "damage" arrives
   add -(other's damage) to my health      # possessive read: the attacker's stat
 ```
 
-**Honest limits:** the math stays one-operator inside `set â€¦ to â€¦` â€” so an ARPG formula like
-`damage = weapon Ã— (1 + strength Ã· 10)` can't be written in v0.1. Compose it (messages and helper
-variables) or park richer math for later (Section 9); it stays a deliberate shape, not a hidden
-surprise.
+**Math, narrowed but real:** a `set ... to ...` line takes up to **three** operators with normal
+precedence (`* /` before `+ -`), so `set my damage to my strength * 2 + weapon damage` is one
+readable line (Task 29 Part A). Grouping is still parked: `weapon * (1 + strength / 10)` needs the
+sum in a helper variable on the line above, and a fourth operator is a friendly "split this line"
+error that names the first half to keep. Anything past that parks for Section 9 - a deliberate
+shape, not a hidden surprise.
 
 ### Point & click adventures (the composition showcase)
 
@@ -1086,9 +1088,9 @@ window around a broken runtime.
 - **Bag counts in text:** `my bag has Sword` handles "do I own one". "Give me the count"
   (`my bag count of Sword is higher than 2`) needs a value-expression â€” parked with the math
   rules until needed.
-- **Multi-op math:** `set damage to weapon * (1 + strength / 10)` is not v0.1 (one-op rule).
-  Parked: either a `formula` line or a slightly grown expression shape â€” decide when an actual
-  game needs it, don't pre-grow.
+- **Parentheses in math:** `set damage to weapon * (1 + strength / 10)` still can't be written -
+  `set` reads up to three operators with precedence (Task 29 Part A), but no grouping. Parked:
+  either a `formula` line or brackets in the value grammar - decide when an actual game needs it.
 - **XP level-up thresholds:** automatic "level up when XP crosses Level*100" needs multi-op
   math (same parking). For now: one `becomes` event per level cap, or a helper variable.
 - **Floating combat text:** damage numbers popping above hit actors are a nicety, not a gap

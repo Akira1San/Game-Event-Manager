@@ -47,6 +47,20 @@ namespace Game
     }
 
     /// <summary>
+    /// Two or three operators on one line — <c>my Strength * 2 + 5</c> (Task 29 Part A).
+    /// <see cref="Parts"/> holds the operands (one more than <see cref="Ops"/>) and
+    /// <see cref="Ops"/> the operators between them, in the order they were written. It stays
+    /// flat instead of nested so the runtime can apply precedence without the parser rebuilding
+    /// a tree; a single-operator line still uses <see cref="SetNode.Op"/> and
+    /// <see cref="SetNode.Right"/>, so nothing that already parsed changes shape.
+    /// </summary>
+    public class ExpressionValue : ValueNode
+    {
+        public List<ValueNode> Parts = new List<ValueNode>();
+        public List<char> Ops = new List<char>();
+    }
+
+    /// <summary>
     /// <c>format "Health: {0}/{1}"</c> — a template whose <c>{0}</c>, <c>{1}</c>, ...
     /// placeholders are filled from <see cref="Args"/>. Used by <c>bind ... format</c>.
     /// </summary>
@@ -103,6 +117,17 @@ namespace Game
                     return $"random {Describe(r.Min)} to {Describe(r.Max)}";
                 case MathValue m:
                     return $"{Describe(m.Left)} {m.Op} {Describe(m.Right)}";
+                case ExpressionValue e:
+                {
+                    var text = new System.Text.StringBuilder();
+                    for (int i = 0; i < e.Parts.Count; i++)
+                    {
+                        if (i > 0)
+                            text.Append(' ').Append(e.Ops[i - 1]).Append(' ');
+                        text.Append(Describe(e.Parts[i]));
+                    }
+                    return text.ToString();
+                }
                 case FormatValue f:
                     return $"format \"{f.Template}\"";
                 default:
