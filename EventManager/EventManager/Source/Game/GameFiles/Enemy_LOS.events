@@ -24,7 +24,7 @@ when me arrives at Waypoint
   my mode is "patrol"                        # don't hijack a hunt or chase
   my Speed is higher than 0
   wait random 0.5 to 2 seconds
-  goto random Waypoint speed 100
+  goto random Waypoint speed 100 facing forward
 
 when me sees player by my SightDistance
   set my mode to "chase"
@@ -42,7 +42,7 @@ when me stops seeing player
   my mode is "hunt"                          # still hunting (never reacquired)? back to patrol
   set my mode to "patrol"
   print "Enemy_LOS: hunt gave up, back to patrol"
-  goto random Waypoint speed 100             # a mode flag alone would leave it standing still
+  goto random Waypoint speed 100 facing forward           # a mode flag alone would leave it standing still
 
 when every 0.5 seconds
   my mode is "hunt"
@@ -53,7 +53,7 @@ when every 0.5 seconds
 when every 0.02 seconds
   my mode is "chase"
   my Speed is higher than 0                  # a rooted type stays still
-  move toward player speed 60
+  move toward player speed 60 facing forward
 
 when me is near player by 1.5
   my mode is "chase"

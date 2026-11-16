@@ -234,6 +234,32 @@ namespace Game
         }
 
         /// <summary>
+        /// The furthest one movement tick may travel, in engine units (cm). A normal frame at
+        /// 60 fps and speed 100 moves about 1.7 units, so this cap never touches ordinary motion —
+        /// it only stops one hitched frame from turning into a visible lurch (or a jump across a
+        /// wall). See <see cref="MoveStep"/>.
+        /// </summary>
+        public const double MaxStepPerTick = 8.0;
+
+        /// <summary>
+        /// One tick's signed travel distance: <c>speed × deltaTime</c>, clamped to
+        /// ±<paramref name="maxStep"/>. A frame hitch (or a paused window) would otherwise multiply
+        /// the per-frame distance by the hitch length and teleport the body.
+        /// </summary>
+        public static double MoveStep(double speed, double deltaTime, double maxStep = MaxStepPerTick)
+        {
+            double step = speed * Math.Max(0.0, deltaTime);
+            if (maxStep > 0)
+            {
+                if (step > maxStep)
+                    step = maxStep;
+                else if (step < -maxStep)
+                    step = -maxStep;
+            }
+            return step;
+        }
+
+        /// <summary>
         /// Whether this tick's movement reaches (or overshoots) the current path waypoint.
         /// Transform moves snap on this; physics bodies land exactly instead of being teleported.
         /// </summary>

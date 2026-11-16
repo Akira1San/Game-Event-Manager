@@ -27,7 +27,7 @@ when me arrives at Waypoint
   my mode is "patrol"                        # don't hijack a hunt or chase
   my Speed is higher than 0
   wait random 0.5 to 2 seconds
-  goto random Waypoint speed 100
+  goto random Waypoint speed 100 facing forward
 
 when me sees player by my SightDistance
   set my mode to "chase"
@@ -47,7 +47,7 @@ when me stops seeing player
   my mode is "hunt"                          # still hunting? back to patrol
   set my mode to "patrol"
   print "Enemy_Walls: hunt gave up, back to patrol"
-  goto random Waypoint speed 100
+  goto random Waypoint speed 100 facing forward
 
 # G1's blind arc: not pathfinding, a sweep that reacquires the moment a ray clears.
 when every 0.5 seconds
@@ -60,7 +60,7 @@ when every 0.02 seconds
   my mode is not "patrol"
   my mode is not "hunt"
   my Speed is higher than 0                  # a rooted type stays still
-  move toward player speed 60 around walls
+  move toward player speed 60 around walls facing forward
 
 when me is near player by 1.5
   my mode is "chase"

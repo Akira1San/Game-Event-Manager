@@ -714,6 +714,49 @@ stuck force-sampling and reset, tangent + flip, blind fan ray cap, clear/reset, 
 **Out of scope:** agent-to-agent avoidance, separation/flocking, and full local pathfinding.
 Variant 2 (waypoint graph) and NavMesh `goto` remain the answers for corridors and long routes.
 
+### Part G2 follow-up — facing, body spacing and the jumping body (2026-11-16) `[x]`
+Reported during the G2 editor chase: two chasers wedged on each other, their bodies slid sideways
+instead of facing the way they walked, and the body occasionally **jumped** — onto the player or to
+the far side of the wall when it was stuck against one. Four separate causes, all fixed:
+
+- **Facing.** `move toward` gained the same opt-in `facing forward` qualifier `goto`/`wander` use:
+  `move toward <thing> [speed <n>] [around walls] [facing forward]`. The bridge turns the body with
+  `LookAt` onto the **steered** heading it actually walks (Y flattened, so a chase never tips the
+  model into the floor). `ActionSpec.FaceForward` doc updated; `Enemy_Walls.events`/`Enemy_LOS.events`
+  chases and their patrol `goto`s now request it.
+- **Wedging.** Character colliders are no longer walls for a chase. `StepBlocked` gained
+  `ignoreCharacters` (only `move toward` sets it) and `WallAhead` always skips character bodies, so
+  two chasers pass each other instead of locking up; a character = a collider whose owner/ancestor
+  has an `EventSheet`. Spacing is the new pure `Runtime/Separation.cs`: neighbours inside
+  `radius + neighbourRadius + Gap` (6 cm) push the heading by the component **perpendicular** to the
+  chase (a sidestep, never a reversal), nothing behind the actor reacts, weight grows with overlap,
+  and two bodies on the exact same spot separate deterministically toward the actor's right. The
+  bridge gathers neighbours (`World.Actors()`, skipping self/children and the chase target so melee
+  still reaches) and blends with `Separation.BlendHeading` (0.8 max bend, result normalized) — a lone
+  chaser's heading is byte-for-byte unchanged.
+- **Jump 1: hitched frames.** `EventsManager` feeds the raw `Time.DeltaTime` with no cap, so one
+  hitched or paused frame multiplied the per-tick step and teleported the body. New
+  `PhysicsMovement.MaxStepPerTick` (8 cm) + `MoveStep(speed, dt, max)`, used by every `MoveSubject`
+  mode (physics velocity, swept move or transform).
+- **Jump 2: a step that skipped a wall.** Transform moves are now sub-stepped in slices of half the
+  collider's smallest half-extent and probed slice by slice, so one long frame step cannot cross a
+  thin wall between two ray ends. `StepBlocked` also measures the collider's extent **along the
+  heading** (support distance of the box) instead of its widest half-extent, so the body hugs a wall
+  it walks at and stops at the surface. Finally `ArriveAt` snaps transform arrivals to the last
+  **path** point (fallbacks `PositionTarget`, `Target.Position`) — it used to snap blindly to the
+  target actor's origin, which for a waypoint at Y=0 (or a `goto <thing>` leg) read as a jump.
+
+**Temporary diagnostics:** two `[jump]` `Debug.Log` lines remain — one in `MoveSubject` when a
+frame step is clamped, one in `ArriveAt` when the arrival snap exceeds 2 units. Remove them once the
+editor run is clean; they exist to name the cause of any leftover jump instead of guessing.
+
+**Tests:** 19 new checks (both qualifiers and their fixed order, `facing forward` opt-in on `move
+toward` only, separation range/perpendicularity/behind/stack/weight/blend, `MoveStep` normal + both
+clamps + zero dt, both shipped sheets chasing with `facing forward`) → **1359/1359 green**. Module
+build: 0 errors (the same 7 pre-existing XML-doc warnings). **Editor play check still yours:** two
+chasers no longer wedge, bodies face travel on the chase and on patrol, no wall crossing or landing
+on the player, no lurch on a frame hitch, and the `[jump]` log stays quiet.
+
 ### Part G3 — Arcade lane enemy (Double Dragon / Contra style) `[ ]`
 Goal: an arcade-floor enemy with none of the top-down machinery — no NavMesh, no raycasts, no
 waypoints. Enemies walk straight at the player, swing on contact, die; a spawner refills the lane

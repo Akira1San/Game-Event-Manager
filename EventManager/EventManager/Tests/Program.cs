@@ -7693,6 +7693,129 @@ foreach (var wallsEvent in wallsProgram.Events)
 Check(wallsProgram.Events.Count == 7 && wallsChaseBlocks == 1 && wallsChaseUsesQualifier,
     "Enemy_Walls.events parses and its chase is the wall-aware move");
 
+// ---- Task 7 G2 follow-up: facing, character spacing and hitched-frame movement ----
+
+// `facing forward` is the second opt-in qualifier on the same chase, after `around walls`.
+var wallsFaceSpec = ActionWords.Parse(
+    RawWords(parser, "when me appears\n  move toward player speed 60 around walls facing forward\n"), _ => { });
+Check(wallsFaceSpec.Verb == ActionVerb.Move && wallsFaceSpec.Thing == "player" &&
+      wallsFaceSpec.AroundWalls && wallsFaceSpec.FaceForward &&
+      wallsFaceSpec.HasNumber && Math.Abs(wallsFaceSpec.Number - 60) < 0.0001 &&
+      wallsFaceSpec.Leftover.Count == 0,
+    "`move toward player speed 60 around walls facing forward` parses both qualifiers");
+
+var faceDefaultSpeed = ActionWords.Parse(
+    RawWords(parser, "when me appears\n  move toward player facing forward\n"), _ => { });
+Check(faceDefaultSpeed.FaceForward && faceDefaultSpeed.HasNumber &&
+      Math.Abs(faceDefaultSpeed.Number - 5) < 0.0001 &&
+      !faceDefaultSpeed.AroundWalls && faceDefaultSpeed.Leftover.Count == 0,
+    "`facing forward` alone keeps the default speed and the straight line");
+
+var faceStraight = ActionWords.Parse(
+    RawWords(parser, "when me appears\n  move toward player speed 60 facing forward\n"), _ => { });
+Check(faceStraight.FaceForward && !faceStraight.AroundWalls &&
+      Math.Abs(faceStraight.Number - 60) < 0.0001 && faceStraight.Leftover.Count == 0,
+    "`move toward ... speed 60 facing forward` faces the walk without wall steering");
+
+var plainMove = ActionWords.Parse(
+    RawWords(parser, "when me appears\n  move forward speed 5\n"), _ => { });
+Check(!plainMove.FaceForward && plainMove.Verb == ActionVerb.Move,
+    "`facing forward` stays opt-in - a plain move does not turn the body");
+
+var faceThenWalls = ActionWords.Parse(
+    RawWords(parser, "when me appears\n  move toward player facing forward around walls\n"), _ => { });
+Check(faceThenWalls.FaceForward && !faceThenWalls.AroundWalls && faceThenWalls.Leftover.Count > 0,
+    "the qualifier order is fixed: `facing forward` comes after `around walls`");
+
+// Separation: two bodies only react inside radius + neighbourRadius + Gap.
+var farNeighbour = new List<SeparationNeighbour>
+{
+    new SeparationNeighbour { X = 100, Z = 0, Radius = 1 },
+};
+Check(!Separation.Push(0, 0, 1, farNeighbour, 1, 0, out _, out _, out _),
+    "a neighbour outside radius + radius + gap produces no push");
+Check(!Separation.Push(0, 0, 1, null, 1, 0, out _, out _, out _),
+    "no neighbours means no push");
+
+// Dead ahead: the escape is sideways, never a reversal.
+var aheadNeighbour = new List<SeparationNeighbour>
+{
+    new SeparationNeighbour { X = 5, Z = 0, Radius = 1 },
+};
+bool aheadPush = Separation.Push(0, 0, 1, aheadNeighbour, 1, 0,
+    out double aheadPushX, out double aheadPushZ, out double aheadWeight);
+Check(aheadPush && Math.Abs(aheadPushX) < 0.001 && Math.Abs(aheadPushZ + 1) < 0.001 &&
+      aheadWeight > 0 && aheadWeight < 1,
+    "a neighbour dead ahead pushes exactly sideways (the actor sidesteps, never reverses)");
+
+// A neighbour off to one side pushes away from it; weight grows as the overlap deepens.
+var sideNeighbour = new List<SeparationNeighbour>
+{
+    new SeparationNeighbour { X = 5, Z = 3, Radius = 1 },
+};
+bool sidePush = Separation.Push(0, 0, 1, sideNeighbour, 1, 0,
+    out double sidePushX, out double sidePushZ, out double sideWeight);
+Check(sidePush && Math.Abs(sidePushX) < 0.001 && sidePushZ < -0.9,
+    "a neighbour ahead-and-to-the-side pushes to the opposite side");
+
+var touchingNeighbour = new List<SeparationNeighbour>
+{
+    new SeparationNeighbour { X = 2, Z = 0, Radius = 1 },
+};
+Separation.Push(0, 0, 1, touchingNeighbour, 1, 0, out _, out _, out double touchWeight);
+Check(touchWeight > sideWeight && touchWeight <= 1.0,
+    "the push weight grows as the overlap deepens and never exceeds 1");
+
+var behindNeighbour = new List<SeparationNeighbour>
+{
+    new SeparationNeighbour { X = -5, Z = 0, Radius = 1 },
+};
+Check(!Separation.Push(0, 0, 1, behindNeighbour, 1, 0, out _, out _, out _),
+    "a neighbour already behind the actor produces nothing (no reversing)");
+
+var stackedNeighbour = new List<SeparationNeighbour>
+{
+    new SeparationNeighbour { X = 0, Z = 0, Radius = 1 },
+};
+bool stackedPush = Separation.Push(0, 0, 1, stackedNeighbour, 0, 1,
+    out double stackedPushX, out double stackedPushZ, out _);
+Check(stackedPush && Math.Abs(stackedPushX - 1) < 0.001 && Math.Abs(stackedPushZ) < 0.001,
+    "two bodies on the exact same spot separate deterministically toward the actor's right");
+
+// BlendHeading: zero push is byte-for-byte unchanged, any push stays a unit heading.
+Separation.BlendHeading(1, 0, 0, 1, 0, out double untouchedX, out double untouchedZ);
+Check(Math.Abs(untouchedX - 1) < 1e-9 && Math.Abs(untouchedZ) < 1e-9,
+    "a zero-weight push leaves the walk heading exactly as it was");
+Separation.BlendHeading(1, 0, 0, 1, 1, out double blendedX, out double blendedZ);
+Check(Math.Abs(Math.Sqrt(blendedX * blendedX + blendedZ * blendedZ) - 1) < 1e-9 &&
+      blendedX > 0.7 && blendedZ > 0.5 && blendedX < 1,
+    "a full-weight push bends the heading sideways and keeps it normalized");
+
+// MoveStep: a normal frame is untouched, a hitch is clamped in both directions.
+Check(Math.Abs(PhysicsMovement.MoveStep(100, 0.016) - 1.6) < 1e-9,
+    "an ordinary frame's step is speed x deltaTime");
+Check(Math.Abs(PhysicsMovement.MoveStep(100, 1.0) - PhysicsMovement.MaxStepPerTick) < 1e-9,
+    "a hitched frame is clamped to the per-tick cap");
+Check(Math.Abs(PhysicsMovement.MoveStep(-100, 1.0) + PhysicsMovement.MaxStepPerTick) < 1e-9,
+    "a negative (reverse) step is clamped too");
+Check(PhysicsMovement.MoveStep(100, 0) == 0 && PhysicsMovement.MoveStep(100, -1) == 0,
+    "no time (or a negative delta) moves nothing");
+
+// Both shipped chases ask for the body to face its walk.
+static bool ChaseFacesForward(ProgramFile program)
+{
+    foreach (var chaseEvent in program.Events)
+        foreach (var chaseLine in chaseEvent.Body)
+            if (chaseLine.Words.Count >= 2 && chaseLine.Words[0].Text == "move" &&
+                chaseLine.Words[1].Text == "toward" &&
+                !chaseLine.Words.Any(word => word.Text == "forward"))
+                return false;
+    return true;
+}
+var losChaseProgram = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Enemy_LOS.events"));
+Check(ChaseFacesForward(wallsProgram) && ChaseFacesForward(losChaseProgram),
+    "both enemy sheets chase with `facing forward`");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

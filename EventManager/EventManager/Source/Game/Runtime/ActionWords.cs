@@ -104,6 +104,8 @@ namespace Game
         public string Dir = "";
         public double Number;
         public bool HasNumber;
+        /// <summary><c>facing forward</c>: turn the body onto the heading it walks. A <c>goto</c>
+        /// qualifier, and since the G2 follow-up also a <c>move toward</c> one.</summary>
         public bool FaceForward;
         public ValueNode AmountNode;
         public List<Token> Leftover = new List<Token>();
@@ -1287,6 +1289,16 @@ namespace Game
                         words[afterThing].Text == "around" && words[afterThing + 1].Text == "walls")
                     {
                         spec.AroundWalls = true;
+                        afterThing += 2;
+                    }
+                    // `facing forward` (Task 7 G2 follow-up): turn the body onto the heading this
+                    // chase actually walks, so a chaser never slides sideways at the player. Same
+                    // qualifier `goto` uses; the order is `move toward X [speed n] [around walls]
+                    // [facing forward]`.
+                    if (words.Count >= afterThing + 2 &&
+                        words[afterThing].Text == "facing" && words[afterThing + 1].Text == "forward")
+                    {
+                        spec.FaceForward = true;
                         afterThing += 2;
                     }
                     return Finish(spec, ActionVerb.Move, words, afterThing);

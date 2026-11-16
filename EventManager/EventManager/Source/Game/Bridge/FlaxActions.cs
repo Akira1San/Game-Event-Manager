@@ -611,14 +611,13 @@ namespace Game
                         if (target != null)
                         {
                             double speed = ResolveNumber(context, spec);
+                            Vector3 heading;
                             if (spec.AroundWalls)
                             {
                                 // `move toward <thing> ... around walls` (Task 7 G2): steer around
                                 // what blocks the chase. One probe while clear; a short fan or a
                                 // wall tangent only when it is blocked.
-                                Vector3 steered = SteerAroundWalls(context, me, target, speed);
-                                if (steered != Vector3.Zero)
-                                    MoveSubject(me, steered, speed, mode);
+                                heading = SteerAroundWalls(context, me, target, speed);
                             }
                             else
                             {
@@ -626,8 +625,16 @@ namespace Game
                                 context.Runtime.Steering.Clear(me);
                                 Vector3 delta = target.Position - me.Position;
                                 float length = delta.Length;
-                                if (length > 0.001f)
-                                    MoveSubject(me, delta / length, speed, mode);
+                                heading = length > 0.001f ? delta / length : Vector3.Zero;
+                            }
+                            if (heading != Vector3.Zero)
+                            {
+                                // Other bodies are not walls for a chase (two enemies used to
+                                // wedge); space them with a small sidestep instead.
+                                heading = NudgeAroundNeighbours(context, me, target, heading);
+                                MoveSubject(me, heading, speed, mode, ignoreCharacters: true);
+                                if (spec.FaceForward)
+                                    FaceHeading(me, heading);
                             }
                         }
                         else
@@ -1359,38 +1366,65 @@ namespace Game
         private static bool TryColliderFootprint(Actor actor, out float radius, out float centreY)
         {
             radius = 0f;
-            centreY = 0f;
-            if (actor == null)
+            if (!TryColliderExtents(actor, out float halfX, out float halfZ, out centreY))
                 return false;
-            GatherCollider(actor, ref radius, ref centreY);
+            radius = Math.Max(halfX, halfZ);
             return radius > 0f;
         }
 
-        private static void GatherCollider(Actor node, ref float radius, ref float centreY)
+        /// <summary>
+        /// The two horizontal half-extents of an actor's widest collider. A heading only needs the
+        /// extent it travels along (the support distance of the box), so the body stops at the wall
+        /// it is actually facing instead of hovering a half-width away on its narrow side.
+        /// </summary>
+        private static bool TryColliderExtents(Actor actor, out float halfX, out float halfZ, out float centreY)
+        {
+            halfX = 0f;
+            halfZ = 0f;
+            centreY = 0f;
+            if (actor == null)
+                return false;
+            GatherCollider(actor, ref halfX, ref halfZ, ref centreY);
+            return halfX > 0f || halfZ > 0f;
+        }
+
+        private static void GatherCollider(Actor node, ref float halfX, ref float halfZ, ref float centreY)
         {
             if (node == null || !node.IsActive)
                 return;
             if (node is BoxCollider box)
             {
-                float halfWidth = Math.Max(Math.Abs(box.Size.X * node.Scale.X), Math.Abs(box.Size.Z * node.Scale.Z)) * 0.5f;
-                if (halfWidth > radius)
+                float boxX = Math.Abs(box.Size.X * node.Scale.X) * 0.5f;
+                float boxZ = Math.Abs(box.Size.Z * node.Scale.Z) * 0.5f;
+                if (Math.Max(boxX, boxZ) > Math.Max(halfX, halfZ))
                 {
-                    radius = halfWidth;
                     float localY = node.Parent == null ? 0f : node.Position.Y - node.Parent.Position.Y;
                     centreY = localY + box.Center.Y * node.Scale.Y;
                 }
+                if (boxX > halfX)
+                    halfX = boxX;
+                if (boxZ > halfZ)
+                    halfZ = boxZ;
             }
             else if (node is SphereCollider sphere)
             {
                 float sphereRadius = Math.Abs(sphere.Radius * node.Scale.X);
-                if (sphereRadius > radius)
-                {
-                    radius = sphereRadius;
+                if (sphereRadius > Math.Max(halfX, halfZ))
                     centreY = node.Parent == null ? 0f : node.Position.Y - node.Parent.Position.Y;
-                }
+                if (sphereRadius > halfX)
+                    halfX = sphereRadius;
+                if (sphereRadius > halfZ)
+                    halfZ = sphereRadius;
             }
             foreach (Actor child in node.Children)
-                GatherCollider(child, ref radius, ref centreY);
+                GatherCollider(child, ref halfX, ref halfZ, ref centreY);
+        }
+
+        /// <summary>Distance from the collider's middle to its surface along a ground heading
+        /// (the support function of the box).</summary>
+        private static float ExtentAlong(float halfX, float halfZ, Vector3 heading)
+        {
+            return Math.Abs(heading.X) * halfX + Math.Abs(heading.Z) * halfZ;
         }
 
         /// <summary>The point a wall probe should start from: the middle of the actor's collider.</summary>
@@ -1404,28 +1438,52 @@ namespace Game
         /// <summary>
         /// True when a transform step of <paramref name="step"/> along <paramref name="direction"/>
         /// would push the actor's own collider into something solid. Actors without a collider are
-        /// never blocked (nothing of theirs can intersect); the step is measured from the collider's
-        /// centre and includes its radius, so the box stops at the wall instead of overlapping it.
+        /// never blocked (nothing of theirs can intersect). The probe starts at the collider's
+        /// middle and adds the extent the box presents **along that heading**, so a long-sided box
+        /// stops at the wall instead of hovering a half-width away. Character colliders are ignored
+        /// when <paramref name="ignoreCharacters"/> is set (the wall-aware chase), which is what
+        /// lets two chasers pass each other instead of wedging; <see cref="Separation"/> then keeps
+        /// them spaced.
         /// </summary>
-        private static bool StepBlocked(Actor actor, Vector3 direction, float step)
+        private static bool StepBlocked(Actor actor, Vector3 direction, float step, bool ignoreCharacters = false)
         {
-            if (!TryColliderFootprint(actor, out float radius, out _))
+            if (!TryColliderExtents(actor, out float halfX, out float halfZ, out _))
                 return false;
             var heading = new Vector3(direction.X, 0f, direction.Z);
             if (heading.LengthSquared < 1e-6f)
                 return false;
             heading = Vector3.Normalize(heading);
+            float extent = ExtentAlong(halfX, halfZ, heading);
             Vector3 start = ColliderCastPoint(actor);
-            if (!Physics.LineCastAll(start, start + heading * (step + radius), out var hits, ~0u, true))
+            if (!Physics.LineCastAll(start, start + heading * (step + extent), out var hits, ~0u, true))
                 return false;
             foreach (var hit in hits)
             {
                 var hitActor = hit.Collider as Actor;
                 if (hitActor == null)
                     return true; // geometry without an actor (terrain, a static collider, ...)
-                if (!ReferenceEquals(hitActor, actor) && !IsAncestorOrSelf(actor, hitActor))
-                    return true;
+                if (IsAncestorOrSelf(actor, hitActor))
+                    continue; // the mover's own collider (or a child's)
+                if (ignoreCharacters && IsCharacterActor(hitActor))
+                    continue; // another character: spacing is Separation's job, not a wall
+                return true;
             }
+            return false;
+        }
+
+        /// <summary>
+        /// True when a collider belongs to an event-driven actor (anything with an EventSheet on it
+        /// or an ancestor) rather than to world geometry like the floor or a wall. Used to keep a
+        /// chase from treating other bodies as walls.
+        /// </summary>
+        private static bool IsCharacterActor(Actor colliderActor)
+        {
+            EventRuntime runtime = EventsManager.Instance?.Runtime;
+            if (runtime == null)
+                return false;
+            for (Actor node = colliderActor; node != null && !(node is Scene); node = node.Parent)
+                if (runtime.FindSheetFor(node) != null)
+                    return true;
             return false;
         }
 
@@ -1474,9 +1532,16 @@ namespace Game
             return false;
         }
 
-        private static void MoveSubject(Actor subject, Vector3 direction, double speed, PhysicsMoveMode mode)
+        private static void MoveSubject(Actor subject, Vector3 direction, double speed, PhysicsMoveMode mode,
+            bool ignoreCharacters = false)
         {
-            float step = (float)speed * DeltaTime;
+            double wanted = speed * DeltaTime;
+            float step = (float)PhysicsMovement.MoveStep(speed, DeltaTime);
+            // A hitched (or paused) frame used to multiply the step by the hitch length, which
+            // reads as a body lurching or jumping through a wall. Log it once per hitch so a jump
+            // in the editor can be traced to a frame spike instead of guessed at.
+            if (Math.Abs(wanted) > PhysicsMovement.MaxStepPerTick && Math.Abs(step) > 0.001f)
+                Debug.Log($"[jump] \"{subject.Name}\" frame step clamped: wanted {wanted:0.###} at {speed:0.###} speed, dt {DeltaTime:0.###} s.");
             // Terrain (Task 22 Part B): a unit never steps onto ground its own type cannot cross.
             // Checked for every mode, before the body is told to move.
             if (TerrainBlocksStep(subject, subject.Position + direction * step))
@@ -1534,10 +1599,74 @@ namespace Game
                     // actor would end up inside the wall (and a RigidBody under it would be
                     // ejected with a spin). Stop at the surface instead; the owner (`wander`,
                     // `goto`) re-aims on its next tick, so it walks away rather than through.
-                    if (!StepBlocked(subject, direction, step))
-                        subject.Position = subject.Position + direction * step;
+                    MoveTransformStep(subject, direction, step, ignoreCharacters);
                     break;
             }
+        }
+
+        /// <summary>
+        /// One transform move, split into slices no longer than the collider's smallest half-extent
+        /// and probed slice by slice. A single long step could otherwise cross a thin wall between
+        /// two frames — the ray only proves the *end* of the step, not the gap it skipped over.
+        /// </summary>
+        private static void MoveTransformStep(Actor subject, Vector3 direction, float step, bool ignoreCharacters)
+        {
+            if (Math.Abs(step) < 1e-6f)
+                return;
+            TryColliderExtents(subject, out float halfX, out float halfZ, out _);
+            float smallest = halfX > 0f && halfZ > 0f ? Math.Min(halfX, halfZ) : Math.Max(halfX, halfZ);
+            float slice = Math.Max(1f, smallest * 0.5f);
+            int slices = Math.Max(1, (int)Math.Ceiling(Math.Abs(step) / slice));
+            float piece = step / slices;
+            for (int i = 0; i < slices; i++)
+            {
+                if (StepBlocked(subject, direction, piece, ignoreCharacters))
+                    return;
+                subject.Position = subject.Position + direction * piece;
+            }
+        }
+
+        /// <summary>Turn a body onto the heading it is walking (the `facing forward` qualifier
+        /// added to `move toward`). Flattened, so a chase never tips the model into the floor.</summary>
+        private static void FaceHeading(Actor actor, Vector3 heading)
+        {
+            var flat = new Vector3(heading.X, 0f, heading.Z);
+            if (flat.LengthSquared < 1e-6f)
+                return;
+            actor.LookAt(actor.Position + flat);
+        }
+
+        /// <summary>
+        /// Bends a chase heading away from nearby bodies (Task 7 G2 follow-up). Movement no longer
+        /// treats characters as walls, so without this two chasers would stack on one spot — or,
+        /// before that change, wedge against each other. The rule itself is pure
+        /// (<see cref="Separation"/>); this only gathers the neighbours, skipping the chaser, its
+        /// children and the thing it is chasing (an attacker still has to reach melee range).
+        /// </summary>
+        private static Vector3 NudgeAroundNeighbours(EventContext context, Actor me, Actor target, Vector3 heading)
+        {
+            IReadOnlyList<object> actors = context.Runtime.World.Actors();
+            if (actors == null || actors.Count == 0)
+                return heading;
+            TryColliderFootprint(me, out float myRadius, out _);
+            var neighbours = new List<SeparationNeighbour>();
+            foreach (object item in actors)
+            {
+                if (!(item is Actor other) || other == null || other.Scene == null)
+                    continue;
+                if (ReferenceEquals(other, me) || IsAncestorOrSelf(me, other))
+                    continue;
+                if (target != null && (ReferenceEquals(other, target) || IsAncestorOrSelf(target, other)))
+                    continue;
+                if (!TryColliderFootprint(other, out float radius, out _))
+                    continue;
+                neighbours.Add(new SeparationNeighbour { X = other.Position.X, Z = other.Position.Z, Radius = radius });
+            }
+            if (!Separation.Push(me.Position.X, me.Position.Z, myRadius, neighbours,
+                    heading.X, heading.Z, out double pushX, out double pushZ, out double weight))
+                return heading;
+            Separation.BlendHeading(heading.X, heading.Z, pushX, pushZ, weight, out double x, out double z);
+            return new Vector3((float)x, 0f, (float)z);
         }
 
         /// <summary>
@@ -1605,9 +1734,9 @@ namespace Game
         }
 
         /// <summary>
-        /// One horizontal probe from the actor's collider centre. True when something that is
-        /// neither the actor (or its children) nor the chase target (or its children) is in the
-        /// way; <paramref name="normal"/> is the surface that blocked it, for the tangent fallback.
+        /// One horizontal probe from the actor's collider centre. True when world geometry (not
+        /// the actor, its children, the chase target or another character body) is in the way;
+        /// <paramref name="normal"/> is the surface that blocked it, for the tangent fallback.
         /// </summary>
         private static bool WallAhead(
             Actor me, Actor ignore, Vector3 heading, float distance, out Vector3 normal)
@@ -1632,6 +1761,8 @@ namespace Game
                     continue; // the chaser's own collider (or a child's)
                 if (ignore != null && IsAncestorOrSelf(ignore, hitActor))
                     continue; // the target is not a wall
+                if (IsCharacterActor(hitActor))
+                    continue; // another body: separation handles it, steering only rounds geometry
                 normal = hit.Normal;
                 return true;
             }
@@ -1810,11 +1941,26 @@ namespace Game
         private static void ArriveAt(OngoingMove move)
         {
             if (move.UsesPhysics)
+            {
                 BrakeBody(move.Subject);
-            else if (move.Target != null)
-                move.Subject.Position = move.Target.Position;
+                return;
+            }
+            // Snap to the point the path actually ended on, never to the target actor's origin:
+            // a waypoint sitting at Y=0 is not the ground the leg walked to, and `goto <thing>`
+            // must not copy the target's exact position just because its last leg finished.
+            Vector3 destination;
+            if (move.Path != null && move.Path.Length > 0)
+                destination = move.Path[move.Path.Length - 1];
             else if (move.HasPositionTarget)
-                move.Subject.Position = move.PositionTarget;
+                destination = move.PositionTarget;
+            else if (move.Target != null)
+                destination = move.Target.Position;
+            else
+                return;
+            float jump = (destination - move.Subject.Position).Length;
+            if (jump > 2f)
+                Debug.Log($"[jump] \"{move.Subject.Name}\" arrival snapped {jump:0.#} units onto the end of its path.");
+            move.Subject.Position = destination;
         }
 
         /// <summary>Push an arrives-at-something signal to the subject's sheet(s), used by
