@@ -321,6 +321,45 @@ namespace Game
         }
 
         /// <summary>
+        /// Default take-off speed for <c>jump</c> (cm/s). With Flax gravity (981 cm/s²) it peaks
+        /// about 62 cm up and lands again in roughly 0.7 s — a crate, not a moon jump.
+        /// </summary>
+        public const double DefaultJumpStrength = 350.0;
+
+        /// <summary>Slowest take-off worth applying, so `jump strength -5` cannot launch nothing
+        /// while still counting as a jump.</summary>
+        public const double MinJumpStrength = 20.0;
+
+        /// <summary>Take-off velocity: the authored strength, floored at
+        /// <see cref="MinJumpStrength"/>.</summary>
+        public static double JumpVelocity(double strength)
+            => Math.Max(MinJumpStrength, strength);
+
+        /// <summary>
+        /// One tick of a scripted jump arc (an actor with no physics body): rise while the upward
+        /// speed lasts, fall under gravity, land at height 0. The step moves by the pre-gravity
+        /// speed — the same semi-implicit Euler the bodies get — so both paths look alike, and the
+        /// height is measured from the take-off point rather than the world floor.
+        /// </summary>
+        public static void JumpStep(
+            double height, double velocityY, double gravity, double deltaTime,
+            out double newHeight, out double newVelocityY)
+        {
+            double dt = Math.Max(0.0, deltaTime);
+            newVelocityY = velocityY - Math.Max(0.0, gravity) * dt;
+            newHeight = height + velocityY * dt;
+            if (newHeight <= 0.0)
+            {
+                newHeight = 0.0;
+                newVelocityY = 0.0;
+            }
+        }
+
+        /// <summary>True once a scripted jump has come back down to its take-off height.</summary>
+        public static bool JumpLanded(double height, double velocityY)
+            => height <= 0.0 && velocityY <= 0.0;
+
+        /// <summary>
         /// One tick of character motion with gravity and ground contact. Horizontal movement only
         /// applies while grounded (no air steering); airborne ticks fall straight down. An
         /// explicit up/down move (<paramref name="directionY"/> ≠ 0) still wins over gravity, so

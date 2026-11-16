@@ -23,6 +23,11 @@ namespace Game
         /// <summary>True when <paramref name="actor"/> is actively moving this tick (an ongoing
         /// <c>goto</c>/<c>face</c> move, or a <c>move</c> word that ran this tick).</summary>
         bool IsMoving(object actor);
+        /// <summary>True when <paramref name="actor"/> is standing on walkable ground this tick:
+        /// the character ground probe for a CharacterController, a short downward ray for any
+        /// other body, and false while a `jump` is still in the air. Backs `me is on ground` /
+        /// `me is airborne` (Task 7 G4 phase 3).</summary>
+        bool IsOnGround(object actor);
         /// <summary>The physics-material name of <paramref name="actor"/>'s collider (e.g.
         /// "Grass", "Stone"), or empty when it has no collider or no material assigned.</summary>
         string MaterialOf(object actor);
@@ -138,6 +143,13 @@ namespace Game
         public bool IsMoving(object actor)
         {
             return false;
+        }
+
+        public bool IsOnGround(object actor)
+        {
+            // A world with no physics cannot answer, so it reports grounded — an on-ground gate
+            // then behaves like a plain "is this thing there" instead of blocking the sheet.
+            return true;
         }
 
         public string MaterialOf(object actor)

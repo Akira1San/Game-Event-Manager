@@ -16,6 +16,9 @@ namespace Game
         Chance,
         Near,
         Moving,
+        /// <summary>`me is on ground` / `me is airborne` (Task 7 G4 phase 3).</summary>
+        OnGround,
+        Airborne,
         // Hearing (Task 16 Part B)
         Hears,
         // Typed enemies (Task 16 Part D)
@@ -121,6 +124,19 @@ namespace Game
             if (texts.Length == 3 && texts[0] == "me" && texts[1] == "is" && texts[2] == "moving")
             {
                 node.Kind = ConditionKind.Moving;
+                return node;
+            }
+
+            // `me is on ground` / `me is airborne` — the jump's gate (Task 7 G4 phase 3).
+            if (texts.Length == 4 && texts[0] == "me" && texts[1] == "is" &&
+                texts[2] == "on" && texts[3] == "ground")
+            {
+                node.Kind = ConditionKind.OnGround;
+                return node;
+            }
+            if (texts.Length == 3 && texts[0] == "me" && texts[1] == "is" && texts[2] == "airborne")
+            {
+                node.Kind = ConditionKind.Airborne;
                 return node;
             }
 
@@ -715,6 +731,10 @@ namespace Game
                 }
                 case ConditionKind.Moving:
                     return context.World.IsMoving(context.Me);
+                case ConditionKind.OnGround:
+                    return context.World.IsOnGround(context.Me);
+                case ConditionKind.Airborne:
+                    return !context.World.IsOnGround(context.Me);
                 case ConditionKind.Hears:
                     return context.Runtime != null && context.Me != null &&
                            context.Runtime.Sounds.IsAudible(node.Thing, context.Me, context.World, node.Distance);

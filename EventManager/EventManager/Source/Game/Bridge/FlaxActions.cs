@@ -67,6 +67,22 @@ namespace Game
         /// <summary>Vertical speed per character actor. <c>CharacterController.Move</c> carries no
         /// velocity state, so the event runtime keeps the falling speed between ticks.</summary>
         private static readonly Dictionary<Actor, float> CharacterFallSpeeds = new Dictionary<Actor, float>();
+        /// <summary>Characters in the air because of `jump`. The floor is still right under them at
+        /// take-off, so the ground probe would say "grounded"; this flag is what makes the jump
+        /// read as airborne until it lands, and what refuses a second take-off mid-air.</summary>
+        private static readonly HashSet<Actor> JumpingCharacters = new HashSet<Actor>();
+
+        /// <summary>A scripted jump arc for an actor with no body (or a kinematic one): height
+        /// above the take-off Y, vertical speed, and where the arc started.</summary>
+        private sealed class ScriptedJump
+        {
+            public double BaseY;
+            public double Height;
+            public double VelocityY;
+        }
+
+        /// <summary>In-flight scripted jump arcs, advanced every tick in <see cref="Step"/>.</summary>
+        private static readonly Dictionary<Actor, ScriptedJump> ScriptedJumps = new Dictionary<Actor, ScriptedJump>();
         /// <summary>Sources spawned by <c>play sound</c>, with the actor whose sheet started them.</summary>
         private static readonly List<(Actor Owner, AudioSource Source)> ActiveSounds = new List<(Actor, AudioSource)>();
 
@@ -223,6 +239,8 @@ namespace Game
             ActiveSounds.Clear();
             LiveTweens.Clear();
             CharacterFallSpeeds.Clear();
+            JumpingCharacters.Clear();
+            ScriptedJumps.Clear();
             SoundIndexCache = null;
             AnimIndexCache = null;
             AnimFullNames = null;
@@ -433,6 +451,31 @@ namespace Game
                 }
             }
 
+            // Scripted jumps: an actor with no physics body (or a kinematic one) rises and falls
+            // along its own little arc, so `jump` works in the plain transform mode too.
+            if (ScriptedJumps.Count > 0)
+            {
+                var jumps = new List<KeyValuePair<Actor, ScriptedJump>>(ScriptedJumps);
+                foreach (var pair in jumps)
+                {
+                    Actor jumper = pair.Key;
+                    ScriptedJump jump = pair.Value;
+                    if (jumper == null || jumper.Scene == null)
+                    {
+                        ScriptedJumps.Remove(jumper);
+                        continue;
+                    }
+                    PhysicsMovement.JumpStep(jump.Height, jump.VelocityY, Math.Abs(Physics.Gravity.Y), DeltaTime,
+                        out double height, out double velocity);
+                    jump.Height = height;
+                    jump.VelocityY = velocity;
+                    jumper.Position = new Vector3(jumper.Position.X, (float)(jump.BaseY + height), jumper.Position.Z);
+                    MovedThisTick.Add(jumper);
+                    if (PhysicsMovement.JumpLanded(jump.Height, jump.VelocityY))
+                        ScriptedJumps.Remove(jumper);
+                }
+            }
+
             // Sustained pushes: keep shoving for the authored time, so a bullet's knockback
             // lasts long enough to see instead of a single 1/60 s nudge.
             for (int i = Pushes.Count - 1; i >= 0; i--)
@@ -593,6 +636,10 @@ namespace Game
         {
             switch (spec.Verb)
             {
+                case ActionVerb.Jump:
+                    Jump(context, spec);
+                    break;
+
                 case ActionVerb.Move:
                 {
                     var me = context.Me as Actor;
@@ -1564,12 +1611,17 @@ namespace Game
                     // steering). A short ray below the capsule respects the character's slope
                     // limit, and `IsGrounded` covers contact cases the ray is too short to see.
                     bool grounded = IsCharacterGrounded(character, subject);
+                    // A jump overrides ground contact for as long as the take-off speed lasts:
+                    // the character is airborne even though the floor is still in reach.
+                    bool jumping = JumpingCharacters.Contains(subject);
                     CharacterFallSpeeds.TryGetValue(subject, out float fallSpeed);
                     PhysicsMovement.CharacterStep(
-                        direction.X, direction.Y, direction.Z, speed, fallSpeed, grounded,
+                        direction.X, direction.Y, direction.Z, speed, fallSpeed, grounded && !jumping,
                         Math.Abs(Physics.Gravity.Y), PhysicsMovement.GroundStickSpeed, DeltaTime,
                         out double cx, out double cy, out double cz, out double newFallSpeed);
                     CharacterFallSpeeds[subject] = (float)newFallSpeed;
+                    if (jumping && grounded && newFallSpeed <= 0f)
+                        JumpingCharacters.Remove(subject); // landed: the next tick walks again
                     character.Move(new Vector3((float)cx, (float)cy, (float)cz));
                     break;
                 }
@@ -1829,6 +1881,33 @@ namespace Game
                 : (float)PhysicsMovement.DefaultGroundCheckDistance;
         }
 
+        /// <summary>
+        /// Ground probe behind `jump` and the `me is on ground` / `me is airborne` conditions.
+        /// A CharacterController uses its own ray plus the controller's slope limit; every other
+        /// actor gets a short downward ray from its pivot. Both ignore trigger volumes, and a
+        /// `jump` that is still in the air reads as airborne even though the floor is inside the
+        /// probe (that is what makes "no double jumps" work).
+        /// </summary>
+        public static bool IsGrounded(Actor actor)
+        {
+            if (actor == null || actor.Scene == null)
+                return false;
+            if (JumpingCharacters.Contains(actor) || ScriptedJumps.ContainsKey(actor))
+                return false;
+            CharacterController character = EventSheet.FindCharacterController(actor);
+            if (character != null && IsAncestorOrSelf(character, actor))
+                return IsCharacterGrounded(character, actor);
+            float probe = GroundCheckDistanceFor(actor);
+            if (probe <= 0f)
+                return false;
+            if (!Physics.RayCast(actor.Position, Vector3.Down, out RayCastHit hit, probe, ~0u, false))
+                return false;
+            var hitActor = hit.Collider as Actor;
+            if (hitActor == null)
+                return true; // terrain, or a collider with no actor above it
+            return !ReferenceEquals(hitActor, actor) && !IsAncestorOrSelf(actor, hitActor);
+        }
+
         /// <summary>Stop a physics-driven actor: brake a dynamic body's horizontal velocity
         /// (vertical speed is kept, so a fall keeps falling). A CharacterController has no
         /// settable velocity — its per-tick <c>Move</c> simply stops, so there is nothing to do.</summary>
@@ -1858,6 +1937,8 @@ namespace Game
                 if (Pushes[i].Target == subject)
                     Pushes.RemoveAt(i);
             CharacterFallSpeeds.Remove(subject);
+            JumpingCharacters.Remove(subject);
+            ScriptedJumps.Remove(subject);
 
             RigidBody body = FindBody(subject);
             if (body != null && !body.IsKinematic)
@@ -2025,6 +2106,68 @@ namespace Game
                 default:
                     return Vector3.Zero;
             }
+        }
+
+        /// <summary>
+        /// `jump` / `jump strength <n>` (Task 7 G4 phase 3): a vertical take-off, refused while
+        /// the actor is already in the air so holding the key cannot chain jumps. A
+        /// CharacterController gets the take-off as its stored vertical speed (the same number
+        /// gravity then decays), a dynamic body gets <c>LinearVelocity.Y</c>, and a kinematic body
+        /// or an actor with no body at all runs the scripted arc from <see cref="Step"/>.
+        /// Plays a `Jump` clip when the actor has an AnimatedModel and the project has one.
+        /// </summary>
+        private static void Jump(EventContext context, ActionSpec spec)
+        {
+            var me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Cjump\u201D needs to run on an actor's sheet — the global Game sheet has no body to jump.");
+                return;
+            }
+            if (!IsGrounded(me))
+                return;
+            double strength = PhysicsMovement.JumpVelocity(ResolveNumber(context, spec));
+            PhysicsMoveMode mode = ResolveMoveMode(me, context.Sheet != null && context.Sheet.UsePhysicsMovement);
+
+            // A jump anim is optional: a simple mesh has no model to animate, and a project
+            // without a `Jump` clip should not warn on every hop.
+            FlaxEngine.AnimatedModel model = ModelOf(me);
+            if (model != null && model.SkinnedModel != null && LoadAnimation("Jump") != null)
+                StartAnim(context, new ActionSpec { Thing = "Jump" }, false);
+
+            switch (mode)
+            {
+                case PhysicsMoveMode.Character:
+                    JumpingCharacters.Add(me);
+                    CharacterFallSpeeds[me] = (float)strength;
+                    break;
+                case PhysicsMoveMode.Dynamic:
+                {
+                    RigidBody body = FindBody(me);
+                    if (body == null || !IsAncestorOrSelf(body, me))
+                    {
+                        StartScriptedJump(me, strength);
+                        break;
+                    }
+                    Vector3 velocity = body.LinearVelocity;
+                    body.LinearVelocity = new Vector3(velocity.X, (float)strength, velocity.Z);
+                    break;
+                }
+                default:
+                    StartScriptedJump(me, strength);
+                    break;
+            }
+        }
+
+        /// <summary>Starts a scripted (no-body) jump arc from the actor's current height.</summary>
+        private static void StartScriptedJump(Actor subject, double strength)
+        {
+            ScriptedJumps[subject] = new ScriptedJump
+            {
+                BaseY = subject.Position.Y,
+                Height = 0.0,
+                VelocityY = strength,
+            };
         }
 
         private static double ResolveNumber(EventContext context, ActionSpec spec)
@@ -4514,7 +4657,11 @@ namespace Game
         {
             if (actor == null) return;
             if (actor is Actor body)
+            {
                 CharacterFallSpeeds.Remove(body);
+                JumpingCharacters.Remove(body);
+                ScriptedJumps.Remove(body);
+            }
             if (AnimStates.TryGetValue(actor, out AnimState state))
             {
                 if (state.Graph != null)

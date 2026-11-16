@@ -1881,11 +1881,11 @@ when me is released
     Check(arcadeEnemyProgram.Events.Count == 7, $"Arcade_Enemy.events parses into 7 events (got {arcadeEnemyProgram.Events.Count})");
 
     var arcadeSpawnerProgram = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Arcade_Spawner.events"));
-    Check(arcadeSpawnerProgram.Events.Count == 3, $"Arcade_Spawner.events parses into 3 events (got {arcadeSpawnerProgram.Events.Count})");
+    Check(arcadeSpawnerProgram.Events.Count == 5, $"Arcade_Spawner.events parses into 3 events (got {arcadeSpawnerProgram.Events.Count})");
 
     // Contact: the `near 1.5` enter edge hurts once per approach, never once per tick.
     var arcadeWorld = new FakeWorld();
-    var arcadeEnemy = new FakeActor("Arcade_Enemy");
+    var arcadeEnemy = new FakeActor("Zombie");
     var arcadePlayer = new FakeActor("Player");
     arcadeWorld.AddActor(arcadeEnemy);
     arcadeWorld.AddActor(arcadePlayer);
@@ -1963,7 +1963,7 @@ when me is released
     // ------------------------------------------------------------------
 
     var knockdownWorld = new FakeWorld();
-    var knockdownEnemy = new FakeActor("Arcade_Enemy");
+    var knockdownEnemy = new FakeActor("Zombie");
     var knockdownPlayer = new FakeActor("Player");
     knockdownWorld.AddActor(knockdownEnemy);
     knockdownWorld.AddActor(knockdownPlayer);
@@ -2027,6 +2027,52 @@ when me is released
     spawnerEngine.Tick(32);
     Check(spawnerEngine.Variables.GetGlobal("Combo").AsNumber() == 2,
         $"the lane decays Combo by one every 2 s (got {spawnerEngine.Variables.GetGlobal("Combo").AsNumber()})");
+
+    // ------------------------------------------------------------------
+    // Task 7 Part G4 phase 2: the lane's three types share one sheet
+    // ------------------------------------------------------------------
+
+    // The shipped data file carries Knife and Brute next to the TK4 cast.
+    EnemyTypes.LoadData(parser.Parse(File.ReadAllText("Source/Game/GameFiles/EnemyTypes.events")));
+
+    var knifeRuntime = FreshEngine(new FakeWorld());
+    var knifeActor = new FakeActor("Knife");
+    knifeRuntime.AddSheet(knifeActor, arcadeEnemyProgram);
+    knifeRuntime.Tick(0);
+    Check(knifeRuntime.Variables.GetLocal(knifeActor, "Type").AsText() == "Knife" &&
+          knifeRuntime.Variables.GetLocal(knifeActor, "Speed").AsNumber() == 110 &&
+          knifeRuntime.Variables.GetLocal(knifeActor, "Health").AsNumber() == 30,
+        $"a `Knife` template reads its type from its name: speed {knifeRuntime.Variables.GetLocal(knifeActor, "Speed").AsNumber()}, health {knifeRuntime.Variables.GetLocal(knifeActor, "Health").AsNumber()}");
+
+    var bruteRuntime = FreshEngine(new FakeWorld());
+    var bruteActor = new FakeActor("Brute");
+    bruteRuntime.AddSheet(bruteActor, arcadeEnemyProgram);
+    bruteRuntime.Tick(0);
+    Check(bruteRuntime.Variables.GetLocal(bruteActor, "Type").AsText() == "Brute" &&
+          bruteRuntime.Variables.GetLocal(bruteActor, "Speed").AsNumber() == 40 &&
+          bruteRuntime.Variables.GetLocal(bruteActor, "Health").AsNumber() == 120,
+        $"a `Brute` template reads its type from its name: speed {bruteRuntime.Variables.GetLocal(bruteActor, "Speed").AsNumber()}, health {bruteRuntime.Variables.GetLocal(bruteActor, "Health").AsNumber()}");
+
+    // Three shots drop a Knife, and the kill is counted against Knife alone.
+    var killWorld = new FakeWorld();
+    var killKnife = new FakeActor("Knife");
+    var killBullet = new FakeActor("Bullet");
+    killWorld.AddActor(killKnife);
+    killWorld.AddActor(killBullet);
+    var killEngine = FreshEngine(killWorld);
+    killEngine.AddSheet(killKnife, arcadeEnemyProgram);
+    killEngine.Tick(0);
+    for (int shot = 0; shot < 3; shot++)
+    {
+        killEngine.PushContact(TriggerKind.Touches, killKnife, killBullet);
+        killEngine.Tick(0.1 + shot * 0.1);
+    }
+    killEngine.Tick(0.6); // the `Health becomes 0` watch settles on a later tick
+    Check(killEngine.Variables.GetGlobal("Kills Knife").AsNumber() == 1 &&
+          killEngine.Variables.GetGlobal("Kills Brute").IsNone(),
+        $"the lane counts Knife kills apart from Brute (Knife {killEngine.Variables.GetGlobal("Kills Knife").AsNumber()}, Brute {killEngine.Variables.GetGlobal("Kills Brute").AsNumber()})");
+
+    EnemyTypes.LoadData(null);
 
     // Condition lookups resolve player references the way triggers do (Task 7 G3 follow-up), so
     // the spawner's portable `me is near player by 60` works no matter what the hero is called.
@@ -8030,6 +8076,84 @@ var losChaseProgram = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Enemy
 Check(ChaseFacesForward(wallsProgram) && ChaseFacesForward(losChaseProgram),
     "both enemy sheets chase with `facing forward`");
 
+// ------------------------------------------------------------------
+// Task 7 G4 phase 3: `jump` and the on-ground / airborne gates
+// ------------------------------------------------------------------
+
+// The word: `jump` alone is the default arc, `jump strength <n>` overrides it, and the amount
+// may be the actor's own variable (an enemy whose sheet gives it a JumpPower).
+var plainJump = parser.Parse("when every 0 seconds\n  jump");
+var plainJumpSpec = ActionWords.Parse(plainJump.Events[0].Body[0].Words, null);
+Check(plainJumpSpec.Verb == ActionVerb.Jump &&
+      Math.Abs(plainJumpSpec.Number - PhysicsMovement.DefaultJumpStrength) < 1e-9,
+    "`jump` parses to ActionVerb.Jump with the default take-off strength");
+
+var strongJump = parser.Parse("when every 0 seconds\n  jump strength 500");
+var strongJumpSpec = ActionWords.Parse(strongJump.Events[0].Body[0].Words, null);
+Check(strongJumpSpec.Verb == ActionVerb.Jump && Math.Abs(strongJumpSpec.Number - 500) < 1e-9,
+    "`jump strength 500` keeps the authored take-off strength");
+
+var variableJump = parser.Parse("when every 0 seconds\n  jump strength my JumpPower");
+var variableJumpSpec = ActionWords.Parse(variableJump.Events[0].Body[0].Words, null);
+Check(variableJumpSpec.Verb == ActionVerb.Jump &&
+      variableJumpSpec.AmountNode is VariableValue jumpAmount && jumpAmount.Name == "JumpPower",
+    "`jump strength my JumpPower` reads the amount from the actor's own variable");
+
+// The scripted arc (an actor with no body): up off the strength, down under gravity, landing
+// exactly at the take-off height rather than sinking through it.
+double jumpHeight = 0, jumpSpeed = PhysicsMovement.JumpVelocity(350), jumpPeak = 0;
+bool jumpLanded = false;
+for (int jumpTick = 0; jumpTick < 300 && !jumpLanded; jumpTick++)
+{
+    PhysicsMovement.JumpStep(jumpHeight, jumpSpeed, 981.0, 1.0 / 60.0, out jumpHeight, out jumpSpeed);
+    jumpPeak = Math.Max(jumpPeak, jumpHeight);
+    jumpLanded = PhysicsMovement.JumpLanded(jumpHeight, jumpSpeed);
+}
+Check(jumpLanded && jumpPeak > 50 && jumpPeak < 80,
+    "a 350 cm/s jump rises about 62 cm and comes back down within the second");
+Check(jumpHeight == 0 && jumpSpeed == 0,
+    "the scripted arc lands exactly at its take-off height, not below it");
+Check(Math.Abs(PhysicsMovement.JumpVelocity(-5) - PhysicsMovement.MinJumpStrength) < 1e-9,
+    "a negative strength is floored to the minimum take-off instead of cancelling the jump");
+
+// The conditions: `me is on ground` gates a jump, `me is airborne` is its opposite, and landing
+// flips them back — the crate-and-back-down loop the phase's done-when describes.
+var groundProg = parser.Parse(@"when every 0 seconds
+  me is on ground
+  add 1 to GroundTicks
+
+when every 0 seconds
+  me is airborne
+  add 1 to AirTicks");
+Check(groundProg.Events.Count == 2, "`me is on ground` / `me is airborne` parse inside an event body");
+Check(Conditions.Parse(groundProg.Events[0].Body[0].Words).Kind == ConditionKind.OnGround,
+    "`me is on ground` parses to ConditionKind.OnGround");
+Check(Conditions.Parse(groundProg.Events[1].Body[0].Words).Kind == ConditionKind.Airborne,
+    "`me is airborne` parses to ConditionKind.Airborne");
+
+var jumpWorld = new FakeWorld();
+var jumper = new FakeActor("Jumper");
+jumpWorld.AddActor(jumper);
+var jumpEngine = FreshEngine(jumpWorld);
+jumpEngine.AddSheet(jumper, groundProg);
+jumpWorld.SetGrounded(jumper, true);
+jumpEngine.Tick(0);
+Check(jumpEngine.Variables.GetGlobal("GroundTicks").AsNumber() == 1,
+    "`me is on ground` is true for an actor standing on something");
+Check(jumpEngine.Variables.GetGlobal("AirTicks").AsNumber() == 0,
+    "`me is airborne` is false while the actor is grounded");
+
+jumpWorld.SetGrounded(jumper, false);
+jumpEngine.Tick(1);
+Check(jumpEngine.Variables.GetGlobal("GroundTicks").AsNumber() == 1 &&
+      jumpEngine.Variables.GetGlobal("AirTicks").AsNumber() == 1,
+    "`me is airborne` flips true once the actor leaves the ground");
+
+jumpWorld.SetGrounded(jumper, true);
+jumpEngine.Tick(2);
+Check(jumpEngine.Variables.GetGlobal("GroundTicks").AsNumber() == 2,
+    "landing is detected — the on-ground gate goes true again");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
@@ -8294,6 +8418,22 @@ class FakeWorld : IEventWorld
     public bool IsMoving(object actor)
     {
         return moving.Contains(actor);
+    }
+
+    private readonly HashSet<object> grounded = new HashSet<object>();
+
+    public bool IsOnGround(object actor)
+    {
+        return grounded.Contains(actor);
+    }
+
+    /// <summary>Sets the ground answer behind `me is on ground` / `me is airborne`.</summary>
+    public void SetGrounded(object actor, bool on)
+    {
+        if (on)
+            grounded.Add(actor);
+        else
+            grounded.Remove(actor);
     }
 
     private readonly HashSet<(object, string)> playingParticles = new HashSet<(object, string)>();

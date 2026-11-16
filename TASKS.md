@@ -862,8 +862,8 @@ scene composes existing pieces (no C#).
 - `TK4_Arcade_Test.scene` (no NavMesh): 500 × 2400 floor with two `wall` lane edges, `Player`
   (`TK_Player` — arrows/Space, camera follows, HUD labels) at Z +200, inactive `Arcade_Enemy`
   template (EventSheet + BoxCollider), `SpawnAhead` at Z -150, `Arcade_Spawner` (EventSheet) at
-  the player start, plus the `Bullet`/`MuzzleFlash`/`Blood`/`Footprint`/`Gib` templates the
-  player sheet spawns, and one `EventsManager` on a scene-root `Game` actor.
+  the player start, plus the `Bullet`/`MuzzleFlash`/`Blood`/`Footprint`/`Gib` templates   the player sheet spawns, and one `EventsManager` on a scene-root `Game` actor. (G4 phase 2
+  renamed that template to `Zombie` and added `Knife` / `Brute` beside it — see below.)
 - Tests: 19 new checks (parse shape, one `hurt` per approach, five shots → 0 health →
   `EnemiesAlive -1` + `Kills Zombie 1`, spawner cap at 4, near gate stops spawning, plus the
   condition-lookup follow-up below) → **1378/1378 green**; Flax module build clean. **Editor play
@@ -938,22 +938,54 @@ Stats come from `EnemyTypes.events` (`<Type><Stat>` globals: `Speed`, `SightDist
 `Weapon`, `Hostile`), and behaviour is split either by `my type is "<name>"` gates in one shared
 sheet or by giving each template its own `.events` file.
 
-- [ ] `EnemyTypes.events`: add `Knife` (fast, 30 HP, 12 sight) and `Brute` (slow, 120 HP).
-- [ ] Two scene templates (`Arcade_Knife`, `Arcade_Brute`) or one template + `my type is` gates.
-- [ ] Done-when: both types play with no C#, differ in speed/health/range, and `kills Knife` /
+- [x] `EnemyTypes.events`: add `Knife` (fast, 30 HP, 12 sight) and `Brute` (slow, 120 HP).
+- [x] Two scene templates (`Arcade_Knife`, `Arcade_Brute`) or one template + `my type is` gates.
+- [x] Done-when: both types play with no C#, differ in speed/health/range, and `kills Knife` /
       `kills Brute` counters separate.
+
+**As shipped (2026-11-16, events only):** the lane templates are named after their **type** —
+`Zombie`, `Knife`, `Brute` — and share the one `Arcade_Enemy.events` sheet through an explicit
+`EventSheet` component. `when me appears` now reads `enemy type my name` (the same word
+`TK_Gunner.events` uses), so a template needs no per-type sheet and `kills Zombie` / `kills Knife`
+/ `kills Brute` stay separate by construction. The walk reads the type's pace (`move toward player
+speed my Speed`, guarded by `my Speed is higher than 0`) instead of the literal 60. Types added to
+`EnemyTypes.events` in cm/s to match the TK table: **Knife** speed 110, sight 200, health 30;
+**Brute** speed 40, sight 150, health 120 (the sketch's "12 sight" is 12 m = 200 cm). Variety is
+cadence-based rather than random: the spawner emits a Zombie every 3 s, a Knife every 6 s and a
+Brute every 9 s, all under the same `EnemiesAlive` cap. Scene: the old `Arcade_Enemy` template is
+now `Zombie`, with `Knife` and `Brute` inactive templates beside it, all carrying the shared sheet.
+Tests: 3 new checks (`Knife` applies 110/30 from its name, `Brute` 40/120, three shots on a Knife
+count `Kills Knife` while `Kills Brute` stays untouched), plus the spawner now parsing 5 events →
+**1392/1392 green**; module build clean. Editor check still yours: all three walk in, differ
+visibly in pace/health, and the per-type kill counters climb separately.
 
 **Phase 3 — Jump & platforms (C#, new words)**
 Gravity and vertical `move up/down` already exist (Task 12); what is missing is the impulse word and
 a grounded query.
 
-- [ ] `jump` / `jump strength <n>` action: vertical impulse on a CharacterController or dynamic
+- [x] `jump` / `jump strength <n>` action: vertical impulse on a CharacterController or dynamic
       body, refused while airborne (no double jumps), plays the jump anim if present.
-- [ ] `me is on ground` / `me is airborne` conditions (the bridge already owns the character
+- [x] `me is on ground` / `me is airborne` conditions (the bridge already owns the character
       ground check, so this is exposure, not new physics).
-- [ ] Transform-mode fallback: a scripted arc when the actor has no physics body.
+- [x] Transform-mode fallback: a scripted arc when the actor has no physics body.
 - [ ] Done-when: player jumps onto a crate and back down, landing is detected, holding the key does
       not chain jumps; enemies jump only if their sheet says so.
+
+**As shipped (2026-11-16):** `jump` and `jump strength <n>` (a literal or `my JumpPower`) parse to
+`ActionVerb.Jump`; the default is 350 cm/s, floored at 20 so a negative strength still hops.
+`FlaxActions.Jump` refuses the take-off when `IsGrounded` is false, plays a `Jump` clip only when
+the actor has a skinned AnimatedModel *and* the project has that clip, then routes by body: a
+CharacterController writes its stored fall speed (the number `CharacterStep` already decays), a
+dynamic body sets `LinearVelocity.Y`, and a kinematic body or actor with no body runs the scripted
+`PhysicsMovement.JumpStep` arc from `Step` (rise off the strength, gravity from `Physics.Gravity`,
+land exactly at the take-off Y). `me is on ground` / `me is airborne` parse to new
+`ConditionKind.OnGround` / `Airborne` and ask the new `IEventWorld.IsOnGround` (bridge →
+`FlaxActions.IsGrounded`). Airborne is the jump's own flag rather than the ground ray, since the
+floor is still inside the probe at take-off — that flag is what makes holding the key refuse to
+chain jumps. Tests: 13 new checks (three parses, arc peak/landing/negative strength, three condition
+parses, the grounded → airborne → landed loop) → **1405/1405 green**; module build clean. Editor
+check still yours: jump onto and off a crate in `TK4_Arcade_Test` (or a fresh ground scene), watch
+`me is airborne` flip while the actor is up, and hold the key to confirm only one take-off.
 
 **Phase 4 — Ladders (C#, new word)**
 - [ ] `climb <thing>` / `stop climbing`: locks X/Z to the ladder actor, drives Y at a climb speed,

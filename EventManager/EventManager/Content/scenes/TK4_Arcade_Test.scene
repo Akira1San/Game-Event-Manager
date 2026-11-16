@@ -233,7 +233,7 @@
 			"ID": "22ca783cb3e44caeb9365cb2b3559e7b",
 			"TypeName": "FlaxEngine.StaticModel",
 			"ParentID": "13b56f7dfbc641eab61abaebfeb26d87",
-			"Name": "Arcade_Enemy",
+			"Name": "Zombie",
 			"Transform": {
 				"Translation": {
 					"X": 400.0,
@@ -1020,6 +1020,104 @@
 			"ParentID": "53194b3106324df1bace51b8b65349fe",
 			"V": {
 				"EventFile": "Arcade_Spawner"
+			}
+		},
+		{
+			"ID": "7c164c273ec24ae9b439d831f4bf51d4",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "13b56f7dfbc641eab61abaebfeb26d87",
+			"Name": "Knife",
+			"Transform": {
+				"Translation": {
+					"X": 300.0,
+					"Y": 4.04949951171875,
+					"Z": -600.0
+				}
+			},
+			"Model": "efb6d881436796e7b8fb8496dcfe8808",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "e448085a4958f904fe3a6db6cd353d42",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			},
+			"IsActive": false
+		},
+		{
+			"ID": "9eae3630c5a44315be7067a713747428",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "7c164c273ec24ae9b439d831f4bf51d4",
+			"V": {
+				"EventFile": "Arcade_Enemy"
+			}
+		},
+		{
+			"ID": "ffa2afabefde4e21a3917d1fca84ebeb",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "7c164c273ec24ae9b439d831f4bf51d4",
+			"Name": "BoxCollider",
+			"Center": {
+				"X": -1.9073486328125e-06,
+				"Y": 19.999998092651367,
+				"Z": 0.0
+			},
+			"Size": {
+				"X": 54.6875,
+				"Y": 39.375,
+				"Z": 34.0625
+			}
+		},
+		{
+			"ID": "6f407fe7407c4bd5b32950d1fac945e3",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "13b56f7dfbc641eab61abaebfeb26d87",
+			"Name": "Brute",
+			"Transform": {
+				"Translation": {
+					"X": 500.0,
+					"Y": 4.04949951171875,
+					"Z": -600.0
+				}
+			},
+			"Model": "efb6d881436796e7b8fb8496dcfe8808",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "e448085a4958f904fe3a6db6cd353d42",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			},
+			"IsActive": false
+		},
+		{
+			"ID": "61b634aea492490984f25d77b8dbc803",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "6f407fe7407c4bd5b32950d1fac945e3",
+			"V": {
+				"EventFile": "Arcade_Enemy"
+			}
+		},
+		{
+			"ID": "1b9dda46da5d4454a9859aee517ce1f1",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "6f407fe7407c4bd5b32950d1fac945e3",
+			"Name": "BoxCollider",
+			"Center": {
+				"X": -1.9073486328125e-06,
+				"Y": 19.999998092651367,
+				"Z": 0.0
+			},
+			"Size": {
+				"X": 54.6875,
+				"Y": 39.375,
+				"Z": 34.0625
 			}
 		}
 	]

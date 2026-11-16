@@ -1,12 +1,17 @@
-# ---------------- Arcade_Spawner.events (Task 7 Part G3 + G4 phase 1) ----------------
-# Every three seconds, while the player is close enough, put one more enemy on the floor ahead.
+# ---------------- Arcade_Spawner.events (Task 7 Part G3 + G4 phases 1-2) ----------------
+# Every few seconds, while the player is close enough, put another enemy on the floor ahead.
 # `EnemiesAlive` is a global the enemy sheet decrements on death, so the lane cannot swamp.
 # The lane's globals are also seeded here (`EnemiesAlive`, and the `Combo` counter the enemy
 # sheet raises): the spawner is the one actor that exists exactly once in the scene, so the
 # Combo decay also lives here — in the shared enemy sheet every clone would decay it.
 #
-# `me is near player by 200` works as a CONDITION here (a `when every` line plus a gate), which is
-# what makes the spawner repeat instead of firing once on the `near` enter-edge. Lowercase
+# Phase 2 (variety): the lane mixes the three types by cadence instead of at random — a Zombie
+# every 3 s, a Knife every 6 s, a Brute every 9 s, all sharing the same `EnemiesAlive` cap. Each
+# template actor is named after its type (`Zombie`, `Knife`, `Brute`) so the shared enemy sheet
+# reads the stats from the name and the `kills <Type>` counters stay separate.
+#
+# `me is near player by 200` works as a CONDITION here (a `when every` line plus a gate), which
+# is what makes the spawner repeat instead of firing once on the `near` enter-edge. Lowercase
 # `player` resolves to the nearest player in conditions too, so the sheet keeps working if the
 # scene names the hero something else.
 #
@@ -23,8 +28,22 @@ when every 3 seconds
   me is near player by 200
   unless EnemiesAlive is higher than 3
   add 1 to EnemiesAlive
-  spawn Arcade_Enemy at SpawnAhead
-  print "Spawner: one more enemy ahead"
+  spawn Zombie at SpawnAhead
+  print "Spawner: one more zombie ahead"
+
+when every 6 seconds
+  me is near player by 200
+  unless EnemiesAlive is higher than 3
+  add 1 to EnemiesAlive
+  spawn Knife at SpawnAhead
+  print "Spawner: a knife is closing in"
+
+when every 9 seconds
+  me is near player by 200
+  unless EnemiesAlive is higher than 3
+  add 1 to EnemiesAlive
+  spawn Brute at SpawnAhead
+  print "Spawner: a brute lumbers in"
 
 # Combo decays one point every two seconds (G4 phase 1). One actor runs it, so the rate does not
 # scale with the number of enemies on the floor.

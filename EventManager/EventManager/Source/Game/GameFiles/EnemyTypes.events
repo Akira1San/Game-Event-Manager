@@ -108,6 +108,27 @@ when game starts
   set PunkHostile to true
   set PunkExplosionDeath to false
 
+  # ---- Task 7 G4 phase 2: arcade lane types -------------------------------------------
+  # The lane templates are named after their type, so one shared sheet reads the type from the
+  # actor (`enemy type my name`) and every `kills <Type>` counter stays separate. Speeds are
+  # cm/s like the rest of the TK table (the lane's Zombie walks at 60).
+
+  # Knife — fast and fragile: closes the gap quickly, drops in three hits.
+  set KnifeSpeed to 110
+  set KnifeSightDistance to 200
+  set KnifeHealth to 30
+  set KnifeWeapon to ""
+  set KnifeHostile to true
+  set KnifeExplosionDeath to false
+
+  # Brute — slow and heavy: walks the lane at a stump's pace, takes twelve hits.
+  set BruteSpeed to 40
+  set BruteSightDistance to 150
+  set BruteHealth to 120
+  set BruteWeapon to ""
+  set BruteHostile to true
+  set BruteExplosionDeath to false
+
   # GrenadeGay — lobs grenades from a distance; the bandolier goes up with him.
   set GrenadeGaySpeed to 60
   set GrenadeGaySightDistance to 240

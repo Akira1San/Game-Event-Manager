@@ -10,22 +10,25 @@
 # stuns. Combo's decay lives on the spawner, which is one actor — in a shared sheet every clone
 # would decay the same global.
 #
-# SETUP (editor): the scene's `Arcade_Enemy` actor is the spawn template — give it an EventSheet
-# with Event File = Arcade_Enemy, a BoxCollider, and leave the actor inactive. `spawn Arcade_Enemy
-# at SpawnAhead` clones it activated; the clone keeps the template's name (Flax allows duplicate
-# actor names), so this one sheet drives every enemy on the floor.
+# SETUP (editor): each lane template is an inactive actor named after its enemy type —
+# `Zombie`, `Knife`, `Brute` — with an EventSheet (Event File = Arcade_Enemy) and a BoxCollider.
+# `spawn Knife at SpawnAhead` clones one activated; the clone keeps the template's name (Flax
+# allows duplicate actor names), and `enemy type my name` reads that name as its type, so this
+# one sheet drives the whole lane while `kills Zombie` / `kills Knife` / `kills Brute` stay apart.
+# A template named after no known type warns once and keeps the built-in defaults.
 #
 # No NavMesh bake is involved: `move toward` is a direct vector, the same word the Variant 1
 # chase uses. It walks into walls rather than around them — the documented con of the variant.
 
 when me appears
-  enemy type "Zombie"
+  enemy type my name                # Zombie / Knife / Brute — stats come from EnemyTypes.events
   set state walk
   print "Arcade_Enemy: walking in"
 
 when every 0.2 seconds
   my state is "walk"                  # a downed enemy neither walks nor swings
-  move toward player speed 60         # re-issued so it tracks a moving player
+  my Speed is higher than 0           # the type's pace (Knife 110, Brute 40, Zombie 60)
+  move toward player speed my Speed   # re-issued so it tracks a moving player
   # loop anim "Walk"                 # simple meshes have no clips; armature enemies can
 
 when me is near player by 1.5

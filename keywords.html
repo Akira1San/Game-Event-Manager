@@ -185,6 +185,7 @@
         <tr><td><span class="kw">ammo</span> <span class="placeholder">&lt;name&gt;</span> <span class="kw">is</span> <span class="placeholder">&lt;value&gt;</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">ammo Pistol is 0</span><br><span class="alt">alt: ammo my Weapon is 0 — whatever is held right now · the count is this actor's own <code>my &lt;Weapon&gt;Ammo</code>, so two players keep separate ammo · <code>my Ammo</code> reads the held count as a value, e.g. <code>bind WeaponLabel to my Weapon and my Ammo format "Weapon: {0} Ammo: {1}"</code></span></td></tr>
         <tr><td><span class="kw">reloading</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">reloading</span><br><span class="alt">alt: me is reloading · true from <code>reload</code> until its timer runs out — <code>unless reloading</code> is what suspends shooting</span></td></tr>
         <tr><td><span class="kw">me is moving</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">me is moving</span><br><span class="alt">gates a polled/continuous trigger — e.g. <code>when me touches Grass and me is moving</code></span></td></tr>
+        <tr><td><span class="kw">me is on ground</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">me is on ground</span><br><span class="alt">alt: <code>me is airborne</code> is its opposite · a CharacterController answers from its own ground ray, any other actor from a short downward probe; true only once a <code>jump</code> has landed, so it is the gate that stops mid-air take-offs</span></td></tr>
         <tr><td><span class="kw">me is selected</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">me is selected</span></td></tr>
         <tr><td><span class="kw">me is land</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">me is land</span><br><span class="alt">alt: <code>me is air</code> / <code>me is sea</code> · reads <code>my unit type</code>, and a unit that never wrote one is a land unit, so existing sheets keep working · a unit type is what the unit moves over: land units are blocked by water, air units ignore the ground, sea units are restricted to it</span></td></tr>
         <tr><td><span class="kw">selection count is</span> <span class="placeholder">&lt;n&gt;</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">selection count is 2</span></td></tr>
@@ -485,6 +486,12 @@
           <td><code>Position += direction × speed × dt</code></td>
           <td>sets <code>LinearVelocity</code> = direction × speed. A move with no vertical part keeps the current vertical speed, so gravity and falling still work.</td>
           <td>swept <code>AddMovement</code> step — PhysX carries the body and reports contacts on the way instead of teleporting through them</td>
+        </tr>
+        <tr>
+          <td><span class="kw">jump</span> [<span class="kw">strength</span> <span class="placeholder">&lt;n&gt;</span>]</td>
+          <td>scripted arc: <code>JumpStep</code> rises off the strength and falls under gravity, landing back at the take-off height</td>
+          <td><code>LinearVelocity.Y = strength</code> — gravity and the body's own collider do the rest</td>
+          <td>scripted arc (a kinematic body ignores velocity, so the transform carries it)</td>
         </tr>
         <tr>
           <td><span class="kw">stop moving</span></td>

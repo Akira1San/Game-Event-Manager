@@ -176,6 +176,11 @@ namespace Game
             return FlaxActions.IsMoving(actor as Actor);
         }
 
+        public bool IsOnGround(object actor)
+        {
+            return FlaxActions.IsGrounded(actor as Actor);
+        }
+
         public bool IsParticlePlaying(object actor, string name)
         {
             if (string.IsNullOrEmpty(name))

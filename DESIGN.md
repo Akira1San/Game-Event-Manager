@@ -1047,6 +1047,15 @@ window around a broken runtime.
   obstacles to the probes). **Vocabulary friction:** there is still no ray/normal query word
   (`me is blocked`, `path exists`), so this lives in C# while `sees` stays a trigger rather than
   a condition; the qualifier reads well enough that `chase <thing> speed <n>` was not added.
+- **Lane variety without a sheet per type (Task 7 G4 phase 2):** the cheapest shape is to name
+  the **template actor after its type** (`Zombie`, `Knife`, `Brute`) and read it with
+  `enemy type my name`, the word `TK_Gunner.events` already uses. One `.events` file then serves
+  the whole lane through explicit `EventSheet` components, the type supplies pace/health/sight as
+  data, and `kills my Type` counts each type separately with no `my type is "..."` branching.
+  The catch: a template whose name is not a known type warns once and keeps the built-in
+  defaults, so the naming is load-bearing — the G3 `Arcade_Enemy` template was renamed to
+  `Zombie` for this. Variety is per-cadence (3 s Zombie, 6 s Knife, 9 s Brute under one alive
+  cap) rather than random, because there is no `random` form of `spawn`.
 - **Knockdown and combo ownership (Task 7 G4 phase 1):** the lane enemy's `my state` is the
   switch — `walk` gates the walk and the swing, a hit flips it to `down` (0.4 s) then `getup`
   (0.2 s) then back to `walk`, and standing up adds one `Combo`. Two details worth keeping:
@@ -1117,6 +1126,19 @@ window around a broken runtime.
   change Player's bag directly, so the locked-door puzzle (Task 9 C) tracks key possession with a
   global flag (`HasKey`) set on pickup instead of checking `Player's bag`. A cross-actor bag
   condition and `remove ... from <actor>'s bag` are parked for a later era.
+
+- **Jumping without a jump system:** G4 phase 3 adds only a word and a query — `jump [strength n]`,
+  `me is on ground`, `me is airborne` — and lets the existing body rules carry it. A
+  CharacterController jumps by writing its stored fall speed (the number `CharacterStep` already
+  decays), a dynamic body by setting `LinearVelocity.Y`, and an actor with no body (or a kinematic
+  one) by a scripted `JumpStep` arc that moves its `Position.Y` from the take-off height. "Airborne"
+  is the jump's own flag rather than the ground ray, because at take-off the floor is still inside
+  the probe — that flag is also what refuses a second take-off, so holding the key cannot chain
+  jumps. The on-ground query answers from the controller's ground check when there is one, else a
+  short downward probe that ignores the actor's own colliders and triggers; a world without physics
+  reports grounded, so the gate never blocks a sheet in a test or a bare scene. Parked: coyote time,
+  jump buffering, variable-height jumps (releasing mid-air), wall jumps and moving-platform carry —
+  a platform moving under a jumping actor is not rideable yet.
 
 ---
 

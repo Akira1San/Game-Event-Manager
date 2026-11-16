@@ -8,6 +8,8 @@ namespace Game
         Unknown,
         Move,
         StopMoving,
+        /// <summary><c>jump</c> / <c>jump strength &lt;n&gt;</c> (Task 7 G4 phase 3).</summary>
+        Jump,
         Turn,
         LookAt,
         Face,
@@ -665,6 +667,27 @@ namespace Game
                         return Finish(spec, ActionVerb.Push, words, pushIndex);
                     }
                     return Unknown(spec, words, "\u201Cpush\u201D looks like this: \u201Cpush other up strength 10\u201D or \u201Cpush other back strength 100 for 0.2 seconds\u201D", warn);
+
+                case "jump":
+                {
+                    // `jump` / `jump strength 350`: a vertical take-off, refused in mid-air by
+                    // the bridge. No strength means the default arc; `my JumpPower` works too.
+                    int jumpIndex = 1;
+                    if (words.Count >= 3 && words[1].Text == "strength")
+                    {
+                        spec.AmountNode = ValueNodeAt(words, 2, out int strengthUsed);
+                        spec.HasNumber = words[2].Type == TokenType.Number;
+                        if (spec.HasNumber)
+                            spec.Number = words[2].Number;
+                        jumpIndex = 2 + strengthUsed;
+                    }
+                    if (!spec.HasNumber && spec.AmountNode == null)
+                    {
+                        spec.Number = PhysicsMovement.DefaultJumpStrength;
+                        spec.HasNumber = true;
+                    }
+                    return Finish(spec, ActionVerb.Jump, words, jumpIndex);
+                }
 
                 case "parent":
                     if (words.Count >= 4 && IsThing(words[1]) && words[2].Text == "to" && IsThing(words[3]))
