@@ -732,8 +732,10 @@ forms, text) and they nest, but they deliberately do not leak into conditions or
 editing the data file changes the game with no C# edit and no second copy of the numbers. Row and
 field match case-insensitively and ignore spaces (`field "FireRate" of "Shotgun Maniac"` reaches
 `ShotgunManiacFireRate`), the result is an ordinary value so it multiplies, rounds and nests, and a
-row or field that does not exist warns once - naming the global it looked for and listing the fields
-that row has, or the rows that have that field - then reads 0.
+row or field that does not exist warns once - naming the global it looked for, listing the fields
+that row has or the rows that have that field, and offering the nearest name through `WordDistance`
+(the same two-edit threshold `UnknownWord` and the file loader use, so `Damag` suggests `Damage` and
+`Zombiee` suggests `Zombie` while a name with no near match gets no silly guess) - then reads 0.
 
 ### Point & click adventures (the composition showcase)
 

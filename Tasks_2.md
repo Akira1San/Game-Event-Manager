@@ -250,9 +250,15 @@ and reads 0, never a silent wrong number.
       A missing row or field warns once through `EventRuntime.WarnMissingField`, names the global it
       looked for, lists the fields that row has (or the rows that have that field) and reads 0.
       The table name is carried for those messages; resolution itself is the `<Row><Field>` global.
-- [ ] **Part D — Friendly errors.** Unknown field lists the fields the table actually has when it
+- [x] **Part D — Friendly errors.** Unknown field lists the fields the table actually has when it
       can be discovered; unknown row suggests the nearest row name; too-long expression points at
       the operator to split.
+      *Landed:* `DataLookup.MissingMessage` + `Nearest` do the lookup hints — an unknown field lists
+      `"Sword" has Damage and Slot.` and adds `Did you mean "Damage"?` within the same two-edit
+      `WordDistance` threshold `UnknownWord` and `EventFiles.SuggestFileName` use; an unknown row
+      lists the rows that do have the field and adds `Did you mean row "Zombie"?`; a name with no
+      near match gets no guess. Part A's too-long `set` line names the operator to split at and shows
+      the half to keep (`set running to 1 + 2`). All three are asserted together in the tests.
 - [ ] **Part E — Tests and docs.** Precedence, unary minus, clamp bounds written high-to-low,
       percent rounding, table reads for a shipped weapon and enemy type, missing row/field warnings,
       and a regression test that every existing `set` line in `GameFiles/*.events` still parses.

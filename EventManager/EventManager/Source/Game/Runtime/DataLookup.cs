@@ -82,6 +82,9 @@ namespace Game
             {
                 message.Append(" \u201C").Append(field.Row).Append("\u201D has ")
                        .Append(Join(fields)).Append('.');
+                string nearestField = Nearest(fields, field.Field);
+                if (nearestField != null)
+                    message.Append(" Did you mean \u201C").Append(nearestField).Append("\u201D?");
                 return message.ToString();
             }
 
@@ -90,12 +93,36 @@ namespace Game
             {
                 message.Append(" Rows with a \u201C").Append(field.Field).Append("\u201D field are ")
                        .Append(Join(rows)).Append('.');
+                string nearestRow = Nearest(rows, field.Row);
+                if (nearestRow != null)
+                    message.Append(" Did you mean row \u201C").Append(nearestRow).Append("\u201D?");
                 return message.ToString();
             }
 
             message.Append(" No row has a \u201C").Append(field.Field)
                    .Append("\u201D field yet, so a data file has to set it — `set ").Append(name).Append(" to ...`.");
             return message.ToString();
+        }
+
+        /// <summary>
+        /// The closest name to what the sheet wrote, or null when nothing is close. Two edits is the
+        /// same threshold the parser and the file loader use for their "did you mean" hints, so a
+        /// typo is answered the same way wherever the author makes it.
+        /// </summary>
+        private static string Nearest(List<string> names, string wanted)
+        {
+            string best = null;
+            int bestDistance = int.MaxValue;
+            foreach (string name in names)
+            {
+                int distance = WordDistance.Between(wanted, name);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    best = name;
+                }
+            }
+            return bestDistance <= 2 ? best : null;
         }
 
         private static string Join(List<string> names)

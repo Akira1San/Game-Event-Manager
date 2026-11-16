@@ -527,6 +527,43 @@ Check(missingFieldWarnings.Count > 1 && missingFieldWarnings[1].Contains("Hammer
       missingFieldWarnings[1].Contains("Rows with a") && missingFieldWarnings[1].Contains("Sword"),
       "a missing row suggests the rows that do have the field");
 
+// Task 29 Part D — a typo gets the nearest name, the way `UnknownWord` and the file loader do.
+var typoWarnings = new List<string>();
+var typoEngine = FreshEngine(new FakeWorld());
+typoEngine.OnRuntimeWarning = message => typoWarnings.Add(message);
+typoEngine.AddSheet(new GlobalHost(), parser.Parse(@"when game starts
+  set SwordDamage to 12
+  set SwordSlot to ""weapon""
+  set ZombieHealth to 50
+  set ZombieSpeed to 60
+  set TypoField to field ""Damag"" of ""Sword"" in ""item""
+  set TypoRow to field ""Health"" of ""Zombiee"" in ""enemy""
+  set FarOff to field ""Health"" of ""CompletelyDifferent"" in ""enemy"""));
+typoEngine.SessionStarted();
+typoEngine.Tick(0);
+Check(typoWarnings.Count > 0 && typoWarnings[0].Contains("has Damage and Slot") &&
+      typoWarnings[0].Contains("Did you mean \u201CDamage\u201D?"),
+      "a mistyped field lists the row's fields and offers the nearest one (`Damag` -> `Damage`)");
+Check(typoWarnings.Count > 1 && typoWarnings[1].Contains("Did you mean row \u201CZombie\u201D?"),
+      "a mistyped row suggests the nearest row that has the field (`Zombiee` -> `Zombie`)");
+Check(typoWarnings.Count > 2 && !typoWarnings[2].Contains("Did you mean"),
+      "a name with no near match is listed without a silly suggestion");
+Check(typoEngine.Variables.GetGlobal("TypoField").AsNumber() == 0 &&
+      typoEngine.Variables.GetGlobal("TypoRow").AsNumber() == 0 &&
+      typoEngine.Variables.GetGlobal("FarOff").AsNumber() == 0,
+      "every mistyped lookup reads 0 instead of a wrong number");
+
+// Task 29 Part D's three friendly errors, asserted together as the task words them.
+Check(tooManyOps != null && tooManyOps.Contains("4 calculations") && tooManyOps.Contains("split it in two") &&
+      tooManyOps.Contains("set running to 1 + 2"),
+      "the too-long expression names the operator to split at and shows the half to keep");
+Check(missingFieldWarnings.Count > 0 && missingFieldWarnings[0].Contains("has Damage and Slot") &&
+      missingFieldWarnings[0].Contains("SwordArmour"),
+      "an unknown field lists the fields the table actually has");
+Check(typoWarnings.Count > 1 && typoWarnings[1].Contains("Did you mean row") &&
+      typoWarnings[1].Contains("Rows with a"),
+      "an unknown row lists and suggests the rows that exist");
+
 var hurt = parser.Parse("when me appears\n  add -1 to Lives\n  add Potion to my bag\n");
 var negative = (AddNode)hurt.Events[0].Body[0].Statement!;
 Check(negative.Amount is NumberValue av && av.Value == -1 && negative.Target.Name == "Lives",
