@@ -691,7 +691,7 @@ cooldowns cost one polling trigger per unit.
   actors) has no unit tests, as usual; editor play-check pending (assign an ability key, `aim`,
   click a point and a unit, right click out).
 
-### Part B — Per-player tech and weapon values (`Runtime/Tech.cs`) [ ]
+### Part B — Per-player tech and weapon values (`Runtime/Tech.cs`) [x]
 - Upgrade levels are per player: `Player2 UpgradeStim is 1`, set by research or events;
   `Tech.LevelOf(variables, player, upgrade)` reads them and defaults to 0
 - `WeaponData.Effective(variables, player, weapon, field)` = base stat × per-player multiplier +
@@ -702,6 +702,33 @@ cooldowns cost one polling trigger per unit.
 - Unit-local stats stay as they are — speed, armour, range and shields are already per unit; tech
   that touches them is a `set` line in the upgrade's event
 - No change to `WeaponData.events`: it keeps the base numbers, the player-scoped values sit on top
+  → `Runtime/Tech.cs`: `PlayerPrefix`/`VariableName` (`VariableName(1, "UpgradeStim")` →
+  `"Player2 UpgradeStim"`), `WeaponBonusName`/`WeaponMultiplierName`, `PlayerIndexOf(context)`
+  (fog first, then `my Player`, then 0), `LevelOf`/`SetLevel` (negative levels read as 0),
+  `Scale(base, …)` = `base × multiplier + bonus` with a missing multiplier 1 and bonus 0, and
+  `TryOverride` for text/flag fields. Player indexing follows the minimap: fog index 0 is `Player1`,
+  index 1 is `Player2`, the same numbering `Player1 Score` already used. Names are looked up through
+  `FindGlobalName`, so `player2 upgradestim` still reaches the right global.
+  → `WeaponData.Effective(variables, player, weapon, field)` returns the effective `ValueBox`:
+  numeric fields (`Damage`, `FireRate`, `Spread`, `Multiplier`, `Reload`, `AmmoPerShot`, `Ammo`,
+  `Speed`, `Knockback`, `Life`, `Blast`) take the formula, `Bullet`/`Sound`/`Smoke`/`Bounce`/
+  `Explosive`/`Pierce` take a per-player override or the base. `ForActor` applies that scope, so
+  `spawn Bullet` stamps the shooter's own `damage` and `reload` uses the holder's reload; `TryGet`
+  stays base-only, so table reads and the unknown-weapon help are unchanged.
+- Words that now parse: `set Player2 UpgradeStim to 1`, the run-together `Player2UpgradeStim`, and
+  `if Player2 UpgradeStim is 1` — `EventParser.ReadVariable` and `Conditions.Parse` join a
+  `<PlayerN>` plus a capitalised name into one global, after the `Players`/`PlayerInput` joins so
+  `Player1 Score` and `Player1 ShootKey` keep their own spellings.
+
+#### Part B notes
+- 22 new pure checks (level defaults/isolation/`SetLevel`/negative clamp, the spaced and run-together
+  parser joins, the condition read, `Effective` base vs multiplier vs bonus vs both, text override,
+  per-player isolation, `WeaponData.events` unchanged, `PlayerIndexOf` through the fog and the
+  `my Player` fallback, and `ForActor` stamping 15 for a player-2 marine with +5) ->
+  **1648 passed, 0 failed**; Game module build 0 errors (`Flax.Build -build -arch=x64
+  -platform=Windows -configuration=Debug -target=GameEditorTarget`).
+- No new bridge code beyond the `ForActor`/`reload` call sites; editor play-check pending (give a
+  marine `Player2 PistolDamage 5` and confirm its bullets hit for 15 while the other side hits for 10).
 
 ### Part C — Buffs and debuffs (`Runtime/Buffs.cs`) [ ]
 - One buff: name, duration, stack rule (`refresh` / `stack` / `ignore`), modifiers, source actor,

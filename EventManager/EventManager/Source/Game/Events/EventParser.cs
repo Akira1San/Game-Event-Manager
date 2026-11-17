@@ -839,6 +839,15 @@ namespace Game
                 index += 2;
                 return new VariableValue { Line = t.Line, Name = setting };
             }
+            // `Player2 UpgradeStim` / `Player2 PistolDamage` — per-player tech and weapon values
+            // (Task 27 Part B). A player name plus a capitalised name is one global, so research
+            // can raise one side's levels and an upgrade can buff one side's guns.
+            if (index + 1 < words.Count && words[index + 1].Type == TokenType.Word &&
+                Tech.TryReadVariableName(t.Text, words[index + 1].Text, out string techVariable))
+            {
+                index += 2;
+                return new VariableValue { Line = t.Line, Name = techVariable };
+            }
             // Level statistics (Task 16 Part G): `kills total`, `kills Zombie`, `accuracy`,
             // `time elapsed`, `level number` and `level name`. These are lowercase words, so
             // they must be recognised before the capital-letter variable rule below.
@@ -861,6 +870,12 @@ namespace Game
             {
                 index++;
                 return new VariableValue { Line = t.Line, Name = runTogetherVariable };
+            }
+            // ... and so does `Player2UpgradeStim` / `Player2PistolDamage` (Task 27 Part B).
+            if (Tech.TryReadVariableName(t.Text, out string runTogetherTech))
+            {
+                index++;
+                return new VariableValue { Line = t.Line, Name = runTogetherTech };
             }
             if (!char.IsLetter(t.Text[0]) || !char.IsUpper(t.Text[0]))
                 throw new ParseException($@"I can't use {DescribeWord(t)} as a variable — variables start with a capital letter, or use `my` for a per-object one (like `Score` or `my health`)", t.Line);

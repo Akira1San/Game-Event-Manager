@@ -2034,7 +2034,10 @@ namespace Game
                 : ResolveWeaponName(context, node.Weapon, node.WeaponVariable, "reload");
             double seconds = WeaponClock.DefaultReload;
             if (weapon.Length > 0 && WeaponData.TryGet(context.Variables, weapon, out WeaponStats stats))
-                seconds = stats.Reload;
+                // The reload is the holder's too (Task 27 Part B), so a per-player reload upgrade
+                // only shortens the reloading side's guns.
+                seconds = Tech.Scale(context.Variables, Tech.PlayerIndexOf(context),
+                    stats.Name + "Reload", stats.Reload);
             else if (weapon.Length > 0)
                 OnRuntimeWarning($"I don't know the weapon \u201C{weapon}\u201D, so `reload` uses {WeaponClock.DefaultReload} seconds.");
             Weapons.Start(context.Me, seconds, Time);

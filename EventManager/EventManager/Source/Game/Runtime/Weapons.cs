@@ -315,7 +315,10 @@ namespace Game
             }
         }
 
-        /// <summary>The weapon the acting sheet currently holds, or null when none is set.</summary>
+        /// <summary>
+        /// The weapon the acting sheet currently holds, or null when none is set. The numbers are
+        /// the shooter's own (Task 27 Part B): one player's upgrade never buffs the other's guns.
+        /// </summary>
         public static WeaponStats ForActor(EventContext context)
         {
             if (context == null)
@@ -323,7 +326,82 @@ namespace Game
             string name = context.ReadMy(CurrentWeaponVariable).AsText();
             if (string.IsNullOrEmpty(name))
                 return null;
-            return TryGet(context.Variables, name, out WeaponStats stats) ? stats : null;
+            if (!TryGet(context.Variables, name, out WeaponStats stats))
+                return null;
+            return ApplyPlayerScope(context.Variables, Tech.PlayerIndexOf(context), stats);
+        }
+
+        /// <summary>
+        /// Fields the per-player formula (× multiplier + bonus) applies to. Everything else is a
+        /// name or a flag, so a player value replaces it outright instead.
+        /// </summary>
+        private static readonly HashSet<string> NumericFields =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "Damage", "FireRate", "Spread", "Multiplier", "Reload", "AmmoPerShot", "Ammo",
+                "Speed", "Knockback", "Life", "Blast",
+            };
+
+        /// <summary>
+        /// One weapon field with a player's tech on top (Task 27 Part B): <c>Player2 PistolDamage</c>
+        /// is a bonus, <c>Player2 PistolDamageBonusMultiplier</c> a multiplier, and the result is
+        /// <c>base × multiplier + bonus</c>. Text and flag fields take a plain override
+        /// (<c>Player2 PistolBullet</c>). The base is whatever <see cref="TryGet"/> resolves, so
+        /// WeaponData.events keeps owning the shared numbers.
+        /// </summary>
+        public static ValueBox Effective(EventVariables variables, int playerIndex, string weaponName, string field)
+        {
+            if (field == null || !TryGet(variables, weaponName, out WeaponStats stats))
+                return new ValueBox();
+            return EffectiveField(variables, playerIndex, stats, field);
+        }
+
+        private static ValueBox EffectiveField(EventVariables variables, int playerIndex,
+            WeaponStats stats, string field)
+        {
+            ValueBox baseValue = Current(stats, field);
+            if (NumericFields.Contains(field))
+                return ValueBox.OfNumber(Tech.Scale(variables, playerIndex, stats.Name + field,
+                    baseValue.AsNumber()));
+            if (Tech.TryOverride(variables, playerIndex, stats.Name + field, out ValueBox playerValue))
+                return playerValue;
+            return baseValue;
+        }
+
+        /// <summary>Copies the player-scoped values over a resolved weapon's shared numbers.</summary>
+        private static WeaponStats ApplyPlayerScope(EventVariables variables, int playerIndex, WeaponStats stats)
+        {
+            if (variables == null || playerIndex < 0)
+                return stats;
+            foreach (string field in FieldNames)
+                Apply(stats, field, EffectiveField(variables, playerIndex, stats, field));
+            return stats;
+        }
+
+        /// <summary>Reads one field back out of resolved stats, for the per-player formula.</summary>
+        private static ValueBox Current(WeaponStats stats, string field)
+        {
+            switch (field)
+            {
+                case "Bullet": return ValueBox.OfText(stats.Bullet);
+                case "Damage": return ValueBox.OfNumber(stats.Damage);
+                case "FireRate": return ValueBox.OfNumber(stats.FireRate);
+                case "Spread": return ValueBox.OfNumber(stats.Spread);
+                case "Multiplier": return ValueBox.OfNumber(stats.Multiplier);
+                case "Reload": return ValueBox.OfNumber(stats.Reload);
+                case "Sound": return ValueBox.OfText(stats.Sound);
+                case "Smoke": return ValueBox.OfText(stats.Smoke);
+                case "AmmoPerShot": return ValueBox.OfNumber(stats.AmmoPerShot);
+                case "Ammo": return ValueBox.OfNumber(stats.Ammo);
+                case "Speed": return ValueBox.OfNumber(stats.Speed);
+                case "Knockback": return ValueBox.OfNumber(stats.Knockback);
+                case "Life": return ValueBox.OfNumber(stats.Life);
+                case "Blast": return ValueBox.OfNumber(stats.Blast);
+                case "Bounce": return ValueBox.OfBoolean(stats.Bounce);
+                case "Explosive": return ValueBox.OfBoolean(stats.Explosive);
+                case "Pierce": return ValueBox.OfBoolean(stats.Pierce);
+                default: return new ValueBox();
+            }
         }
 
         /// <summary>The actor variable holding one weapon's ammo count (<c>PistolAmmo</c>).</summary>

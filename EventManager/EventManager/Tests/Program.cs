@@ -9267,6 +9267,129 @@ Check(WordRegistry.All.Any(entry => entry.Kind == "action" && entry.Word == "dam
       entry.Example.Contains("damage area", StringComparison.Ordinal)),
     "the word book lists `damage area`");
 
+// ------------------------------------------------------------------
+// Task 27 Part B — per-player tech and weapon values
+// ------------------------------------------------------------------
+
+var techVars = new EventVariables();
+Check(Tech.LevelOf(techVars, 0, "UpgradeStim") == 0,
+    "a tech level nobody wrote reads 0");
+techVars.SetGlobal("Player2 UpgradeStim", ValueBox.OfNumber(1));
+Check(Tech.LevelOf(techVars, 1, "UpgradeStim") == 1 &&
+      Tech.LevelOf(techVars, 0, "UpgradeStim") == 0,
+    "`Player2 UpgradeStim` is player 2's level alone");
+Tech.SetLevel(techVars, 0, "UpgradeStim", 3);
+Check(Tech.LevelOf(techVars, 0, "UpgradeStim") == 3 &&
+      Tech.LevelOf(techVars, 1, "UpgradeStim") == 1,
+    "SetLevel writes that player's global and leaves the other alone");
+techVars.SetGlobal("Player1 UpgradeStim", ValueBox.OfNumber(-2));
+Check(Tech.LevelOf(techVars, 0, "UpgradeStim") == 0,
+    "a negative level reads as 0 — research only goes up");
+
+// The parser joins `Player2 UpgradeStim` (and the run-together spelling) into one global.
+var techProgram = parser.Parse(@"when game starts
+  set Player2 UpgradeStim to 1
+  set Player1 PistolDamage to 4
+  set Player2 PistolDamageBonusMultiplier to 1.5
+  set Player1UpgradeArmor to 2
+  set Player1 Score to 5");
+CheckStrings("Player2 UpgradeStim",
+    ((SetNode)techProgram.Events[0].Body[0].Statement).Target.Name,
+    "`set Player2 UpgradeStim to 1` parses as one global");
+CheckStrings("Player1 PistolDamage",
+    ((SetNode)techProgram.Events[0].Body[1].Statement).Target.Name,
+    "`set Player1 PistolDamage to 4` parses as one global");
+CheckStrings("Player2 PistolDamageBonusMultiplier",
+    ((SetNode)techProgram.Events[0].Body[2].Statement).Target.Name,
+    "the per-player multiplier global parses too");
+CheckStrings("Player1 UpgradeArmor",
+    ((SetNode)techProgram.Events[0].Body[3].Statement).Target.Name,
+    "the run-together `Player1UpgradeArmor` reads as the same variable");
+CheckStrings("Player1 Score",
+    ((SetNode)techProgram.Events[0].Body[4].Statement).Target.Name,
+    "`Player1 Score` keeps the Players spelling");
+
+// A condition reads the level research raised (conditions gate the event, so the level is
+// already there when the sheet runs).
+var techCondEngine = FreshEngine(new FakeWorld());
+techCondEngine.Variables.SetGlobal("Player2 UpgradeStim", ValueBox.OfNumber(1));
+techCondEngine.AddSheet(new GlobalHost(), parser.Parse(@"when game starts
+  if Player2 UpgradeStim is 1
+  set Seen to Seen + 1"));
+techCondEngine.SessionStarted();
+techCondEngine.Tick(0);
+Check(techCondEngine.Variables.GetGlobal("Seen").AsNumber() == 1,
+    "`if Player2 UpgradeStim is 1` reads the per-player level");
+
+// Weapons: base × multiplier + bonus, per player.
+var techWeaponVars = new EventVariables();
+Check(WeaponData.Effective(techWeaponVars, 0, "Pistol", "Damage").AsNumber() == 10,
+    "an un-upgraded pistol keeps its base damage");
+techWeaponVars.SetGlobal("Player1 PistolDamage", ValueBox.OfNumber(4));
+Check(WeaponData.Effective(techWeaponVars, 0, "Pistol", "Damage").AsNumber() == 14,
+    "`Player1 PistolDamage` is a bonus on that player's damage");
+Check(WeaponData.Effective(techWeaponVars, 1, "Pistol", "Damage").AsNumber() == 10,
+    "player 1's bonus never buffs player 2's guns");
+techWeaponVars.SetGlobal("Player2 PistolDamageBonusMultiplier", ValueBox.OfNumber(1.5));
+techWeaponVars.SetGlobal("Player2 PistolDamage", ValueBox.OfNumber(2));
+Check(WeaponData.Effective(techWeaponVars, 1, "Pistol", "Damage").AsNumber() == 17,
+    "base × multiplier + bonus (10 × 1.5 + 2)");
+Check(WeaponData.Effective(techWeaponVars, 1, "Pistol", "FireRate").AsNumber() == 0.25,
+    "a field with no player value keeps its base");
+techWeaponVars.SetGlobal("Player2 PistolBullet", ValueBox.OfText("Rocket"));
+CheckStrings("Rocket", WeaponData.Effective(techWeaponVars, 1, "Pistol", "Bullet").AsText(),
+    "a text field takes a per-player override");
+CheckStrings("Bullet", WeaponData.Effective(techWeaponVars, 0, "Pistol", "Bullet").AsText(),
+    "the other player keeps the shared bullet type");
+WeaponData.TryGet(techWeaponVars, "Pistol", out WeaponStats plainPistol);
+Check(plainPistol != null && plainPistol.Damage == 10 &&
+      WeaponData.Effective(techWeaponVars, 0, "Pistol", "Damage").AsNumber() == 14,
+    "WeaponData.events keeps the base numbers, the player values sit on top");
+
+// The acting unit's player comes from the fog, falling back to `my Player`.
+var techWorld = new FakeWorld();
+var techMarine = new FakeActor("Marine");
+techWorld.AddActor(techMarine);
+var techEngine = FreshEngine(techWorld);
+techEngine.Variables.SetLocal(techMarine, "Weapon", ValueBox.OfText("Pistol"));
+techEngine.Fog.SetActor(techMarine, 1, 0, 0, 100);
+techEngine.Variables.SetGlobal("Player2 PistolDamage", ValueBox.OfNumber(5));
+var techContext = new EventContext
+{
+    Me = techMarine,
+    Variables = techEngine.Variables,
+    Runtime = techEngine,
+};
+Check(Tech.PlayerIndexOf(techContext) == 1,
+    "the fog's player is the acting unit's player");
+var scopedPistol = WeaponData.ForActor(techContext);
+Check(scopedPistol != null && scopedPistol.Damage == 15,
+    "`spawn Bullet` stamps the shooter's own damage (10 + 5)");
+
+var techFallback = new FakeActor("Gunner");
+techEngine.Variables.SetLocal(techFallback, "Player", ValueBox.OfNumber(1));
+techEngine.Variables.SetLocal(techFallback, "Weapon", ValueBox.OfText("Pistol"));
+var techFallbackContext = new EventContext
+{
+    Me = techFallback,
+    Variables = techEngine.Variables,
+    Runtime = techEngine,
+};
+Check(Tech.PlayerIndexOf(techFallbackContext) == 1 &&
+      WeaponData.ForActor(techFallbackContext).Damage == 15,
+    "a unit the fog does not know falls back to `my Player`");
+var techLocal = new FakeActor("Worker");
+techEngine.Variables.SetLocal(techLocal, "Weapon", ValueBox.OfText("Pistol"));
+var techLocalContext = new EventContext
+{
+    Me = techLocal,
+    Variables = techEngine.Variables,
+    Runtime = techEngine,
+};
+Check(Tech.PlayerIndexOf(techLocalContext) == 0 &&
+      WeaponData.ForActor(techLocalContext).Damage == 10,
+    "a unit with no player is player 1 and keeps the base damage");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

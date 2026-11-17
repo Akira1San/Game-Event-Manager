@@ -174,6 +174,16 @@ namespace Game
                 node.Right = ValueFrom(tokens, texts, 3);
                 return node;
             }
+            // `Player2 UpgradeStim is 1` — per-player tech (Task 27 Part B). The same shape as
+            // the per-player counters above, for any capitalised name instead of Score/Lives/Kills.
+            if (texts.Length == 4 && texts[2] == "is" &&
+                Tech.TryReadVariableName(texts[0], texts[1], out string techVariable))
+            {
+                node.Kind = ConditionKind.Equal;
+                node.Name = techVariable;
+                node.Right = ValueFrom(tokens, texts, 3);
+                return node;
+            }
             // `player 1 exists` / `player 2 does not exist` / `player 1 is near me by 5` /
             // `player 2 has tag Player`. `player 1` and `Player1` are both accepted.
             if (Players.TryReadReference(texts, 0, out int playerNumber, out int playerUsed))
