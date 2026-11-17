@@ -352,6 +352,52 @@ namespace Game
             return true;
         }
 
+        /// <summary>
+        /// Every <c>&lt;Name&gt;&lt;Resource&gt;Cost</c> global the name carries, one entry per declared
+        /// resource. Research prices an upgrade by this, so an upgrade needs no building actor.
+        /// </summary>
+        public static List<(string Resource, double Amount)> CostsOf(EventVariables variables, string name)
+        {
+            var costs = new List<(string, double)>();
+            if (string.IsNullOrEmpty(name))
+                return costs;
+            foreach (string resource in CostResources())
+                if (TryCost(variables, name, resource, out double amount) && amount != 0)
+                    costs.Add((resource, amount));
+            return costs;
+        }
+
+        /// <summary>The bank global for one player: <c>Player2 Minerals</c> (Task 27 Part D).</summary>
+        public static string BankName(int playerIndex, string resource)
+        {
+            return Tech.PlayerPrefix(playerIndex) + " " + CanonicalOrName(resource);
+        }
+
+        /// <summary>
+        /// A player's stockpile: <c>Player2 Minerals</c> when the game keeps per-player banks,
+        /// otherwise the bare global — <c>Minerals</c> stays player 1's alias, so every
+        /// single-player economy file keeps working untouched.
+        /// </summary>
+        public static double BankValue(EventVariables variables, int playerIndex, string resource)
+        {
+            string bank = BankName(playerIndex, resource);
+            if (variables != null && variables.HasGlobal(bank))
+                return variables.GetGlobal(bank).AsNumber();
+            return playerIndex <= 0 ? ReadNumber(variables, resource) : 0;
+        }
+
+        /// <summary>Writes a player's stockpile, clamped at 0 like <c>deduct</c>.</summary>
+        public static void WriteBank(EventVariables variables, int playerIndex, string resource, double value)
+        {
+            if (variables == null)
+                return;
+            string bank = BankName(playerIndex, resource);
+            string target = playerIndex <= 0 && !variables.HasGlobal(bank)
+                ? CanonicalOrName(resource)
+                : bank;
+            variables.SetGlobal(target, ValueBox.OfNumber(value < 0 ? 0 : value));
+        }
+
         /// <summary>The declared resources that carry a cost — everything but the supply ones.</summary>
         public static List<string> CostResources()
         {

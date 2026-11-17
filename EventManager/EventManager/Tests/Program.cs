@@ -9628,6 +9628,225 @@ Check(WordRegistry.All.Any(e => e.Kind == "trigger" && e.Word.Contains("when buf
 Check(WordRegistry.All.Any(e => e.Kind == "value" && e.Word.Contains("time left")),
     "the word book lists the buff time-left value");
 
+// ------------------------------------------------------------------
+// Task 27 Part D: research queues and the Upgrades.events table
+// ------------------------------------------------------------------
+
+// Parser shapes: a quoted upgrade name, the acting-building form and both cancels.
+var rdParse = parser.Parse("when game starts\n  research \"Stim Pack\" at Barracks\n  research \"Psi Storm\"\n  research StimPack\n  cancel research \"Stim Pack\" at Barracks\n  cancel research \"Psi Storm\"\n");
+var rdAtSpec = ActionWords.Parse(((RawActionNode)rdParse.Events[0].Body[0].Statement!).Words, _ => { });
+Check(rdAtSpec.Verb == ActionVerb.Research && rdAtSpec.Thing == "Stim Pack" && rdAtSpec.To == "Barracks",
+    "`research \"Stim Pack\" at Barracks` parses to Research with the upgrade and building");
+var rdOwnSpec = ActionWords.Parse(((RawActionNode)rdParse.Events[0].Body[1].Statement!).Words, _ => { });
+Check(rdOwnSpec.Verb == ActionVerb.Research && rdOwnSpec.Thing == "Psi Storm" && rdOwnSpec.To.Length == 0,
+    "`research \"Psi Storm\"` queues on the acting building");
+var rdBareSpec = ActionWords.Parse(((RawActionNode)rdParse.Events[0].Body[2].Statement!).Words, _ => { });
+Check(rdBareSpec.Verb == ActionVerb.Research && rdBareSpec.Thing == "StimPack",
+    "an unquoted one-word upgrade name also parses");
+var rdCancelSpec = ActionWords.Parse(((RawActionNode)rdParse.Events[0].Body[3].Statement!).Words, _ => { });
+Check(rdCancelSpec.Verb == ActionVerb.CancelResearch && rdCancelSpec.Thing == "Stim Pack" &&
+      rdCancelSpec.To == "Barracks",
+    "`cancel research \"Stim Pack\" at Barracks` parses to CancelResearch");
+var rdCancelOwnSpec = ActionWords.Parse(((RawActionNode)rdParse.Events[0].Body[4].Statement!).Words, _ => { });
+Check(rdCancelOwnSpec.Verb == ActionVerb.CancelResearch && rdCancelOwnSpec.To.Length == 0,
+    "`cancel research \"Psi Storm\"` keeps the acting building");
+
+// Triggers: both researched forms, the bare edges and the queue edges.
+var rdFinish = TriggerClassifier.Classify(parser.Parse("when Barracks finishes researching \"Stim Pack\"\n  set Done to 1\n").Events[0]);
+Check(rdFinish.Kind == TriggerKind.ResearchFinished && rdFinish.RequireName == "Barracks" &&
+      rdFinish.RequireUnit == "Stim Pack",
+    "`when Barracks finishes researching \"Stim Pack\"` carries the building and upgrade");
+var rdStart = TriggerClassifier.Classify(parser.Parse("when Barracks starts researching \"Stim Pack\"\n  set Done to 1\n").Events[0]);
+Check(rdStart.Kind == TriggerKind.ResearchStarted && rdStart.RequireName == "Barracks" &&
+      rdStart.RequireUnit == "Stim Pack",
+    "`when Barracks starts researching \"Stim Pack\"` carries both names too");
+Check(TriggerClassifier.Classify(parser.Parse("when research starts\n  set Done to 1\n").Events[0]).Kind == TriggerKind.ResearchStarted,
+    "`when research starts` is the bare start edge");
+Check(TriggerClassifier.Classify(parser.Parse("when research finishes\n  set Done to 1\n").Events[0]).Kind == TriggerKind.ResearchFinished,
+    "`when research finishes` is the bare finish edge");
+var rdBareEmpty = TriggerClassifier.Classify(parser.Parse("when research queue is empty\n  set Done to 1\n").Events[0]);
+Check(rdBareEmpty.Kind == TriggerKind.ResearchQueueEmpty && rdBareEmpty.RequireName.Length == 0,
+    "`when research queue is empty` listens to every building");
+var rdNamedEmpty = TriggerClassifier.Classify(parser.Parse("when Barracks research queue is empty\n  set Done to 1\n").Events[0]);
+Check(rdNamedEmpty.Kind == TriggerKind.ResearchQueueEmpty && rdNamedEmpty.RequireName == "Barracks",
+    "`when Barracks research queue is empty` filters by building");
+
+// Upgrades.events: rows are read from literals, suffix by suffix.
+Upgrades.Reset();
+Upgrades.LoadData(parser.Parse("when game starts\n  set StimPackTime to 30\n  set StimPackCost to 100\n  set StimPackRequires to \"Barracks\"\n  set StimPackLevels to 2\n  set ArmorTime to 5\n  set Unrelated to 1\n"));
+bool rdFound = Upgrades.TryGet("Stim Pack", out UpgradeData rdRow);
+Check(rdFound && Math.Abs((rdRow.Time ?? -1) - 30) < 1e-9 &&
+      Math.Abs((rdRow.Cost ?? -1) - 100) < 1e-9 && rdRow.Requires == "Barracks" &&
+      Math.Abs(rdRow.MaxLevel - 2) < 1e-9,
+    "Upgrades.events declares time, cost, required building and level cap for one upgrade");
+Check(Upgrades.KeyOf("Stim Pack") == "StimPack" && Upgrades.KeyOf("StimPack") == "StimPack",
+    "the spaced and run-together spellings reach the same upgrade row");
+Check(!Upgrades.TryGet("Unrelated", out _), "a global with no upgrade suffix is ignored");
+Check(Math.Abs(Upgrades.MaxLevelOf("Psi Storm") - 1) < 1e-9,
+    "an upgrade with no row defaults to a single level");
+Upgrades.Reset();
+Check(!Upgrades.TryGet("Stim Pack", out _), "a reload with no file forgets every upgrade");
+
+// Duration precedence: the live global, then the file, then the building, then the shared one.
+var rdVars = new EventVariables();
+Check(Math.Abs(Upgrades.DurationOf(rdVars, "StimPack", "Barracks") - Upgrades.DefaultResearchTime) < 1e-9,
+    "research with no data takes the default time");
+rdVars.SetGlobal("ResearchTime", ValueBox.OfNumber(12));
+Check(Math.Abs(Upgrades.DurationOf(rdVars, "StimPack", "Barracks") - 12) < 1e-9,
+    "`ResearchTime` overrides the default");
+rdVars.SetGlobal("BarracksResearchTime", ValueBox.OfNumber(7));
+Check(Math.Abs(Upgrades.DurationOf(rdVars, "StimPack", "Barracks") - 7) < 1e-9,
+    "`BarracksResearchTime` overrides the shared global");
+rdVars.SetGlobal("StimPackTime", ValueBox.OfNumber(30));
+Check(Math.Abs(Upgrades.DurationOf(rdVars, "StimPack", "Barracks") - 30) < 1e-9,
+    "`StimPackTime` overrides everything, so a sheet can retune one upgrade");
+
+// The queue: charge up front, run, then raise the finish and apply the level.
+var rdEngine = FreshEngine(new FakeWorld());
+rdEngine.Variables.SetGlobal("Minerals", ValueBox.OfNumber(250));
+rdEngine.Variables.SetGlobal("StimPackCost", ValueBox.OfNumber(100));
+rdEngine.Variables.SetGlobal("StimPackTime", ValueBox.OfNumber(2));
+var rdBuilding = new FakeActor("Barracks");
+rdEngine.AddSheet(rdBuilding, parser.Parse(@"when me starts researching ""Stim Pack""
+  set my Started to 1
+when me finishes researching ""Stim Pack""
+  set my Finished to 1
+when my research queue is empty
+  set my Emptied to 1"));
+rdEngine.AddSheet(new GlobalHost(), parser.Parse(@"when research finishes
+  set AnyFinished to 1
+when Barracks research queue is empty
+  set NamedEmpty to 1"));
+Check(rdEngine.Research.Enqueue(rdEngine.Variables, rdEngine, rdBuilding, "Barracks", "Stim Pack", 0) == ResearchStartResult.Started,
+    "`research \"Stim Pack\" at Barracks` starts a queue");
+Check(rdEngine.Variables.GetGlobal("Minerals").AsNumber() == 150,
+    "the cost is charged when the order starts, not when it finishes");
+Check(rdEngine.Research.QueueCount(rdBuilding) == 1 && rdEngine.Research.CurrentUpgrade(rdBuilding) == "Stim Pack",
+    "the queue reports the upgrade it is working on");
+rdEngine.Tick(0);
+Check(rdEngine.Variables.GetLocal(rdBuilding, "Started").AsNumber() == 1,
+    "`when me starts researching` fires on the building's own sheet");
+rdEngine.Tick(1);
+Check(Math.Abs(rdEngine.Research.ProgressOf(rdBuilding) - 50) < 1e-9 &&
+      Math.Abs(rdEngine.Research.Remaining(rdBuilding) - 1) < 1e-9,
+    "half the research time reads as 50% progress and 1 second left");
+Check(Math.Abs(rdEngine.Variables.GetLocal(rdBuilding, "ResearchProgress").AsNumber() - 50) < 1e-9 &&
+      rdEngine.Variables.GetLocal(rdBuilding, "ResearchName").AsText() == "Stim Pack",
+    "the building carries `my ResearchProgress` and `my ResearchName` for a progress bar");
+rdEngine.Tick(2);
+Check(rdEngine.Variables.GetLocal(rdBuilding, "Finished").AsNumber() == 1 &&
+      rdEngine.Variables.GetGlobal("AnyFinished").AsNumber() == 1,
+    "`when me finishes researching` and the bare `when research finishes` both fire");
+Check(rdEngine.Variables.GetLocal(rdBuilding, "Emptied").AsNumber() == 1 &&
+      rdEngine.Variables.GetGlobal("NamedEmpty").AsNumber() == 1,
+    "`when research queue is empty` fires bare and by building name");
+Check(Math.Abs(rdEngine.Variables.GetGlobal("Player1 StimPack").AsNumber() - 1) < 1e-9,
+    "finishing raises the owner's `Player1 StimPack` level");
+Check(rdEngine.Variables.GetLocal(rdBuilding, "ResearchProgress").AsNumber() == 0 &&
+      rdEngine.Research.IsIdle(rdBuilding),
+    "a drained queue reads idle and resets its progress");
+
+// Cancelling refunds exactly what was paid; a missing entry is a quiet false.
+var rdCancelEngine = FreshEngine(new FakeWorld());
+rdCancelEngine.Variables.SetGlobal("Minerals", ValueBox.OfNumber(300));
+rdCancelEngine.Variables.SetGlobal("StimPackCost", ValueBox.OfNumber(100));
+var rdCancelBuilding = new FakeActor("Barracks");
+rdCancelEngine.Research.Enqueue(rdCancelEngine.Variables, rdCancelEngine, rdCancelBuilding, "Barracks", "Stim Pack", 0);
+Check(rdCancelEngine.Variables.GetGlobal("Minerals").AsNumber() == 200, "starting research spends 100");
+Check(rdCancelEngine.Research.Cancel(rdCancelEngine.Variables, rdCancelEngine, rdCancelBuilding, "Stim Pack") &&
+      rdCancelEngine.Variables.GetGlobal("Minerals").AsNumber() == 300,
+    "cancelling refunds the full price");
+Check(!rdCancelEngine.Research.Cancel(rdCancelEngine.Variables, rdCancelEngine, rdCancelBuilding, "Stim Pack"),
+    "cancelling something that is not queued returns false");
+
+// The refund factor is data: 0.5 refunds half.
+var rdHalfEngine = FreshEngine(new FakeWorld());
+rdHalfEngine.Variables.SetGlobal("Minerals", ValueBox.OfNumber(300));
+rdHalfEngine.Variables.SetGlobal("StimPackCost", ValueBox.OfNumber(100));
+rdHalfEngine.Variables.SetGlobal("ResearchRefund", ValueBox.OfNumber(0.5));
+var rdHalfBuilding = new FakeActor("Barracks");
+rdHalfEngine.Research.Enqueue(rdHalfEngine.Variables, rdHalfEngine, rdHalfBuilding, "Barracks", "Stim Pack", 0);
+rdHalfEngine.Research.Cancel(rdHalfEngine.Variables, rdHalfEngine, rdHalfBuilding, "Stim Pack");
+Check(rdHalfEngine.Variables.GetGlobal("Minerals").AsNumber() == 250,
+    "`ResearchRefund` 0.5 gives back half the price");
+
+// Per-player banks: player 2 pays its own minerals and gets its own level.
+var rdBankEngine = FreshEngine(new FakeWorld());
+rdBankEngine.Variables.SetGlobal("Minerals", ValueBox.OfNumber(500));
+rdBankEngine.Variables.SetGlobal("Player2 Minerals", ValueBox.OfNumber(200));
+rdBankEngine.Variables.SetGlobal("StimPackCost", ValueBox.OfNumber(100));
+rdBankEngine.Variables.SetGlobal("StimPackTime", ValueBox.OfNumber(1));
+var rdBankBuilding = new FakeActor("Barracks");
+rdBankEngine.Research.Enqueue(rdBankEngine.Variables, rdBankEngine, rdBankBuilding, "Barracks", "Stim Pack", 1);
+Check(rdBankEngine.Variables.GetGlobal("Player2 Minerals").AsNumber() == 100 &&
+      rdBankEngine.Variables.GetGlobal("Minerals").AsNumber() == 500,
+    "a player-2 building spends `Player2 Minerals`, never the player-1 stockpile");
+rdBankEngine.Tick(0);
+rdBankEngine.Tick(1);
+Check(Math.Abs(rdBankEngine.Variables.GetGlobal("Player2 StimPack").AsNumber() - 1) < 1e-9 &&
+      !rdBankEngine.Variables.HasGlobal("Player1 StimPack"),
+    "the finished upgrade lands on player 2's tech only");
+
+// Refusals: unaffordable, already queued, capped, and the wrong building.
+var rdRefuseVars = new EventVariables();
+rdRefuseVars.SetGlobal("Minerals", ValueBox.OfNumber(50));
+rdRefuseVars.SetGlobal("StimPackCost", ValueBox.OfNumber(100));
+var rdRefuseBuilding = new FakeActor("Barracks");
+var rdRefuseManager = new ResearchManager();
+Check(rdRefuseManager.Enqueue(rdRefuseVars, null, rdRefuseBuilding, "Barracks", "Stim Pack", 0) == ResearchStartResult.CannotAfford &&
+      rdRefuseVars.GetGlobal("Minerals").AsNumber() == 50 &&
+      rdRefuseManager.QueueCount(rdRefuseBuilding) == 0,
+    "an unaffordable upgrade is refused without spending anything");
+rdRefuseVars.SetGlobal("Minerals", ValueBox.OfNumber(500));
+Check(rdRefuseManager.Enqueue(rdRefuseVars, null, rdRefuseBuilding, "Barracks", "Stim Pack", 0) == ResearchStartResult.Started &&
+      rdRefuseManager.Enqueue(rdRefuseVars, null, rdRefuseBuilding, "Barracks", "Stim Pack", 0) == ResearchStartResult.AlreadyQueued,
+    "the same upgrade cannot be queued twice at one building");
+var rdCapVars = new EventVariables();
+Tech.SetLevel(rdCapVars, 0, "StimPack", 1);
+Check(new ResearchManager().Enqueue(rdCapVars, null, new FakeActor("Barracks"), "Barracks", "Stim Pack", 0) == ResearchStartResult.AtMaxLevel,
+    "an upgrade already at its level cap is refused");
+Upgrades.LoadData(parser.Parse("when game starts\n  set StimPackRequires to \"Barracks\"\n"));
+var rdWrongManager = new ResearchManager();
+Check(rdWrongManager.Enqueue(new EventVariables(), null, new FakeActor("Factory"), "Factory", "Stim Pack", 0) == ResearchStartResult.WrongBuilding,
+    "`StimPackRequires` refuses research at a different building");
+Upgrades.Reset();
+
+// A second order starts when the first is cancelled or finishes, and a destroyed building drops
+// its queue without a refund.
+var rdQueueEngine = FreshEngine(new FakeWorld());
+rdQueueEngine.Variables.SetGlobal("Minerals", ValueBox.OfNumber(500));
+rdQueueEngine.Variables.SetGlobal("StimPackCost", ValueBox.OfNumber(50));
+rdQueueEngine.Variables.SetGlobal("ArmorCost", ValueBox.OfNumber(50));
+var rdQueueBuilding = new FakeActor("Barracks");
+rdQueueEngine.Research.Enqueue(rdQueueEngine.Variables, rdQueueEngine, rdQueueBuilding, "Barracks", "Stim Pack", 0);
+rdQueueEngine.Research.Enqueue(rdQueueEngine.Variables, rdQueueEngine, rdQueueBuilding, "Barracks", "Armor", 0);
+Check(rdQueueEngine.Research.QueueCount(rdQueueBuilding) == 2 &&
+      rdQueueEngine.Research.CurrentUpgrade(rdQueueBuilding) == "Stim Pack",
+    "the second upgrade waits behind the first");
+rdQueueEngine.Research.Cancel(rdQueueEngine.Variables, rdQueueEngine, rdQueueBuilding, "Stim Pack");
+Check(rdQueueEngine.Research.CurrentUpgrade(rdQueueBuilding) == "Armor" &&
+      rdQueueEngine.Variables.GetGlobal("Minerals").AsNumber() == 450,
+    "cancelling the active order promotes the next one and refunds only the cancelled price");
+rdQueueEngine.Research.Destroyed(rdQueueBuilding);
+Check(!rdQueueEngine.Research.HasQueue(rdQueueBuilding) && rdQueueEngine.Research.IsIdle(rdQueueBuilding),
+    "a destroyed building drops its queue");
+
+// The default: a manager nobody used never writes anything.
+var rdUntouchedVars = new EventVariables();
+var rdUntouchedBuilding = new FakeActor("Barracks");
+var rdUntouched = new ResearchManager();
+Check(rdUntouched.IsIdle(rdUntouchedBuilding) && rdUntouched.ProgressOf(rdUntouchedBuilding) == 0 &&
+      rdUntouched.Remaining(rdUntouchedBuilding) == 0 &&
+      !rdUntouchedVars.HasLocal(rdUntouchedBuilding, ResearchManager.ProgressVariable),
+    "a scene that never researches is untouched");
+
+Check(WordRegistry.All.Any(e => e.Kind == "action" && e.Word == "research") &&
+      WordRegistry.All.Any(e => e.Kind == "action" && e.Example.StartsWith("cancel research")),
+    "the word book lists `research` and `cancel research`");
+Check(WordRegistry.All.Any(e => e.Kind == "trigger" && e.Word.Contains("finishes researching")) &&
+      WordRegistry.All.Any(e => e.Kind == "trigger" && e.Word == "when research queue is empty"),
+    "the word book lists the research triggers");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

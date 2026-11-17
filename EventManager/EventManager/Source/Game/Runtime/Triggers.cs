@@ -66,6 +66,10 @@ namespace Game
         TrainingStarted,
         TrainingFinished,
         ProductionQueueEmpty,
+        // RTS research queues & upgrades (Task 27 Part D)
+        ResearchStarted,
+        ResearchFinished,
+        ResearchQueueEmpty,
         // RTS orders & attack-move (Task 18 Part E)
         OrderCompletes,
         OrderStarts,
@@ -247,6 +251,41 @@ namespace Game
                 return new TriggerDescriptor
                 {
                     Kind = TriggerKind.ProductionQueueEmpty,
+                    RequireName = Join(trigger, 0, words.Length - 4),
+                };
+            // RTS research (Task 27 Part D). `when Barracks finishes researching "Stim Pack"`
+            // names both the building and the upgrade; the bare forms listen to any building,
+            // and the queue edges filter like the production ones.
+            int researchFinishes = IndexOf(words, "finishes");
+            if (researchFinishes > 0 && researchFinishes + 2 < words.Length &&
+                words[researchFinishes + 1] == "researching")
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.ResearchFinished,
+                    RequireName = Join(trigger, 0, researchFinishes),
+                    RequireUnit = Join(trigger, researchFinishes + 2, words.Length),
+                };
+            int researchStarts = IndexOf(words, "starts");
+            if (researchStarts > 0 && researchStarts + 2 < words.Length &&
+                words[researchStarts + 1] == "researching")
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.ResearchStarted,
+                    RequireName = Join(trigger, 0, researchStarts),
+                    RequireUnit = Join(trigger, researchStarts + 2, words.Length),
+                };
+            if (words.Length == 2 && words[0] == "research" &&
+                (words[1] == "starts" || words[1] == "finishes"))
+                return new TriggerDescriptor
+                {
+                    Kind = words[1] == "starts" ? TriggerKind.ResearchStarted : TriggerKind.ResearchFinished,
+                };
+            if (words.Length >= 4 && words[words.Length - 4] == "research" &&
+                words[words.Length - 3] == "queue" && words[words.Length - 2] == "is" &&
+                words[words.Length - 1] == "empty")
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.ResearchQueueEmpty,
                     RequireName = Join(trigger, 0, words.Length - 4),
                 };
             // RTS orders & attack-move (Task 18 Part E). The bare forms listen to the

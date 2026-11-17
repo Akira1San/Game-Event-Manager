@@ -1078,6 +1078,12 @@ namespace Game
                 case ActionVerb.CancelTraining:
                     CancelTraining(context, spec);
                     break;
+                case ActionVerb.Research:
+                    ResearchUpgrade(context, spec);
+                    break;
+                case ActionVerb.CancelResearch:
+                    CancelResearchUpgrade(context, spec);
+                    break;
                 case ActionVerb.AttackMove:
                     StartAttackMove(context, spec);
                     break;
@@ -3064,6 +3070,72 @@ namespace Game
             if (!string.IsNullOrEmpty(thing))
                 return ResolveThing(context, thing) as Actor;
             return context.Me as Actor;
+        }
+
+        /// <summary>
+        /// <c>research "&lt;upgrade&gt;" at &lt;building&gt;</c> — queue an upgrade for that building's
+        /// owner, charging the cost up front so a cancel can refund (Task 27 Part D).
+        /// </summary>
+        private static void ResearchUpgrade(EventContext context, ActionSpec spec)
+        {
+            Actor building = ResolveProductionBuilding(context, spec.To);
+            if (building == null)
+            {
+                WarnOnce(string.IsNullOrEmpty(spec.To)
+                    ? "\u201Cresearch\u201D needs a building \u2014 run it on the building's sheet or write \u201Cresearch \"Stim Pack\" at Barracks\u201D."
+                    : $"I couldn't find the building \u201C{spec.To}\u201D to research \u201C{spec.Thing}\u201D at.");
+                return;
+            }
+
+            string buildingName = context.Runtime.Construction.BuildingOf(building);
+            if (string.IsNullOrEmpty(buildingName))
+                buildingName = building.Name;
+
+            int player = PlayerForBuilding(context, building);
+            ResearchStartResult result = context.Runtime.Research.Enqueue(context.Variables,
+                context.Runtime, building, buildingName, spec.Thing, player);
+            switch (result)
+            {
+                case ResearchStartResult.WrongBuilding:
+                    WarnOnce($"\u201C{spec.Thing}\u201D has to be researched at \u201C{Upgrades.RequiresOf(spec.Thing)}\u201D, not \u201C{buildingName}\u201D.");
+                    break;
+                case ResearchStartResult.AlreadyQueued:
+                    WarnOnce($"\u201C{buildingName}\u201D is already researching \u201C{spec.Thing}\u201D.");
+                    break;
+                case ResearchStartResult.AtMaxLevel:
+                    WarnOnce($"\u201C{spec.Thing}\u201D is already at its highest level for {Players.ActorName(player + 1)}.");
+                    break;
+                case ResearchStartResult.CannotAfford:
+                    WarnOnce($"{Players.ActorName(player + 1)} can't afford \u201C{spec.Thing}\u201D right now \u2014 check its cost globals or Upgrades.events.");
+                    break;
+                case ResearchStartResult.Invalid:
+                    WarnOnce("\u201Cresearch\u201D needs an upgrade name \u2014 write \u201Cresearch \"Stim Pack\" at Barracks\u201D.");
+                    break;
+            }
+        }
+
+        /// <summary><c>cancel research &lt;upgrade&gt; [at &lt;building&gt;]</c> — remove it from the
+        /// queue and refund what was paid.</summary>
+        private static void CancelResearchUpgrade(EventContext context, ActionSpec spec)
+        {
+            Actor building = ResolveProductionBuilding(context, spec.To);
+            if (building == null)
+            {
+                WarnOnce(string.IsNullOrEmpty(spec.To)
+                    ? "\u201Ccancel research\u201D needs a building \u2014 run it on the building's sheet or write \u201Ccancel research \"Stim Pack\" at Barracks\u201D."
+                    : $"I couldn't find the building \u201C{spec.To}\u201D to cancel research at.");
+                return;
+            }
+            if (!context.Runtime.Research.Cancel(context.Variables, context.Runtime, building, spec.Thing))
+                WarnOnce($"\u201C{building.Name}\u201D has no \u201C{spec.Thing}\u201D in its research queue.");
+        }
+
+        /// <summary>The player a building belongs to: its fog entry first, then the acting sheet.</summary>
+        private static int PlayerForBuilding(EventContext context, Actor building)
+        {
+            if (context.Runtime.Fog.TryGetActor(building, out FogActor info))
+                return info.Player < 0 ? 0 : info.Player;
+            return Tech.PlayerIndexOf(context);
         }
 
         /// <summary><c>attack-move to &lt;target&gt;</c> — walk toward a target, ready to

@@ -1,0 +1,43 @@
+# ---------------- Upgrades.events (Task 27 Part D) ----------------
+# The RTS upgrade table: how long a research takes, what it costs, which building may run it
+# and how many levels it has. It is read by name — Upgrades.events — once at load and again on
+# hot reload, the same way Matchups.events and Resources.events are.
+#
+# HOW A LINE IS READ: `<Upgrade>Time` (seconds), `<Upgrade>Cost` (the default cost resource,
+# Minerals unless Resources.events says otherwise), `<Upgrade>Requires` (the building template
+# that may research it) and `<Upgrade>Levels` (how high it goes; 1 when nobody says). The name is
+# whatever comes before the suffix, so `StimPackTime` defines the upgrade `Stim Pack` /
+# `StimPack` — `research "Stim Pack" at Barracks` matches it.
+#
+# WHAT FINISHING DOES: `Player<N> <Upgrade>` goes up by one through the tech table, so the
+# upgrade lands for the building's owner only. Units read it on spawn (`when me appears`) or when
+# it changes (`when Player1 StimPack changes`), e.g.
+#   when Player1 StimPack changes
+#     set my Speed to 120
+#
+# CHANGING IT AT RUNTIME: these are ordinary globals first — any sheet may `set StimPackTime to
+# 45`, and the live global wins over the row below. A scene that never researches is unaffected.
+
+when game starts
+  # ---- Stim Pack: a cheap early upgrade (Marine.events spends it) -------------------------
+  set StimPackTime to 30
+  set StimPackCost to 100
+  set StimPackRequires to "Barracks"
+  set StimPackLevels to 1
+
+  # ---- Psi Storm: the templar ability's prerequisite research ------------------------------
+  set PsiStormTime to 45
+  set PsiStormCost to 200
+  set PsiStormRequires to "TemplarArchives"
+  set PsiStormLevels to 1
+
+  # ---- Weapon and armour upgrades: repeatable, three levels each -------------------------
+  set InfantryWeaponsTime to 40
+  set InfantryWeaponsCost to 100
+  set InfantryWeaponsRequires to "Barracks"
+  set InfantryWeaponsLevels to 3
+
+  set InfantryArmorTime to 40
+  set InfantryArmorCost to 100
+  set InfantryArmorRequires to "Barracks"
+  set InfantryArmorLevels to 3

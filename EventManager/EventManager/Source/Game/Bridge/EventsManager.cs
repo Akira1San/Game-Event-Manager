@@ -197,6 +197,9 @@ namespace Game
             // Attack matchups come from their own data file, so `me can attack other` is settled
             // before the first shot (Task 23 Part B).
             Matchups.LoadData(ProgramNamed(Matchups.FileName)?.File);
+            // Upgrade definitions (time, cost, required building, level cap) load the same way, so
+            // `research "Stim Pack"` knows its price before the first order (Task 27 Part D).
+            Upgrades.LoadData(ProgramNamed(Upgrades.FileName)?.File);
             RememberSignatures(programs);
             SweepComponents();
             AttachPrograms(programs, startedNow: true);
@@ -289,7 +292,7 @@ namespace Game
             ItemData.LoadData(ProgramNamed(ItemData.FileName)?.File);
             AffixData.LoadData(ProgramNamed(AffixData.FileName)?.File);
             Matchups.LoadData(ProgramNamed(Matchups.FileName)?.File);
-            _shownErrors.Clear();
+            Upgrades.LoadData(ProgramNamed(Upgrades.FileName)?.File);
             _missingShown.Clear();
             var byName = new Dictionary<string, EventFileResult>();
             foreach (EventFileResult program in programs)

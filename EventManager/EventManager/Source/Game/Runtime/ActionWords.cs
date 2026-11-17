@@ -122,6 +122,9 @@ namespace Game
         // Buffs and debuffs (Task 27 Part C)
         AddBuff,
         RemoveBuff,
+        // RTS research queues & upgrades (Task 27 Part D)
+        Research,
+        CancelResearch,
     }
 
     public class ActionSpec
@@ -1050,6 +1053,39 @@ namespace Game
                         }
                     }
                     return Unknown(spec, words, "\u201Cspawn\u201D looks like this: \u201Cspawn Bullet at me\u201D, \u201Cspawn Bullet at me offset 30\u201D, \u201Cspawn Ring at me rarity \"Rare\" level 12\u201D, \u201Cspawn prefab \"Hero\" at SpawnPoint\u201D or \u201Cspawn scene \"HeroScene\" at SpawnPoint\u201D", warn);
+                case "research":
+                {
+                    // `research "Stim Pack" at Barracks` — queue an upgrade on that building.
+                    // `research "Stim Pack"` queues on the acting building (its own sheet).
+                    // The name is quoted like a spell, so a two-word upgrade stays one name.
+                    string upgrade = null;
+                    int upgradeUsed = 0;
+                    if (words.Count >= 2 && words[1].Type == TokenType.Str)
+                    {
+                        upgrade = words[1].Text;
+                        upgradeUsed = 1;
+                    }
+                    else if (words.Count >= 2)
+                    {
+                        upgrade = ThingAt(words, 1, out upgradeUsed);
+                    }
+                    if (!string.IsNullOrEmpty(upgrade))
+                    {
+                        spec.Thing = upgrade;
+                        int index = 1 + upgradeUsed;
+                        if (words.Count >= index + 2 && words[index].Text == "at")
+                        {
+                            string building = TargetAt(words, index + 1, out int buildingUsed);
+                            if (building != null)
+                            {
+                                spec.To = building;
+                                index += 1 + buildingUsed;
+                            }
+                        }
+                        return Finish(spec, ActionVerb.Research, words, index);
+                    }
+                    return Unknown(spec, words, "\u201Cresearch\u201D looks like this: \u201Cresearch \"Stim Pack\" at Barracks\u201D", warn);
+                }
                 case "train":
                 {
                     // `train Marine at Barracks` — add a unit to that building's queue.
@@ -1100,6 +1136,28 @@ namespace Game
                     // `cancel aim` leaves target-pick mode (Task 27 Part A).
                     if (words.Count >= 2 && words[1].Text == "aim")
                         return Finish(spec, ActionVerb.CancelAim, words, 2);
+                    if (words.Count >= 3 && words[1].Text == "research")
+                    {
+                        // `cancel research "Stim Pack"` refunds it; `at Barracks` names the building.
+                        string upgrade = words[2].Type == TokenType.Str
+                            ? words[2].Text
+                            : ThingAt(words, 2, out _);
+                        if (!string.IsNullOrEmpty(upgrade))
+                        {
+                            spec.Thing = upgrade;
+                            int index = 3;
+                            if (words.Count >= index + 2 && words[index].Text == "at")
+                            {
+                                string building = TargetAt(words, index + 1, out int buildingUsed);
+                                if (building != null)
+                                {
+                                    spec.To = building;
+                                    index += 1 + buildingUsed;
+                                }
+                            }
+                            return Finish(spec, ActionVerb.CancelResearch, words, index);
+                        }
+                    }
                     if (words.Count >= 3 && words[1].Text == "training")
                     {
                         string unit = ThingAt(words, 2, out int unitUsed);
@@ -1129,7 +1187,7 @@ namespace Game
                         }
                         return Finish(spec, ActionVerb.CancelBuild, words, index);
                     }
-                    return Unknown(spec, words, "\u201Ccancel\u201D looks like this: \u201Ccancel build\u201D or \u201Ccancel training Marine\u201D", warn);
+                    return Unknown(spec, words, "\u201Ccancel\u201D looks like this: \u201Ccancel build\u201D, \u201Ccancel training Marine\u201D or \u201Ccancel research \"Stim Pack\"\u201D", warn);
                 }
                 case "set":
                 {

@@ -775,7 +775,7 @@ cooldowns cost one polling trigger per unit.
   play-check pending (press stim, watch `my Speed` jump and come back, and `when buff "stim" ends`
   fire once).
 
-### Part D — Research queue (`Runtime/ResearchManager.cs`) [ ]
+### Part D — Research queue (`Runtime/ResearchManager.cs`) [x]
 - Per-building queue mirroring `ProductionManager`: `Start`, `Cancel`, `ProgressOf`, `Remaining`,
   `Tick`, costs through `ResourceManager`, and `when research starts` / `finishes` / `queue is empty`
 - Words: `research "Stim Pack" at Barracks`, `cancel research "Stim Pack"`
@@ -783,6 +783,55 @@ cooldowns cost one polling trigger per unit.
   100`, `set StimPackRequires to "Barracks"`), read at boot like `Matchups.events`
 - Why a manager rather than a `wait` in a sheet: cancel with refund, progress bars via `bind`, and
   a queue that survives the building being selected away from
+
+#### Part D notes
+- `Runtime/ResearchManager.cs` holds both halves. `Upgrades` (static) reads `Upgrades.events` the
+  `Matchups` way — one row per block of `set <Upgrade><Field> to ...` literals, suffixes `Time`,
+  `Cost`, `Requires`, `Levels`/`MaxLevel`/`Level` (a name that ends in none of them is ignored).
+  `KeyOf` strips whitespace, so `"Stim Pack"` and `StimPack` reach one row and one level global
+  (`Player2 StimPack`). No file (or a reload with none) leaves every scene exactly as before.
+- `ResearchManager` is `ProductionManager`'s shape: queues keyed by the building actor, `Enqueue`
+  raises `ResearchStarted` immediately, `Tick(runtime, time)` raises `ResearchFinished` → next
+  `ResearchStarted` → `ResearchQueueEmpty`, all before the push drain so the event runs that tick.
+  `ProgressOf` is 0–100 like `ConstructionManager.ProgressOf`, `Remaining` is seconds, and the
+  manager writes `my ResearchProgress` / `my ResearchName` on the building for a `bind progress`
+  card. `Destroyed` drops the queue; `Reset` clears every queue.
+- Costs are charged at enqueue, so a cancel can refund and the bank cannot be spent twice. Prices
+  come from live `<Upgrade><Resource>Cost` globals plus the file's declared `Cost` for the default
+  resource. `ResourceManager` gained `CostsOf` (a name's cost globals) and `BankName` /
+  `BankValue` / `WriteBank`: a research order spends its **owner's** bank — `Player2 Minerals`
+  when the game keeps per-player banks, otherwise the bare global, so `Minerals` stays player 1's
+  alias and existing single-player economy files are untouched. The owner comes from the fog
+  entry for the building, falling back to `my Player`. `cancel` refunds exactly what was paid,
+  scaled by `ResearchRefund` (1 by default), and a destroyed building keeps its loss.
+- Finishing applies the upgrade through Part B: `Tech.SetLevel` raises `Player<N> <Upgrade>` for
+  the building's owner only, capped by the row's `Levels` (1 when nobody says, 0 = unlimited).
+  `StimPackRequires` refuses research at a different building; a duplicate in the queue, an
+  unaffordable price, or a level already at the cap is refused without charging, and each refusal
+  gets one bridge warning.
+- Words: `research "<upgrade>" [at <building>]` reads a quoted name like `cast` (a two-word
+  upgrade stays one name; an unquoted single word also parses) and `cancel research "<upgrade>"
+  [at <building>]` joins the `cancel` family. Verbs `Research` / `CancelResearch` route through
+  `FlaxActions` to the manager, reusing `ResolveProductionBuilding` and the building's own name.
+- Triggers: `when <building> starts|finishes researching "<upgrade>"`, the bare `when research
+  starts` / `when research finishes`, and `when research queue is empty` / `when <building>
+  research queue is empty` (also `my`). `EventRuntime.Matches` mirrors the production branch: the
+  upgrade in `Name`, the building actor in `Other`, its template in `Material`, the owner in
+  `PlayerA`. The registry rows use `<name>` for the quoted upgrade so trigger validation accepts
+  it, and `keywords.html` documents the words.
+- `GameFiles/Upgrades.events` ships Stim Pack, Psi Storm and three-level infantry weapon/armour
+  rows; `EventsManager` loads it at boot and on reload next to `Matchups`.
+- 46 new pure checks (both trigger shapes incl. quoted names and queue edges, both action parses,
+  the data loader's suffixes/reset, duration precedence, charge-at-start, progress/remaining,
+  started/finished/empty pushes on the right sheets, level landing on the right player, full and
+  half refunds, per-player banks, every refusal, queue promotion, destroyed queue, the untouched
+  default, and the registry rows) -> **1727 passed, 0 failed**; `Source/Game.csproj` builds with
+  0 warnings and 0 errors (`dotnet build Source/Game.csproj -c Debug`; `Flax.Build` printed only
+  its SDK notices here).
+- Bridge half (real actor resolution, live charges, the bank's fog lookup) has no unit tests, as
+  usual; editor play-check pending: `research "Stim Pack" at Barracks` with 100 minerals, watch
+  `my ResearchProgress` rise, `cancel research "Stim Pack"` refund, then finish and see
+  `Player1 StimPack` reach 1 while the other player stays at 0.
 
 ### Part E — Shared cooldowns (`Runtime/Cooldowns.cs`) [ ]
 - Per-actor named timers advanced in one loop: `Ready(actor, name)`, `Start(actor, name, seconds)`,

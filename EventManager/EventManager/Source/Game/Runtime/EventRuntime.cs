@@ -259,6 +259,8 @@ namespace Game
         public ConstructionManager Construction = new ConstructionManager();
         /// <summary>RTS production queues and training timers (Task 18 Part D).</summary>
         public ProductionManager Production = new ProductionManager();
+        /// <summary>RTS research queues, refunds and per-player upgrade levels (Task 27 Part D).</summary>
+        public ResearchManager Research = new ResearchManager();
         /// <summary>RTS per-unit order queues, attack-move and rally points (Task 18 Part E).</summary>
         public OrderManager Orders = new OrderManager();
         /// <summary>RTS per-player fog of war and visibility (Task 18 Part F).</summary>
@@ -1255,6 +1257,9 @@ namespace Game
             // Production completions are pushed before the drain below, so a
             // `when <building> finishes training <unit>` event runs this same tick.
             Production.Tick(this, Time);
+            // Research completions are pushed before the drain too, so `when research finishes`
+            // (and its named forms) run in the tick the upgrade landed.
+            Research.Tick(this, Time);
             // Construction completions are pushed before the drain below, so a
             // `when construction completes` event runs this same tick.
             Construction.Tick(this);
@@ -1436,6 +1441,13 @@ namespace Game
                    kind == TriggerKind.ProductionQueueEmpty;
         }
 
+        private static bool IsResearchKind(TriggerKind kind)
+        {
+            return kind == TriggerKind.ResearchStarted ||
+                   kind == TriggerKind.ResearchFinished ||
+                   kind == TriggerKind.ResearchQueueEmpty;
+        }
+
         private static bool IsOrderKind(TriggerKind kind)
         {
             return kind == TriggerKind.OrderCompletes ||
@@ -1505,6 +1517,27 @@ namespace Game
             if (IsProductionKind(descriptor.Kind))
             {
                 if (descriptor.Kind == TriggerKind.ProductionQueueEmpty)
+                {
+                    if (descriptor.RequireName.Length == 0)
+                        return true;
+                    return descriptor.RequireName == "me" || descriptor.RequireName == "my"
+                        ? ReferenceEquals(signal.Other, sheet.Actor)
+                        : signal.Name == descriptor.RequireName;
+                }
+                if (descriptor.RequireUnit.Length > 0 &&
+                    !string.Equals(signal.Name, descriptor.RequireUnit, StringComparison.OrdinalIgnoreCase))
+                    return false;
+                if (descriptor.RequireName.Length == 0)
+                    return true;
+                if (descriptor.RequireName == "me" || descriptor.RequireName == "my")
+                    return ReferenceEquals(signal.Other, sheet.Actor);
+                return signal.Material == descriptor.RequireName || NameOf(signal.Other) == descriptor.RequireName;
+            }
+            // Research signals mirror production: the upgrade in `Name`, the building actor in
+            // `Other`, the building template in `Material` (Task 27 Part D).
+            if (IsResearchKind(descriptor.Kind))
+            {
+                if (descriptor.Kind == TriggerKind.ResearchQueueEmpty)
                 {
                     if (descriptor.RequireName.Length == 0)
                         return true;
