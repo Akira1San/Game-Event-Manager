@@ -65,6 +65,9 @@ namespace Game
         AttackTypeIs,
         // RTS attack matchups (Task 23 Part B)
         CanAttackTarget,
+        // RTS air targeting (Task 28 Part D)
+        TargetTypeIs,
+        CanAttackType,
         // RTS target-pick mode (Task 27 Part A)
         AimIsUnit,
         // Shared cooldowns (Task 27 Part E)
@@ -395,6 +398,16 @@ namespace Game
             }
 
             // ---- RTS attack matchups (Task 23 Part B) ----
+            // `me can attack air` / `me can attack ground` (Task 28 Part D) — the same matchup
+            // table asked about a type, so an anti-air unit can branch without naming an actor.
+            // Must precede the actor form below, which would read `air` as a scene name.
+            if (texts.Length == 4 && texts[0] == "me" && texts[1] == "can" && texts[2] == "attack" &&
+                AirTargeting.Canonical(texts[3]) != null)
+            {
+                node.Kind = ConditionKind.CanAttackType;
+                node.Name = AirTargeting.Canonical(texts[3]);
+                return node;
+            }
             // `me can attack other` / `me can attack Enemy` — the data-driven matchup table.
             if (texts.Length >= 4 && texts[0] == "me" && texts[1] == "can" && texts[2] == "attack")
             {
@@ -511,6 +524,16 @@ namespace Game
             {
                 node.Kind = ConditionKind.AttackTypeIs;
                 node.Name = AttackTypes.Canonical(texts[2]);
+                return node;
+            }
+
+            // `target is air` / `target is land` (Task 28 Part D) — the unit's current order
+            // target, then the actor whose event is running. `ground` means the land type.
+            if (texts.Length == 3 && texts[0] == AirTargeting.Pronoun && texts[1] == "is" &&
+                AirTargeting.Canonical(texts[2]) != null)
+            {
+                node.Kind = ConditionKind.TargetTypeIs;
+                node.Name = AirTargeting.Canonical(texts[2]);
                 return node;
             }
 
@@ -771,6 +794,10 @@ namespace Game
                     return AttackTypes.Is(context, node.Name);
                 case ConditionKind.CanAttackTarget:
                     return Matchups.CanAttackTarget(context, FindTarget(node.Thing, context));
+                case ConditionKind.TargetTypeIs:
+                    return AirTargeting.IsType(context, AirTargeting.TargetOf(context), node.Name);
+                case ConditionKind.CanAttackType:
+                    return AirTargeting.CanAttackType(context, node.Name);
                 case ConditionKind.InRangeOf:
                 {
                     object target = FindTarget(node.Thing, context);
@@ -1045,6 +1072,8 @@ namespace Game
                 return context.Me;
             if (thing == "other")
                 return context.Other;
+            if (thing == AirTargeting.Pronoun)
+                return AirTargeting.TargetOf(context);
             return context.Runtime.FindThing(thing, context.Me);
         }
 

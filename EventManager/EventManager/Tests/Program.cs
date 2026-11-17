@@ -10413,6 +10413,127 @@ Check(liftCondEngine.Variables.GetGlobal("AirborneGate").AsNumber() == 1 &&
       liftCondEngine.Variables.GetGlobal("GroundGate").AsNumber() == 0,
     "`me is airborne` is true for a building holding an altitude, and `me is on ground` is not");
 
+// ------------------------------------------------------------------
+// Task 28 Part D: air targeting gate
+// ------------------------------------------------------------------
+
+var targetTypeCond = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  target is air").Events[0].Body[0].Words);
+Check(targetTypeCond.Kind == ConditionKind.TargetTypeIs && targetTypeCond.Name == UnitTypes.Air,
+    "`target is air` parses to TargetTypeIs");
+var targetGroundCond = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  target is ground").Events[0].Body[0].Words);
+Check(targetGroundCond.Kind == ConditionKind.TargetTypeIs && targetGroundCond.Name == UnitTypes.Land,
+    "`target is ground` reads the land unit type");
+Check(Conditions.Parse(parser.Parse("when every 1 seconds\n  target is shiny").Events[0].Body[0].Words).Kind
+        != ConditionKind.TargetTypeIs,
+    "`target is <something else>` is not a unit type check");
+var canAttackAirCond = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  me can attack air").Events[0].Body[0].Words);
+Check(canAttackAirCond.Kind == ConditionKind.CanAttackType && canAttackAirCond.Name == UnitTypes.Air,
+    "`me can attack air` parses to CanAttackType instead of the actor matchup check");
+var canAttackGroundCond = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  me can attack ground").Events[0].Body[0].Words);
+Check(canAttackGroundCond.Kind == ConditionKind.CanAttackType &&
+      canAttackGroundCond.Name == UnitTypes.Land,
+    "`me can attack ground` is the land type");
+Check(Conditions.Parse(parser.Parse("when every 1 seconds\n  me can attack other").Events[0].Body[0].Words).Kind
+        == ConditionKind.CanAttackTarget,
+    "`me can attack other` still names an actor");
+
+var airGateWorld = new FakeWorld();
+var gateMarine = new FakeActor("Marine");
+var gateBomber = new FakeActor("Bomber");
+var gateRaider = new FakeActor("Raider");
+airGateWorld.AddActor(gateMarine);
+airGateWorld.AddActor(gateBomber);
+airGateWorld.AddActor(gateRaider);
+var airGate = FreshEngine(airGateWorld);
+airGate.Variables.SetLocal(gateBomber, "unit type", ValueBox.OfText("air"));
+EventContext AirGateContext(object me, object other = null) => new EventContext
+{
+    Variables = airGate.Variables,
+    World = airGateWorld,
+    Me = me,
+    Other = other,
+    Runtime = airGate,
+};
+airGate.Orders.StartOrder(airGate.Variables, airGate, gateMarine,
+    new UnitOrder { Kind = UnitOrderKind.Attack, Name = "attack", Target = gateBomber, TargetName = "Bomber" });
+Check(Conditions.Evaluate(targetTypeCond, AirGateContext(gateMarine)),
+    "`target is air` reads the unit's current order target");
+var targetLandCond = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  target is land").Events[0].Body[0].Words);
+Check(!Conditions.Evaluate(targetLandCond, AirGateContext(gateMarine)),
+    "`target is land` is false for an air order target");
+var idleScout = new FakeActor("Scout");
+airGateWorld.AddActor(idleScout);
+Check(!airGate.Orders.HasOrders(idleScout) &&
+      Conditions.Evaluate(targetTypeCond, AirGateContext(idleScout, gateBomber)),
+    "`target is air` falls back to `other` for a unit with no order");
+Check(!Conditions.Evaluate(targetTypeCond, AirGateContext(idleScout)),
+    "`target is air` is false with neither an order target nor `other`");
+
+Check(!Conditions.Evaluate(canAttackAirCond, AirGateContext(gateMarine)) &&
+      Conditions.Evaluate(canAttackGroundCond, AirGateContext(gateMarine)),
+    "a land unit cannot attack air but can attack ground");
+airGate.Variables.SetLocal(gateBomber, "unit type", ValueBox.OfText("air"));
+Check(Conditions.Evaluate(canAttackAirCond, AirGateContext(gateBomber)),
+    "an air unit can attack air, as the default table says");
+
+var canAttackPronounCond = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  me can attack target").Events[0].Body[0].Words);
+Check(canAttackPronounCond.Kind == ConditionKind.CanAttackTarget &&
+      !Conditions.Evaluate(canAttackPronounCond, AirGateContext(gateMarine)) &&
+      Conditions.Evaluate(canAttackPronounCond, AirGateContext(gateBomber, gateMarine)),
+    "`me can attack target` resolves the pronoun to the order target, then `other`");
+
+Check(AirTargeting.Canonical("Ground") == UnitTypes.Land && AirTargeting.Canonical("Air") == UnitTypes.Air &&
+      AirTargeting.Canonical("swimming") == null,
+    "`ground` is the only extra spelling the type words take");
+Check((AirTargeting.Refusal(AirGateContext(gateMarine), gateBomber) ?? "").Contains("LandCanAttackAir"),
+    "the refusal names the matchup global that would allow the pair");
+Check(AirTargeting.Refusal(AirGateContext(gateMarine), gateRaider) == null,
+    "a pair the table allows is not refused");
+Check(AirTargeting.Refusal(AirGateContext(gateMarine), null) == null,
+    "a point order with no actor target is never refused");
+
+// A building lifted with `lift off` (Task 28 Part C) is still a land-type unit, but it is
+// holding an altitude: it is in the sky, not standing where a ground army can reach it.
+var skyTower = new FakeActor("SkyTower");
+airGateWorld.AddActor(skyTower);
+airGate.Variables.SetLocal(skyTower, Altitude.Variable, ValueBox.OfNumber(120));
+Check(UnitTypes.TypeOf(airGate.Variables, skyTower) == UnitTypes.Land &&
+      AirTargeting.EffectiveTypeOf(airGate.Variables, skyTower) == UnitTypes.Air,
+    "a lifted building counts as air for the gate even though its unit type is land");
+var skySiege = new FakeActor("Siege");
+airGateWorld.AddActor(skySiege);
+airGate.Orders.StartOrder(airGate.Variables, airGate, skySiege,
+    new UnitOrder { Kind = UnitOrderKind.Attack, Name = "attack", Target = skyTower, TargetName = "SkyTower" });
+Check(Conditions.Evaluate(targetTypeCond, AirGateContext(skySiege)),
+    "`target is air` is true for a lifted building under attack");
+Check((AirTargeting.Refusal(AirGateContext(skySiege), skyTower) ?? "").Contains("LandCanAttackAir"),
+    "a ground unit's `attack` on a lifted building is refused by the same row");
+Check(Conditions.Evaluate(canAttackAirCond, AirGateContext(skyTower)),
+    "a lifted building can itself attack air, as an air unit does");
+var canAttackSkyCond = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  me can attack other").Events[0].Body[0].Words);
+Check(!Conditions.Evaluate(canAttackSkyCond, AirGateContext(skySiege, skyTower)),
+    "`me can attack other` agrees: a lifted building is out of a ground unit's reach");
+airGate.Variables.SetLocal(skyTower, Altitude.Variable, ValueBox.OfNumber(0));
+Check(AirTargeting.EffectiveTypeOf(airGate.Variables, skyTower) == UnitTypes.Land &&
+      AirTargeting.Refusal(AirGateContext(skySiege), skyTower) == null,
+    "landing the building returns it to a land target");
+
+airGate.Variables.SetGlobal(Matchups.VariableFor(UnitTypes.Land, UnitTypes.Air), ValueBox.OfBoolean(true));
+Check(Conditions.Evaluate(canAttackAirCond, AirGateContext(gateMarine)) &&
+      AirTargeting.Refusal(AirGateContext(gateMarine), gateBomber) == null,
+    "`LandCanAttackAir` opens the gate for both the condition and the order");
+
+Check(WordRegistry.All.Any(e => e.Word == "target is air") &&
+      WordRegistry.All.Any(e => e.Word == "me can attack air"),
+    "the registry documents the air target gate");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

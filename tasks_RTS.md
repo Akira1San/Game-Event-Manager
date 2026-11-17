@@ -1087,11 +1087,30 @@ land for buildings, and no targeting gate that refuses an air target for a land-
   `train` queue stop and its grid cell free, `land` it over water and see the refusal, then over
   land and see the queue resume). The flying-building example sheet is still Part E.
 
-### Part D — Air targeting gate [ ]
+### Part D — Air targeting gate [x]
 - `target is air` / `target is land` condition and a `can attack air` / `can attack ground` gate
   that consults the Task 23 `Matchups` rows, so an attack order against an unreachable type is
   refused with one warning instead of firing
 - Ground-only units keep their old behaviour in scenes that never wrote a matchup row
+- **Part D notes.** `Runtime/AirTargeting.cs` holds the whole answer: `Canonical` reads `ground`
+  as the land type, `TargetOf` resolves the `target` pronoun as the active order's target first
+  and the actor whose event is running (`other`) second, `IsType` / `CanAttackType` read
+  `my unit type` through `UnitTypes`, and `Refusal` phrases the warning and names the
+  `<Mine>CanAttack<Theirs>` global that would allow the pair. `target` also joined the pronoun
+  list in `Conditions.FindTarget`, so `me can attack target`, `me is in range of target` and the
+  other thing-naming conditions resolve it. `me can attack air` is parsed before the generic
+  `me can attack <thing>` branch, which would otherwise look for a scene actor called "air".
+  The gate itself lives in `StartAttack` only: a forbidden pair warns once and returns before
+  the order exists, so a ground unit never walks across the map to swing at a flying one, while
+  `attack-move` is deliberately untouched and still travels. No new matchup data — the default
+  table (land and sea cannot reach air) is what fires the refusal, and `LandCanAttackAir`
+  opens both the condition and the order.
+- **Part D follow-up — altitude counts as air.** The gate does not read `my unit type` alone:
+  `AirTargeting.EffectiveTypeOf` reports `air` for any unit holding an altitude above 0, so a
+  building lifted with `lift off` (Part C) stops being a ground target the moment it leaves the
+  floor and becomes one again when it lands. `Matchups.CanAttackBetween` asks that same helper,
+  so `me can attack other`, `me can attack target`, the `attack` refusal and the runtime's
+  damage drop all agree — a ground army cannot hit a lifted building by any of those paths.
 
 ### Part E — Content, words, tests, acceptance [ ]
 - Example content: an air unit (`Observer.events` or a Wraith-style sheet) that hovers, crosses

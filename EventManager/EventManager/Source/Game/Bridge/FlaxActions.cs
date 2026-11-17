@@ -3504,6 +3504,16 @@ namespace Game
             }
             if (!TryResolveOrderTarget(context, spec.Thing, out object target, out string targetName, out bool isPosition))
                 return;
+            // A pair the matchup table forbids is refused here (Task 28 Part D) instead of
+            // walking the unit across the map to swing at something it cannot reach. One
+            // warning names the global that would allow it. Only `attack` is gated this way;
+            // `attack-move` still travels and lets the sheet decide what it meets.
+            string refusal = AirTargeting.Refusal(context, target);
+            if (refusal != null)
+            {
+                WarnOnce(refusal);
+                return;
+            }
             context.Runtime.Wander.Clear(me);
             var order = new UnitOrder
             {

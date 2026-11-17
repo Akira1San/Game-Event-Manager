@@ -61,12 +61,16 @@ namespace Game
             return defender != UnitTypes.Air; // ground and sea cannot reach the sky
         }
 
-        /// <summary>The two actors' own types decide the answer.</summary>
+        /// <summary>
+        /// The two actors' own types decide the answer. A unit holding an altitude above 0
+        /// counts as air (Task 28 Part D): a building lifted with <c>lift off</c> keeps its land
+        /// unit type, but it is in the sky, so ground units cannot reach or damage it.
+        /// </summary>
         public static bool CanAttackBetween(EventVariables variables, object attacker, object defender)
         {
             return CanAttack(variables,
-                UnitTypes.TypeOf(variables, attacker),
-                UnitTypes.TypeOf(variables, defender));
+                AirTargeting.EffectiveTypeOf(variables, attacker),
+                AirTargeting.EffectiveTypeOf(variables, defender));
         }
 
         /// <summary>`me can attack other` — the acting unit against a resolved target.</summary>
