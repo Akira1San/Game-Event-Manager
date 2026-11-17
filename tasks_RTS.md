@@ -833,13 +833,51 @@ cooldowns cost one polling trigger per unit.
   `my ResearchProgress` rise, `cancel research "Stim Pack"` refund, then finish and see
   `Player1 StimPack` reach 1 while the other player stays at 0.
 
-### Part E — Shared cooldowns (`Runtime/Cooldowns.cs`) [ ]
+### Part E — Shared cooldowns (`Runtime/Cooldowns.cs`) [x]
 - Per-actor named timers advanced in one loop: `Ready(actor, name)`, `Start(actor, name, seconds)`,
   `Remaining(actor, name)`, `Clear(actor)` on death
 - Words: `put "stim" on cooldown for 10 seconds`, condition `my "stim" is ready`, value
   `my "stim" cooldown`
 - Replaces the per-unit `when every 1 seconds` polling; the old polling keeps working, so nothing
   is taken away
+
+#### Part E notes
+- `Runtime/Cooldowns.cs` stores seconds-remaining per actor per name (`actor → name → seconds`,
+  names case-insensitive), so `Tick(dt)` walks every timer once, drops the expired ones and never
+  touches an absolute clock. `Start` refreshes rather than stacks; `seconds <= 0` clears the timer,
+  so `for 0 seconds` reads ready immediately; `Remaining` returns 0 for an unknown or expired
+  timer and `Ready` is `Remaining <= 0`. `Count`, `Forget`, `Clear(actor)` and `Reset` round it
+  out. No Flax types.
+- `EventRuntime.Tick` advances the whole table once between the buff expiry and the sound
+  expiry, with the same one-second hitched-frame clamp the buffs use, so a long pause cannot
+  drain every ability at once. `SceneStarted` calls `Cooldowns.Reset()`; `FlaxActions`'
+  `ForgetSubject` calls `Cooldowns.Clear(actor)` beside the spell/buff/targeting clears, so a
+  destroyed unit (or a clone that reuses its name) starts ready.
+- The value `my "stim" cooldown` is parsed like `my "stim" time left`: `EventParser.ReadVariable`
+  joins the quoted name into `cooldown stim` (`Cooldowns.VariableName`) and `EventContext.ReadMy`
+  answers it from the manager before ordinary locals, so a HUD bind or a `set` line reads live
+  seconds without mirroring a countdown.
+- The condition `my "stim" is ready` is `ConditionKind.CooldownReady`, with `is not ready`
+  setting `Negated`; `Conditions.Evaluate` asks the manager for the acting actor. It sits before
+  the generic `<var> is <value>` handling, so a quoted name is never mistaken for a local
+  variable.
+- The action `put "stim" on cooldown for <n> seconds` is `ActionVerb.PutOnCooldown`, read by a
+  new `put` case in `ActionWords` (quoted name like `cast`, optional trailing `seconds`).
+  `FlaxActions.PutOnCooldown` starts it on the acting actor and warns once when run from the
+  global sheet, which has no body to cool down.
+- `WordRegistry` and `keywords.html` document the action, condition and value; the registry
+  examples are parsed by the existing self-test.
+- The old style is untouched: `when every 1 seconds` still fires (a check asserts it alongside a
+  live shared timer), so no existing sheet loses its hand-rolled cooldown.
+- 29 new pure checks (start/read/tick/expiry arithmetic, refresh instead of stacking, zero and
+  negative durations, independent names and actors, one-loop expiry, `Clear` sparing other
+  actors, `Reset`, the `cooldown <name>` mapping, the action/condition/value parses, the
+  missing-duration help, the runtime `ReadMy` readout, both condition polarities across ticks,
+  the surviving `when every` poll, and the registry rows) -> **1756 passed, 0 failed**;
+  `Source/Game.csproj` builds with 0 warnings and 0 errors.
+- Bridge half (the actor the word runs on, the death clear) has no unit tests, as usual; editor
+  play-check pending: bind a key to `put "stim" on cooldown for 10 seconds`, gate the ability on
+  `my "stim" is ready`, and confirm the value counts down and a destroyed unit comes back ready.
 
 ### Part F — Content, words, tests, acceptance [ ]
 - Example content: `Marine.events` stim (cost, cooldown, buff, sound), `HighTemplar.events` psi storm

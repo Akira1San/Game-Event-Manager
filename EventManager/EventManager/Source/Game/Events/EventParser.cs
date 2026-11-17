@@ -763,6 +763,14 @@ namespace Game
                     index += 4;
                     return new VariableValue { Line = t.Line, Owner = "my", Name = Buffs.TimeLeftName(buffName) };
                 }
+                // `my "stim" cooldown` — the seconds left on a shared timer (Task 27 Part E).
+                if (index + 2 < words.Count && words[index + 1].Type == TokenType.Str &&
+                    words[index + 2].Text == "cooldown")
+                {
+                    string timerName = words[index + 1].Text;
+                    index += 3;
+                    return new VariableValue { Line = t.Line, Owner = "my", Name = Cooldowns.VariableName(timerName) };
+                }
                 if (index + 2 < words.Count && words[index + 1].Type == TokenType.Word &&
                     words[index + 2].Type == TokenType.Word)
                 {

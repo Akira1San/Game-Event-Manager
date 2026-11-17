@@ -125,6 +125,8 @@ namespace Game
         // RTS research queues & upgrades (Task 27 Part D)
         Research,
         CancelResearch,
+        // Shared cooldowns (Task 27 Part E)
+        PutOnCooldown,
     }
 
     public class ActionSpec
@@ -1053,6 +1055,23 @@ namespace Game
                         }
                     }
                     return Unknown(spec, words, "\u201Cspawn\u201D looks like this: \u201Cspawn Bullet at me\u201D, \u201Cspawn Bullet at me offset 30\u201D, \u201Cspawn Ring at me rarity \"Rare\" level 12\u201D, \u201Cspawn prefab \"Hero\" at SpawnPoint\u201D or \u201Cspawn scene \"HeroScene\" at SpawnPoint\u201D", warn);
+                case "put":
+                {
+                    // `put "stim" on cooldown for 10 seconds` — start a named per-actor timer.
+                    // The name is quoted like a spell, so a two-word timer stays one name.
+                    if (words.Count >= 6 && words[1].Type == TokenType.Str &&
+                        words[2].Text == "on" && words[3].Text == "cooldown" &&
+                        words[4].Text == "for" && words[5].Type == TokenType.Number)
+                    {
+                        spec.Thing = words[1].Text;
+                        spec.Duration = Math.Max(0, words[5].Number);
+                        int index = 6;
+                        if (words.Count >= index + 1 && words[index].Text == "seconds")
+                            index++;
+                        return Finish(spec, ActionVerb.PutOnCooldown, words, index);
+                    }
+                    return Unknown(spec, words, "\u201Cput\u201D looks like this: \u201Cput \"stim\" on cooldown for 10 seconds\u201D", warn);
+                }
                 case "research":
                 {
                     // `research "Stim Pack" at Barracks` — queue an upgrade on that building.

@@ -67,6 +67,8 @@ namespace Game
         CanAttackTarget,
         // RTS target-pick mode (Task 27 Part A)
         AimIsUnit,
+        // Shared cooldowns (Task 27 Part E)
+        CooldownReady,
         // RTS fog of war & visibility (Task 18 Part F)
         IsVisibleToEnemy,
         IsHidden,
@@ -535,6 +537,24 @@ namespace Game
                 return node;
             }
 
+            // ---- shared cooldowns (Task 27 Part E) ----
+            // `my "stim" is ready` gates an ability on its named timer; `is not ready` inverts it.
+            if (texts.Length >= 4 && texts[0] == "my" && tokens[1].Type == TokenType.Str &&
+                texts[2] == "is" && texts[3] == "ready")
+            {
+                node.Kind = ConditionKind.CooldownReady;
+                node.Name = tokens[1].Text;
+                return node;
+            }
+            if (texts.Length >= 5 && texts[0] == "my" && tokens[1].Type == TokenType.Str &&
+                texts[2] == "is" && texts[3] == "not" && texts[4] == "ready")
+            {
+                node.Kind = ConditionKind.CooldownReady;
+                node.Name = tokens[1].Text;
+                node.Negated = true;
+                return node;
+            }
+
             // ---- attack range (Task 21 Part A) ----
             // `my attack range is 120` — the same multiword stat `set` joins, so a sheet can
             // read back the range it declared.
@@ -913,6 +933,14 @@ namespace Game
                         return false;
                     TargetingSession session = aimContext.Runtime.Targeting.SessionOf(aimContext.Me);
                     return session != null && session.HasPick && session.PickIsUnit;
+                }
+                // `my "stim" is ready` (Task 27 Part E): the shared timer has run out.
+                case ConditionKind.CooldownReady:
+                {
+                    if (context.Runtime == null || context.Me == null)
+                        return false;
+                    bool ready = context.Runtime.Cooldowns.Ready(context.Me, node.Name);
+                    return node.Negated ? !ready : ready;
                 }
                 case ConditionKind.IsVisibleToEnemy:
                     return context.Me != null && context.Runtime != null &&

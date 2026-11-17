@@ -9847,6 +9847,143 @@ Check(WordRegistry.All.Any(e => e.Kind == "trigger" && e.Word.Contains("finishes
       WordRegistry.All.Any(e => e.Kind == "trigger" && e.Word == "when research queue is empty"),
     "the word book lists the research triggers");
 
+// ------------------------------------------------------------------
+// Task 27 Part E: shared cooldowns
+// ------------------------------------------------------------------
+
+// The timers: one loop advances them, expiry is exact, and actors stay independent.
+var cd = new Cooldowns();
+var cdMarine = new FakeActor("Marine");
+var cdOther = new FakeActor("Zergling");
+Check(cd.Ready(cdMarine, "stim") && cd.Remaining(cdMarine, "stim") == 0,
+    "a timer nobody started is ready");
+cd.Start(cdMarine, "stim", 10);
+Check(!cd.Ready(cdMarine, "stim") && Math.Abs(cd.Remaining(cdMarine, "stim") - 10) < 1e-9,
+    "`put \"stim\" on cooldown for 10 seconds` starts a live timer");
+cd.Tick(4);
+Check(Math.Abs(cd.Remaining(cdMarine, "stim") - 6) < 1e-9, "one tick loop advances the timer");
+cd.Tick(6);
+Check(cd.Ready(cdMarine, "stim") && cd.Remaining(cdMarine, "stim") == 0,
+    "the timer is exactly ready when its time is up");
+cd.Tick(5);
+Check(cd.Ready(cdMarine, "stim"), "an expired timer never goes negative");
+cd.Start(cdMarine, "stim", 3);
+cd.Start(cdMarine, "stim", 5);
+Check(Math.Abs(cd.Remaining(cdMarine, "stim") - 5) < 1e-9 && !cd.Ready(cdMarine, "stim"),
+    "starting the same timer again refreshes it instead of stacking");
+cd.Start(cdMarine, "stim", 0);
+Check(cd.Ready(cdMarine, "stim"), "`for 0 seconds` leaves the timer ready");
+cd.Start(cdMarine, "stim", 4);
+cd.Start(cdMarine, "storm", 2);
+Check(!cd.Ready(cdMarine, "stim") && !cd.Ready(cdMarine, "storm") && cd.Count(cdMarine) == 2,
+    "two abilities on one actor cool down independently");
+cd.Start(cdOther, "stim", 4);
+cd.Tick(2);
+Check(cd.Ready(cdMarine, "storm") && !cd.Ready(cdMarine, "stim") && cd.Count(cdMarine) == 1,
+    "the single loop expires only the timers that ran out");
+Check(!cd.Ready(cdOther, "stim"), "another actor's same-named timer is untouched");
+cd.Clear(cdMarine);
+Check(cd.Ready(cdMarine, "stim") && cd.Count(cdMarine) == 0 && !cd.Ready(cdOther, "stim"),
+    "Clear drops one actor's timers on death and leaves the others");
+cd.Reset();
+Check(cd.Ready(cdOther, "stim"), "Reset clears every timer");
+Check(Cooldowns.VariableName("stim") == "cooldown stim" &&
+      Cooldowns.TryReadVariable("cooldown stim", out string cdName) && cdName == "stim" &&
+      !Cooldowns.TryReadVariable("cooldown", out _),
+    "the value form maps to `cooldown <name>`");
+
+// The words: action, condition and value.
+var cdProgram = parser.Parse("when Q is pressed\n  put \"stim\" on cooldown for 10 seconds\n");
+var cdSpec = ActionWords.Parse(((RawActionNode)cdProgram.Events[0].Body[0].Statement!).Words, _ => { });
+Check(cdSpec.Verb == ActionVerb.PutOnCooldown && cdSpec.Thing == "stim" &&
+      Math.Abs(cdSpec.Duration - 10) < 1e-9,
+    "`put \"stim\" on cooldown for 10 seconds` parses to PutOnCooldown");
+string cdHint = "";
+Action<string> grabCdHint = message => cdHint = message;
+var bareCdProgram = parser.Parse("when Q is pressed\n  put \"stim\" on cooldown\n");
+var bareCdSpec = ActionWords.Parse(
+    ((RawActionNode)bareCdProgram.Events[0].Body[0].Statement!).Words, grabCdHint);
+Check(bareCdSpec.Verb == ActionVerb.Unknown && cdHint.Contains("10 seconds"),
+    "`put` without a duration explains the shape");
+
+var readyNode = Conditions.Parse(new List<Token>
+{
+    new Token { Type = TokenType.Word, Text = "my" },
+    new Token { Type = TokenType.Str, Text = "stim" },
+    new Token { Type = TokenType.Word, Text = "is" },
+    new Token { Type = TokenType.Word, Text = "ready" },
+});
+Check(readyNode.Kind == ConditionKind.CooldownReady && readyNode.Name == "stim" && !readyNode.Negated,
+    "`my \"stim\" is ready` parses to CooldownReady");
+var notReadyNode = Conditions.Parse(new List<Token>
+{
+    new Token { Type = TokenType.Word, Text = "my" },
+    new Token { Type = TokenType.Str, Text = "stim" },
+    new Token { Type = TokenType.Word, Text = "is" },
+    new Token { Type = TokenType.Word, Text = "not" },
+    new Token { Type = TokenType.Word, Text = "ready" },
+});
+Check(notReadyNode.Kind == ConditionKind.CooldownReady && notReadyNode.Negated,
+    "`my \"stim\" is not ready` inverts the same condition");
+
+var cdValueProgram = parser.Parse("when game starts\n  set Left to my \"stim\" cooldown\n");
+var cdValueSet = (SetNode)cdValueProgram.Events[0].Body[0].Statement!;
+Check(cdValueSet.Value is VariableValue cdValue && cdValue.Owner == "my" &&
+      cdValue.Name == "cooldown stim",
+    "`my \"stim\" cooldown` reads as one variable");
+
+// End to end: the word starts the acting unit's timer, the gate follows it, the value reads it.
+var cdEngine = FreshEngine(new FakeWorld());
+var cdUnit = new FakeActor("Marine");
+// The bridge half of an action word: FlaxActions parses the line and hands it to the manager.
+cdEngine.OnRawAction = (context, words) =>
+{
+    var spec = ActionWords.Parse(words, _ => { });
+    if (spec.Verb == ActionVerb.PutOnCooldown)
+        cdEngine.Cooldowns.Start(context.Me, spec.Thing, spec.Duration);
+};
+cdEngine.AddSheet(cdUnit, parser.Parse("when me appears\n  put \"stim\" on cooldown for 2 seconds\n"));
+cdEngine.Tick(0);
+Check(!cdEngine.Cooldowns.Ready(cdUnit, "stim") &&
+      Math.Abs(cdEngine.Cooldowns.Remaining(cdUnit, "stim") - 2) < 1e-9,
+    "`put ... on cooldown` starts the acting unit's timer");
+var cdContext = new EventContext
+{
+    Variables = cdEngine.Variables,
+    World = cdEngine.World,
+    Me = cdUnit,
+    Runtime = cdEngine,
+};
+Check(!Conditions.Evaluate(readyNode, cdContext),
+    "`my \"stim\" is ready` is false while the timer runs");
+Check(Conditions.Evaluate(notReadyNode, cdContext),
+    "`my \"stim\" is not ready` is true while the timer runs");
+Check(Math.Abs(cdContext.ReadMy("cooldown stim").AsNumber() - 2) < 1e-9,
+    "`my \"stim\" cooldown` reads the live seconds left");
+cdEngine.Tick(1);
+Check(Math.Abs(cdContext.ReadMy("cooldown stim").AsNumber() - 1) < 1e-9,
+    "the runtime advances the timer once per tick");
+cdEngine.Tick(2);
+Check(Conditions.Evaluate(readyNode, cdContext) && !Conditions.Evaluate(notReadyNode, cdContext),
+    "the gate turns true when the timer runs out");
+Check(cdContext.ReadMy("cooldown stim").AsNumber() == 0,
+    "the value reads 0 once ready");
+
+// The old polling is untouched: `when every 1 seconds` still fires.
+var pollEngine = FreshEngine(new FakeWorld());
+pollEngine.AddSheet(new GlobalHost(), parser.Parse("when every 1 seconds\n  add 1 to Polled\n"));
+pollEngine.Tick(0);
+pollEngine.Tick(1.5);
+Check(pollEngine.Variables.GetGlobal("Polled").AsNumber() >= 1,
+    "a `when every 1 seconds` cooldown poll still works alongside the shared timers");
+
+Check(WordRegistry.All.Any(e => e.Kind == "action" && e.Word == "put"),
+    "the word book lists `put ... on cooldown`");
+Check(WordRegistry.All.Any(e => e.Kind == "condition" && e.Word == "my \"<name>\" is ready"),
+    "the word book lists the cooldown condition");
+Check(WordRegistry.All.Any(e => e.Kind == "value" && e.Word == "my \"<name>\" cooldown"),
+    "the word book lists the cooldown value");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

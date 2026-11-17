@@ -1084,6 +1084,9 @@ namespace Game
                 case ActionVerb.CancelResearch:
                     CancelResearchUpgrade(context, spec);
                     break;
+                case ActionVerb.PutOnCooldown:
+                    PutOnCooldown(context, spec);
+                    break;
                 case ActionVerb.AttackMove:
                     StartAttackMove(context, spec);
                     break;
@@ -2822,6 +2825,9 @@ namespace Game
             // A destroyed actor also ends its buffs, so nothing keeps ticking a dead object or
             // rewriting stats on it — and a clone born under the same name starts clean.
             context.Runtime.Buffs.Clear(context.Runtime.Variables, actor);
+            // Shared ability timers die with the actor too (Task 27 Part E), so a respawn or a
+            // clone never inherits an ability that is still supposed to be cooling down.
+            context.Runtime.Cooldowns.Clear(actor);
             ClearFogVisibility(actor);
         }
 
@@ -3128,6 +3134,18 @@ namespace Game
             }
             if (!context.Runtime.Research.Cancel(context.Variables, context.Runtime, building, spec.Thing))
                 WarnOnce($"\u201C{building.Name}\u201D has no \u201C{spec.Thing}\u201D in its research queue.");
+        }
+
+        /// <summary><c>put "&lt;timer&gt;" on cooldown for &lt;n&gt; seconds</c> — start a named
+        /// per-actor timer (Task 27 Part E). Only the acting actor can be cooled down.</summary>
+        private static void PutOnCooldown(EventContext context, ActionSpec spec)
+        {
+            if (context.Me == null)
+            {
+                WarnOnce("\u201Cput \u2026 on cooldown\u201D needs an actor \u2014 run it on a unit's sheet, not the global Game sheet.");
+                return;
+            }
+            context.Runtime.Cooldowns.Start(context.Me, spec.Thing, spec.Duration);
         }
 
         /// <summary>The player a building belongs to: its fog entry first, then the acting sheet.</summary>

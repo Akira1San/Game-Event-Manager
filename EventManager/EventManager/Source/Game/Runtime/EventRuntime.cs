@@ -87,6 +87,10 @@ namespace Game
             // `my "stim" time left` (Task 27 Part C): the seconds this actor's buff still has.
             if (Buffs.TryReadTimeLeft(name, out string buffName))
                 return ValueBox.OfNumber(Runtime.Buffs.TimeLeft(Me, buffName));
+            // `my "stim" cooldown` (Task 27 Part E): seconds left on this actor's shared timer,
+            // computed like the buff readout so a HUD or gate never mirrors a countdown.
+            if (Cooldowns.TryReadVariable(name, out string cooldownName))
+                return ValueBox.OfNumber(Runtime.Cooldowns.Remaining(Me, cooldownName));
             // `my camera zoom` / `my camera position` (Task 26 Part D): the state the free-pan
             // controls keep, readable from any sheet — a HUD readout or a debug print. The
             // position is the ground point the camera is centred on, as "x, 0, z".
@@ -268,6 +272,9 @@ namespace Game
         /// <summary>Timed stat changes with a stack rule (Task 27 Part C).</summary>
         public Buffs Buffs = new Buffs();
         private double lastBuffTick;
+        /// <summary>Shared named ability timers (Task 27 Part E).</summary>
+        public Cooldowns Cooldowns = new Cooldowns();
+        private double lastCooldownTick;
         /// <summary>RTS terrain passability — land/water/air cells (Task 22 Part B).</summary>
         public TerrainMap Terrain = new TerrainMap();
         /// <summary>Random-angle wander legs and still mode per actor (Task 16 Part A).</summary>
@@ -487,6 +494,7 @@ namespace Game
             Fog.Reset();
             Targeting.Clear();
             Buffs.Reset(Variables);
+            Cooldowns.Reset();
             foreach (var sheet in sheets)
                 sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.SceneStart });
         }
@@ -1248,6 +1256,12 @@ namespace Game
                     });
             }
             lastBuffTick = time;
+            // Shared ability timers advance in one loop here (Task 27 Part E), with the same
+            // one-second clamp so a hitched frame cannot drain every cooldown at once.
+            double cooldownDelta = time - lastCooldownTick;
+            if (cooldownDelta > 0)
+                Cooldowns.Tick(cooldownDelta > 1 ? 1 : cooldownDelta);
+            lastCooldownTick = time;
             // Sounds are momentary: drop the ones older than the bus's memory before this tick's
             // actions can add new ones, so a shot fired now is heard now and not a minute later.
             Sounds.Expire(Time);
