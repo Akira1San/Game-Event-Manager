@@ -10131,6 +10131,48 @@ Check(!bEngine.Variables.HasGlobal("Player2 StimPack"),
     "the other player's tech is untouched");
 Upgrades.Reset();
 
+// ------------------------------------------------------------------
+// Task 28 Part A: flight altitude (`my Altitude`)
+// ------------------------------------------------------------------
+
+var altVars = new EventVariables();
+var altUnit = new FakeActor("Observer");
+Check(Altitude.Of(altVars, altUnit) == 0,
+    "a unit that never wrote an altitude is on the ground");
+altVars.SetLocal(altUnit, "altitude", ValueBox.OfNumber(120));
+Check(Math.Abs(Altitude.Of(altVars, altUnit) - 120) < 1e-9 && Altitude.IsAirborne(altVars, altUnit),
+    "`my altitude` reads as the flying height");
+var altUnit2 = new FakeActor("Wraith");
+altVars.SetLocal(altUnit2, "Altitude", ValueBox.OfNumber(80));
+Check(Math.Abs(Altitude.Of(altVars, altUnit2) - 80) < 1e-9,
+    "`my Altitude` and `my altitude` are one value");
+altVars.SetLocal(altUnit2, "Altitude", ValueBox.OfNumber(-5));
+Check(Altitude.Of(altVars, altUnit2) == 0, "a negative altitude reads as the ground");
+Check(Math.Abs(Altitude.GroundY(125, 120) - 5) < 1e-9 && Math.Abs(Altitude.PinY(5, 120) - 125) < 1e-9,
+    "ground Y and pinned Y convert both ways");
+Check(Altitude.IsVariableName("Altitude") && Altitude.IsVariableName("altitude") &&
+      !Altitude.IsVariableName("Altitudes"),
+    "both spellings name the altitude variable");
+
+var altWorld = new FakeWorld();
+var altActor = new FakeActor("Observer");
+altWorld.AddActor(altActor);
+var altEngine = FreshEngine(altWorld);
+altEngine.AddSheet(altActor, parser.Parse(@"
+when me appears
+  set my altitude to 120
+  set my ReadBack to my Altitude
+when W is pressed
+  my Altitude is higher than 0
+  set Flying to Flying + 1"));
+altEngine.Tick(0);
+Check(Math.Abs(altEngine.Variables.GetLocal(altActor, "ReadBack").AsNumber() - 120) < 1e-9,
+    "`my Altitude` reads 120 after the sheet wrote `my altitude`");
+altEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "W" });
+altEngine.Tick(1);
+Check(altEngine.Variables.GetGlobal("Flying").AsNumber() == 1,
+    "`my Altitude is higher than 0` gates the event that follows it");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

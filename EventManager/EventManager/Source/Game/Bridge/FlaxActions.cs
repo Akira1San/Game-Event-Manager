@@ -151,6 +151,11 @@ namespace Game
         /// <summary>World position of the last mouse click on bare ground — the <c>goto there</c> target.</summary>
         public static Vector3? LastClickPosition;
 
+        /// <summary>Ground height each flying actor's <c>my Altitude</c> is measured from
+        /// (Task 28 Part A). An actor that writes the altitude back to 0 lands on this Y and
+        /// leaves the table, so ground actors never appear here.</summary>
+        private static readonly Dictionary<Actor, float> AltitudeGrounds = new Dictionary<Actor, float>();
+
         /// <summary>Current and previous clip for one actor, with the virtual graphs that play them.</summary>
         private sealed class AnimState
         {
@@ -393,6 +398,7 @@ namespace Game
         {
             DeltaTime = deltaTime;
             MovedThisTick.Clear();
+            StepAltitude();
             StepAudio(deltaTime);
             for (int i = ActiveSounds.Count - 1; i >= 0; i--)
                 if (ActiveSounds[i].Source == null)
@@ -1717,9 +1723,71 @@ namespace Game
             return false;
         }
 
+        /// <summary>The actor's own <c>my Altitude</c> (0 when it never wrote one).</summary>
+        private static double AltitudeOf(Actor actor)
+        {
+            var runtime = EventsManager.Instance?.Runtime;
+            return runtime == null || actor == null ? 0 : Altitude.Of(runtime.Variables, actor);
+        }
+
+        /// <summary>
+        /// Keeps <c>my Altitude</c> honest once a tick (Task 28 Part A). A flying actor is pinned to
+        /// its ground height plus its altitude; one whose sheet wrote the altitude back to 0 lands
+        /// on that ground and leaves the table. Actors that never wrote an altitude are not touched
+        /// at all, so `jump`, `platform` and physics still own their Y.
+        /// </summary>
+        private static void StepAltitude()
+        {
+            var runtime = EventsManager.Instance?.Runtime;
+            if (runtime == null)
+                return;
+            if (AltitudeGrounds.Count > 0)
+            {
+                var gone = new List<Actor>();
+                foreach (var pair in AltitudeGrounds)
+                    if (pair.Key == null || pair.Key.Scene == null)
+                        gone.Add(pair.Key);
+                foreach (Actor dead in gone)
+                    AltitudeGrounds.Remove(dead);
+            }
+
+            var seen = new HashSet<Actor>();
+            foreach (SheetInstance sheet in runtime.Sheets)
+            {
+                Actor actor = sheet.Actor as Actor;
+                if (actor == null || actor.Scene == null || !seen.Add(actor))
+                    continue;
+                double altitude = AltitudeOf(actor);
+                bool flying = AltitudeGrounds.TryGetValue(actor, out float ground);
+                if (altitude <= 0)
+                {
+                    if (!flying)
+                        continue;
+                    // The sheet wrote 0: put the unit down on the ground it was flying over.
+                    AltitudeGrounds.Remove(actor);
+                    Vector3 landed = actor.Position;
+                    landed.Y = ground;
+                    actor.Position = landed;
+                    continue;
+                }
+                if (!flying)
+                {
+                    ground = (float)Altitude.GroundY(actor.Position.Y, altitude);
+                    AltitudeGrounds[actor] = ground;
+                }
+                Vector3 pinned = actor.Position;
+                pinned.Y = (float)Altitude.PinY(ground, altitude);
+                actor.Position = pinned;
+            }
+        }
+
         private static void MoveSubject(Actor subject, Vector3 direction, double speed, PhysicsMoveMode mode,
             bool ignoreCharacters = false)
         {
+            // A flying unit travels level (Task 28 Part A): navmesh waypoints and a target's own Y
+            // never pull it down, and StepAltitude re-applies its height every tick.
+            if (AltitudeOf(subject) > 0)
+                direction.Y = 0f;
             double wanted = speed * DeltaTime;
             float step = (float)PhysicsMovement.MoveStep(speed, DeltaTime);
             // A hitched (or paused) frame used to multiply the step by the hitch length, which
@@ -2188,6 +2256,20 @@ namespace Game
             if (jump > 2f)
                 Debug.Log($"[jump] \"{move.Subject.Name}\" arrival snapped {jump:0.#} units onto the end of its path.");
             move.Subject.Position = destination;
+            // A flying unit keeps its height over the ground it just arrived above, so `goto`
+            // walks it along the plane without dropping it to the waypoint's Y (Task 28 Part A).
+            double altitude = AltitudeOf(move.Subject);
+            if (altitude > 0)
+            {
+                AltitudeGrounds[move.Subject] = destination.Y;
+                Vector3 held = move.Subject.Position;
+                held.Y = destination.Y + (float)altitude;
+                move.Subject.Position = held;
+            }
+            else
+            {
+                AltitudeGrounds.Remove(move.Subject);
+            }
         }
 
         /// <summary>Push an arrives-at-something signal to the subject's sheet(s), used by

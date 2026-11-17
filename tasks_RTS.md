@@ -934,6 +934,92 @@ cooldowns cost one polling trigger per unit.
 
 ---
 
+## Task 28 — Air units, hover height and lift-off [ ]
+
+Goal: StarCraft-style flight on a **2.5D plane** (the answer to open question 6): units and
+buildings keep a height but still move over the XZ plane, so nothing needs full 3D pathfinding.
+Task 22 already classifies a unit as `land` / `air` / `sea` for terrain passability and Task 23
+already has land-vs-air matchup rows, but an `air` unit today walks the ground NavMesh at its
+scene Y, and a building can never leave the ground.
+
+### What events already do (so the task only fills gaps)
+
+- **Unit type**: `set my unit type to "air"`, read back with `me is air`; air crosses land, water
+  and marked void (`UnitTypes.CanCross`), and `place` refuses a building on ground its type cannot
+  cross.
+- **Vertical motion of a kind**: `jump` (character controller, dynamic body, or a scripted arc),
+  `me is on ground` / `me is airborne`, `climb` for ladders and `platform` for lifts. All are
+  momentary or fixed-path — none holds an altitude.
+- **Ground movement**: `goto` / `move` / orders / formations all path through `Navigation.FindPath`
+  and every proximity test uses `Distance2D`, i.e. XZ.
+
+The gaps are specific: no altitude a unit keeps, no air path that skips the NavMesh, no lift-off /
+land for buildings, and no targeting gate that refuses an air target for a land-only weapon.
+
+### Part A — Altitude (`my Altitude`) [x]
+- Per-unit height above the point it was placed at: `set my Altitude to 120`, read as `my Altitude`
+  (and `my altitude`); a unit that never wrote one stays at 0, so existing sheets are untouched
+- `goto` / `move` / formations keep the altitude instead of copying the destination's Y; `jump`
+  and `platform` still own their own vertical motion
+- Landing sets it back to 0 and snaps onto the ground under the unit
+
+#### Part A notes
+- `Runtime/Altitude.cs` is the pure half: `IsVariableName` (both spellings), `Of` (0 when unwritten,
+  negative/unreadable clamps to 0), `IsAirborne`, and `GroundY` / `PinY` for the two conversions.
+  No new word was needed — the altitude is an ordinary per-unit variable.
+- `EventContext.ReadMy` answers any altitude spelling from the manager before ordinary locals, so a
+  sheet that writes `my altitude` and a HUD that reads `my Altitude` see one value (locals are
+  otherwise case-sensitive; without this the two spellings would drift apart).
+- Bridge (`Bridge/FlaxActions.cs`): `StepAltitude` runs once per tick, walking the sheet list and
+  for each actor with an altitude above 0 pinning `Position.Y` to `ground + altitude`, remembering
+  the ground the first time; when a sheet writes the altitude back to 0 the unit is put down on
+  that ground and leaves the table (dead actors are dropped too). Actors with no altitude are not
+  touched at all, so `jump`, `platform`, characters and rigid bodies keep owning their Y.
+- `MoveSubject` flattens `direction.Y` for a flying unit, and `ArriveAt` rebases the ground to the
+  arrival point and re-pins the height, so `goto` slides a flyer along the plane and never drops it
+  to a navmesh waypoint's Y. Characters with a `CharacterController` (or dynamic bodies) fight the
+  pin and should not carry an altitude — air units belong on the transform/kinematic mode.
+- Tests: 8 new pure checks (default ground, both spellings, negative clamp, ground/pinned Y round
+  trip, name check, and a headless sheet that writes `my altitude` and reads `my Altitude` back plus
+  the `my Altitude is higher than 0` gate) -> **1787 passed, 0 failed**; `Source/Game.csproj` builds
+  with 0 warnings and 0 errors. The pin/land movement itself is bridge code with no unit tests, as
+  usual; editor play-check pending (scene air actor with `my Altitude`, `goto` somewhere, then
+  `set my Altitude to 0` and confirm it settles on the ground).
+
+### Part B — Air path (`me is air` skips the NavMesh) [ ]
+- An air unit flies a straight XZ line at its altitude (no `FindPath`), ignoring terrain kinds,
+  props and buildings, and stops at its own stop distance
+- Path-blocked reporting does not fire for air units; a `goto` to an actor aims at that actor's
+  altitude, so air-versus-air chases work
+- Optional `fly to <spot> at <height>` so one line both moves and changes altitude
+
+### Part C — Lift-off and land (buildings) [ ]
+- `lift off` on a building sheet raises it to its `my Altitude`, marks it airborne and pauses its
+  production/research queues; `land` puts it down, re-checks terrain for its own unit type
+  (refusing water for a barracks, marking `when path blocked`-style feedback) and resumes work
+- `when <building> lifts off` / `when <building> lands` triggers and `me is airborne` for gates
+  (no training while flying, no new construction on a flying building)
+- A flying building is selectable and movable with the same orders; its footprint frees the build
+  grid while airborne and re-reserves it on landing
+
+### Part D — Air targeting gate [ ]
+- `target is air` / `target is land` condition and a `can attack air` / `can attack ground` gate
+  that consults the Task 23 `Matchups` rows, so an attack order against an unreachable type is
+  refused with one warning instead of firing
+- Ground-only units keep their old behaviour in scenes that never wrote a matchup row
+
+### Part E — Content, words, tests, acceptance [ ]
+- Example content: an air unit (`Observer.events` or a Wraith-style sheet) that hovers, crosses
+  water and marked void, and a flying building example extending `Barracks.events`
+- `WordRegistry` rows and `keywords.html` rows for every new word; pure tests for altitude
+  retention, air path, lift-off/land state, terrain refusal on landing, queue pausing and the
+  targeting gate
+- Acceptance: an air unit hovers and flies over a wall and a lake, then lands on ground; a
+  barracks lifts off, moves, is refused over water and lands; a marine refuses an air target while
+  an anti-air unit engages it; a scene that writes none of the new words behaves exactly as before
+
+---
+
 ## Open Questions (carried from Docs/rts-event-manager-support.md)
 
 1. ~~Grid-based vs. free-form unit placement for buildings?~~ → Both: free-form by default, `on grid` opt-in via `place … on grid`; grid cell size from `BuildGridSize`.
@@ -943,5 +1029,6 @@ cooldowns cost one polling trigger per unit.
 5. Control groups: 1–0 keys or click-assign? — **keys**: 1–0 recalls a group, Ctrl+1–0
    assigns the current selection (`EventRuntime.AssignControlGroup`); sheets can also assign with
    `set my control group to <n>`. Click-assign was dropped: the command card has no group buttons.
-6. Homeworld 3D movement: full 3D or 2.5D plane?
+6. Homeworld 3D movement: full 3D or 2.5D plane? — **2.5D**: movement and pathing stay on the XZ
+   plane; flight is a height a unit keeps, added by Task 28 Part A–C.
 7. Red Alert power system: power deficit slows production?

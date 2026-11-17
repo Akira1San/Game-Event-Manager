@@ -55,6 +55,10 @@ namespace Game
             // `enemy type my name` reads the type from a scene actor called "Pistolboy".
             if (string.Equals(name, "name", StringComparison.OrdinalIgnoreCase))
                 return ValueBox.OfText(Runtime.NameOfActor(Me));
+            // `my Altitude` / `my altitude` — the height a flying unit holds (Task 28 Part A).
+            // Both spellings read the one value, so a sheet cannot end up with two heights.
+            if (Altitude.IsVariableName(name))
+                return ValueBox.OfNumber(Altitude.Of(Variables, Me));
             // `my TargetPlayer` (Task 16 Part F) is computed rather than stored: the nearest
             // living player, recomputed on every read, so vision/hearing can never leave a
             // stale name behind. Compare it with `my TargetPlayer is Player1`.
