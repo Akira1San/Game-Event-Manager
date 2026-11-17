@@ -612,6 +612,143 @@ not unit tested; the pure rules (clamps, edge/key directions, step maths, zoom-s
 are covered by `Tests/`. Editor play-check still pending: `camera free`, then wheel, edges and WASD.
 
 
+## Task 27 — RTS Abilities & Upgrades [ ]
+
+Goal: StarCraft-style unit abilities (stim pack, psi storm, cloak), tech upgrades and a research
+queue — while the ability itself stays **authored in events**. This task only adds the plumbing
+the language cannot express today.
+
+### What events already do (so the task only fills gaps)
+
+- **A stim pack is already a sheet**: `when Q is pressed` → `if my StimCooldown is 0` → `deduct` a
+  cost → `set my Speed to 120` → `set my StimCooldown to 10` → `wait 8 seconds` → restore.
+  `when every 1 seconds` ticks the cooldown; `set state stimmed` gates other triggers; sounds and
+  animations exist.
+- **AoE damage exists** via `explode radius 320`, which spawns the `Explosion` template and sends
+  real `damage` messages inside the radius — they pass through armour/shield/health and the Task 23
+  matchup gate.
+- **Upgrades work** as `deduct` + `wait` on the building plus a global the unit reads on spawn
+  (`when me appears`) or on change (`when UpgradeStim changes`). `my Armor`, `my Shield`,
+  `my MaxHealth` and `my attack range` are all real, stat-clamped, order-respected values.
+- **Command cards** are authorable: `when StimButton is pressed`, key triggers, and `bind` for
+  labels/progress bars.
+
+The gaps are specific: no click-to-target mode, weapon/tech values are global (so an upgrade buffs
+both players' guns), timed buffs have no stacking/refresh/expiry model, research has no queue, and
+cooldowns cost one polling trigger per unit.
+
+### Part A — Target-pick mode (`Runtime/Targeting.cs`) [x]
+- Pure `Targeting` state: caster, ability name, what it accepts (`Point` / `Unit` / `Self`), range,
+  validity test, and a timeout — `TryPick(actor)`, `TryPick(x, z)`, `Cancel()`, `Tick(dt)`
+  → `Runtime/Targeting.cs`: `TargetAccepts` flags + `TargetingSession` (caster, ability, accepts,
+  range, timeout/remaining, a `UnitValid` delegate for matchup/fog, and the pick: `PickX/Z`,
+  `PickActor`, `PickIsUnit`) plus `TargetingManager` on `EventRuntime.Targeting` with `Begin`,
+  `MoveCaster`, `SessionOf`, `TryPick(caster, actor, x, z)`, `TryPick(caster, x, z)`, `Cancel`,
+  `Forget`, `Clear` and `Tick(dt)` (returns the casters whose mode lapsed). One aim at a time — a
+  second `aim` replaces the first. Reach is XZ from the caster; 0 means anywhere. A landed pick
+  ends the waiting mode but keeps the pick readable until the next `aim` / `cancel aim`, which is
+  what a trigger body needs.
+- Words: `aim "psi storm"` enters the mode; `when my aim picks a target` fires with the pick, and
+  `aim x` / `aim z` / `aim target` / `aim is a unit` read it; `cancel aim` leaves
+  → `ActionVerb.Aim` / `CancelAim`; the optional qualifiers are `at a point` / `at a unit` /
+  `at me` (default: a point or a unit) and `for <n> seconds` (default 8). `TriggerKind.AimPicked`
+  (both `when my aim picks a target` and the bare spelling) is pushed to the caster's sheet only,
+  with the ability in `Name` and the unit in `Other`. Values `my aim x` / `my aim z` /
+  `my aim target` parse as one variable each through `EventContext.ReadMy`;
+  `ConditionKind.AimIsUnit` is `my aim is a unit` (unit pick, not bare ground).
+- Bridge half: while aiming, a left click raycasts the ground and the actor under the cursor
+  (`EventsManager` already casts for `Mouse`), right click or Escape cancels, and an optional
+  `AimMarker` actor follows the cursor. Clicks that hit UI or are out of range are ignored, not
+  consumed
+  → `EventsManager.TryAimPick` reuses the click raycast; a hit on an actor that owns an
+  `EventSheet` is a unit pick, anything else is a point pick. A landed pick consumes the click;
+  a UI hit (button still runs, aim stays armed), a missing ray or a refused pick falls through to
+  the ordinary click path. Right click and Escape cancel *and* consume; Escape outside aim mode is
+  still an ordinary key press. The `AimMarker` scene actor is optional (absent = no marker),
+  found once and re-found after a scene load.
+- Validity reuses what exists: `OrderManager.AttackRangeOf`, `Matchups.CanAttack`, fog visibility,
+  `unit is <type>` conditions
+  → `TargetingManager` owns the reach, and `FlaxActions.StartAim` installs a `UnitValid` rule that
+  asks `FogOfWarManager.IsVisibleTo(localPlayer)` and `Matchups.CanAttackBetween(caster, target)`;
+  the caster itself is always a legal self pick. Choose the kind with `at a point|a unit|me`.
+- **AoE primitive for point abilities**: `explode` destroys the caster, so add
+  `damage area around <spot> by <n> for radius <r>` — same damage path, same matchup gate, no
+  caster required (a storm kills a group without killing the caster)
+  → `ActionVerb.DamageArea`; `<spot>` is an actor, `there`, or `my aim target` / `my aim` (the pick),
+  radius defaults to 150 and accepts a value (`for radius my blast`), the caster is neither
+  destroyed nor spared, every actor in the radius takes a `"damage"` message from the caster (so
+  armour → shield → health and the matchup gate apply), bullets are skipped so splash never chains,
+  and there is no visual/sound of its own — the sheet plays those.
+- Default: no aiming mode unless an event starts one, so old scenes are untouched
+  → yes: nothing polls unless `Targeting` has a session, the marker is optional, and `DamageArea`
+  only runs where a sheet writes it.
+
+#### Part A notes
+- 34 new pure checks (mask, reach, validity delegate, timeout, cancel/replace, parser shapes for
+  `aim` / `cancel aim` / `damage area`, trigger + condition + value parsing, the push routing to
+  the caster's sheet only) -> **1626 passed, 0 failed**; Game module build 0 errors.
+- The bridge half (raycast pick, click/Escape consumption, marker, the damage loop over live
+  actors) has no unit tests, as usual; editor play-check pending (assign an ability key, `aim`,
+  click a point and a unit, right click out).
+
+### Part B — Per-player tech and weapon values (`Runtime/Tech.cs`) [ ]
+- Upgrade levels are per player: `Player2 UpgradeStim is 1`, set by research or events;
+  `Tech.LevelOf(variables, player, upgrade)` reads them and defaults to 0
+- `WeaponData.Effective(variables, player, weapon, field)` = base stat × per-player multiplier +
+  per-player bonus (`Player2 PistolDamage`, `Player2 PistolDamageBonusMultiplier`), so an upgrade
+  to *your* marines no longer buffs the enemy's guns
+- The acting unit's player comes from `Fog.PlayerOf` (falling back to `my Player`), the same rule
+  the minimap and banks use
+- Unit-local stats stay as they are — speed, armour, range and shields are already per unit; tech
+  that touches them is a `set` line in the upgrade's event
+- No change to `WeaponData.events`: it keeps the base numbers, the player-scoped values sit on top
+
+### Part C — Buffs and debuffs (`Runtime/Buffs.cs`) [ ]
+- One buff: name, duration, stack rule (`refresh` / `stack` / `ignore`), modifiers, source actor,
+  expiry; a single `Tick(dt)` expires everything and restores stats
+- Words: `add buff "stim" to me for 8 seconds`, `remove buff "stim" from me`; triggers
+  `when buff "stim" starts` / `... ends`; value `my "stim" time left`
+- Base-value capture: the first buff records `my BaseSpeed` / `my BaseArmor` and the manager writes
+  the aggregate, so overlapping buffs restore correctly instead of fighting each other
+- Default: a sheet that never adds a buff keeps writing `my Speed` by hand exactly as today
+
+### Part D — Research queue (`Runtime/ResearchManager.cs`) [ ]
+- Per-building queue mirroring `ProductionManager`: `Start`, `Cancel`, `ProgressOf`, `Remaining`,
+  `Tick`, costs through `ResourceManager`, and `when research starts` / `finishes` / `queue is empty`
+- Words: `research "Stim Pack" at Barracks`, `cancel research "Stim Pack"`
+- Upgrades are data: `GameFiles/Upgrades.events` (`set StimPackTime to 30`, `set StimPackCost to
+  100`, `set StimPackRequires to "Barracks"`), read at boot like `Matchups.events`
+- Why a manager rather than a `wait` in a sheet: cancel with refund, progress bars via `bind`, and
+  a queue that survives the building being selected away from
+
+### Part E — Shared cooldowns (`Runtime/Cooldowns.cs`) [ ]
+- Per-actor named timers advanced in one loop: `Ready(actor, name)`, `Start(actor, name, seconds)`,
+  `Remaining(actor, name)`, `Clear(actor)` on death
+- Words: `put "stim" on cooldown for 10 seconds`, condition `my "stim" is ready`, value
+  `my "stim" cooldown`
+- Replaces the per-unit `when every 1 seconds` polling; the old polling keeps working, so nothing
+  is taken away
+
+### Part F — Content, words, tests, acceptance [ ]
+- Example content: `Marine.events` stim (cost, cooldown, buff, sound), `HighTemplar.events` psi storm
+  (aim → `damage area` at the pick), `Barracks.events` research, `Upgrades.events`, plus a command
+  card using `bind` for cooldown and research progress
+- `WordRegistry` rows and `keywords.html` rows for every new word
+- Tests (pure): targeting validity/range/expiry/cancel, tech multipliers and per-player isolation,
+  buff refresh vs stack vs ignore and expiry restoring base, research order/cancel/refund,
+  cooldown arithmetic
+- Acceptance: a marine stims (faster for 8 s, on cooldown after), a caster storms a clicked point
+  and damages only valid targets, a finished research upgrades existing and future units for one
+  player only, and a base game that uses none of these words behaves exactly as before
+
+### Open questions for this task
+- Ability definitions in data (`Abilities.events`: cost, cooldown, range, target kind) so the AI and
+  a generated command card can read them — or is one authored card per unit enough?
+- Aim marker: reuse the `SelectionRing` actor convention, or a new `AimMarker` actor?
+- Buffs on buildings and buildings under research (production speed modifiers) in v1 or later?
+- Does a generated ability hotbar from `UnitTypes.events` + `Abilities.events` belong here or in the
+  UI work of Task 19?
+
 ---
 
 ## Open Questions (carried from Docs/rts-event-manager-support.md)

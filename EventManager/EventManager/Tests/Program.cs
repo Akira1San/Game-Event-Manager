@@ -9103,6 +9103,170 @@ Check(bareRandomMusic.Verb == ActionVerb.Unknown && bareRandomHint.Contains("ran
 Check(WordRegistry.All.Any(entry => entry.Kind == "action" && entry.Word == "play music random from"),
     "the word book lists the random music list form");
 
+// ------------------------------------------------------------------
+// Task 27 Part A: target-pick mode (`aim`) and the `damage area` primitive
+// ------------------------------------------------------------------
+
+var aimProg = parser.Parse("when Q is pressed\n  aim \"psi storm\"\n");
+var aimSpec = ActionWords.Parse(((RawActionNode)aimProg.Events[0].Body[0].Statement!).Words, _ => { });
+Check(aimSpec.Verb == ActionVerb.Aim && aimSpec.Ability == "psi storm",
+    "`aim \"psi storm\"` parses as Aim with the ability name");
+Check((aimSpec.Accepts & TargetAccepts.Point) != 0 && (aimSpec.Accepts & TargetAccepts.Unit) != 0,
+    "`aim` accepts a point or a unit by default");
+
+var aimPoint = parser.Parse("when Q is pressed\n  aim \"psi storm\" at a point for 6 seconds\n");
+var aimPointSpec = ActionWords.Parse(((RawActionNode)aimPoint.Events[0].Body[0].Statement!).Words, _ => { });
+Check(aimPointSpec.Verb == ActionVerb.Aim && aimPointSpec.Accepts == TargetAccepts.Point &&
+      Math.Abs(aimPointSpec.Duration - 6) < 0.0001,
+    "`aim ... at a point for 6 seconds` narrows the kind and the timeout");
+
+var aimSelf = parser.Parse("when Q is pressed\n  aim \"stim\" at me\n");
+var aimSelfSpec = ActionWords.Parse(((RawActionNode)aimSelf.Events[0].Body[0].Statement!).Words, _ => { });
+Check(aimSelfSpec.Verb == ActionVerb.Aim && aimSelfSpec.Accepts == TargetAccepts.Me,
+    "`aim ... at me` accepts only the caster");
+
+var cancelAimProg = parser.Parse("when Escape is pressed\n  cancel aim\n");
+var cancelAimSpec = ActionWords.Parse(((RawActionNode)cancelAimProg.Events[0].Body[0].Statement!).Words, _ => { });
+Check(cancelAimSpec.Verb == ActionVerb.CancelAim, "`cancel aim` parses as CancelAim");
+
+var damageAreaProg = parser.Parse("when Q is pressed\n  damage area around Mouse by 30 for radius 180\n");
+var damageAreaSpec = ActionWords.Parse(((RawActionNode)damageAreaProg.Events[0].Body[0].Statement!).Words, _ => { });
+Check(damageAreaSpec.Verb == ActionVerb.DamageArea && damageAreaSpec.Thing == "Mouse" &&
+      Math.Abs(damageAreaSpec.Number - 30) < 0.0001 && Math.Abs(damageAreaSpec.Radius - 180) < 0.0001,
+    "`damage area around Mouse by 30 for radius 180` carries its spot, amount and radius");
+
+var damageAimProg = parser.Parse("when my aim picks a target\n  damage area around my aim target by 30 for radius 180\n");
+var damageAimSpec = ActionWords.Parse(((RawActionNode)damageAimProg.Events[0].Body[0].Statement!).Words, _ => { });
+Check(damageAimSpec.Verb == ActionVerb.DamageArea && damageAimSpec.Thing == "my aim target",
+    "`damage area around my aim target` reads the pick");
+
+var aimTriggerProg = parser.Parse("when my aim picks a target\n  set Picked to 1\n");
+var aimTriggerDesc = TriggerClassifier.Classify(aimTriggerProg.Events[0]);
+Check(aimTriggerDesc.Kind == TriggerKind.AimPicked,
+    "`when my aim picks a target` classifies to AimPicked");
+var bareAimTrigger = parser.Parse("when aim picks a target\n  set Picked to 1\n");
+Check(TriggerClassifier.Classify(bareAimTrigger.Events[0]).Kind == TriggerKind.AimPicked,
+    "the bare `when aim picks a target` spelling classifies too");
+
+var aimCondTokens = new List<Token>
+{
+    new Token { Type = TokenType.Word, Text = "my" },
+    new Token { Type = TokenType.Word, Text = "aim" },
+    new Token { Type = TokenType.Word, Text = "is" },
+    new Token { Type = TokenType.Word, Text = "a" },
+    new Token { Type = TokenType.Word, Text = "unit" },
+};
+Check(Conditions.Parse(aimCondTokens).Kind == ConditionKind.AimIsUnit,
+    "`my aim is a unit` parses to AimIsUnit");
+
+var aimValueProg = parser.Parse("when Q is pressed\n  set AimX to my aim x\n  set AimZ to my aim z\n  set AimName to my aim target\n");
+var aimXNode = (SetNode)aimValueProg.Events[0].Body[0].Statement!;
+var aimZNode = (SetNode)aimValueProg.Events[0].Body[1].Statement!;
+var aimNameNode = (SetNode)aimValueProg.Events[0].Body[2].Statement!;
+Check(aimXNode.Value is VariableValue ax && ax.Owner == "my" && ax.Name == "aim x" &&
+      aimZNode.Value is VariableValue az && az.Name == "aim z" &&
+      aimNameNode.Value is VariableValue aimNameVar && aimNameVar.Name == "aim target",
+    "`my aim x` / `my aim z` / `my aim target` read as one variable each");
+
+// The pure state: kinds, reach, validity, timeout, cancel.
+var targeting = new TargetingManager();
+var aimCaster = new FakeActor("HighTemplar");
+var aimVictim = new FakeActor("Marine");
+var aimSession = targeting.Begin(aimCaster, "psi storm", TargetAccepts.Point | TargetAccepts.Unit,
+    300, 8, 0, 0);
+Check(targeting.IsAiming && Math.Abs(aimSession.Remaining - 8) < 0.0001,
+    "starting an aim arms it with its timeout");
+Check(targeting.TryPick(aimCaster, aimVictim, 100, 500) == null && !aimSession.HasPick,
+    "a pick outside the caster's reach is refused");
+var landedPick = targeting.TryPick(aimCaster, aimVictim, 100, 100);
+Check(landedPick != null && aimSession.HasPick && aimSession.PickIsUnit &&
+      ReferenceEquals(aimSession.PickActor, aimVictim) && Math.Abs(aimSession.PickX - 100) < 0.0001,
+    "an in-range unit pick lands and records the unit and point");
+Check(!targeting.IsAiming && targeting.SessionOf(aimCaster) != null,
+    "a landed pick stops the waiting mode but keeps the pick readable");
+Check(targeting.TryPick(aimCaster, aimVictim, 0, 0) == null,
+    "a finished aim refuses a second pick");
+
+var pointOnlyAim = targeting.Begin(aimCaster, "blizzard", TargetAccepts.Point, 0, 8, 0, 0);
+Check(targeting.TryPick(aimCaster, aimVictim, 10, 0) == null && !pointOnlyAim.HasPick,
+    "a point-only aim refuses a unit");
+Check(targeting.TryPick(aimCaster, 10, 0) != null && !pointOnlyAim.PickIsUnit,
+    "a point-only aim accepts the ground and records no unit");
+
+var selfAim = targeting.Begin(aimCaster, "stim", TargetAccepts.Me, 0, 8, 0, 0);
+Check(targeting.TryPick(aimCaster, aimVictim, 0, 0) == null && !selfAim.HasPick,
+    "a self aim refuses another unit");
+Check(targeting.TryPick(aimCaster, aimCaster, 0, 0) != null,
+    "a self aim accepts the caster");
+
+var ruledAim = targeting.Begin(aimCaster, "psi storm", TargetAccepts.Unit, 0, 8, 0, 0, _ => false);
+Check(targeting.TryPick(aimCaster, aimVictim, 0, 0) == null && !ruledAim.HasPick,
+    "the session's validity rule can refuse a unit (matchup / fog)");
+
+var reachAim = targeting.Begin(aimCaster, "psi storm", TargetAccepts.Unit, 100, 8, 0, 0);
+targeting.MoveCaster(aimCaster, 500, 0);
+Check(targeting.TryPick(aimCaster, aimVictim, 550, 0) != null,
+    "the reach follows the caster when it moves");
+
+var expiryAim = targeting.Begin(aimCaster, "psi storm", TargetAccepts.Unit, 0, 2, 0, 0);
+Check(targeting.Tick(1).Count == 0 && targeting.IsAiming,
+    "an aim survives a tick shorter than its timeout");
+var expiredAims = targeting.Tick(1.5);
+Check(expiredAims.Count == 1 && ReferenceEquals(expiredAims[0], aimCaster) && !targeting.IsAiming,
+    "an aim lapses when its timeout runs out");
+
+var cancelTargeting = new TargetingManager();
+cancelTargeting.Begin(aimCaster, "psi storm", TargetAccepts.Unit, 0, 8, 0, 0);
+Check(cancelTargeting.Cancel(aimCaster) && cancelTargeting.SessionOf(aimCaster) == null &&
+      !cancelTargeting.IsAiming,
+    "cancel aim drops the session");
+Check(!cancelTargeting.Cancel(aimCaster), "cancelling when nothing is aiming answers false");
+
+var replaceTargeting = new TargetingManager();
+var firstAim = replaceTargeting.Begin(aimCaster, "psi storm", TargetAccepts.Unit, 0, 8, 0, 0);
+var secondAim = replaceTargeting.Begin(aimCaster, "stim", TargetAccepts.Me, 0, 8, 0, 0);
+Check(!ReferenceEquals(firstAim, secondAim) && ReferenceEquals(replaceTargeting.Current, secondAim) &&
+      ReferenceEquals(replaceTargeting.SessionOf(aimCaster), secondAim),
+    "a second aim replaces the first, so only one picker is ever live");
+Check(new TargetingManager().Begin(aimCaster, "x", TargetAccepts.Unit, 0, 0, 0, 0).Timeout ==
+      TargetingManager.DefaultTimeout,
+    "an aim without a timeout uses the 8 second default");
+
+// The trigger reaches the caster's sheet and carries the ability name.
+var aimPushWorld = new FakeWorld();
+var aimPushCaster = new FakeActor("HighTemplar");
+var aimPushTarget = new FakeActor("Marine");
+var aimPushEngine = FreshEngine(aimPushWorld);
+aimPushEngine.AddSheet(aimPushCaster,
+    parser.Parse("when my aim picks a target\n  set my Picked to 1\n  set my PickedTag to other's Tag\n"));
+var aimPushStray = new FakeActor("Stray");
+aimPushEngine.AddSheet(aimPushStray, parser.Parse("when my aim picks a target\n  set my StrayPicked to 1\n"));
+aimPushEngine.SceneStarted("Level1");
+aimPushEngine.Variables.SetLocal(aimPushTarget, "Tag", ValueBox.OfText("Marine"));
+aimPushEngine.Tick(1.0);
+aimPushEngine.RaisePush(aimPushCaster, new PushSignal
+{
+    Kind = TriggerKind.AimPicked,
+    Name = "psi storm",
+    Other = aimPushTarget,
+});
+aimPushEngine.Tick(1.1);
+Check(aimPushEngine.Variables.GetLocal(aimPushCaster, "Picked").AsNumber() == 1,
+    "`when my aim picks a target` runs on the caster's sheet");
+Check(aimPushEngine.Variables.GetLocal(aimPushCaster, "PickedTag").AsText() == "Marine",
+    "the picked unit arrives as `other`");
+Check(aimPushEngine.Variables.GetLocal(aimPushStray, "StrayPicked").IsNone() ||
+      aimPushEngine.Variables.GetLocal(aimPushStray, "StrayPicked").AsNumber() == 0,
+    "another actor's sheet does not hear the pick");
+
+Check(WordRegistry.All.Any(entry => entry.Kind == "trigger" && entry.Word == "when my aim picks a target"),
+    "the word book lists the aim trigger");
+Check(WordRegistry.All.Any(entry => entry.Kind == "action" && entry.Word == "aim"),
+    "the word book lists `aim`");
+Check(WordRegistry.All.Any(entry => entry.Kind == "action" && entry.Word == "damage" &&
+      entry.Example.Contains("damage area", StringComparison.Ordinal)),
+    "the word book lists `damage area`");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

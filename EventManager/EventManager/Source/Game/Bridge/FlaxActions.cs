@@ -1045,6 +1045,15 @@ namespace Game
                 case ActionVerb.Explode:
                     ExplodeProjectile(context, spec);
                     break;
+                case ActionVerb.Aim:
+                    StartAim(context, spec);
+                    break;
+                case ActionVerb.CancelAim:
+                    CancelAim(context);
+                    break;
+                case ActionVerb.DamageArea:
+                    DamageArea(context, spec);
+                    break;
                 case ActionVerb.Spawn:
                     Spawn(context, spec);
                     break;
@@ -2642,6 +2651,143 @@ namespace Game
             FlaxEngine.Object.Destroy(me, 0f);
         }
 
+        /// <summary>How wide `damage area` is when the line writes no `for radius`.</summary>
+        private const double DefaultDamageAreaRadius = 150;
+
+        /// <summary>
+        /// <c>aim "&lt;ability&gt;"</c> (Task 27 Part A): arms target-pick mode for the acting
+        /// unit. A left click then resolves it (<see cref="EventsManager"/> raycasts the ground
+        /// and the actor under the cursor), a right click / Escape / <c>cancel aim</c> drops it,
+        /// and it lapses after its timeout. Reach is <c>my attack range</c>, so a caster tuned
+        /// with <c>set my attack range to 600</c> can click further; unit picks additionally
+        /// obey the matchup table and the local player's fog, the same rules <c>me can attack</c>
+        /// uses. Nothing here runs unless a sheet calls <c>aim</c>.
+        /// </summary>
+        private static void StartAim(EventContext context, ActionSpec spec)
+        {
+            var me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Caim\u201D needs to run on the caster's own sheet \u2014 the global Game sheet has no unit to aim with.");
+                return;
+            }
+            double range = OrderManager.AttackRangeOf(context);
+            context.Runtime?.Targeting.Begin(me, spec.Ability, spec.Accepts, range, spec.Duration,
+                me.Position.X, me.Position.Z, actor => AimAcceptsUnit(context, me, actor));
+        }
+
+        /// <summary>The extra rule a unit pick must pass: visible in the fog and hittable per
+        /// the matchup table. The caster itself is always a legal pick (a self-buff).</summary>
+        private static bool AimAcceptsUnit(EventContext context, Actor caster, object actor)
+        {
+            if (actor == null)
+                return false;
+            if (ReferenceEquals(actor, caster))
+                return true;
+            if (actor is Actor other && (other.Scene == null || !other.IsActive))
+                return false;
+            EventRuntime runtime = context.Runtime;
+            if (runtime != null && runtime.Fog.Enabled &&
+                !runtime.Fog.IsVisibleTo(runtime.Fog.LocalPlayer, actor))
+                return false;
+            return Matchups.CanAttackBetween(context.Variables, caster, actor);
+        }
+
+        /// <summary><c>cancel aim</c> \u2014 leaves target-pick mode without a pick.</summary>
+        private static void CancelAim(EventContext context)
+        {
+            EventRuntime runtime = context.Runtime;
+            if (runtime == null)
+                return;
+            if (context.Me == null || !runtime.Targeting.Cancel(context.Me))
+                runtime.CancelAim();
+        }
+
+        /// <summary>
+        /// <c>damage area around &lt;spot&gt; by &lt;n&gt; for radius &lt;r&gt;</c> (Task 27
+        /// Part A): the AoE primitive point abilities need, since <c>explode</c> belongs to a
+        /// projectile and destroys the caster. Every other actor inside the radius takes a
+        /// <c>"damage"</c> message from the caster, so the usual armour \u2192 shield \u2192 health
+        /// pipeline and the Task 23 matchup gate apply unchanged; the caster is not destroyed
+        /// and is not spared (a storm hits its own side too). No visual or sound of its own \u2014
+        /// the sheet plays those, so one primitive serves every kind of blast.
+        /// </summary>
+        private static void DamageArea(EventContext context, ActionSpec spec)
+        {
+            EventRuntime runtime = context.Runtime;
+            if (runtime == null || context.World == null)
+                return;
+            double amount = ResolveNumber(context, spec);
+            double radius = spec.RadiusNode != null
+                ? context.Evaluate(spec.RadiusNode).AsNumber()
+                : spec.Radius;
+            if (radius <= 0)
+                radius = DefaultDamageAreaRadius;
+            if (!TryResolveAreaSpot(context, spec.Thing, out double x, out double z))
+                return;
+
+            object sender = context.Me;
+            foreach (object other in context.World.Actors())
+            {
+                if (other == null)
+                    continue;
+                if (other is Actor actor && (actor.Scene == null || !actor.IsActive))
+                    continue;
+                // Splash never chains through the rest of a shotgun spread or another bullet.
+                if (runtime.Variables.HasLocal(other, "BulletSpeed"))
+                    continue;
+                if (context.World.DistanceToPoint(other, x, z) > radius)
+                    continue;
+                runtime.RaisePush(other, new PushSignal
+                {
+                    Kind = TriggerKind.Message,
+                    Name = "damage",
+                    Other = sender,
+                });
+            }
+        }
+
+        /// <summary>The spot a <c>damage area</c> is centred on: an actor, <c>there</c>, or the
+        /// pick <c>aim</c> just made (<c>my aim target</c> / <c>my aim</c>).</summary>
+        private static bool TryResolveAreaSpot(EventContext context, string spot, out double x, out double z)
+        {
+            x = 0;
+            z = 0;
+            if (spot == "my aim target" || spot == "my aim" || spot == "aim")
+            {
+                TargetingSession session = context.Runtime?.Targeting.SessionOf(context.Me)
+                    ?? context.Runtime?.Targeting.Current;
+                if (session == null || !session.HasPick)
+                {
+                    WarnOnce("\u201Cdamage area around my aim target\u201D needs an `aim` pick first \u2014 click a target while aiming.");
+                    return false;
+                }
+                x = session.PickX;
+                z = session.PickZ;
+                return true;
+            }
+            if (spot == "there")
+            {
+                if (!LastClickPosition.HasValue)
+                {
+                    WarnOnce("\u201Cdamage area around there\u201D needs a clicked position first \u2014 click somewhere in the scene.");
+                    return false;
+                }
+                x = LastClickPosition.Value.X;
+                z = LastClickPosition.Value.Z;
+                return true;
+            }
+            var target = ResolveThing(context, spot) as Actor;
+            if (target == null)
+            {
+                WarnOnce($"I couldn't find \u201C{spot}\u201D to centre that damage area on.");
+                return false;
+            }
+            x = target.Position.X;
+            z = target.Position.Z;
+            return true;
+        }
+
         /// <summary>Drops the per-actor bookkeeping a destroyed actor leaves behind.</summary>
         private static void ForgetSubject(EventContext context, Actor actor)
         {
@@ -2660,6 +2806,7 @@ namespace Game
             context.Runtime.Affixes.Forget(context.Runtime.Variables, actor);
             context.Runtime.Affixes.ForgetWearer(actor);
             context.Runtime.Selection.Forget(actor);
+            context.Runtime.Targeting.Forget(actor);
             ClearFogVisibility(actor);
         }
 

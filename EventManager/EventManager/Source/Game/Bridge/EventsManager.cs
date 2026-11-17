@@ -73,6 +73,10 @@ namespace Game
         /// <summary>Last-tick TextBox contents, used to raise text-change edges.</summary>
         private readonly Dictionary<Actor, string> _textLastValue = new Dictionary<Actor, string>();
         private const double DoubleClickSeconds = 0.3;
+        /// <summary>Scene actor that shows where an aimed click would land (Task 27 Part A).</summary>
+        private const string AimMarkerName = "AimMarker";
+        private Actor _aimMarker;
+        private bool _aimMarkerSearched;
 
         [Tooltip("How touches/overlaps are detected. Distance needs no colliders; Colliders uses Flax trigger events; Both compares them without double-firing.")]
         public EventContactMode ContactMode = EventContactMode.Both;
@@ -559,6 +563,7 @@ namespace Game
             FlaxActions.Step(delta);
             CheckForChanges();
             InputEdges();
+            UpdateAim();
             UpdateButtons();
             UpdateTextControls();
             UpdateFocus();
@@ -781,12 +786,21 @@ namespace Game
             Float2 screenSize = Screen.Size;
             Float2 screenCenter = screenSize * 0.5f;
 
+            // Escape drops target-pick mode instead of reaching the sheets (Task 27 Part A).
+            // When nothing is aiming it stays an ordinary key press, so menus are unchanged.
+            bool escapedAim = Input.GetKeyDown(KeyboardKeys.Escape) && Runtime.CancelAim();
+
             foreach (string key in ActionWords.KeyNamesForScanning)
             {
                 bool held = _world.IsKeyHeld(key);
                 _heldLastTick.TryGetValue(key, out bool wasHeld);
                 if (held && !wasHeld)
                 {
+                    if (escapedAim && key == "Escape")
+                    {
+                        _heldLastTick[key] = held;
+                        continue;
+                    }
                     // A capture (`rebind player 2 Shoot`) swallows this press: the menu is
                     // binding a key, not playing.
                     if (Runtime.TryCompleteCapture(key, null))
@@ -833,16 +847,26 @@ namespace Game
             bool leftMouseDown = Input.GetMouseButtonDown(MouseButton.Left);
             if (leftMouseDown && !_leftMouseDownLastFrame)
             {
-                HandleMouseClick(mousePos, screenCenter, TriggerKind.Clicked);
-                var clickWorld = RaycastToWorld(mousePos);
-                if (clickWorld.HasValue)
-                    FlaxActions.LastClickPosition = clickWorld.Value;
+                // While aiming, a left click resolves the pick (Task 27 Part A). A landed pick
+                // consumes the click; a UI click or an out-of-range pick is ignored and the
+                // click still runs its ordinary path.
+                if (!TryAimPick(mousePos))
+                {
+                    HandleMouseClick(mousePos, screenCenter, TriggerKind.Clicked);
+                    var clickWorld = RaycastToWorld(mousePos);
+                    if (clickWorld.HasValue)
+                        FlaxActions.LastClickPosition = clickWorld.Value;
+                }
             }
             _leftMouseDownLastFrame = leftMouseDown;
 
             bool rightMouseDown = Input.GetMouseButtonDown(MouseButton.Right);
             if (rightMouseDown && !_rightMouseDownLastFrame)
-                HandleMouseClick(mousePos, screenCenter, TriggerKind.RightClicked);
+            {
+                // A right click cancels an aim instead of issuing an order.
+                if (!Runtime.CancelAim())
+                    HandleMouseClick(mousePos, screenCenter, TriggerKind.RightClicked);
+            }
             _rightMouseDownLastFrame = rightMouseDown;
 
             bool middleMouseDown = Input.GetMouseButtonDown(MouseButton.Middle);
@@ -926,6 +950,100 @@ namespace Game
             _hoveredUI = newHovered;
             if (_hoveredUI != null)
                 Runtime.RaisePush(_hoveredUI, new PushSignal { Kind = TriggerKind.Hovered, Name = _hoveredUI.Name });
+        }
+
+        /// <summary>
+        /// Resolves a left click while <c>aim</c> is armed (Task 27 Part A). True only when the
+        /// pick landed, so the click is consumed; a UI hit, a missing ray, or a pick the aim
+        /// refuses (out of reach, wrong kind, unseen) returns false and the click keeps its
+        /// ordinary behaviour. A hit that belongs to no event sheet is bare ground, so it becomes
+        /// a point pick rather than a click on the world actor.
+        /// </summary>
+        private bool TryAimPick(Float2 mousePos)
+        {
+            if (!Runtime.Targeting.IsAiming)
+                return false;
+            if (MouseOverAnyUI(mousePos))
+                return false;
+            if (!FlaxWorld.TryGetMouseRay(mousePos, out Ray ray))
+                return false;
+            if (!Physics.LineCastAll(ray.Position, ray.Position + ray.Direction * 10000f, out var hits, ~0u, true))
+                return false;
+
+            Actor bestActor = null;
+            Vector3 bestPoint = Vector3.Zero;
+            float best = float.MaxValue;
+            foreach (var hit in hits)
+            {
+                if (hit.Distance >= best)
+                    continue;
+                best = hit.Distance;
+                bestPoint = hit.Point;
+                bestActor = ActorOfHit(hit.Collider);
+            }
+
+            bool unit = bestActor != null && bestActor.GetScript<EventSheet>() != null;
+            if (unit)
+                return Runtime.PickAimActor(bestActor, bestActor.Position.X, bestActor.Position.Z);
+            if (best < float.MaxValue)
+                return Runtime.PickAimPoint(bestPoint.X, bestPoint.Z);
+            return false;
+        }
+
+        /// <summary>True when the cursor is over any UI control — an aim never steals a
+        /// command-card button click (the button runs and the aim stays armed).</summary>
+        private bool MouseOverAnyUI(Float2 mousePos)
+        {
+            foreach (Actor actor in SceneActors())
+            {
+                if (actor == null || !actor.IsActive)
+                    continue;
+                if (actor is UIControl ui && MouseOverUIControl(ui, mousePos))
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Keeps the aim visuals honest (Task 27 Part A): the caster's position is refreshed so
+        /// the reach check follows a walking caster, and the optional scene <c>AimMarker</c> actor
+        /// sits under the cursor while aiming and hides when the mode ends.
+        /// </summary>
+        private void UpdateAim()
+        {
+            TargetingSession aim = Runtime.Targeting.Aiming;
+            Actor marker = FindAimMarker();
+            if (aim == null)
+            {
+                if (marker != null && marker.IsActive)
+                    marker.IsActive = false;
+                return;
+            }
+            if (aim.Caster is Actor caster && caster.Scene != null)
+                Runtime.Targeting.MoveCaster(caster, caster.Position.X, caster.Position.Z);
+            if (marker == null)
+                return;
+            Vector3? spot = RaycastToWorld(Input.MousePosition);
+            if (!spot.HasValue)
+            {
+                marker.IsActive = false;
+                return;
+            }
+            marker.IsActive = true;
+            marker.Position = spot.Value;
+        }
+
+        /// <summary>The optional <c>AimMarker</c> scene actor, looked up again after a scene load.</summary>
+        private Actor FindAimMarker()
+        {
+            if (_aimMarker != null && _aimMarker.Scene != null)
+                return _aimMarker;
+            if (_aimMarker != null)
+                _aimMarker = null;
+            if (!_aimMarkerSearched)
+                _aimMarker = Level.FindActor(AimMarkerName);
+            _aimMarkerSearched = true;
+            return _aimMarker;
         }
 
         /// <summary>Raises <paramref name="kind"/> on the actor under the cursor. UIControls

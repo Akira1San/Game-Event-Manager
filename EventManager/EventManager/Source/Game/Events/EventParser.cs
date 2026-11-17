@@ -759,7 +759,10 @@ namespace Game
                     words[index + 2].Type == TokenType.Word)
                 {
                     string pair = words[index + 1].Text + " " + words[index + 2].Text;
-                    if (pair == "current order" || pair == "order target" || pair == "order queue")
+                    // `my aim x` / `my aim z` / `my aim target` — the target-pick result
+                    // (Task 27 Part A), read as one variable like the order state.
+                    if (pair == "current order" || pair == "order target" || pair == "order queue" ||
+                        pair == "aim x" || pair == "aim z" || pair == "aim target")
                     {
                         index += 3;
                         return new VariableValue { Line = t.Line, Owner = "my", Name = pair };

@@ -92,6 +92,8 @@ namespace Game
             new WordEntry { Kind = "trigger", Word = "when area becomes revealed", Example = "when area becomes revealed" },
             new WordEntry { Kind = "trigger", Word = "when area becomes hidden", Example = "when area becomes hidden" },
             new WordEntry { Kind = "trigger", Word = "when <unit> enters fog", Example = "when Marine enters fog" },
+            new WordEntry { Kind = "trigger", Word = "when my aim picks a target", Example = "when my aim picks a target" },
+            new WordEntry { Kind = "trigger", Word = "when aim picks a target", Example = "when aim picks a target" },
 
             new WordEntry { Kind = "condition", Word = "<var> is <value>", Example = "Score is 3" },
             new WordEntry { Kind = "condition", Word = "<var> is not <value>", Example = "my health is lower than 1" },
@@ -153,6 +155,7 @@ namespace Game
             new WordEntry { Kind = "condition", Word = "my order queue is <n>", Example = "my order queue is 2" },
             new WordEntry { Kind = "condition", Word = "me is visible to enemy", Example = "me is visible to enemy" },
             new WordEntry { Kind = "condition", Word = "me is hidden", Example = "me is hidden" },
+            new WordEntry { Kind = "condition", Word = "my aim is a unit", Example = "my aim is a unit", AltShape = "the last `aim` pick was a unit, not bare ground — branch inside `when my aim picks a target`" },
 
             new WordEntry { Kind = "directive", Word = "bind <label> to <variable>", Example = "bind ScoreLabel to Score" },
             new WordEntry { Kind = "directive", Word = "bind progress of <thing> to <variable>", Example = "bind progress of HealthBar to Health" },
@@ -167,6 +170,10 @@ namespace Game
             new WordEntry { Kind = "action", Word = "spawn", Example = "spawn Gib at player 2", AltShape = "spawn Bullet at nearest player" },
             new WordEntry { Kind = "action", Word = "bounce", Example = "bounce", AltShape = "a bullet reflects off the wall instead of dying" },
             new WordEntry { Kind = "action", Word = "explode", Example = "explode radius 320" },
+            new WordEntry { Kind = "action", Word = "aim", Example = "aim \"psi storm\"", AltShape = "enters target-pick mode: the next left click on the ground or a unit resolves it, a right click / Escape / `cancel aim` drops it, and it lapses after 8 s (`for 6 seconds` overrides) · `at a point`, `at a unit` or `at me` narrows what a click accepts · `my attack range` is the reach, and a unit pick must also pass the matchup table and the local player's fog · the optional scene actor `AimMarker` follows the cursor while aiming" },
+            new WordEntry { Kind = "action", Word = "cancel", Example = "cancel aim" },
+            new WordEntry { Kind = "action", Word = "damage", Example = "damage area around my aim target by 30 for radius 180", AltShape = "AoE without a projectile — `explode` destroys its caster, this does not · spot is an actor, `there`, or the `my aim target` / `my aim` pick · every actor in the radius (the caster's own side included) takes a `\"damage\"` message from the caster, so armour, shields, health and the matchup gate all apply · no visual or sound of its own · radius defaults to 150" },
+            new WordEntry { Kind = "value", Word = "my aim x", Example = "set StormX to my aim x", AltShape = "`my aim z` is the other coordinate and `my aim target` the picked unit's name (empty for a ground pick)" },
             new WordEntry { Kind = "action", Word = "explosive", Example = "explosive", AltShape = "the same as `explode`" },
             new WordEntry { Kind = "action", Word = "weapon", Example = "weapon \"Shotgun\"", AltShape = "set weapon to \"Pistol\"" },
             new WordEntry { Kind = "action", Word = "reload", Example = "reload" },

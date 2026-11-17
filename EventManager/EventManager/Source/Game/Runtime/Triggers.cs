@@ -76,6 +76,8 @@ namespace Game
         EntersFog,
         // RTS damage & per-unit health (Task 18 Part G)
         HealthLow,
+        // RTS target-pick mode (Task 27 Part A)
+        AimPicked,
         // Local multiplayer (Task 16 Part F)
         PlayerJoins,
         PlayerDies,
@@ -243,6 +245,12 @@ namespace Game
                 return new TriggerDescriptor { Kind = TriggerKind.OrderStarts };
             if (words.Length == 2 && words[0] == "path" && words[1] == "blocked")
                 return new TriggerDescriptor { Kind = TriggerKind.PathBlocked };
+            // `when my aim picks a target` (Task 27 Part A) — the click that resolved `aim`.
+            // Sits before the generic `my`/`changes` shapes so `aim` is never read as a variable.
+            int picksIndex = IndexOf(words, "picks");
+            if (picksIndex >= 1 && words[picksIndex - 1] == "aim" && picksIndex + 2 < words.Length &&
+                words[picksIndex + 1] == "a" && words[picksIndex + 2] == "target")
+                return new TriggerDescriptor { Kind = TriggerKind.AimPicked };
             if (words.Length >= 3 && words[words.Length - 2] == "order" &&
                 (words[words.Length - 1] == "completes" || words[words.Length - 1] == "starts"))
                 return new TriggerDescriptor

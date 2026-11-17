@@ -65,6 +65,8 @@ namespace Game
         AttackTypeIs,
         // RTS attack matchups (Task 23 Part B)
         CanAttackTarget,
+        // RTS target-pick mode (Task 27 Part A)
+        AimIsUnit,
         // RTS fog of war & visibility (Task 18 Part F)
         IsVisibleToEnemy,
         IsHidden,
@@ -513,6 +515,16 @@ namespace Game
                 return node;
             }
 
+            // ---- target-pick mode (Task 27 Part A) ----
+            // `my aim is a unit` reads the pick an `aim` left behind; `aim is a unit` is the
+            // same line without the owner.
+            if (texts.Length >= 5 && texts[0] == "my" && texts[1] == "aim" &&
+                texts[3] == "a" && texts[4] == "unit")
+            {
+                node.Kind = ConditionKind.AimIsUnit;
+                return node;
+            }
+
             // ---- attack range (Task 21 Part A) ----
             // `my attack range is 120` — the same multiword stat `set` joins, so a sheet can
             // read back the range it declared.
@@ -881,6 +893,16 @@ namespace Game
                         return false;
                     ValueBox wanted = ValueEvaluator.Evaluate(node.Right, ContextResolver(context));
                     return CompareEqual(ValueBox.OfText(context.Runtime.Orders.CurrentOrderName(context.Me)), wanted);
+                }
+                // `my aim is a unit` (Task 27 Part A): the last pick was a unit, not bare ground.
+                // Reads the pick the caster's own `aim` left behind, so a trigger body can branch.
+                case ConditionKind.AimIsUnit:
+                {
+                    EventContext aimContext = context;
+                    if (aimContext.Runtime == null || aimContext.Me == null)
+                        return false;
+                    TargetingSession session = aimContext.Runtime.Targeting.SessionOf(aimContext.Me);
+                    return session != null && session.HasPick && session.PickIsUnit;
                 }
                 case ConditionKind.IsVisibleToEnemy:
                     return context.Me != null && context.Runtime != null &&

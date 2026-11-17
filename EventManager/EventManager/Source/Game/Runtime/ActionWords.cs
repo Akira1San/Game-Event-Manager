@@ -115,6 +115,10 @@ namespace Game
         // Projectile behaviour (Task 16 Part C.5)
         Bounce,
         Explode,
+        // RTS target-pick mode & area damage (Task 27 Part A)
+        Aim,
+        CancelAim,
+        DamageArea,
     }
 
     public class ActionSpec
@@ -173,6 +177,15 @@ namespace Game
         /// <summary><c>... level 12</c>: the item level the affixes roll for.</summary>
         public double ItemLevel = 1;
         public bool HasItemLevel;
+        /// <summary><c>aim "&lt;ability&gt;"</c>: the ability name (also kept in
+        /// <see cref="Thing"/> so warnings read the same as other actions).</summary>
+        public string Ability = "";
+        /// <summary>What that aim accepts — a point, a unit, the caster, or any of them.</summary>
+        public TargetAccepts Accepts = TargetAccepts.Point | TargetAccepts.Unit;
+        /// <summary><c>damage area around &lt;spot&gt; by &lt;n&gt; for radius &lt;r&gt;</c>:
+        /// the blast radius, as a literal (<see cref="Radius"/>) or a value.</summary>
+        public double Radius;
+        public ValueNode RadiusNode;
     }
 
     public static class ActionWords
@@ -388,6 +401,100 @@ namespace Game
                 case "bounce":
                     // `bounce` — a projectile reflects off the wall it just hit (Task 16 Part C.5).
                     return Finish(spec, ActionVerb.Bounce, words, 1);
+
+                case "aim":
+                {
+                    // `aim "psi storm"` enters target-pick mode (Task 27 Part A). The optional
+                    // qualifiers narrow what a click accepts and how long the mode stays armed:
+                    // `aim "heal" at me`, `aim "psi storm" at a point for 6 seconds`.
+                    if (words.Count >= 2 && words[1].Type == TokenType.Str)
+                    {
+                        spec.Thing = words[1].Text;
+                        spec.Ability = words[1].Text;
+                        int aimIndex = 2;
+                        if (words.Count >= aimIndex + 3 && words[aimIndex].Text == "at" &&
+                            words[aimIndex + 1].Text == "a" &&
+                            (words[aimIndex + 2].Text == "point" || words[aimIndex + 2].Text == "unit"))
+                        {
+                            spec.Accepts = words[aimIndex + 2].Text == "point"
+                                ? TargetAccepts.Point
+                                : TargetAccepts.Unit;
+                            aimIndex += 3;
+                        }
+                        else if (words.Count >= aimIndex + 2 && words[aimIndex].Text == "at" &&
+                                 words[aimIndex + 1].Text == "me")
+                        {
+                            spec.Accepts = TargetAccepts.Me;
+                            aimIndex += 2;
+                        }
+                        else if (words.Count >= aimIndex + 2 && words[aimIndex].Text == "at")
+                        {
+                            return Unknown(spec, words, "after \u201Cat\u201D an aim takes \u201Ca point\u201D, \u201Ca unit\u201D or \u201Cme\u201D", warn);
+                        }
+                        if (words.Count >= aimIndex + 3 && words[aimIndex].Text == "for" &&
+                            words[aimIndex + 2].Text == "seconds")
+                        {
+                            if (words[aimIndex + 1].Type != TokenType.Number)
+                                return Unknown(spec, words, "an aim timeout is seconds, like \u201Cfor 6 seconds\u201D", warn);
+                            spec.Duration = words[aimIndex + 1].Number;
+                            aimIndex += 3;
+                        }
+                        return Finish(spec, ActionVerb.Aim, words, aimIndex);
+                    }
+                    return Unknown(spec, words, "\u201Caim\u201D needs an ability name in quotes, like \u201Caim \"psi storm\"\u201D", warn);
+                }
+
+                case "damage":
+                {
+                    // `damage area around <spot> by <n> for radius <r>` (Task 27 Part A) — AoE
+                    // without a projectile, so a storm never destroys its caster. The spot is
+                    // an actor, `there`, or the pick an `aim` just made.
+                    if (words.Count >= 4 && words[1].Text == "area" && words[2].Text == "around")
+                    {
+                        int damageIndex = 3;
+                        string spot;
+                        int spotUsed;
+                        if (words.Count >= damageIndex + 3 && words[damageIndex].Text == "my" &&
+                            words[damageIndex + 1].Text == "aim" && words[damageIndex + 2].Text == "target")
+                        {
+                            spot = "my aim target";
+                            spotUsed = 3;
+                        }
+                        else if (words.Count >= damageIndex + 2 && words[damageIndex].Text == "my" &&
+                                 words[damageIndex + 1].Text == "aim")
+                        {
+                            spot = "my aim";
+                            spotUsed = 2;
+                        }
+                        else
+                        {
+                            spot = TargetAt(words, damageIndex, out spotUsed);
+                        }
+                        if (spot != null)
+                        {
+                            spec.Thing = spot;
+                            damageIndex += spotUsed;
+                            if (words.Count >= damageIndex + 2 && words[damageIndex].Text == "by")
+                            {
+                                spec.AmountNode = ValueNodeAt(words, damageIndex + 1, out int damageUsed);
+                                spec.HasNumber = words[damageIndex + 1].Type == TokenType.Number;
+                                if (spec.HasNumber)
+                                    spec.Number = words[damageIndex + 1].Number;
+                                damageIndex += 1 + damageUsed;
+                                if (words.Count >= damageIndex + 3 && words[damageIndex].Text == "for" &&
+                                    words[damageIndex + 1].Text == "radius")
+                                {
+                                    spec.RadiusNode = ValueNodeAt(words, damageIndex + 2, out int radiusUsed);
+                                    if (words[damageIndex + 2].Type == TokenType.Number)
+                                        spec.Radius = words[damageIndex + 2].Number;
+                                    damageIndex += 2 + radiusUsed;
+                                }
+                                return Finish(spec, ActionVerb.DamageArea, words, damageIndex);
+                            }
+                        }
+                    }
+                    return Unknown(spec, words, "\u201Cdamage area\u201D looks like \u201Cdamage area around Mouse by 30 for radius 180\u201D", warn);
+                }
 
                 case "explode":
                 case "explosive":
@@ -975,6 +1082,9 @@ namespace Game
                 }
                 case "cancel":
                 {
+                    // `cancel aim` leaves target-pick mode (Task 27 Part A).
+                    if (words.Count >= 2 && words[1].Text == "aim")
+                        return Finish(spec, ActionVerb.CancelAim, words, 2);
                     if (words.Count >= 3 && words[1].Text == "training")
                     {
                         string unit = ThingAt(words, 2, out int unitUsed);

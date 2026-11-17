@@ -71,6 +71,19 @@ namespace Game
                 return ValueBox.OfText(Runtime.Orders.OrderTargetName(Me));
             if (name == "order queue" || name == "OrderQueue")
                 return ValueBox.OfNumber(Runtime.Orders.OrderCount(Me));
+            // `my aim x` / `my aim z` / `my aim target` (Task 27 Part A): the pick an `aim`
+            // left behind, so a trigger body can read where the click landed.
+            if (name == "aim x" || name == "AimX")
+                return ValueBox.OfNumber(AimSession()?.PickX ?? 0);
+            if (name == "aim z" || name == "AimZ")
+                return ValueBox.OfNumber(AimSession()?.PickZ ?? 0);
+            if (name == "aim target" || name == "AimTarget")
+            {
+                TargetingSession aim = AimSession();
+                return ValueBox.OfText(aim != null && aim.PickIsUnit && aim.PickActor != null
+                    ? Runtime.NameOfActor(aim.PickActor)
+                    : "");
+            }
             // `my camera zoom` / `my camera position` (Task 26 Part D): the state the free-pan
             // controls keep, readable from any sheet — a HUD readout or a debug print. The
             // position is the ground point the camera is centred on, as "x, 0, z".
@@ -110,6 +123,10 @@ namespace Game
 
         public ValueBox ReadOther(string name)
             => Other == null ? new ValueBox() : Variables.GetLocal(Other, name);
+
+        /// <summary>This sheet actor's aim session (picked or still waiting), or null.</summary>
+        private TargetingSession AimSession()
+            => Runtime == null || Me == null ? null : Runtime.Targeting.SessionOf(Me);
 
         public VariableResolver Resolver()
             => variable =>
@@ -260,6 +277,10 @@ namespace Game
         public WeaponClock Weapons = new WeaponClock();
         /// <summary>Per actor + spell cooldowns behind `cast` (Task 9 E3).</summary>
         public SpellClock Spells = new SpellClock();
+        /// <summary>Target-pick mode behind `aim` (Task 27 Part A).</summary>
+        public TargetingManager Targeting = new TargetingManager();
+        /// <summary>Last tick time, so the aim timeout advances with real tick delta.</summary>
+        private double lastTargetingTick;
         /// <summary>Rolled item instances and what they added to their wearer (Task 9 E7).</summary>
         public ItemAffixes Affixes = new ItemAffixes();
         /// <summary>Level order, current level and run statistics (Task 16 Part G).</summary>
@@ -456,6 +477,7 @@ namespace Game
             allEnemiesDeadRaised = false;
             pendingLevel = "";
             Fog.Reset();
+            Targeting.Clear();
             foreach (var sheet in sheets)
                 sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.SceneStart });
         }
@@ -518,6 +540,55 @@ namespace Game
         public bool SelectControlGroup(int group)
         {
             return Selection.SelectControlGroup(group);
+        }
+
+        // ---------------- RTS target-pick mode (Task 27 Part A) ----------------
+        // The bridge turns a left click into one of these; the pick then fires
+        // `when my aim picks a target` on the caster's own sheet, in the same tick.
+
+        /// <summary>A click landed on a unit while aiming. False when the aim refused it
+        /// (wrong kind, out of reach, or the bridge's validity rule said no).</summary>
+        public bool PickAimActor(object actor, double x, double z)
+        {
+            TargetingSession aiming = Targeting.Aiming;
+            if (aiming == null)
+                return false;
+            TargetingSession picked = Targeting.TryPick(aiming.Caster, actor, x, z);
+            if (picked == null)
+                return false;
+            RaisePush(picked.Caster, new PushSignal
+            {
+                Kind = TriggerKind.AimPicked,
+                Name = picked.Ability,
+                Other = actor,
+            });
+            return true;
+        }
+
+        /// <summary>A click landed on bare ground while aiming.</summary>
+        public bool PickAimPoint(double x, double z)
+        {
+            TargetingSession aiming = Targeting.Aiming;
+            if (aiming == null)
+                return false;
+            TargetingSession picked = Targeting.TryPick(aiming.Caster, x, z);
+            if (picked == null)
+                return false;
+            RaisePush(picked.Caster, new PushSignal
+            {
+                Kind = TriggerKind.AimPicked,
+                Name = picked.Ability,
+            });
+            return true;
+        }
+
+        /// <summary><c>cancel aim</c>, a right click or Escape while aiming.</summary>
+        public bool CancelAim()
+        {
+            TargetingSession aiming = Targeting.Aiming;
+            if (aiming == null)
+                return false;
+            return Targeting.Cancel(aiming.Caster);
         }
 
         // ---------------- RTS state queries (Task 18 Part H) ----------------
@@ -1148,6 +1219,12 @@ namespace Game
         public void Tick(double time)
         {
             Time = time;
+            // `aim` lapses when its timeout runs out (Task 27 Part A). Advanced before the
+            // push queues are drained so a lapse lands in the same tick.
+            double aimDelta = time - lastTargetingTick;
+            if (aimDelta > 0)
+                Targeting.Tick(aimDelta > 1 ? 1 : aimDelta);
+            lastTargetingTick = time;
             // Sounds are momentary: drop the ones older than the bus's memory before this tick's
             // actions can add new ones, so a shot fired now is heard now and not a minute later.
             Sounds.Expire(Time);
