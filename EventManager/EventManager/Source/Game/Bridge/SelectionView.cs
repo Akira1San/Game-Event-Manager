@@ -12,6 +12,8 @@ namespace Game
     /// - Put a child actor named <c>SelectionRing</c> under each selectable unit.
     /// - Optionally add a label actor named <c>ControlGroups</c> (shows "1 2 5") and/or
     ///   actors named <c>ControlGroup0</c> … <c>ControlGroup9</c> (shown while assigned).
+    /// The keys themselves live in <see cref="EventsManager"/>: 1–0 recalls a group and
+    /// Ctrl+1–0 assigns the current selection to it.
     /// </summary>
     public static class SelectionView
     {

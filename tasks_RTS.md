@@ -940,6 +940,8 @@ cooldowns cost one polling trigger per unit.
 2. How many players (1v1, FFA, teams)?
 3. Supply cap mechanics — hard limit or soft warning?
 4. Fog of war: explored areas stay visible or revert to fog?
-5. Control groups: 1–0 keys or click-assign?
+5. Control groups: 1–0 keys or click-assign? — **keys**: 1–0 recalls a group, Ctrl+1–0
+   assigns the current selection (`EventRuntime.AssignControlGroup`); sheets can also assign with
+   `set my control group to <n>`. Click-assign was dropped: the command card has no group buttons.
 6. Homeworld 3D movement: full 3D or 2.5D plane?
 7. Red Alert power system: power deficit slows production?

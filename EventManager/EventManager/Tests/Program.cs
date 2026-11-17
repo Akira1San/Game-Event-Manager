@@ -3940,6 +3940,15 @@ when control group 1 is held
     Check(!stateEngine.Selection.IsSelected(a1) && !stateEngine.Selection.IsInControlGroup(a1, 3),
         "Forget removes a destroyed actor from the selection and every control group");
     Check(!stateEngine.SelectControlGroup(9), "recalling an unassigned group changes nothing");
+    // Ctrl+1–0: the current selection becomes the group (the bridge calls this on Ctrl).
+    stateEngine.Selection.Clear();
+    stateEngine.Selection.Select(a2);
+    Check(stateEngine.AssignControlGroup(4) && stateEngine.Selection.IsInControlGroup(a2, 4),
+        "AssignControlGroup stores the current selection as a group");
+    stateEngine.Selection.Clear();
+    Check(!stateEngine.AssignControlGroup(5) && !stateEngine.Selection.IsControlGroupAssigned(5),
+        "assigning with nothing selected creates no group");
+    Check(!stateEngine.AssignControlGroup(10), "a group number outside 1–0 is refused");
 
 // ------------------------------------------------------------------
 // Task 18 Part B: RTS resource economy

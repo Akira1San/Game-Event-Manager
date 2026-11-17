@@ -559,6 +559,19 @@ namespace Game
             return Selection.SelectControlGroup(group);
         }
 
+        /// <summary>
+        /// Assign the current selection to a control group (Ctrl+1–0 in the engine bridge,
+        /// the same thing a global sheet's <c>set my control group to &lt;n&gt;</c> does).
+        /// An empty selection assigns nothing rather than wiping the group.
+        /// </summary>
+        public bool AssignControlGroup(int group)
+        {
+            if (group < 0 || group >= Selection.ControlGroupCount || Selection.Count == 0)
+                return false;
+            Selection.SetControlGroup(group, Selection.Selected);
+            return true;
+        }
+
         // ---------------- RTS target-pick mode (Task 27 Part A) ----------------
         // The bridge turns a left click into one of these; the pick then fires
         // `when my aim picks a target` on the caster's own sheet, in the same tick.

@@ -825,9 +825,16 @@ namespace Game
                         PlayerA = Runtime.PlayerForKey(key),
                     };
                     Runtime.RaisePushAll(press);
-                    // Pressing 1–0 recalls that control group (classic RTS behaviour).
+                    // Pressing 1–0 recalls that control group, and Ctrl+1–0 assigns the current
+                    // selection to it (classic RTS behaviour). Assign is a no-op with nothing
+                    // selected, so a stray Ctrl+digit never wipes a group.
                     if (Selection.TryGroupKey(key, out int group))
-                        Runtime.SelectControlGroup(group);
+                    {
+                        if (_world.IsKeyHeld("Ctrl"))
+                            Runtime.AssignControlGroup(group);
+                        else
+                            Runtime.SelectControlGroup(group);
+                    }
                 }
                 else if (wasHeld && !held)
                 {
