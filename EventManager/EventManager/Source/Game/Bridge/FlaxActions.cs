@@ -3216,8 +3216,13 @@ namespace Game
             // A building that kept its cells — raised by `fly to … at …` instead of `lift off` —
             // still needs the dry run; its own cells count as free inside it.
             bool reserved = lift.ReservedOf(me) || runtime.Construction.OwnsCells(me);
+            // No lift-off state means no template name on it; fall back to the placement table so
+            // a building raised by `fly to … at …` re-takes its real footprint, not a bare 1x1.
+            string building = lift.BuildingOf(me);
+            if (building.Length == 0)
+                building = runtime.Construction.BuildingOf(me);
             double size = ConstructionManager.ResolveGridSize(context.Variables, false, 0);
-            bool gridFree = !reserved || runtime.Construction.CanReserveCells(me, lift.BuildingOf(me),
+            bool gridFree = !reserved || runtime.Construction.CanReserveCells(me, building,
                 context.Variables, me.Position.X, me.Position.Z, size);
 
             LandResult result = lift.TryLand(context.Variables, runtime, me, groundOk, gridFree);
@@ -3229,7 +3234,7 @@ namespace Game
                         // Drop any cells it still holds at its old spot, then take the ones under
                         // where it touched down.
                         runtime.Construction.ReleaseCells(me);
-                        runtime.Construction.TryReserveCells(me, lift.BuildingOf(me), context.Variables,
+                        runtime.Construction.TryReserveCells(me, building, context.Variables,
                             me.Position.X, me.Position.Z, size);
                     }
                     break; // Part A settles it on the ground it was flying over

@@ -10321,6 +10321,30 @@ var keptOther = new FakeActor("Turret");
 Check(!keptEngine.Construction.CanReserveCells(keptOther, "Turret", keptEngine.Variables, 0, 0, 64),
     "another building still cannot claim a footprint those cells belong to");
 
+// A 2x2 building that kept its cells: the landing dry run has to clear the whole footprint,
+// not just the anchor cell, and re-reserving takes all four cells back.
+var wideKeptWorld = new FakeWorld();
+var wideKeptBarracks = new FakeActor("Barracks");
+wideKeptWorld.AddActor(wideKeptBarracks);
+var wideKept = FreshEngine(wideKeptWorld);
+wideKept.Variables.SetGlobal("BarracksGridWidth", ValueBox.OfNumber(2));
+wideKept.Variables.SetGlobal("BarracksGridDepth", ValueBox.OfNumber(2));
+wideKept.Construction.RegisterPlaced(wideKeptBarracks, "Barracks", wideKept.Variables);
+Check(wideKept.Construction.TryReserveCells(wideKeptBarracks, "Barracks", wideKept.Variables, 0, 0, 64),
+    "a 2x2 building that flies without lifting off keeps its whole footprint");
+wideKept.Variables.SetLocal(wideKeptBarracks, Altitude.Variable, ValueBox.OfNumber(150));
+Check(wideKept.LiftOff.TryLand(wideKept.Variables, wideKept, wideKeptBarracks, groundPassable: true,
+            gridFree: wideKept.Construction.CanReserveCells(wideKeptBarracks, "Barracks", wideKept.Variables, 0, 0, 64))
+        == LandResult.Landed,
+    "a 2x2 building that kept its cells can land on them whole");
+Check(wideKept.Construction.TryReserveCells(wideKeptBarracks, "Barracks", wideKept.Variables, 0, 0, 64),
+    "landing re-reserves the whole 2x2 footprint");
+var wideIntruder = new FakeActor("Turret");
+Check(!wideKept.Construction.CanReserveCells(wideIntruder, "Turret", wideKept.Variables, 64, 64, 64) &&
+      !wideKept.Construction.CanReserveCells(wideIntruder, "Turret", wideKept.Variables, 0, 64, 64) &&
+      !wideKept.Construction.CanReserveCells(wideIntruder, "Turret", wideKept.Variables, 64, 0, 64),
+    "all four cells of the landed 2x2 footprint are taken");
+
 Check(liftManager.TryLand(liftEngine.Variables, liftEngine, liftBarracks, groundPassable: true, gridFree: true)
         == LandResult.Landed,
     "land puts the building down");

@@ -1057,7 +1057,8 @@ land for buildings, and no targeting gate that refuses an air target for a land-
   in that check, so a building that kept its footprint — raised by `fly to … at …` rather than
   `lift off` — lands on it instead of getting a false `GridRefused`; `LandBuilding` now dry-runs
   the grid for any building that still owns cells, drops them and re-takes the ones under where
-  it touches down.
+  it touches down — using the template name from the placement table when there is no lift-off
+  state, so a 2x2 building raised by `fly to … at …` re-takes all four cells, not a bare 1x1.
 - Bridge (`Bridge/FlaxActions.cs`): `LiftOffBuilding` seeds `AltitudeGrounds` from the building's
   own Y before the height changes and uses an authored `my Altitude` as the rise height (else the
   global/default); `LandBuilding` tests the ground with `Terrain.IsPassable`, **not** `CanStep` —
@@ -1071,13 +1072,14 @@ land for buildings, and no targeting gate that refuses an air target for a land-
   building's own sheet and any other name matches the template, exactly like `is placed`.
   `me is airborne` now also answers true for any actor holding an altitude, and `me is on ground`
   is its mirror — that pair is the gate for "no training / no new construction while flying".
-- 35 new pure checks (height precedence, the grid dry run and `OwnsCells`, lift writing the
+- 39 new pure checks (height precedence, the grid dry run and `OwnsCells`, lift writing the
   altitude and freeing cells, double-lift refusal, the lift trigger, a paused queue keeping its
   remaining time and resuming, both landing refusals with the `path blocked` push, the successful
-  landing and its trigger, a building that kept its cells landing on its own footprint, both
+  landing and its trigger, a building that kept its cells landing on its own footprint, a 2x2 one
+  landing whole, both
   trigger classifications incl. the bare forms, both action parses, the bad-shape help, the
   registry rows, and `me is airborne` / `me is on ground` for an altitude-holding building) ->
-  **1833 passed, 0 failed**; `Flax.Build -build -arch=x64
+  **1837 passed, 0 failed**; `Flax.Build -build -arch=x64
   -platform=Windows -configuration=Debug -target=GameEditorTarget` reported 0 errors and the
   rebuilt `Game.CSharp.dll` contains `LiftOffBuilding` / `LandResult`.
 - The bridge half (ground/grid answers, the altitude seeding, warn-once messages) has no unit
