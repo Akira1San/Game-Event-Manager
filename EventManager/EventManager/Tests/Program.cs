@@ -10227,6 +10227,168 @@ Check(airFlyBroken.Verb == ActionVerb.Unknown && actionHint.Contains("fly"),
 Check(WordRegistry.All.Any(e => e.Word == "fly" && e.Example == "fly to LZ at 120"),
     "the registry documents `fly to ... at ...`");
 
+// ------------------------------------------------------------------
+// Task 28 Part C: lift-off and landing (buildings)
+// ------------------------------------------------------------------
+
+var liftVars = new EventVariables();
+Check(Math.Abs(LiftOffManager.ResolveHeight(liftVars, 120) - 120) < 1e-9,
+    "the height on the lift-off line wins");
+Check(Math.Abs(LiftOffManager.ResolveHeight(liftVars, 0) - LiftOffManager.DefaultHeight) < 1e-9,
+    "a building with no authored height rises to the default");
+liftVars.SetGlobal("LiftOffHeight", ValueBox.OfNumber(90));
+Check(Math.Abs(LiftOffManager.ResolveHeight(liftVars, 0) - 90) < 1e-9,
+    "LiftOffHeight overrides the default rise");
+
+var liftWorld = new FakeWorld();
+var liftBarracks = new FakeActor("Barracks");
+liftWorld.AddActor(liftBarracks);
+var liftEngine = FreshEngine(liftWorld);
+var liftManager = liftEngine.LiftOff;
+liftEngine.Construction.RegisterPlaced(liftBarracks, "Barracks", liftEngine.Variables);
+Check(liftEngine.Construction.TryReserveCells(liftBarracks, "Barracks", liftEngine.Variables, 0, 0, 64) &&
+      liftEngine.Construction.OwnsCells(liftBarracks),
+    "a placed building reserves its grid footprint");
+Check(liftEngine.Construction.CanReserveCells(liftBarracks, "Barracks", liftEngine.Variables, 320, 0, 64),
+    "CanReserveCells is a dry run for a free footprint");
+
+liftEngine.AddSheet(liftBarracks, parser.Parse(@"
+when Barracks lifts off
+  add 1 to Lifted
+when Barracks lands
+  add 1 to Landed
+when path blocked
+  add 1 to LandingBlocked"));
+
+Check(liftManager.TryLift(liftEngine.Variables, liftEngine, liftBarracks, "Barracks", 120, true),
+    "lift off raises a placed building");
+Check(liftManager.IsFlying(liftBarracks) &&
+      Math.Abs(Altitude.Of(liftEngine.Variables, liftBarracks) - 120) < 1e-9,
+    "lifting writes `my Altitude`, which Part A pins");
+Check(!liftEngine.Construction.OwnsCells(liftBarracks),
+    "a flying building frees its build-grid footprint");
+Check(!liftManager.TryLift(liftEngine.Variables, liftEngine, liftBarracks, "Barracks", 120, true),
+    "a building that is already up cannot lift off twice");
+liftEngine.Tick(0);
+Check(liftEngine.Variables.GetGlobal("Lifted").AsNumber() == 1,
+    "`when Barracks lifts off` fires on the lift");
+
+liftEngine.Production.Enqueue(liftEngine.Variables, liftEngine, liftBarracks, "Barracks", "Marine");
+liftEngine.Production.Tick(liftEngine, 1);
+liftEngine.Production.Tick(liftEngine, 2);
+double pausedAt = liftEngine.Production.RemainingOf(liftBarracks);
+liftEngine.Production.Tick(liftEngine, 9);
+Check(Math.Abs(liftEngine.Production.RemainingOf(liftBarracks) - pausedAt) < 1e-9 &&
+      Math.Abs(pausedAt - ProductionManager.DefaultBuildTime) < 1e-9,
+    "a lifted building's training queue keeps its remaining time and does not advance");
+Check(liftEngine.Production.IsPaused(liftBarracks) && liftEngine.Research.IsPaused(liftBarracks),
+    "lifting pauses both the production and research queues");
+
+Check(liftManager.TryLand(liftEngine.Variables, liftEngine, liftBarracks, groundPassable: false, gridFree: true)
+        == LandResult.GroundRefused && liftManager.IsFlying(liftBarracks),
+    "a landing on ground its own type cannot cross is refused and the building stays up");
+liftEngine.Tick(3);
+Check(liftEngine.Variables.GetGlobal("LandingBlocked").AsNumber() == 1,
+    "a refused landing reports `when path blocked` with the name land");
+
+var liftDepot = new FakeActor("Depot");
+liftEngine.Construction.TryReserveCells(liftDepot, "Depot", liftEngine.Variables, 0, 0, 64);
+Check(liftManager.TryLand(liftEngine.Variables, liftEngine, liftBarracks, groundPassable: true, gridFree: false)
+        == LandResult.GridRefused && liftManager.IsFlying(liftBarracks),
+    "a landing on a footprint another building took is refused");
+liftEngine.Construction.ReleaseCells(liftDepot);
+Check(liftEngine.Construction.CanReserveCells(liftBarracks, "Barracks", liftEngine.Variables, 0, 0, 64),
+    "the freed footprint can be reserved again");
+
+// A building raised by `fly to … at …` never lifted off, so it still holds its grid cells.
+// Landing it must not read its own footprint as somebody else's (GridRefused).
+var keptWorld = new FakeWorld();
+var keptBarracks = new FakeActor("Barracks");
+keptWorld.AddActor(keptBarracks);
+var keptEngine = FreshEngine(keptWorld);
+keptEngine.Construction.RegisterPlaced(keptBarracks, "Barracks", keptEngine.Variables);
+Check(keptEngine.Construction.TryReserveCells(keptBarracks, "Barracks", keptEngine.Variables, 0, 0, 64),
+    "a building that flies without lifting off keeps its grid cells");
+keptEngine.Variables.SetLocal(keptBarracks, Altitude.Variable, ValueBox.OfNumber(150));
+Check(keptEngine.Construction.CanReserveCells(keptBarracks, "Barracks", keptEngine.Variables, 0, 0, 64),
+    "a building's own cells count as free in the reservation dry run");
+Check(keptEngine.LiftOff.TryLand(keptEngine.Variables, keptEngine, keptBarracks, groundPassable: true,
+            gridFree: keptEngine.Construction.CanReserveCells(keptBarracks, "Barracks", keptEngine.Variables, 0, 0, 64))
+        == LandResult.Landed &&
+      keptEngine.Construction.OwnsCells(keptBarracks),
+    "a building that kept its grid cells can land on them");
+var keptOther = new FakeActor("Turret");
+Check(!keptEngine.Construction.CanReserveCells(keptOther, "Turret", keptEngine.Variables, 0, 0, 64),
+    "another building still cannot claim a footprint those cells belong to");
+
+Check(liftManager.TryLand(liftEngine.Variables, liftEngine, liftBarracks, groundPassable: true, gridFree: true)
+        == LandResult.Landed,
+    "land puts the building down");
+Check(!liftManager.IsFlying(liftBarracks) && Altitude.Of(liftEngine.Variables, liftBarracks) == 0 &&
+      !liftEngine.Production.IsPaused(liftBarracks) && !liftEngine.Research.IsPaused(liftBarracks),
+    "landing clears the altitude and resumes the paused queues");
+liftEngine.Tick(4);
+Check(liftEngine.Variables.GetGlobal("Landed").AsNumber() == 1,
+    "`when Barracks lands` fires on the landing");
+liftEngine.Production.Tick(liftEngine, 10);
+Check(liftEngine.Production.RemainingOf(liftBarracks) < pausedAt,
+    "the resumed queue starts advancing again");
+Check(liftManager.TryLand(liftEngine.Variables, liftEngine, liftBarracks, true, true) == LandResult.NotFlying,
+    "landing a building that is already down is refused");
+
+var liftTriggerDesc = TriggerClassifier.Classify(parser.Parse("when Barracks lifts off\n  set Lifted to 1\n").Events[0]);
+Check(liftTriggerDesc.Kind == TriggerKind.LiftOff && liftTriggerDesc.RequireName == "Barracks",
+    "`when Barracks lifts off` classifies to LiftOff with the building name");
+var meLiftDesc = TriggerClassifier.Classify(parser.Parse("when me lifts off\n  set Lifted to 1\n").Events[0]);
+Check(meLiftDesc.Kind == TriggerKind.LiftOff && meLiftDesc.RequireName == "me",
+    "`when me lifts off` belongs to the building's own sheet");
+var bareLiftDesc = TriggerClassifier.Classify(parser.Parse("when lift off\n  set Lifted to 1\n").Events[0]);
+Check(bareLiftDesc.Kind == TriggerKind.LiftOff && bareLiftDesc.RequireName.Length == 0,
+    "bare `when lift off` listens to any building");
+var landsDesc = TriggerClassifier.Classify(parser.Parse("when me lands\n  set Landed to 1\n").Events[0]);
+Check(landsDesc.Kind == TriggerKind.Lands && landsDesc.RequireName == "me",
+    "`when me lands` classifies to Lands");
+var bareLandDesc = TriggerClassifier.Classify(parser.Parse("when land\n  set Landed to 1\n").Events[0]);
+Check(bareLandDesc.Kind == TriggerKind.Lands && bareLandDesc.RequireName.Length == 0,
+    "bare `when land` listens to any building");
+
+var liftOffSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  lift off"), null);
+Check(liftOffSpec.Verb == ActionVerb.LiftOff, "`lift off` parses as the LiftOff action");
+var landActionSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  land"), null);
+Check(landActionSpec.Verb == ActionVerb.Land, "`land` parses as the Land action");
+actionHint = "";
+var liftBrokenSpec = ActionWords.Parse(LooseWords("lift", "up"), GrabHint);
+Check(liftBrokenSpec.Verb == ActionVerb.Unknown && actionHint.Contains("lift"),
+    "a bent `lift` line explains the shape");
+Check(WordRegistry.All.Any(e => e.Word == "lift" && e.Example == "lift off") &&
+      WordRegistry.All.Any(e => e.Word == "land" && e.Example == "land") &&
+      WordRegistry.All.Any(e => e.Word == "when <building> lifts off") &&
+      WordRegistry.All.Any(e => e.Word == "when <building> lands"),
+    "the registry documents lift-off and landing");
+
+var liftCondWorld = new FakeWorld();
+var skyBarracks = new FakeActor("SkyBarracks");
+liftCondWorld.AddActor(skyBarracks);
+var liftCondEngine = FreshEngine(liftCondWorld);
+liftCondEngine.AddSheet(skyBarracks, parser.Parse(@"
+when me appears
+  set my Altitude to 120
+when W is pressed
+  me is airborne
+  set AirborneGate to AirborneGate + 1
+when E is pressed
+  me is on ground
+  set GroundGate to GroundGate + 1"));
+liftCondEngine.Tick(0);
+liftCondEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "W" });
+liftCondEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "E" });
+liftCondEngine.Tick(1);
+Check(liftCondEngine.Variables.GetGlobal("AirborneGate").AsNumber() == 1 &&
+      liftCondEngine.Variables.GetGlobal("GroundGate").AsNumber() == 0,
+    "`me is airborne` is true for a building holding an altitude, and `me is on ground` is not");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

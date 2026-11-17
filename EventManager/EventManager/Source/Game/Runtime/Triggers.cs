@@ -62,6 +62,10 @@ namespace Game
         BuildingPlaced,
         ConstructionCompleted,
         BuildingDestroyed,
+        /// <summary><c>when &lt;building&gt; lifts off</c> (Task 28 Part C).</summary>
+        LiftOff,
+        /// <summary><c>when &lt;building&gt; lands</c> (Task 28 Part C).</summary>
+        Lands,
         // RTS production queues & unit training (Task 18 Part D)
         TrainingStarted,
         TrainingFinished,
@@ -224,6 +228,24 @@ namespace Game
                     Kind = TriggerKind.BuildingDestroyed,
                     RequireName = Join(trigger, 0, words.Length - 2),
                 };
+            // Lift-off and landing (Task 28 Part C): `when Barracks lifts off`, `when me lands`,
+            // and the bare `when lift off` / `when land` forms for any building.
+            if (words.Length >= 3 && words[words.Length - 2] == "lifts" && words[words.Length - 1] == "off")
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.LiftOff,
+                    RequireName = Join(trigger, 0, words.Length - 2),
+                };
+            if (words.Length == 2 && words[0] == "lift" && words[1] == "off")
+                return new TriggerDescriptor { Kind = TriggerKind.LiftOff };
+            if (words.Length >= 2 && words[words.Length - 1] == "lands")
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.Lands,
+                    RequireName = Join(trigger, 0, words.Length - 1),
+                };
+            if (words.Length == 1 && words[0] == "land")
+                return new TriggerDescriptor { Kind = TriggerKind.Lands };
             // RTS production (Task 18 Part D). `when Barracks finishes training Marine` and
             // `when Barracks starts producing Marine` carry both the building and the unit.
             int finishesIndex = IndexOf(words, "finishes");

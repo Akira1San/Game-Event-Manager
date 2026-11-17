@@ -166,7 +166,7 @@ namespace Game
         /// Reserves the building's footprint, anchored at the cell containing
         /// (<paramref name="x"/>, <paramref name="z"/>). Reads <c>&lt;Building&gt;GridWidth</c>
         /// and <c>&lt;Building&gt;GridDepth</c> (default 1, minimum 1). Returns false without
-        /// reserving anything when any cell is already occupied.
+        /// reserving anything when any of those cells is held by another actor.
         /// </summary>
         public bool TryReserveCells(object actor, string building, EventVariables variables,
                                     double x, double z, double size)
@@ -178,20 +178,55 @@ namespace Game
             int depth = Footprint(variables, building + "GridDepth");
             var (anchorX, anchorZ) = CellOf(x, z, size);
 
-            var wanted = new List<(int X, int Z)>(width * depth);
+            if (!CanReserveCells(actor, building, variables, x, z, size))
+                return false; // atomic: reserve nothing on failure
+
+            for (int dx = 0; dx < width; dx++)
+            {
+                for (int dz = 0; dz < depth; dz++)
+                    _cells[(anchorX + dx, anchorZ + dz)] = actor;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Whether <see cref="TryReserveCells"/> would succeed, without reserving anything — the
+        /// dry run a landing needs before it decides to come down (Task 28 Part C). Cells the
+        /// actor already holds count as free, so a building that kept its footprint while
+        /// airborne (raised by <c>fly to … at …</c> rather than <c>lift off</c>) can still land
+        /// on it.
+        /// </summary>
+        public bool CanReserveCells(object actor, string building, EventVariables variables,
+                                    double x, double z, double size)
+        {
+            if (actor == null || size <= 0)
+                return false;
+
+            int width = Footprint(variables, building + "GridWidth");
+            int depth = Footprint(variables, building + "GridDepth");
+            var (anchorX, anchorZ) = CellOf(x, z, size);
+
             for (int dx = 0; dx < width; dx++)
             {
                 for (int dz = 0; dz < depth; dz++)
                 {
-                    var cell = (anchorX + dx, anchorZ + dz);
-                    if (_cells.ContainsKey(cell))
-                        return false; // atomic: reserve nothing on failure
-                    wanted.Add(cell);
+                    if (_cells.TryGetValue((anchorX + dx, anchorZ + dz), out object owner) &&
+                        !ReferenceEquals(owner, actor))
+                        return false;
                 }
             }
-            foreach (var cell in wanted)
-                _cells[cell] = actor;
             return true;
+        }
+
+        /// <summary>True when <paramref name="actor"/> currently holds grid cells.</summary>
+        public bool OwnsCells(object actor)
+        {
+            if (actor == null)
+                return false;
+            foreach (var pair in _cells)
+                if (ReferenceEquals(pair.Value, actor))
+                    return true;
+            return false;
         }
 
         /// <summary>Removes every cell owned by <paramref name="actor"/>.</summary>

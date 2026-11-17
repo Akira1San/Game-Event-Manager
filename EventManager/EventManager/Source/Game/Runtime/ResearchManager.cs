@@ -310,6 +310,8 @@ namespace Game
         public const string NameVariable = "ResearchName";
 
         private readonly Dictionary<object, ResearchQueue> _queues = new Dictionary<object, ResearchQueue>();
+        /// <summary>Buildings whose research is on hold — a lifted-off building (Task 28 Part C).</summary>
+        private readonly HashSet<object> _paused = new HashSet<object>();
         private double _lastTime;
         private bool _hasTime;
 
@@ -468,18 +470,39 @@ namespace Game
             return true;
         }
 
+        /// <summary>Holds or releases a building's research without refunding or dropping anything
+        /// it queued (<c>lift off</c> / <c>land</c>).</summary>
+        public void SetPaused(object building, bool paused)
+        {
+            if (building == null)
+                return;
+            if (paused)
+                _paused.Add(building);
+            else
+                _paused.Remove(building);
+        }
+
+        public bool IsPaused(object building)
+        {
+            return building != null && _paused.Contains(building);
+        }
+
         /// <summary>Drops a destroyed building's queue without refunding or raising edges — the
         /// investment goes with the building, exactly like a lost training queue.</summary>
         public void Destroyed(object building)
         {
             if (building != null)
+            {
                 _queues.Remove(building);
+                _paused.Remove(building);
+            }
         }
 
         /// <summary>Clears every queue for a scene restart / new session.</summary>
         public void Reset()
         {
             _queues.Clear();
+            _paused.Clear();
             _lastTime = 0;
             _hasTime = false;
         }
@@ -508,6 +531,9 @@ namespace Game
                 ResearchQueue queue = pair.Value;
                 ResearchOrder order = queue.Current;
                 if (order == null)
+                    continue;
+                // A lifted-off building's research waits with its production (Task 28 Part C).
+                if (_paused.Contains(pair.Key))
                     continue;
                 order.Elapsed += delta;
                 if (order.Elapsed < order.Duration)

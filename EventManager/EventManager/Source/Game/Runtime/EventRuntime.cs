@@ -269,6 +269,9 @@ namespace Game
         public ProductionManager Production = new ProductionManager();
         /// <summary>RTS research queues, refunds and per-player upgrade levels (Task 27 Part D).</summary>
         public ResearchManager Research = new ResearchManager();
+        /// <summary>Building lift-off and landing: airborne state, pausing and footprint
+        /// (Task 28 Part C).</summary>
+        public LiftOffManager LiftOff = new LiftOffManager();
         /// <summary>RTS per-unit order queues, attack-move and rally points (Task 18 Part E).</summary>
         public OrderManager Orders = new OrderManager();
         /// <summary>RTS per-player fog of war and visibility (Task 18 Part F).</summary>
@@ -499,6 +502,7 @@ namespace Game
             Targeting.Clear();
             Buffs.Reset(Variables);
             Cooldowns.Reset();
+            LiftOff.Reset();
             foreach (var sheet in sheets)
                 sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.SceneStart });
         }
@@ -1462,7 +1466,9 @@ namespace Game
         {
             return kind == TriggerKind.BuildingPlaced ||
                    kind == TriggerKind.ConstructionCompleted ||
-                   kind == TriggerKind.BuildingDestroyed;
+                   kind == TriggerKind.BuildingDestroyed ||
+                   kind == TriggerKind.LiftOff ||
+                   kind == TriggerKind.Lands;
         }
 
         private static bool IsProductionKind(TriggerKind kind)

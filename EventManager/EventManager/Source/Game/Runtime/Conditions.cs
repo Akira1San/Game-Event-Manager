@@ -781,9 +781,13 @@ namespace Game
                 case ConditionKind.Moving:
                     return context.World.IsMoving(context.Me);
                 case ConditionKind.OnGround:
-                    return context.World.IsOnGround(context.Me);
+                    // A unit holding an altitude is up, whatever the ground probe says (a lifted
+                    // building's own collider can still be near the floor) — Task 28 Part C.
+                    return Altitude.Of(context.Variables, context.Me) <= 0 &&
+                           context.World.IsOnGround(context.Me);
                 case ConditionKind.Airborne:
-                    return !context.World.IsOnGround(context.Me);
+                    return Altitude.Of(context.Variables, context.Me) > 0 ||
+                           !context.World.IsOnGround(context.Me);
                 case ConditionKind.Climbing:
                     return context.World.IsClimbing(context.Me);
                 case ConditionKind.Hears:

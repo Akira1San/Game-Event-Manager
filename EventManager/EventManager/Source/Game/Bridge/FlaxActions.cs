@@ -1068,6 +1068,12 @@ namespace Game
                 case ActionVerb.Fly:
                     FlyTo(context, spec);
                     break;
+                case ActionVerb.LiftOff:
+                    LiftOffBuilding(context, spec);
+                    break;
+                case ActionVerb.Land:
+                    LandBuilding(context);
+                    break;
                 case ActionVerb.Aim:
                     StartAim(context, spec);
                     break;
@@ -3033,6 +3039,7 @@ namespace Game
             context.Runtime.Affixes.ForgetWearer(actor);
             context.Runtime.Selection.Forget(actor);
             context.Runtime.Targeting.Forget(actor);
+            context.Runtime.LiftOff.Forget(actor);
             // A destroyed actor also ends its buffs, so nothing keeps ticking a dead object or
             // rewriting stats on it — and a clone born under the same name starts clean.
             context.Runtime.Buffs.Clear(context.Runtime.Variables, actor);
@@ -3149,6 +3156,93 @@ namespace Game
                 Name = spec.Thing,
                 Other = clone,
             });
+        }
+
+        /// <summary>
+        /// <c>lift off</c> on a building's sheet (Task 28 Part C): rise to its <c>my Altitude</c>
+        /// (or <c>LiftOffHeight</c>), pause its work and free its build-grid footprint. The ground
+        /// it is measured from is captured first, because Part A pins from there every tick.
+        /// </summary>
+        private static void LiftOffBuilding(EventContext context, ActionSpec spec)
+        {
+            var me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Clift off\u201D needs to run on a building's sheet — the global Game sheet has no building to raise.");
+                return;
+            }
+            EventRuntime runtime = context.Runtime;
+            if (runtime.LiftOff.IsFlying(me))
+            {
+                WarnOnce($"\u201C{me.Name}\u201D is already airborne.");
+                return;
+            }
+            // The height is measured from where it stands now, before `my Altitude` changes.
+            if (!AltitudeGrounds.ContainsKey(me))
+                AltitudeGrounds[me] = me.Position.Y;
+            string building = runtime.Construction.BuildingOf(me);
+            double requested = ResolveNumber(context, spec);
+            if (requested <= 0)
+                requested = AltitudeOf(me); // an authored `my Altitude` is the rise height
+            if (!runtime.LiftOff.TryLift(context.Variables, runtime, me, building, requested,
+                    runtime.Construction.OwnsCells(me)))
+            {
+                WarnOnce($"\u201C{me.Name}\u201D could not lift off.");
+            }
+        }
+
+        /// <summary>
+        /// <c>land</c> (Task 28 Part C): put the building down on ground its own unit type may
+        /// stand on, re-reserving the footprint it freed if nobody took it. A refused landing
+        /// keeps it flying and reports <c>when path blocked</c> with the name <c>land</c>.
+        /// </summary>
+        private static void LandBuilding(EventContext context)
+        {
+            var me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Cland\u201D needs to run on a building's sheet — the global Game sheet has no building to put down.");
+                return;
+            }
+            EventRuntime runtime = context.Runtime;
+            LiftOffManager lift = runtime.LiftOff;
+            TerrainMap terrain = runtime.Terrain;
+            terrain.ResolveCellSize(context.Variables);
+            string unitType = UnitTypes.TypeOf(context.Variables, me);
+            // `IsPassable`, not `CanStep`: the escape rule would otherwise wave a land building
+            // standing over water through, which is exactly the landing this word must refuse.
+            bool groundOk = terrain.IsPassable(unitType, me.Position.X, me.Position.Z);
+            string ground = UnitTypes.GroundName(terrain.KindAt(me.Position.X, me.Position.Z));
+            // A building that kept its cells — raised by `fly to … at …` instead of `lift off` —
+            // still needs the dry run; its own cells count as free inside it.
+            bool reserved = lift.ReservedOf(me) || runtime.Construction.OwnsCells(me);
+            double size = ConstructionManager.ResolveGridSize(context.Variables, false, 0);
+            bool gridFree = !reserved || runtime.Construction.CanReserveCells(me, lift.BuildingOf(me),
+                context.Variables, me.Position.X, me.Position.Z, size);
+
+            LandResult result = lift.TryLand(context.Variables, runtime, me, groundOk, gridFree);
+            switch (result)
+            {
+                case LandResult.Landed:
+                    if (reserved)
+                    {
+                        // Drop any cells it still holds at its old spot, then take the ones under
+                        // where it touched down.
+                        runtime.Construction.ReleaseCells(me);
+                        runtime.Construction.TryReserveCells(me, lift.BuildingOf(me), context.Variables,
+                            me.Position.X, me.Position.Z, size);
+                    }
+                    break; // Part A settles it on the ground it was flying over
+                case LandResult.GroundRefused:
+                    WarnOnce($"\u201C{me.Name}\u201D is a {unitType} building and that spot is {ground}, so it can't land there.");
+                    break;
+                case LandResult.GridRefused:
+                    WarnOnce($"\u201C{me.Name}\u201D can't land there — the build grid is already taken.");
+                    break;
+                default:
+                    WarnOnce($"\u201C{me.Name}\u201D is not airborne, so there is nothing to land.");
+                    break;
+            }
         }
 
         /// <summary>Where a <c>place</c> target points: <c>Mouse</c> uses the cursor ray (nearest

@@ -111,6 +111,10 @@ namespace Game
         MarkTerrain,
         /// <summary><c>fly to &lt;spot&gt; at &lt;height&gt;</c> (Task 28 Part B).</summary>
         Fly,
+        /// <summary><c>lift off</c> — a building rises to its <c>my Altitude</c> (Task 28 Part C).</summary>
+        LiftOff,
+        /// <summary><c>land</c> — the building comes back down (Task 28 Part C).</summary>
+        Land,
         // Random-angle wander and still mode (Task 16 Part A)
         Wander,
         Still,
@@ -645,6 +649,14 @@ namespace Game
                     if (words.Count >= 2 && words[1].Text == "orders")
                         return Finish(spec, ActionVerb.ClearOrders, words, 2);
                     return Unknown(spec, words, "\u201Cclear\u201D looks like this: \u201Cclear orders\u201D", warn);
+
+                case "lift":
+                    if (words.Count >= 2 && words[1].Text == "off")
+                        return Finish(spec, ActionVerb.LiftOff, words, 2);
+                    return Unknown(spec, words, "\u201Clift\u201D looks like this: \u201Clift off\u201D", warn);
+
+                case "land":
+                    return Finish(spec, ActionVerb.Land, words, 1);
 
                 case "fly":
                 {

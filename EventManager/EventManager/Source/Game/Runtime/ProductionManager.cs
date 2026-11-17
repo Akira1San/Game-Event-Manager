@@ -38,6 +38,9 @@ namespace Game
         public const string DefaultBuildTimeVariable = "ProductionBuildTime";
 
         private readonly Dictionary<object, ProductionQueue> _queues = new Dictionary<object, ProductionQueue>();
+        /// <summary>Buildings whose work is on hold (a lifted-off building, Task 28 Part C).
+        /// A paused queue keeps its orders and its elapsed time; it just stops advancing.</summary>
+        private readonly HashSet<object> _paused = new HashSet<object>();
         private double _lastTime;
         private bool _hasTime;
 
@@ -146,17 +149,38 @@ namespace Game
             return true;
         }
 
+        /// <summary>Holds or releases a building's training without dropping anything it queued
+        /// (<c>lift off</c> / <c>land</c>).</summary>
+        public void SetPaused(object building, bool paused)
+        {
+            if (building == null)
+                return;
+            if (paused)
+                _paused.Add(building);
+            else
+                _paused.Remove(building);
+        }
+
+        public bool IsPaused(object building)
+        {
+            return building != null && _paused.Contains(building);
+        }
+
         /// <summary>Drops a destroyed building's queue without raising any edge signals.</summary>
         public void Destroyed(object building)
         {
             if (building != null)
+            {
                 _queues.Remove(building);
+                _paused.Remove(building);
+            }
         }
 
         /// <summary>Clears every queue for a scene restart / new session.</summary>
         public void Reset()
         {
             _queues.Clear();
+            _paused.Clear();
             _lastTime = 0;
             _hasTime = false;
         }
@@ -184,6 +208,9 @@ namespace Game
                 ProductionQueue queue = pair.Value;
                 ProductionOrder order = queue.Current;
                 if (order == null)
+                    continue;
+                // A lifted-off building's work waits: nothing is lost, no time passes.
+                if (_paused.Contains(pair.Key))
                     continue;
                 order.Elapsed += delta;
                 if (order.Elapsed < order.Duration)

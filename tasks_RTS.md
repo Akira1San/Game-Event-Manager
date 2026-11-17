@@ -1028,7 +1028,7 @@ land for buildings, and no targeting gate that refuses an air target for a land-
   editor play-check pending (an air actor flies over a wall and marked water, `fly to ... at 0`
   sets it down, and a flyer chasing a flyer meets at the target's height).
 
-### Part C — Lift-off and land (buildings) [ ]
+### Part C — Lift-off and land (buildings) [x]
 - `lift off` on a building sheet raises it to its `my Altitude`, marks it airborne and pauses its
   production/research queues; `land` puts it down, re-checks terrain for its own unit type
   (refusing water for a barracks, marking `when path blocked`-style feedback) and resumes work
@@ -1036,6 +1036,54 @@ land for buildings, and no targeting gate that refuses an air target for a land-
   (no training while flying, no new construction on a flying building)
 - A flying building is selectable and movable with the same orders; its footprint frees the build
   grid while airborne and re-reserves it on landing
+
+#### Part C notes
+- `Runtime/LiftOff.cs` is the pure half: `LandResult` (`Landed` / `NotFlying` / `GroundRefused` /
+  `GridRefused`), one `LiftOffState` per building (template, height, whether it held grid cells)
+  and `ResolveHeight` — the number on the line, else the `LiftOffHeight` global, else 200.
+  `TryLift` writes `my Altitude` (Part A pins it), frees the grid footprint, pauses production and
+  research and raises `LiftOff`; `TryLand` takes the ground and grid answers as booleans, so a
+  refusal changes nothing and just raises `when path blocked` with the name `land` on the
+  building's own sheet, while a landing zeroes the altitude, resumes both queues and raises
+  `Lands`. An actor that only holds an altitude (`fly to … at …` on a building) can land too: it
+  has no paused work to resume.
+- Pausing lives in `ProductionManager` / `ResearchManager` as a set of paused buildings, not as a
+  queue field: `SetPaused` never invents a queue, so `me has build queue` and `queue count` keep
+  reporting what the building actually queued. `Tick` skips a paused building (orders and elapsed
+  time survive untouched), and `Reset` / `Destroyed` forget the flag.
+- `ConstructionManager` gained `CanReserveCells` (the footprint loop without reserving, now what
+  `TryReserveCells` checks first) and `OwnsCells`, which is what lets a free-form building land
+  without suddenly reserving cells it never had. Cells the same actor already holds count as free
+  in that check, so a building that kept its footprint — raised by `fly to … at …` rather than
+  `lift off` — lands on it instead of getting a false `GridRefused`; `LandBuilding` now dry-runs
+  the grid for any building that still owns cells, drops them and re-takes the ones under where
+  it touches down.
+- Bridge (`Bridge/FlaxActions.cs`): `LiftOffBuilding` seeds `AltitudeGrounds` from the building's
+  own Y before the height changes and uses an authored `my Altitude` as the rise height (else the
+  global/default); `LandBuilding` tests the ground with `Terrain.IsPassable`, **not** `CanStep` —
+  whose escape rule would wave a land building standing over water through — dry-runs the
+  footprint with `CanReserveCells`, warns once per refusal and re-reserves on a successful
+  landing. `ForgetSubject` drops a destroyed building's lift state with the other per-actor
+  tables, so a clone never inherits "airborne".
+- Triggers `TriggerKind.LiftOff` / `Lands` classify from `when <building> lifts off` and
+  `when <building> lands` (plus the bare `when lift off` / `when land` forms, accepted because the
+  registry rows give the parser their shapes) and join `IsBuildingKind`, so `me`/`my` mean the
+  building's own sheet and any other name matches the template, exactly like `is placed`.
+  `me is airborne` now also answers true for any actor holding an altitude, and `me is on ground`
+  is its mirror — that pair is the gate for "no training / no new construction while flying".
+- 35 new pure checks (height precedence, the grid dry run and `OwnsCells`, lift writing the
+  altitude and freeing cells, double-lift refusal, the lift trigger, a paused queue keeping its
+  remaining time and resuming, both landing refusals with the `path blocked` push, the successful
+  landing and its trigger, a building that kept its cells landing on its own footprint, both
+  trigger classifications incl. the bare forms, both action parses, the bad-shape help, the
+  registry rows, and `me is airborne` / `me is on ground` for an altitude-holding building) ->
+  **1833 passed, 0 failed**; `Flax.Build -build -arch=x64
+  -platform=Windows -configuration=Debug -target=GameEditorTarget` reported 0 errors and the
+  rebuilt `Game.CSharp.dll` contains `LiftOffBuilding` / `LandResult`.
+- The bridge half (ground/grid answers, the altitude seeding, warn-once messages) has no unit
+  tests, as usual; editor play-check pending (lift a barracks with `my Altitude 200`, watch its
+  `train` queue stop and its grid cell free, `land` it over water and see the refusal, then over
+  land and see the queue resume). The flying-building example sheet is still Part E.
 
 ### Part D — Air targeting gate [ ]
 - `target is air` / `target is land` condition and a `can attack air` / `can attack ground` gate
