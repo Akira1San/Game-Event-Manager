@@ -202,6 +202,10 @@ namespace Game
             AttachPrograms(programs, startedNow: true);
             _booted = true;
             Level.ActorDeleted += ActorGoneAway;
+            // Scenes load additively (`load scene` keeps the current one), so this manager can
+            // outlive the scene its aim marker came from: a later scene may author its own
+            // `AimMarker`, and the actor cached from the old scene is dead (Task 27 Part A).
+            Level.SceneLoaded += SceneLoadedAim;
 
             if (!_sessionBegan)
             {
@@ -543,6 +547,7 @@ namespace Game
             if (Instance == this)
                 Instance = null;
             Level.ActorDeleted -= ActorGoneAway;
+            Level.SceneLoaded -= SceneLoadedAim;
             FlaxActions.ClearSession();
             _components.Clear();
             Runtime.Selection.Reset();
@@ -1044,6 +1049,19 @@ namespace Game
                 _aimMarker = Level.FindActor(AimMarkerName);
             _aimMarkerSearched = true;
             return _aimMarker;
+        }
+
+        /// <summary>A scene finished loading: drop the marker cached from the scene that came
+        /// before it and search the freshly loaded scenes, so an <c>AimMarker</c> authored in a
+        /// later scene is picked up instead of the stale actor. It starts hidden and only shows
+        /// while an aim is armed (<see cref="UpdateAim"/>).</summary>
+        private void SceneLoadedAim(Scene scene, Guid sceneId)
+        {
+            _aimMarker = null;
+            _aimMarkerSearched = false;
+            Actor marker = FindAimMarker();
+            if (marker != null)
+                marker.IsActive = false;
         }
 
         /// <summary>Raises <paramref name="kind"/> on the actor under the cursor. UIControls
