@@ -986,12 +986,47 @@ land for buildings, and no targeting gate that refuses an air target for a land-
   usual; editor play-check pending (scene air actor with `my Altitude`, `goto` somewhere, then
   `set my Altitude to 0` and confirm it settles on the ground).
 
-### Part B — Air path (`me is air` skips the NavMesh) [ ]
+### Part B — Air path (`me is air` skips the NavMesh) [x]
 - An air unit flies a straight XZ line at its altitude (no `FindPath`), ignoring terrain kinds,
   props and buildings, and stops at its own stop distance
 - Path-blocked reporting does not fire for air units; a `goto` to an actor aims at that actor's
   altitude, so air-versus-air chases work
 - Optional `fly to <spot> at <height>` so one line both moves and changes altitude
+
+#### Part B notes
+- `Runtime/AirPath.cs` is the pure half: `IsFlying` (the unit is type `air`, or it holds an
+  `my Altitude` above 0 — which is what lets a lifted, still land-typed building fly),
+  `ReportsBlocked` (a flyer has no route to lose, so it never raises `when path blocked`), and
+  `ChaseAltitude` / `ChaseAltitudeFor` (a flyer copies a flying target's height and keeps its own
+  over anything grounded). No Flax types, so the tests drive it directly.
+- Bridge (`Bridge/FlaxActions.cs`): `IsFlyingActor` / `DirectRoute` / `RememberDirectMove` turn a
+  flying move into one waypoint at the unit's own ground, in transform mode. Both entry points
+  use it — the `goto there` branch, the `goto <actor>` branch and `BeginOrderMove` (orders,
+  `attack-move`, `attack` stop-distance, rally) — so a flyer never calls `Navigation.FindPath`,
+  never runs `StepOntoNavMesh` and never reports a blocked path. Formations still apply, because
+  a flyer's group order goes through the same `FormationSlot`.
+- `MoveSubject` moves a flyer along XZ and returns before the terrain gate and the collider
+  probes, so it crosses water marks, walls and buildings; the `Step` waypoint check skips the
+  terrain gate for flyers too (that one matters for a lifted land building, whose type still
+  refuses water). `ArriveAt` needed no change: a direct move's destination Y is the unit's ground,
+  so the existing re-pin keeps its height.
+- `ChaseAltitude` seeds `AltitudeGrounds` from the current Y before writing the new `my Altitude`,
+  so an air-versus-air chase climbs from the ground it is over instead of jumping off it.
+- New word `fly to <spot> at <height>` → `ActionVerb.Fly` / `FlaxActions.FlyTo`: writes
+  `my Altitude` (either spelling reads it back), pins the unit or puts it down, then flies the
+  same direct line. `at 0` lands where the unit stands and covers the rest on the ground, the spot
+  is an actor or `there`, and the height accepts a value (`at my CruiseHeight`). A line without a
+  height warns with the shape. `WordRegistry` and `keywords.html` rows added.
+- 11 new pure checks (flyer by type, by altitude, and at altitude 0, `ReportsBlocked`, the chase
+  height in every direction plus the variables-driven read, both `fly` parse shapes, the
+  missing-height help and the registry row) -> **1798 passed, 0 failed**; the module builds with 0
+  errors (`Flax.Build -build -arch=x64 -platform=Windows -configuration=Debug
+  -target=GameEditorTarget`), and the resulting `Game.CSharp.dll` contains the new `AirPath` and
+  `FlyTo` symbols. Note `Source/Game.csproj` is stale (its explicit file list predates several
+  runtime files), so `dotnet build Source/Game.csproj` is not the module check — Flax.Build is.
+- The bridge half (direct route, collision bypass, altitude seeding) has no unit tests, as usual;
+  editor play-check pending (an air actor flies over a wall and marked water, `fly to ... at 0`
+  sets it down, and a flyer chasing a flyer meets at the target's height).
 
 ### Part C — Lift-off and land (buildings) [ ]
 - `lift off` on a building sheet raises it to its `my Altitude`, marks it airborne and pauses its

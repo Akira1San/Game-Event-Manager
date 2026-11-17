@@ -10173,6 +10173,60 @@ altEngine.Tick(1);
 Check(altEngine.Variables.GetGlobal("Flying").AsNumber() == 1,
     "`my Altitude is higher than 0` gates the event that follows it");
 
+// ------------------------------------------------------------------
+// Task 28 Part B: air path (`fly to`, no NavMesh, no path blocked)
+// ------------------------------------------------------------------
+
+var airPathVars = new EventVariables();
+var airPathUnit = new FakeActor("Observer");
+Check(!AirPath.IsFlying(airPathVars, airPathUnit) && AirPath.ReportsBlocked(airPathVars, airPathUnit),
+    "a land unit with no altitude walks the NavMesh and can report a blocked path");
+airPathVars.SetLocal(airPathUnit, "UnitType", ValueBox.OfText("air"));
+Check(AirPath.IsFlying(airPathVars, airPathUnit) && !AirPath.ReportsBlocked(airPathVars, airPathUnit),
+    "`my unit type` air flies a direct route and never reports `when path blocked`");
+var airPathLifted = new FakeActor("Barracks");
+airPathVars.SetLocal(airPathLifted, "Altitude", ValueBox.OfNumber(90));
+Check(AirPath.IsFlying(airPathVars, airPathLifted),
+    "a land building that lifted off is airborne because it holds an altitude");
+var airPathGrounded = new FakeActor("Depot");
+airPathVars.SetLocal(airPathGrounded, "Altitude", ValueBox.OfNumber(0));
+Check(!AirPath.IsFlying(airPathVars, airPathGrounded),
+    "a building that wrote altitude 0 is on the ground again");
+
+Check(Math.Abs(AirPath.ChaseAltitude(120, 200, true) - 200) < 1e-9 &&
+      Math.Abs(AirPath.ChaseAltitude(120, 0, true) - 120) < 1e-9 &&
+      Math.Abs(AirPath.ChaseAltitude(120, 60, false) - 120) < 1e-9,
+    "a flyer copies a flying target's height and keeps its own over a grounded one");
+var airChaseVars = new EventVariables();
+var airChaser = new FakeActor("Scout");
+var airChaseTarget = new FakeActor("Bomber");
+airChaseVars.SetLocal(airChaseTarget, "Altitude", ValueBox.OfNumber(150));
+Check(Math.Abs(AirPath.ChaseAltitudeFor(airChaseVars, airChaser, airChaseTarget) - 150) < 1e-9,
+    "ChaseAltitudeFor reads the target's own altitude");
+airChaseVars.SetLocal(airChaseTarget, "unit type", ValueBox.OfText("air"));
+airChaseVars.SetLocal(airChaseTarget, "Altitude", ValueBox.OfNumber(0));
+Check(AirPath.ChaseAltitudeFor(airChaseVars, airChaser, airChaseTarget) == 0,
+    "a grounded target leaves the chaser at 0");
+
+var airFlySpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  fly to LZ at 120"), null);
+Check(airFlySpec.Verb == ActionVerb.Fly && airFlySpec.Thing == "LZ" && airFlySpec.HasNumber &&
+      Math.Abs(airFlySpec.Number - 120) < 1e-9,
+    "`fly to LZ at 120` parses the spot and the height");
+
+var airFlyValueSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  fly to there at my CruiseHeight"), null);
+Check(airFlyValueSpec.Verb == ActionVerb.Fly && airFlyValueSpec.Thing == "there" &&
+      !airFlyValueSpec.HasNumber && airFlyValueSpec.AmountNode != null,
+    "`fly to there at my CruiseHeight` takes a value for the height");
+
+actionHint = "";
+var airFlyBroken = ActionWords.Parse(LooseWords("fly", "to", "LZ"), GrabHint);
+Check(airFlyBroken.Verb == ActionVerb.Unknown && actionHint.Contains("fly"),
+    "a `fly` line without a height explains the shape");
+Check(WordRegistry.All.Any(e => e.Word == "fly" && e.Example == "fly to LZ at 120"),
+    "the registry documents `fly to ... at ...`");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

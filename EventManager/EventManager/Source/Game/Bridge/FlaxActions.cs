@@ -431,7 +431,7 @@ namespace Game
                     Vector3 waypoint = move.Path[move.PathIndex];
                     // A waypoint on ground this unit cannot cross ends the walk with
                     // `when path blocked` instead of running into the water (Task 22 Part B).
-                    if (TerrainBlocksStep(move.Subject, waypoint))
+                    if (!IsFlyingActor(move.Subject) && TerrainBlocksStep(move.Subject, waypoint))
                     {
                         var blockedRuntime = EventsManager.Instance?.Runtime;
                         if (blockedRuntime != null)
@@ -973,6 +973,12 @@ namespace Game
                         // Selected units take their own formation slot around the click
                         // (Task 23 Part C) instead of all walking to one point.
                         Vector3 clickTarget = FormationSlot(context.Runtime, me, clickPos.Value);
+                        // A flyer takes the straight line and never asks the NavMesh (Task 28 Part B).
+                        if (IsFlyingActor(me))
+                        {
+                            RememberDirectMove(me, clickTarget, spec.Number);
+                            break;
+                        }
                         if (!Navigation.FindPath(me.Position, clickTarget, out Vector3[] clickPath) || clickPath == null || clickPath.Length == 0)
                         {
                             WarnOnce($"No NavMesh path from \u201C{me.Name}\u201D to the clicked spot — bake a NavMesh for this level first.");
@@ -995,6 +1001,14 @@ namespace Game
                     if (target == null)
                     {
                         WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D to goto it.");
+                        break;
+                    }
+                    // An air-versus-air chase meets at the target's height (Task 28 Part B), and
+                    // the route is the straight line rather than a NavMesh path.
+                    if (IsFlyingActor(me))
+                    {
+                        ChaseAltitude(context.Runtime, me, target);
+                        RememberDirectMove(me, target.Position, spec.Number, spec.FaceForward);
                         break;
                     }
                     if (!Navigation.FindPath(me.Position, target.Position, out Vector3[] path) || path == null || path.Length == 0)
@@ -1050,6 +1064,9 @@ namespace Game
                     break;
                 case ActionVerb.Explode:
                     ExplodeProjectile(context, spec);
+                    break;
+                case ActionVerb.Fly:
+                    FlyTo(context, spec);
                     break;
                 case ActionVerb.Aim:
                     StartAim(context, spec);
@@ -1730,6 +1747,110 @@ namespace Game
             return runtime == null || actor == null ? 0 : Altitude.Of(runtime.Variables, actor);
         }
 
+        /// <summary>True when this actor flies — <c>me is air</c> or an altitude above 0
+        /// (Task 28 Part B).</summary>
+        private static bool IsFlyingActor(Actor actor)
+        {
+            var runtime = EventsManager.Instance?.Runtime;
+            return runtime != null && actor != null && AirPath.IsFlying(runtime.Variables, actor);
+        }
+
+        /// <summary>A flyer's route: one waypoint at the straight-line destination.</summary>
+        private static Vector3[] DirectRoute(Vector3 spot)
+        {
+            return new[] { spot };
+        }
+
+        /// <summary>
+        /// Sends a flyer straight to a spot (Task 28 Part B): no NavMesh route, no terrain gate,
+        /// and the height it holds is kept — the destination's Y is the ground under the unit,
+        /// which <see cref="StepAltitude"/> turns back into ground + altitude.
+        /// </summary>
+        private static void RememberDirectMove(Actor me, Vector3 spot, double speed, bool faceForward = false)
+        {
+            double altitude = AltitudeOf(me);
+            float ground = AltitudeGrounds.TryGetValue(me, out float known)
+                ? known
+                : (float)Altitude.GroundY(me.Position.Y, altitude);
+            Vector3 destination = new Vector3(spot.X, ground, spot.Z);
+            Remember(new OngoingMove
+            {
+                Subject = me,
+                Goto = true,
+                HasPositionTarget = true,
+                PositionTarget = destination,
+                Path = DirectRoute(destination),
+                PathIndex = 0,
+                Speed = speed,
+                FaceForward = faceForward,
+                Mode = PhysicsMoveMode.Transform,
+            });
+        }
+
+        /// <summary>
+        /// A flyer chasing a flyer climbs to its target's height (Task 28 Part B), so an
+        /// air-versus-air chase ends at one altitude; a target on the ground leaves the height
+        /// alone. The ground the height is measured from is captured before the change, so the
+        /// unit rises or sinks in place instead of jumping.
+        /// </summary>
+        private static void ChaseAltitude(EventRuntime runtime, Actor me, Actor target)
+        {
+            if (runtime == null || me == null || target == null)
+                return;
+            double mine = AltitudeOf(me);
+            double chase = AirPath.ChaseAltitudeFor(runtime.Variables, me, target);
+            if (chase <= 0 || Math.Abs(chase - mine) <= 0.0001)
+                return;
+            AltitudeGrounds[me] = (float)Altitude.GroundY(me.Position.Y, mine);
+            runtime.Variables.SetLocal(me, Altitude.Variable, ValueBox.OfNumber(chase));
+        }
+
+        /// <summary>
+        /// <c>fly to &lt;spot&gt; at &lt;height&gt;</c> (Task 28 Part B): set <c>my Altitude</c> to the
+        /// height and fly there in one line. <c>at 0</c> puts the unit down where it stands (and
+        /// covers the rest on the ground), so one word both lands and moves.
+        /// </summary>
+        private static void FlyTo(EventContext context, ActionSpec spec)
+        {
+            var me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Cfly\u201D needs to run on an actor's sheet — the global Game sheet has no body to fly.");
+                return;
+            }
+            double height = Math.Max(0, ResolveNumber(context, spec));
+            float ground = (float)Altitude.GroundY(me.Position.Y, AltitudeOf(me));
+            context.Variables.SetLocal(me, Altitude.Variable, ValueBox.OfNumber(height));
+            if (height <= 0)
+            {
+                AltitudeGrounds.Remove(me);
+                Vector3 landed = me.Position;
+                landed.Y = ground;
+                me.Position = landed;
+            }
+            else
+                AltitudeGrounds[me] = ground;
+
+            Vector3 spot;
+            if (spec.Thing == "there")
+            {
+                if (!LastClickPosition.HasValue)
+                {
+                    WarnOnce("\u201Cfly there\u201D needs a clicked position first — click somewhere in the scene to set it.");
+                    return;
+                }
+                spot = LastClickPosition.Value;
+            }
+            else if (ResolveThing(context, spec.Thing) is Actor target)
+                spot = target.Position;
+            else
+            {
+                WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D to fly to.");
+                return;
+            }
+            RememberDirectMove(me, spot, 5);
+        }
+
         /// <summary>
         /// Keeps <c>my Altitude</c> honest once a tick (Task 28 Part A). A flying actor is pinned to
         /// its ground height plus its altitude; one whose sheet wrote the altitude back to 0 lands
@@ -1786,7 +1907,8 @@ namespace Game
         {
             // A flying unit travels level (Task 28 Part A): navmesh waypoints and a target's own Y
             // never pull it down, and StepAltitude re-applies its height every tick.
-            if (AltitudeOf(subject) > 0)
+            bool flying = IsFlyingActor(subject);
+            if (flying)
                 direction.Y = 0f;
             double wanted = speed * DeltaTime;
             float step = (float)PhysicsMovement.MoveStep(speed, DeltaTime);
@@ -1795,6 +1917,13 @@ namespace Game
             // in the editor can be traced to a frame spike instead of guessed at.
             if (Math.Abs(wanted) > PhysicsMovement.MaxStepPerTick && Math.Abs(step) > 0.001f)
                 Debug.Log($"[jump] \"{subject.Name}\" frame step clamped: wanted {wanted:0.###} at {speed:0.###} speed, dt {DeltaTime:0.###} s.");
+            // A flyer clears terrain, props and buildings alike (Task 28 Part B): it travels the
+            // XZ plane at its own height, so nothing under it is a wall and no body mode applies.
+            if (flying)
+            {
+                subject.Position = subject.Position + direction * step;
+                return;
+            }
             // Terrain (Task 22 Part B): a unit never steps onto ground its own type cannot cross.
             // Checked for every mode, before the body is told to move.
             if (TerrainBlocksStep(subject, subject.Position + direction * step))
@@ -3518,6 +3647,32 @@ namespace Game
             // point (Task 23 Part C). Actor targets keep converging on the actor.
             if (groupOrder)
                 destination = FormationSlot(runtime, me, destination);
+
+            // A flyer ignores the NavMesh and the terrain map (Task 28 Part B): one waypoint, at
+            // the height it holds — or the target's, when the target flies too.
+            if (AirPath.IsFlying(runtime.Variables, me))
+            {
+                if (targetActor != null && targetActor.Scene != null)
+                    ChaseAltitude(runtime, me, targetActor);
+                double flyingAt = AltitudeOf(me);
+                destination = new Vector3(destination.X,
+                    (float)Altitude.GroundY(me.Position.Y, flyingAt), destination.Z);
+                Remember(new OngoingMove
+                {
+                    Subject = me,
+                    Target = snapToTarget ? targetActor : null,
+                    Goto = true,
+                    HasPositionTarget = positionTarget,
+                    PositionTarget = destination,
+                    Path = DirectRoute(destination),
+                    PathIndex = 0,
+                    Speed = speed,
+                    Mode = PhysicsMoveMode.Transform,
+                    CompletesOrder = true,
+                    ArrivesAtThere = arrivesAtThere,
+                });
+                return;
+            }
 
             // A destination this unit's type can never stand on is a blocked path, not a walk
             // that stalls at the shoreline (Task 22 Part B).

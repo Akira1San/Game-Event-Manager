@@ -205,6 +205,7 @@ namespace Game
             new WordEntry { Kind = "action", Word = "goto", Example = "goto Player" },
             new WordEntry { Kind = "action", Word = "goto", Example = "goto there" },
             new WordEntry { Kind = "action", Word = "goto", Example = "goto Player facing forward" },
+            new WordEntry { Kind = "action", Word = "fly", Example = "fly to LZ at 120", AltShape = "`fly to there at my CruiseHeight`; sets `my Altitude` and flies one straight XZ line — no NavMesh, no terrain, no `when path blocked` · `at 0` lands the unit where it stands" },
             new WordEntry { Kind = "action", Word = "camera", Example = "camera looks at Chest" },
             new WordEntry { Kind = "action", Word = "camera", Example = "camera follows Player" },
             new WordEntry { Kind = "action", Word = "camera", Example = "camera free", AltShape = "free-pan mode: wheel zoom, mouse-edge panning and arrow/WASD panning turn on" },

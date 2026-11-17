@@ -109,6 +109,8 @@ namespace Game
         SetVisibility,
         // RTS terrain passability (Task 22 Part B)
         MarkTerrain,
+        /// <summary><c>fly to &lt;spot&gt; at &lt;height&gt;</c> (Task 28 Part B).</summary>
+        Fly,
         // Random-angle wander and still mode (Task 16 Part A)
         Wander,
         Still,
@@ -643,6 +645,30 @@ namespace Game
                     if (words.Count >= 2 && words[1].Text == "orders")
                         return Finish(spec, ActionVerb.ClearOrders, words, 2);
                     return Unknown(spec, words, "\u201Cclear\u201D looks like this: \u201Cclear orders\u201D", warn);
+
+                case "fly":
+                {
+                    // `fly to LZ at 120` — raise to that height and fly the straight line there.
+                    int flyIndex = 1;
+                    if (flyIndex < words.Count && words[flyIndex].Text == "to")
+                        flyIndex++;
+                    string flySpot = ThingAt(words, flyIndex, out int flyUsed);
+                    if (flySpot != null && flyIndex + flyUsed < words.Count && words[flyIndex + flyUsed].Text == "at")
+                    {
+                        int heightIndex = flyIndex + flyUsed + 1;
+                        if (heightIndex < words.Count &&
+                            (words[heightIndex].Type == TokenType.Number || words[heightIndex].Type == TokenType.Word))
+                        {
+                            spec.Thing = flySpot;
+                            spec.AmountNode = ValueNodeAt(words, heightIndex, out int flyHeightUsed);
+                            spec.HasNumber = words[heightIndex].Type == TokenType.Number;
+                            if (spec.HasNumber)
+                                spec.Number = words[heightIndex].Number;
+                            return Finish(spec, ActionVerb.Fly, words, heightIndex + flyHeightUsed);
+                        }
+                    }
+                    return Unknown(spec, words, "\u201Cfly\u201D looks like this: \u201Cfly to LZ at 120\u201D", warn);
+                }
 
                 case "goto":
                 {
