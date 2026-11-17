@@ -1,0 +1,44 @@
+# ---------------- Marine.events (Task 27 Part F example) ----------------
+# Ranged infantry with a stim-pack ability, written against the words Tasks 27 C/E added.
+#
+# WHAT IT SHOWS
+#   · the stim cost is spent from the unit's own `my Mana`
+#   · the speed boost is a buff ("stim", 8 s, +40 Speed, refreshing rather than stacking)
+#   · the ability's lockout is one shared timer: `my "stim" is ready` gates it and
+#     `my "stim" cooldown` is the seconds left, so no `when every 1 seconds` poll is needed
+#   · `bind` drives a command-card label from that cooldown with no extra event
+#
+# SETUP (editor): an EventSheet on the unit whose Event File is `Marine`. The selection
+# ring and control groups are automatic (Task 18 Part A) — the scene owns the ring actors.
+# Task 19 Part A grows this into the full unit: attack, weapon data and the typed stats stay
+# in the unit table, not here.
+#
+# The label and bar are optional: they resolve by actor name, so a scene without them simply
+# shows nothing. Rename them here if your command card uses other names.
+bind StimLabel to my "stim" cooldown
+
+when me appears
+  set my unit type to "land"
+  set my attack type to "ranged"
+  set my attack range to 300
+  set my MaxHealth to 45
+  set my Health to 45
+  set my Speed to 90
+  set my Mana to 100
+  set my StimCost to 25
+
+# ---- stim pack (Q) -------------------------------------------------------------------
+# Both conditions gate every line below them, so a cooling or tired marine spends nothing.
+when Q is pressed
+  my "stim" is ready
+  my Mana is higher than my StimCost
+  deduct my StimCost from my Mana
+  add buff "stim" to me for 8 seconds adding 40 to my Speed
+  put "stim" on cooldown for 10 seconds
+  play sound "stim"
+
+# The buff puts the speed back on its own when it ends; the cooldown ends on its own too.
+# A second press during either one is refused above, not queued.
+
+when my Health becomes 0
+  destroy me

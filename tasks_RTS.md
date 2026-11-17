@@ -879,7 +879,7 @@ cooldowns cost one polling trigger per unit.
   play-check pending: bind a key to `put "stim" on cooldown for 10 seconds`, gate the ability on
   `my "stim" is ready`, and confirm the value counts down and a destroyed unit comes back ready.
 
-### Part F — Content, words, tests, acceptance [ ]
+### Part F — Content, words, tests, acceptance [x]
 - Example content: `Marine.events` stim (cost, cooldown, buff, sound), `HighTemplar.events` psi storm
   (aim → `damage area` at the pick), `Barracks.events` research, `Upgrades.events`, plus a command
   card using `bind` for cooldown and research progress
@@ -890,6 +890,39 @@ cooldowns cost one polling trigger per unit.
 - Acceptance: a marine stims (faster for 8 s, on cooldown after), a caster storms a clicked point
   and damages only valid targets, a finished research upgrades existing and future units for one
   player only, and a base game that uses none of these words behaves exactly as before
+
+#### Part F notes
+- Three example sheets ship in `GameFiles/`:
+  - `Marine.events` — land/ranged stats, `my Mana`, then `when Q is pressed` gated on
+    `my "stim" is ready` and the cost: `deduct my StimCost from my Mana`, an 8 s `stim` buff
+    adding 40 Speed, `put "stim" on cooldown for 10 seconds`, one sound, and
+    `bind StimLabel to my "stim" cooldown` for a card label. The buff restores Speed itself and
+    the cooldown ends itself, so a second press during either is refused by the gate.
+  - `Barracks.events` — `train Marine` behind `can afford Marine`, `research "Stim Pack"`
+    (`StimPackRequires` confines it here, `StimPackCost` prices it), `when research finishes`,
+    `when production queue is empty`, and `bind progress of ResearchBar to my ResearchProgress` /
+    `bind ResearchLabel to my ResearchName` so a card shows the 0–100 progress the manager writes.
+    The research press has **no** `can afford StimPack` gate: `Upgrades.events` values live in the
+    loader, not in globals, so the manager checks the bank and warns — the gate would always fail.
+  - `HighTemplar.events` — `aim "psi storm" at a point`, `put "psi storm" on cooldown for 15 s`,
+    and `when my aim picks a target → damage area around my aim by 30 for radius 180` plus the
+    particle/sound; `bind StormLabel` reads the cooldown. `Upgrades.events` already shipped with
+    Part D.
+- No new words were needed: every word in the content was registered and documented in Parts
+  A–E, so the `WordRegistry` / `keywords.html` requirement is already met (and the registry
+  example self-test stays green).
+- Tests: 20 new pure checks — the three files parse, the stim buff/cooldown/research/aim/
+  damage-area specs read back with their numbers, `Upgrades.events` ties Stim Pack to Barracks at
+  100, a headless Marine run (Q spends 25 mana, Speed 90 → 130, a second Q during the cooldown
+  spends nothing, Speed is back at tick 9, the cooldown is ready at tick 11), and a headless
+  Barracks run (R queues research and charges 100, `Player1 StimPack` reaches 1 while
+  `Player2 StimPack` stays unset) -> **1776 passed, 0 failed**; `Source/Game.csproj` builds with
+  0 warnings and 0 errors.
+- The editor/scene playtest stays deferred with the other play-checks (Task 20): the sheet steps
+  are proved headless, but the command-card controls (`StimLabel`, `StormLabel`, `ResearchBar`,
+  `ResearchLabel`), the click that resolves `aim`, the particle/sound assets and the selection
+  rings are scene wiring. The full unit table, attack and typed combat stay in Task 19 Part A —
+  these three sheets are the Task 27 examples, not the finished RTS content.
 
 ### Open questions for this task
 - Ability definitions in data (`Abilities.events`: cost, cooldown, range, target kind) so the AI and

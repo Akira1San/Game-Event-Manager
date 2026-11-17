@@ -1,0 +1,43 @@
+# ---------------- Barracks.events (Task 27 Part F example) ----------------
+# The production building from Tasks 18 D and 27 D: it trains units and researches upgrades,
+# then shows both on a command card with `bind`.
+#
+# WHAT IT SHOWS
+#   · `train Marine` queues production through ProductionManager (cost/affordance held by the
+#     `can afford` gate, exactly as the building sheets do)
+#   · `research "Stim Pack"` queues the upgrade from Upgrades.events, charging the owner's bank
+#   · `when research finishes` fires once when the level lands (`Player1 StimPack`)
+#   · `bind progress of ResearchBar to my ResearchProgress` paints the bar from the 0-100 value
+#     ResearchManager writes on this building while it works, and `ResearchName` labels it
+#
+# SETUP (editor): an EventSheet on the building, Event File = `Barracks`. `ResearchBar` and
+# `ResearchLabel` are optional UI actors; without them the binds simply do nothing.
+#
+# `StimPackRequires` in Upgrades.events names `Barracks`, so researching it anywhere else is
+# refused by the manager (with one warning) instead of silently working.
+bind progress of ResearchBar to my ResearchProgress
+bind ResearchLabel to my ResearchName
+
+when me appears
+  set my MaxHealth to 1000
+  set my Health to 1000
+  set my unit type to "land"
+
+# ---- train a Marine (W): one order per press, gated on the unit's cost variables ---------
+when W is pressed
+  can afford Marine
+  train Marine
+
+# ---- research Stim Pack (R): the upgrade table prices it -------------------------------
+# The price comes from Upgrades.events (`StimPackCost`), so the manager checks the bank and
+# refuses with one warning when it is short — a `can afford` gate would read only live globals.
+when R is pressed
+  research "Stim Pack"
+
+# The level is already applied (`Player1 StimPack` is 1) before this event runs, so a
+# `when Player1 StimPack changes` sheet sees the new number on the same tick.
+when research finishes
+  play sound "research_complete"
+
+when production queue is empty
+  print "Barracks: idle"

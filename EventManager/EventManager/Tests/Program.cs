@@ -9984,6 +9984,144 @@ Check(WordRegistry.All.Any(e => e.Kind == "condition" && e.Word == "my \"<name>\
 Check(WordRegistry.All.Any(e => e.Kind == "value" && e.Word == "my \"<name>\" cooldown"),
     "the word book lists the cooldown value");
 
+// ------------------------------------------------------------------
+// Task 27 Part F: example content (Marine / Barracks / HighTemplar)
+// ------------------------------------------------------------------
+
+var marineFile = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Marine.events"));
+var barracksFile = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Barracks.events"));
+var templarFile = parser.Parse(File.ReadAllText("Source/Game/GameFiles/HighTemplar.events"));
+Check(marineFile.Events.Count >= 3 && barracksFile.Events.Count >= 4 && templarFile.Events.Count >= 4,
+    "the three Part F example sheets parse");
+
+List<ActionSpec> SpecsOf(ProgramFile file)
+{
+    var specs = new List<ActionSpec>();
+    foreach (var ev in file.Events)
+        foreach (var line in ev.Body)
+            if (line.Statement is RawActionNode raw)
+            {
+                var spec = ActionWords.Parse(raw.Words, _ => { });
+                if (spec.Verb != ActionVerb.Unknown)
+                    specs.Add(spec);
+            }
+    return specs;
+}
+
+var marineSpecs = SpecsOf(marineFile);
+Check(marineSpecs.Any(s => s.Verb == ActionVerb.AddBuff && s.BuffName == "stim" &&
+      Math.Abs(s.Duration - 8) < 1e-9 && s.BuffModifiers.Count == 1 &&
+      s.BuffModifiers[0].Stat == "Speed" && Math.Abs(s.BuffModifiers[0].Number - 40) < 1e-9),
+    "Marine's stim is an 8 second buff adding 40 to Speed");
+Check(marineSpecs.Any(s => s.Verb == ActionVerb.PutOnCooldown && s.Thing == "stim" &&
+      Math.Abs(s.Duration - 10) < 1e-9),
+    "Marine's stim starts its 10 second shared cooldown");
+
+var barracksSpecs = SpecsOf(barracksFile);
+Check(barracksSpecs.Any(s => s.Verb == ActionVerb.Research && s.Thing == "Stim Pack"),
+    "Barracks researches Stim Pack through the manager");
+Check(barracksSpecs.Any(s => s.Verb == ActionVerb.Train && s.Thing == "Marine"),
+    "Barracks trains a Marine through the production queue");
+
+var templarSpecs = SpecsOf(templarFile);
+var stormAimSpec = templarSpecs.FirstOrDefault(s => s.Verb == ActionVerb.Aim);
+Check(stormAimSpec != null && stormAimSpec.Ability == "psi storm" &&
+      (stormAimSpec.Accepts & TargetAccepts.Point) != 0,
+    "HighTemplar aims psi storm at a point");
+var stormDamageSpec = templarSpecs.FirstOrDefault(s => s.Verb == ActionVerb.DamageArea);
+Check(stormDamageSpec != null && stormDamageSpec.Thing == "my aim" &&
+      stormDamageSpec.AmountNode is NumberValue stormDamage && stormDamage.Value == 30 &&
+      Math.Abs(stormDamageSpec.Radius - 180) < 1e-9,
+    "HighTemplar's storm damages a 180 radius around the pick for 30");
+Check(TriggerClassifier.Classify(templarFile.Events.First(e => e.Trigger.Any(t => t.Text == "picks"))).Kind == TriggerKind.AimPicked,
+    "HighTemplar reacts to `when my aim picks a target`");
+
+Upgrades.LoadData(parser.Parse(File.ReadAllText("Source/Game/GameFiles/Upgrades.events")));
+Check(Upgrades.RequiresOf("Stim Pack") == "Barracks" &&
+      Math.Abs(Upgrades.DeclaredCostOf("Stim Pack") - 100) < 1e-9,
+    "Upgrades.events prices Stim Pack at 100 and restricts it to the Barracks");
+
+// Headless acceptance: the Marine sheet really stims through the runtime's own managers.
+var fWorld = new FakeWorld();
+var fEngine = FreshEngine(fWorld);
+var fMarine = new FakeActor("Marine");
+fEngine.OnRawAction = (context, words) =>
+{
+    var spec = ActionWords.Parse(words, _ => { });
+    if (spec.Verb == ActionVerb.AddBuff)
+    {
+        var buff = new BuffInstance { Name = spec.BuffName, Duration = spec.Duration, Source = context.Me };
+        foreach (var m in spec.BuffModifiers)
+            buff.Modifiers.Add(new BuffModifier
+            {
+                Stat = m.Stat,
+                Amount = m.Number,
+                HasAmount = !m.Multiply,
+                Multiplier = m.Multiply ? m.Number : 1,
+                HasMultiplier = m.Multiply,
+            });
+        fEngine.Buffs.Add(fEngine.Variables, context.Me, buff, out _);
+    }
+    else if (spec.Verb == ActionVerb.PutOnCooldown)
+    {
+        fEngine.Cooldowns.Start(context.Me, spec.Thing, spec.Duration);
+    }
+};
+fEngine.AddSheet(fMarine, marineFile);
+fEngine.Tick(0);
+Check(fEngine.Variables.GetLocal(fMarine, "Speed").AsNumber() == 90 &&
+      fEngine.Variables.GetLocal(fMarine, "Health").AsNumber() == 45,
+    "Marine starts from its sheet's stats");
+fEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "Q" });
+fEngine.Tick(1);
+Check(fEngine.Variables.GetLocal(fMarine, "Mana").AsNumber() == 75,
+    "pressing Q spends the 25 mana stim cost");
+Check(fEngine.Variables.GetLocal(fMarine, "Speed").AsNumber() == 130,
+    "the stim buff raises Marine Speed by 40 for its duration");
+Check(!fEngine.Cooldowns.Ready(fMarine, "stim"),
+    "the stim shared timer is running after the cast");
+fEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "Q" });
+fEngine.Tick(2);
+Check(fEngine.Variables.GetLocal(fMarine, "Mana").AsNumber() == 75,
+    "a second Q while cooling down spends nothing");
+for (int fTick = 3; fTick <= 9; fTick++)
+    fEngine.Tick(fTick);
+Check(fEngine.Variables.GetLocal(fMarine, "Speed").AsNumber() == 90,
+    "the stim buff puts Speed back when its 8 seconds end");
+Check(!fEngine.Cooldowns.Ready(fMarine, "stim"),
+    "the 10 second cooldown outlives the 8 second buff");
+for (int fTick = 10; fTick <= 11; fTick++)
+    fEngine.Tick(fTick);
+Check(fEngine.Cooldowns.Ready(fMarine, "stim"),
+    "stim is ready again after its cooldown");
+
+// Headless acceptance: the Barracks sheet researches Stim Pack and applies the level.
+var bWorld = new FakeWorld();
+var bEngine = FreshEngine(bWorld);
+var fBarracks = new FakeActor("Barracks");
+bEngine.OnRawAction = (context, words) =>
+{
+    var spec = ActionWords.Parse(words, _ => { });
+    if (spec.Verb == ActionVerb.Research)
+        bEngine.Research.Enqueue(bEngine.Variables, bEngine, context.Me,
+            bEngine.World.NameOf(context.Me), spec.Thing, 0);
+};
+bEngine.Variables.SetGlobal("Minerals", ValueBox.OfNumber(200));
+bEngine.Variables.SetGlobal("StimPackTime", ValueBox.OfNumber(2));
+bEngine.AddSheet(fBarracks, barracksFile);
+bEngine.Tick(0);
+bEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "R" });
+bEngine.Tick(1);
+Check(bEngine.Research.CurrentUpgrade(fBarracks) == "Stim Pack" &&
+      bEngine.Variables.GetGlobal("Minerals").AsNumber() == 100,
+    "Barracks' R starts Stim Pack research and charges its 100 price");
+bEngine.Tick(3);
+Check(Math.Abs(bEngine.Variables.GetGlobal("Player1 StimPack").AsNumber() - 1) < 1e-9,
+    "the finished research raises Player1 StimPack for that player only");
+Check(!bEngine.Variables.HasGlobal("Player2 StimPack"),
+    "the other player's tech is untouched");
+Upgrades.Reset();
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

@@ -1,0 +1,46 @@
+# ---------------- HighTemplar.events (Task 27 Part F example) ----------------
+# The caster half of Task 27: click-to-target, caster-free area damage and a shared cooldown.
+#
+# WHAT IT SHOWS
+#   · `aim "psi storm" at a point` arms the pick; the next left click on the ground resolves it
+#     (escape / right click cancels and refunds nothing, so the cooldown still starts)
+#   · `when my aim picks a target` runs on the caster's own sheet, and `my aim` is the point
+#   · `damage area around my aim` needs no projectile and never destroys the caster; every
+#     actor in the radius takes a real "damage" message, so armour, shields, health and the
+#     Task 23 matchup table apply
+#   · `my "psi storm" cooldown` is the shared timer, so nothing has to poll for it
+#
+# SETUP (editor): an EventSheet on the caster, Event File = `HighTemplar`, a `PsiStorm`
+# particle effect under the actor (or the `play particle` warns once and carries on), and the
+# `psi storm` / `gunshot` clips the sound names look for. An optional `AimMarker` actor in the
+# scene follows the cursor while aiming.
+#
+# Task 19 Part C is where the 3D movement and the rest of the caster's kit land.
+bind StormLabel to my "psi storm" cooldown
+
+when me appears
+  set my unit type to "land"
+  set my attack type to "ranged"
+  set my attack range to 250
+  set my MaxHealth to 40
+  set my Health to 40
+  set my Mana to 100
+  set my StormCost to 75
+
+when Q is pressed
+  my "psi storm" is ready
+  my Mana is higher than my StormCost
+  deduct my StormCost from my Mana
+  aim "psi storm" at a point
+  put "psi storm" on cooldown for 15 seconds
+
+# The storm lands where the player clicked. `my aim` is the pick point whether the click hit
+# bare ground or a unit, so the same line covers both; 180 is the storm's radius in cm.
+when my aim picks a target
+  damage area around my aim by 30 for radius 180
+  play particle "PsiStorm"
+  play sound "psi storm"
+  set my StormCasts to my StormCasts + 1
+
+when my Health becomes 0
+  destroy me
