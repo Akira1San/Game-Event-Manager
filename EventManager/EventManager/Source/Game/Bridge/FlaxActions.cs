@@ -1054,6 +1054,12 @@ namespace Game
                 case ActionVerb.DamageArea:
                     DamageArea(context, spec);
                     break;
+                case ActionVerb.AddBuff:
+                    BuffCommands.ExecuteAdd(context, spec);
+                    break;
+                case ActionVerb.RemoveBuff:
+                    BuffCommands.ExecuteRemove(context, spec);
+                    break;
                 case ActionVerb.Spawn:
                     Spawn(context, spec);
                     break;
@@ -2807,6 +2813,9 @@ namespace Game
             context.Runtime.Affixes.ForgetWearer(actor);
             context.Runtime.Selection.Forget(actor);
             context.Runtime.Targeting.Forget(actor);
+            // A destroyed actor also ends its buffs, so nothing keeps ticking a dead object or
+            // rewriting stats on it — and a clone born under the same name starts clean.
+            context.Runtime.Buffs.Clear(context.Runtime.Variables, actor);
             ClearFogVisibility(actor);
         }
 

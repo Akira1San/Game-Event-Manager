@@ -78,6 +78,9 @@ namespace Game
         HealthLow,
         // RTS target-pick mode (Task 27 Part A)
         AimPicked,
+        // Buffs and debuffs (Task 27 Part C)
+        BuffStarts,
+        BuffEnds,
         // Local multiplayer (Task 16 Part F)
         PlayerJoins,
         PlayerDies,
@@ -174,6 +177,15 @@ namespace Game
             // `when reload completes` — the current weapon's reload timer ran out (Task 16 Part C).
             if (words.Length >= 2 && words[0] == "reload" && words[1] == "completes")
                 return new TriggerDescriptor { Kind = TriggerKind.ReloadComplete };
+            // `when buff "stim" starts` / `when buff "stim" ends` (Task 27 Part C) — the buff'ed
+            // actor's own sheet hears it, with the buff name matched against the signal.
+            if (words.Length == 3 && words[0] == "buff" &&
+                (words[2] == "starts" || words[2] == "ends"))
+                return new TriggerDescriptor
+                {
+                    Kind = words[2] == "starts" ? TriggerKind.BuffStarts : TriggerKind.BuffEnds,
+                    RequireName = trigger[1].Text,
+                };
             // RTS selection (Task 18 Part A). Call these before the generic key shape:
             // `when Marine is selected` would otherwise read as the key "Marine" being held.
             if (words.Length >= 3 && words[words.Length - 2] == "is" && words[words.Length - 1] == "selected")

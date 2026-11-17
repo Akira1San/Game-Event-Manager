@@ -119,6 +119,9 @@ namespace Game
         Aim,
         CancelAim,
         DamageArea,
+        // Buffs and debuffs (Task 27 Part C)
+        AddBuff,
+        RemoveBuff,
     }
 
     public class ActionSpec
@@ -186,6 +189,12 @@ namespace Game
         /// the blast radius, as a literal (<see cref="Radius"/>) or a value.</summary>
         public double Radius;
         public ValueNode RadiusNode;
+        /// <summary><c>add buff "&lt;name&gt;"</c> / <c>remove buff "&lt;name&gt;"</c> (Task 27 Part C).</summary>
+        public string BuffName = "";
+        /// <summary>What a second copy of that buff does; refresh unless the line says otherwise.</summary>
+        public BuffRule BuffRule = BuffRule.Refresh;
+        /// <summary>The stat changes the buff makes, in the order they were written.</summary>
+        public List<BuffModifierWord> BuffModifiers = new List<BuffModifierWord>();
     }
 
     public static class ActionWords
@@ -311,6 +320,12 @@ namespace Game
             if (verb == "add" && words.Count >= 4 && words[1].Text == "order" &&
                 words[2].Text == "to" && words[3].Text == "queue")
                 return Finish(spec, ActionVerb.AddOrderToQueue, words, 4);
+            // `add buff "stim" to me for 8 seconds` (Task 27 Part C). Checked before the switch
+            // so the generic `add <value> to <var>` shape never sees it.
+            if (verb == "add" && words.Count >= 2 && words[1].Text == "buff")
+                return AddBuff(spec, words, warn);
+            if (verb == "remove" && words.Count >= 2 && words[1].Text == "buff")
+                return RemoveBuff(spec, words, warn);
             switch (verb)
             {
                 case "stop":
@@ -1721,6 +1736,133 @@ namespace Game
         /// <summary>Reads the actor name after <c>at</c>: a word (plus a <c>nearest</c>/<c>random</c>
         /// qualifier), followed by any number words — Flax names duplicates `SpawnPoint 1`, and those
         /// have to stay one name.</summary>
+        /// <summary>
+        /// <c>add buff "&lt;name&gt;" [to &lt;target&gt;] for &lt;n&gt; seconds [refresh|stack|ignore]
+        /// [and] [adding &lt;value&gt; to my &lt;stat&gt;] [and multiplying my &lt;stat&gt; by &lt;value&gt;]</c>
+        /// (Task 27 Part C). Without <c>to</c> the buff lands on the acting sheet.
+        /// </summary>
+        private static ActionSpec AddBuff(ActionSpec spec, List<Token> words, Action<string> warn)
+        {
+            const string shape = "\u201Cadd buff\u201D looks like \u201Cadd buff \"stim\" to me for 8 seconds adding 40 to my Speed\u201D";
+            int index = 2;
+            if (index >= words.Count || words[index].Type != TokenType.Str)
+                return Unknown(spec, words, shape, warn);
+            spec.BuffName = words[index].Text;
+            index++;
+            if (index < words.Count && words[index].Text == "to")
+            {
+                string target = TargetAt(words, index + 1, out int targetUsed);
+                if (target == null)
+                    return Unknown(spec, words, shape, warn);
+                spec.To = target;
+                index += 1 + targetUsed;
+            }
+            else
+                spec.To = "me";
+            if (index + 2 >= words.Count || words[index].Text != "for" ||
+                words[index + 1].Type != TokenType.Number || words[index + 2].Text != "seconds")
+                return Unknown(spec, words, "an \u201Cadd buff\u201D line needs a duration, like \u201Cfor 8 seconds\u201D", warn);
+            spec.Duration = words[index + 1].Number;
+            index += 3;
+            if (index < words.Count && words[index].Type == TokenType.Word &&
+                (words[index].Text == "refresh" || words[index].Text == "stack" || words[index].Text == "ignore"))
+            {
+                spec.BuffRule = words[index].Text == "stack" ? BuffRule.Stack
+                    : words[index].Text == "ignore" ? BuffRule.Ignore
+                    : BuffRule.Refresh;
+                index++;
+            }
+            while (index < words.Count)
+            {
+                if (words[index].Text == "and" && index + 1 < words.Count)
+                    index++;
+                if (words[index].Text == "adding")
+                {
+                    var word = new BuffModifierWord { Multiply = false };
+                    word.Value = ValueNodeAt(words, index + 1, out int valueUsed);
+                    if (word.Value == null)
+                        return Unknown(spec, words, shape, warn);
+                    if (words[index + 1].Type == TokenType.Number)
+                        word.Number = words[index + 1].Number;
+                    int toIndex = index + 1 + valueUsed;
+                    if (toIndex + 1 >= words.Count || words[toIndex].Text != "to" ||
+                        words[toIndex + 1].Text != "my" ||
+                        !TryReadMyStat(words, toIndex + 1, out string stat, out int statUsed))
+                        return Unknown(spec, words, "an \u201Cadding\u201D clause reads \u201Cadding 40 to my Speed\u201D", warn);
+                    word.Stat = stat;
+                    spec.BuffModifiers.Add(word);
+                    index = toIndex + 1 + statUsed;
+                    continue;
+                }
+                if (words[index].Text == "multiplying")
+                {
+                    var word = new BuffModifierWord { Multiply = true };
+                    if (!TryReadMyStat(words, index + 1, out string stat, out int statUsed))
+                        return Unknown(spec, words, "a \u201Cmultiplying\u201D clause reads \u201Cmultiplying my Speed by 1.5\u201D", warn);
+                    int byIndex = index + 1 + statUsed;
+                    if (byIndex + 1 >= words.Count || words[byIndex].Text != "by")
+                        return Unknown(spec, words, "a \u201Cmultiplying\u201D clause reads \u201Cmultiplying my Speed by 1.5\u201D", warn);
+                    word.Stat = stat;
+                    word.Value = ValueNodeAt(words, byIndex + 1, out int factorUsed);
+                    if (word.Value == null)
+                        return Unknown(spec, words, "a \u201Cmultiplying\u201D clause reads \u201Cmultiplying my Speed by 1.5\u201D", warn);
+                    if (words[byIndex + 1].Type == TokenType.Number)
+                        word.Number = words[byIndex + 1].Number;
+                    spec.BuffModifiers.Add(word);
+                    index = byIndex + 1 + factorUsed;
+                    continue;
+                }
+                return Unknown(spec, words,
+                    $"I don't know \u201C{words[index].Text}\u201D in an \u201Cadd buff\u201D line \u2014 it takes a duration, \u201Crefresh\u201D/\u201Cstack\u201D/\u201Cignore\u201D, and \u201Cadding <n> to my <stat>\u201D or \u201Cmultiplying my <stat> by <n>\u201D",
+                    warn);
+            }
+            return Finish(spec, ActionVerb.AddBuff, words, index);
+        }
+
+        /// <summary><c>remove buff "&lt;name&gt;" [from &lt;target&gt;]</c> — ends a buff early (Task 27 Part C).</summary>
+        private static ActionSpec RemoveBuff(ActionSpec spec, List<Token> words, Action<string> warn)
+        {
+            const string shape = "\u201Cremove buff\u201D looks like \u201Cremove buff \"stim\" from me\u201D";
+            int index = 2;
+            if (index >= words.Count || words[index].Type != TokenType.Str)
+                return Unknown(spec, words, shape, warn);
+            spec.BuffName = words[index].Text;
+            index++;
+            if (index < words.Count && words[index].Text == "from")
+            {
+                string target = TargetAt(words, index + 1, out int targetUsed);
+                if (target == null)
+                    return Unknown(spec, words, shape, warn);
+                spec.To = target;
+                index += 1 + targetUsed;
+            }
+            else
+                spec.To = "me";
+            if (index < words.Count)
+                return Unknown(spec, words, shape, warn);
+            return Finish(spec, ActionVerb.RemoveBuff, words, index);
+        }
+
+        /// <summary><c>my &lt;stat&gt;</c> inside a buff clause, including the two-word health stats.</summary>
+        private static bool TryReadMyStat(List<Token> words, int index, out string stat, out int used)
+        {
+            stat = "";
+            used = 0;
+            if (index + 1 >= words.Count || words[index].Text != "my" ||
+                words[index + 1].Type != TokenType.Word)
+                return false;
+            if (index + 2 < words.Count && words[index + 2].Type == TokenType.Word &&
+                HealthManager.TryStat(words[index + 1].Text + " " + words[index + 2].Text, out string pair))
+            {
+                stat = pair;
+                used = 3;
+                return true;
+            }
+            stat = words[index + 1].Text;
+            used = 2;
+            return true;
+        }
+
         private static string TargetAt(List<Token> words, int index, out int used)
         {
             used = 0;

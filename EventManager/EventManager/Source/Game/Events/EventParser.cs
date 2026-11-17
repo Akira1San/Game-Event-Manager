@@ -755,6 +755,14 @@ namespace Game
             }
             if (t.Text == "my")
             {
+                // `my "stim" time left` — the seconds a buff still has (Task 27 Part C).
+                if (index + 3 < words.Count && words[index + 1].Type == TokenType.Str &&
+                    words[index + 2].Text == "time" && words[index + 3].Text == "left")
+                {
+                    string buffName = words[index + 1].Text;
+                    index += 4;
+                    return new VariableValue { Line = t.Line, Owner = "my", Name = Buffs.TimeLeftName(buffName) };
+                }
                 if (index + 2 < words.Count && words[index + 1].Type == TokenType.Word &&
                     words[index + 2].Type == TokenType.Word)
                 {
@@ -1235,6 +1243,14 @@ namespace Game
         private StatementNode ParseAdd(BodyLineNode line)
         {
             var words = line.Words;
+            // `add buff "stim" to me for 8 seconds` is a buff word (Task 27 Part C), not the
+            // `add <value> to <variable>` statement.
+            if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "buff")
+            {
+                var buffRaw = new RawActionNode { Line = line.Line };
+                buffRaw.Words.AddRange(words);
+                return buffRaw;
+            }
             // `add order to queue` is an RTS order action (Task 18 Part E), not the
             // `add <value> to <variable>` statement.
             if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "order")
@@ -1540,6 +1556,13 @@ namespace Game
         {
             var words = line.Words;
             int index = 1;
+            // `remove buff "stim" from me` ends a buff (Task 27 Part C).
+            if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "buff")
+            {
+                var buffRaw = new RawActionNode { Line = line.Line };
+                buffRaw.Words.AddRange(words);
+                return buffRaw;
+            }
             // `remove Potion from my bag` — takes one named item out of the bag
             if (words.Count >= 5 && words[index].Type == TokenType.Word &&
                 words[index + 1].Text == "from" && words[index + 2].Text == "my" && words[index + 3].Text == "bag")

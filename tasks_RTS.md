@@ -730,7 +730,7 @@ cooldowns cost one polling trigger per unit.
 - No new bridge code beyond the `ForActor`/`reload` call sites; editor play-check pending (give a
   marine `Player2 PistolDamage 5` and confirm its bullets hit for 15 while the other side hits for 10).
 
-### Part C — Buffs and debuffs (`Runtime/Buffs.cs`) [ ]
+### Part C — Buffs and debuffs (`Runtime/Buffs.cs`) [x]
 - One buff: name, duration, stack rule (`refresh` / `stack` / `ignore`), modifiers, source actor,
   expiry; a single `Tick(dt)` expires everything and restores stats
 - Words: `add buff "stim" to me for 8 seconds`, `remove buff "stim" from me`; triggers
@@ -738,6 +738,42 @@ cooldowns cost one polling trigger per unit.
 - Base-value capture: the first buff records `my BaseSpeed` / `my BaseArmor` and the manager writes
   the aggregate, so overlapping buffs restore correctly instead of fighting each other
 - Default: a sheet that never adds a buff keeps writing `my Speed` by hand exactly as today
+  → `Runtime/Buffs.cs`: `BuffRule` (`Refresh` default / `Stack` / `Ignore`), `BuffInstance`
+  (name, duration, remaining, rule, source, modifiers) and `BuffModifier` (`Stat` + `Amount` or
+  `Multiplier`). The `Buffs` manager holds the running copies per actor, captures a stat's base the
+  first time a buff touches it (writing `my Base<Stat>` too, and remembering a sheet's own
+  `Base<Stat>`), writes `my <Stat> = base × Π multipliers + Σ amounts` on every change, and puts
+  the base back when the last buff on that stat ends (dropping `Base<Stat>`, and removing the stat
+  again if the actor never had it). Health stats go through `HealthManager.TryStat`, so
+  `my Max Health` buffs `my MaxHealth`. `Tick(dt)` returns the `(actor, name, source)` ends so the
+  runtime pushes them; `Clear` (death) and `Reset` (scene) restore everything.
+- Words: `add buff "<name>" [to <target>] for <n> seconds [refresh|stack|ignore]
+  [adding <value> to my <stat>] [multiplying my <stat> by <value>]` (clauses chain with `and`,
+  the target defaults to the acting sheet) and `remove buff "<name>" [from <target>]` →
+  `ActionVerb.AddBuff` / `RemoveBuff`, with `EventParser.ParseAdd`/`ParseRemove` routing the two
+  shapes to raw actions before the `add <value> to <var>` / `remove … from my bag` statements.
+  `BuffCommands.ExecuteAdd/ExecuteRemove` resolve the target (`me` / `other` / a named actor),
+  evaluate the modifier values, apply the rule and raise the pushes. A refresh reports no new
+  start, so re-pressing stim doesn't re-fire `when buff "stim" starts`.
+  → `TriggerKind.BuffStarts` / `BuffEnds` from `when buff "<name>" starts|ends`, pushed to the
+  buffed actor's sheet with the buff name matched and the source in `other`; the ends are raised in
+  `EventRuntime.Tick` before the drain, so the event runs in the tick the timer ran out.
+  `my "<name>" time left` parses as one variable and reads the longest remaining copy.
+- `WordRegistry` rows for `add buff`, `remove buff`, both triggers and the value.
+
+#### Part C notes
+- 33 new pure checks (start/base capture, refresh vs stack vs ignore, overlapping add+multiply,
+  independent stats and partial removal, canonical `Max Health` buffing, expiry restoring every
+  stat and dropping `Base<Stat>`, no double-reporting, a sheet's own `BaseSpeed` restored, `Clear`,
+  an unbuffed sheet left untouched, the add/remove parse shapes with defaults/rules/chained
+  clauses, the missing-duration error, both triggers, the value form, an end-to-end run where
+  `add buff` buffs a named actor and both pushes land on its own sheet with `other` as the source,
+  and a cleared actor that is never ticked or rewritten again)
+  -> **1681 passed, 0 failed**; Game module build 0 errors (`Flax.Build -build -arch=x64
+  -platform=Windows -configuration=Debug -target=GameEditorTarget`).
+- Bridge half: `FlaxActions` gets only the two `case` labels delegating to `BuffCommands`; editor
+  play-check pending (press stim, watch `my Speed` jump and come back, and `when buff "stim" ends`
+  fire once).
 
 ### Part D — Research queue (`Runtime/ResearchManager.cs`) [ ]
 - Per-building queue mirroring `ProductionManager`: `Start`, `Cancel`, `ProgressOf`, `Remaining`,

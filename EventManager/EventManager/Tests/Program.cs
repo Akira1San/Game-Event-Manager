@@ -9390,6 +9390,244 @@ Check(Tech.PlayerIndexOf(techLocalContext) == 0 &&
       WeaponData.ForActor(techLocalContext).Damage == 10,
     "a unit with no player is player 1 and keeps the base damage");
 
+// ------------------------------------------------------------------
+// Task 27 Part C — buffs and debuffs
+// ------------------------------------------------------------------
+
+BuffInstance NewBuff(string name, double duration, BuffRule rule, string stat, double amount,
+    double multiplier = 1, bool multiply = false)
+{
+    var instance = new BuffInstance { Name = name, Duration = duration, Rule = rule };
+    var modifier = new BuffModifier { Stat = stat };
+    if (multiply)
+    {
+        modifier.Multiplier = multiplier;
+        modifier.HasMultiplier = true;
+    }
+    else
+    {
+        modifier.Amount = amount;
+        modifier.HasAmount = true;
+    }
+    instance.Modifiers.Add(modifier);
+    return instance;
+}
+
+var buffVars = new EventVariables();
+var buffMarine = new FakeActor("Marine");
+buffVars.SetLocal(buffMarine, "Speed", ValueBox.OfNumber(100));
+var buffs = new Buffs();
+Check(buffs.Add(buffVars, buffMarine, NewBuff("stim", 8, BuffRule.Refresh, "Speed", 40), out bool stimStarted) &&
+      stimStarted,
+    "a buff starts and reports the start");
+Check(buffVars.GetLocal(buffMarine, "Speed").AsNumber() == 140 &&
+      buffVars.GetLocal(buffMarine, "BaseSpeed").AsNumber() == 100,
+    "the buff writes the aggregate and records the base (100 + 40)");
+Check(Math.Abs(buffs.TimeLeft(buffMarine, "stim") - 8) < 0.0001,
+    "`my \"stim\" time left` reads the full duration");
+
+// Refresh: a second press restarts the timer without doubling the bonus.
+Check(buffs.Add(buffVars, buffMarine, NewBuff("stim", 8, BuffRule.Refresh, "Speed", 40), out bool refreshed) &&
+      !refreshed,
+    "a refreshed buff runs on but reports no new start");
+var stimEnds = buffs.Tick(buffVars, 3);
+Check(stimEnds.Count == 0 && Math.Abs(buffs.TimeLeft(buffMarine, "stim") - 5) < 0.0001 &&
+      buffVars.GetLocal(buffMarine, "Speed").AsNumber() == 140,
+    "refresh keeps one copy: the timer counts down and the bonus is not doubled");
+
+// Stack: two copies add up.
+var stackBuffs = new Buffs();
+var stackVars = new EventVariables();
+var stackMarine = new FakeActor("Stacker");
+stackVars.SetLocal(stackMarine, "Speed", ValueBox.OfNumber(100));
+stackBuffs.Add(stackVars, stackMarine, NewBuff("stim", 8, BuffRule.Stack, "Speed", 40), out _);
+stackBuffs.Add(stackVars, stackMarine, NewBuff("stim", 8, BuffRule.Stack, "Speed", 40), out bool stackedStarted);
+Check(stackedStarted && stackBuffs.CountOf(stackMarine, "stim") == 2 &&
+      stackVars.GetLocal(stackMarine, "Speed").AsNumber() == 180,
+    "`stack` runs a second copy and the bonuses add up");
+
+// Ignore: while one runs, the second is refused.
+var ignoreBuffs = new Buffs();
+var ignoreVars = new EventVariables();
+var ignoreMarine = new FakeActor("Ignorer");
+ignoreVars.SetLocal(ignoreMarine, "Armor", ValueBox.OfNumber(1));
+ignoreBuffs.Add(ignoreVars, ignoreMarine, NewBuff("shield", 8, BuffRule.Ignore, "Armor", 3), out _);
+Check(!ignoreBuffs.Add(ignoreVars, ignoreMarine, NewBuff("shield", 8, BuffRule.Ignore, "Armor", 3), out _) &&
+      ignoreVars.GetLocal(ignoreMarine, "Armor").AsNumber() == 4,
+    "`ignore` refuses a second copy while the first runs");
+
+// Overlapping buffs on one stat: base × multipliers + amounts.
+var mixBuffs = new Buffs();
+var mixVars = new EventVariables();
+var mixMarine = new FakeActor("Mixer");
+mixVars.SetLocal(mixMarine, "Speed", ValueBox.OfNumber(100));
+mixBuffs.Add(mixVars, mixMarine, NewBuff("adrenaline", 8, BuffRule.Refresh, "Speed", 0, 1.5, true), out _);
+mixBuffs.Add(mixVars, mixMarine, NewBuff("haste", 8, BuffRule.Refresh, "Speed", 40), out _);
+Check(mixVars.GetLocal(mixMarine, "Speed").AsNumber() == 190,
+    "overlapping buffs combine as base × multipliers + amounts (100 × 1.5 + 40)");
+Check(mixBuffs.Remove(mixVars, mixMarine, "adrenaline") &&
+      Math.Abs(mixVars.GetLocal(mixMarine, "Speed").AsNumber() - 140) < 0.0001,
+    "ending one buff leaves the other's bonus in place");
+Check(!mixBuffs.Remove(mixVars, mixMarine, "nothing"),
+    "removing a buff that is not running answers false");
+
+// Expiry restores every stat and drops the Base<Stat> helper.
+var expiryBuffs = new Buffs();
+var expiryVars = new EventVariables();
+var expiryMarine = new FakeActor("Expirer");
+expiryVars.SetLocal(expiryMarine, "Speed", ValueBox.OfNumber(100));
+expiryVars.SetLocal(expiryMarine, "MaxHealth", ValueBox.OfNumber(80));
+expiryBuffs.Add(expiryVars, expiryMarine, NewBuff("stim", 0.5, BuffRule.Refresh, "Speed", 40), out _);
+expiryBuffs.Add(expiryVars, expiryMarine, NewBuff("fortify", 0.5, BuffRule.Refresh, "Max Health", 20), out _);
+Check(expiryVars.GetLocal(expiryMarine, "MaxHealth").AsNumber() == 100,
+    "a two-word health stat is buffed through its canonical spelling");
+var expiryEnds = expiryBuffs.Tick(expiryVars, 0.6);
+Check(expiryEnds.Count == 2 && expiryVars.GetLocal(expiryMarine, "Speed").AsNumber() == 100 &&
+      expiryVars.GetLocal(expiryMarine, "MaxHealth").AsNumber() == 80,
+    "expiry restores every buffed stat and reports each end");
+Check(!expiryVars.HasLocal(expiryMarine, "BaseSpeed") &&
+      !expiryVars.HasLocal(expiryMarine, "BaseMaxHealth"),
+    "the Base<Stat> helper goes away with the buff");
+Check(expiryBuffs.Tick(expiryVars, 1).Count == 0 && expiryBuffs.ActiveNames(expiryMarine).Count == 0,
+    "an expired buff is not reported twice");
+
+// A sheet's own BaseSpeed comes back, and Clear restores everything.
+var savedVars = new EventVariables();
+var savedActor = new FakeActor("Saver");
+savedVars.SetLocal(savedActor, "Speed", ValueBox.OfNumber(100));
+savedVars.SetLocal(savedActor, "BaseSpeed", ValueBox.OfNumber(90));
+var savedBuffs = new Buffs();
+savedBuffs.Add(savedVars, savedActor, NewBuff("stim", 1, BuffRule.Refresh, "Speed", 40), out _);
+Check(savedVars.GetLocal(savedActor, "BaseSpeed").AsNumber() == 100,
+    "the buff records the pre-buff value as BaseSpeed");
+savedBuffs.Tick(savedVars, 1.5);
+Check(savedVars.GetLocal(savedActor, "BaseSpeed").AsNumber() == 90,
+    "a sheet's own BaseSpeed is restored when the buff ends");
+
+var clearVars = new EventVariables();
+var clearActor = new FakeActor("Cleared");
+clearVars.SetLocal(clearActor, "Speed", ValueBox.OfNumber(100));
+var clearBuffs = new Buffs();
+clearBuffs.Add(clearVars, clearActor, NewBuff("stim", 8, BuffRule.Refresh, "Speed", 40), out _);
+clearBuffs.Clear(clearVars, clearActor);
+Check(clearVars.GetLocal(clearActor, "Speed").AsNumber() == 100 && !clearBuffs.IsActive(clearActor, "stim"),
+    "Clear ends an actor's buffs and puts its stats back");
+// A destroyed actor's buffs must stop existing too: nothing left to tick, nothing left to
+// rewrite, and no `when buff ... ends` fired for an actor that is already gone.
+clearVars.SetLocal(clearActor, "Speed", ValueBox.OfNumber(7));
+Check(clearBuffs.Tick(clearVars, 30).Count == 0 &&
+      clearBuffs.ActiveActors().Count == 0 &&
+      clearVars.GetLocal(clearActor, "Speed").AsNumber() == 7,
+    "after Clear the manager never ticks or rewrites that actor again");
+
+// A sheet that never buffs keeps writing `my Speed` by hand.
+var plainVars = new EventVariables();
+var plainActor = new FakeActor("Walker");
+plainVars.SetLocal(plainActor, "Speed", ValueBox.OfNumber(55));
+new Buffs().Tick(plainVars, 1);
+Check(plainVars.GetLocal(plainActor, "Speed").AsNumber() == 55 &&
+      !plainVars.HasLocal(plainActor, "BaseSpeed"),
+    "a sheet that never adds a buff is untouched");
+
+// The words: add / remove, defaults, rules and modifiers.
+var addBuffProgram = parser.Parse("when Q is pressed\n  add buff \"stim\" to me for 8 seconds adding 40 to my Speed\n");
+var addBuffSpec = ActionWords.Parse(
+    ((RawActionNode)addBuffProgram.Events[0].Body[0].Statement!).Words, _ => { });
+Check(addBuffSpec.Verb == ActionVerb.AddBuff && addBuffSpec.BuffName == "stim" &&
+      addBuffSpec.To == "me" && Math.Abs(addBuffSpec.Duration - 8) < 1e-9 &&
+      addBuffSpec.BuffModifiers.Count == 1 && addBuffSpec.BuffModifiers[0].Stat == "Speed",
+    "`add buff \"stim\" to me for 8 seconds adding 40 to my Speed` parses");
+
+var multiplyBuffProgram = parser.Parse(
+    "when Q is pressed\n  add buff \"stim\" for 6 seconds stack multiplying my Speed by 1.5\n");
+var multiplyBuffSpec = ActionWords.Parse(
+    ((RawActionNode)multiplyBuffProgram.Events[0].Body[0].Statement!).Words, _ => { });
+Check(multiplyBuffSpec.Verb == ActionVerb.AddBuff && multiplyBuffSpec.To == "me" &&
+      multiplyBuffSpec.BuffRule == BuffRule.Stack &&
+      multiplyBuffSpec.BuffModifiers.Count == 1 && multiplyBuffSpec.BuffModifiers[0].Multiply &&
+      Math.Abs(multiplyBuffSpec.BuffModifiers[0].Number - 1.5) < 1e-9,
+    "`add buff ... for 6 seconds stack multiplying my Speed by 1.5` parses");
+
+var chainedBuffProgram = parser.Parse(
+    "when Q is pressed\n  add buff \"stim\" to me for 8 seconds adding 40 to my Speed and multiplying my Speed by 1.5\n");
+var chainedBuffSpec = ActionWords.Parse(
+    ((RawActionNode)chainedBuffProgram.Events[0].Body[0].Statement!).Words, _ => { });
+Check(chainedBuffSpec.BuffModifiers.Count == 2 &&
+      !chainedBuffSpec.BuffModifiers[0].Multiply && chainedBuffSpec.BuffModifiers[1].Multiply,
+    "modifier clauses chain with `and`");
+
+var removeBuffProgram = parser.Parse("when Q is pressed\n  remove buff \"stim\" from other\n");
+var removeBuffSpec = ActionWords.Parse(
+    ((RawActionNode)removeBuffProgram.Events[0].Body[0].Statement!).Words, _ => { });
+Check(removeBuffSpec.Verb == ActionVerb.RemoveBuff && removeBuffSpec.BuffName == "stim" &&
+      removeBuffSpec.To == "other",
+    "`remove buff \"stim\" from other` parses");
+
+string shortenHint = "";
+Action<string> GrabShortHint = message => shortenHint = message;
+var bareBuffProgram = parser.Parse("when Q is pressed\n  add buff \"stim\" to me\n");
+var bareBuffSpec = ActionWords.Parse(
+    ((RawActionNode)bareBuffProgram.Events[0].Body[0].Statement!).Words, GrabShortHint);
+Check(bareBuffSpec.Verb == ActionVerb.Unknown && shortenHint.Contains("duration"),
+    "`add buff` without a duration explains the shape");
+
+// Triggers and the value form.
+var buffStartProgram = parser.Parse("when buff \"stim\" starts\n  set Started to 1\n");
+var buffStartDesc = TriggerClassifier.Classify(buffStartProgram.Events[0]);
+Check(buffStartDesc.Kind == TriggerKind.BuffStarts && buffStartDesc.RequireName == "stim",
+    "`when buff \"stim\" starts` classifies to BuffStarts with the name");
+var buffEndProgram = parser.Parse("when buff \"stim\" ends\n  set Done to 1\n");
+var buffEndDesc = TriggerClassifier.Classify(buffEndProgram.Events[0]);
+Check(buffEndDesc.Kind == TriggerKind.BuffEnds && buffEndDesc.RequireName == "stim",
+    "`when buff \"stim\" ends` classifies to BuffEnds");
+
+var timeLeftProgram = parser.Parse("when game starts\n  set Left to my \"stim\" time left\n");
+var timeLeftSet = (SetNode)timeLeftProgram.Events[0].Body[0].Statement!;
+Check(timeLeftSet.Value is VariableValue timeLeftValue && timeLeftValue.Owner == "my" &&
+      timeLeftValue.Name == "buff stim time left",
+    "`my \"stim\" time left` reads as one variable");
+
+// End to end: the word buffs a named actor, and both pushes land on its own sheet.
+var buffWorld = new FakeWorld();
+var buffCaster = new FakeActor("Medic");
+var buffedMarine = new FakeActor("Marine");
+buffWorld.AddActor(buffCaster);
+buffWorld.AddActor(buffedMarine);
+var buffEngine = FreshEngine(buffWorld);
+buffEngine.AddSheet(buffedMarine, parser.Parse(@"when buff ""stim"" starts
+  set my Started to 1
+  set my StarterTag to other's Tag
+when buff ""stim"" ends
+  set my Ended to 1"));
+buffEngine.Variables.SetLocal(buffedMarine, "Speed", ValueBox.OfNumber(100));
+buffEngine.Variables.SetLocal(buffCaster, "Tag", ValueBox.OfText("Medic"));
+var buffContext = new EventContext
+{
+    Me = buffCaster,
+    Variables = buffEngine.Variables,
+    Runtime = buffEngine,
+};
+var stimSpec = new ActionSpec { BuffName = "stim", To = "Marine", Duration = 1 };
+stimSpec.BuffModifiers.Add(new BuffModifierWord { Stat = "Speed", Number = 40 });
+Check(BuffCommands.ExecuteAdd(buffContext, stimSpec) &&
+      buffEngine.Variables.GetLocal(buffedMarine, "Speed").AsNumber() == 140,
+    "`add buff \"stim\" to Marine` buffs the named actor");
+buffEngine.Tick(0);
+Check(buffEngine.Variables.GetLocal(buffedMarine, "Started").AsNumber() == 1 &&
+      buffEngine.Variables.GetLocal(buffedMarine, "StarterTag").AsText() == "Medic",
+    "`when buff \"stim\" starts` runs on the buffed actor with the source as `other`");
+buffEngine.Tick(1);
+Check(buffEngine.Variables.GetLocal(buffedMarine, "Ended").AsNumber() == 1 &&
+      buffEngine.Variables.GetLocal(buffedMarine, "Speed").AsNumber() == 100,
+    "`when buff \"stim\" ends` runs when the timer runs out and the stat is restored");
+
+Check(WordRegistry.All.Any(e => e.Kind == "action" && e.Word == "add buff"),
+    "the word book lists `add buff`");
+Check(WordRegistry.All.Any(e => e.Kind == "trigger" && e.Word.Contains("when buff")),
+    "the word book lists the buff triggers");
+Check(WordRegistry.All.Any(e => e.Kind == "value" && e.Word.Contains("time left")),
+    "the word book lists the buff time-left value");
+
 Console.WriteLine();
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)

@@ -84,6 +84,9 @@ namespace Game
                     ? Runtime.NameOfActor(aim.PickActor)
                     : "");
             }
+            // `my "stim" time left` (Task 27 Part C): the seconds this actor's buff still has.
+            if (Buffs.TryReadTimeLeft(name, out string buffName))
+                return ValueBox.OfNumber(Runtime.Buffs.TimeLeft(Me, buffName));
             // `my camera zoom` / `my camera position` (Task 26 Part D): the state the free-pan
             // controls keep, readable from any sheet — a HUD readout or a debug print. The
             // position is the ground point the camera is centred on, as "x, 0, z".
@@ -260,6 +263,9 @@ namespace Game
         public OrderManager Orders = new OrderManager();
         /// <summary>RTS per-player fog of war and visibility (Task 18 Part F).</summary>
         public FogOfWarManager Fog = new FogOfWarManager();
+        /// <summary>Timed stat changes with a stack rule (Task 27 Part C).</summary>
+        public Buffs Buffs = new Buffs();
+        private double lastBuffTick;
         /// <summary>RTS terrain passability — land/water/air cells (Task 22 Part B).</summary>
         public TerrainMap Terrain = new TerrainMap();
         /// <summary>Random-angle wander legs and still mode per actor (Task 16 Part A).</summary>
@@ -478,6 +484,7 @@ namespace Game
             pendingLevel = "";
             Fog.Reset();
             Targeting.Clear();
+            Buffs.Reset(Variables);
             foreach (var sheet in sheets)
                 sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.SceneStart });
         }
@@ -1225,6 +1232,20 @@ namespace Game
             if (aimDelta > 0)
                 Targeting.Tick(aimDelta > 1 ? 1 : aimDelta);
             lastTargetingTick = time;
+            // Buffs count down here too (Task 27 Part C), and each expiry is pushed before the
+            // drain below so `when buff "stim" ends` runs in the tick it ran out.
+            double buffDelta = time - lastBuffTick;
+            if (buffDelta > 0)
+            {
+                foreach (BuffEnd end in Buffs.Tick(Variables, buffDelta > 1 ? 1 : buffDelta))
+                    RaisePush(end.Actor, new PushSignal
+                    {
+                        Kind = TriggerKind.BuffEnds,
+                        Name = end.Name,
+                        Other = end.Source,
+                    });
+            }
+            lastBuffTick = time;
             // Sounds are momentary: drop the ones older than the bus's memory before this tick's
             // actions can add new ones, so a shot fired now is heard now and not a minute later.
             Sounds.Expire(Time);
