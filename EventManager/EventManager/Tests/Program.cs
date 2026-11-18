@@ -11209,6 +11209,106 @@ Check(!Conditions.Evaluate(selectedCountCondition, selectionContext) &&
       !Conditions.Evaluate(selectedKindCondition, selectionContext),
     "a selected Barracks fails the count and the Marine-kind test");
 
+Console.WriteLine();
+// ------------------------------------------------------------------
+// Task 29 Part E (first slice): the production numbers a command card needs
+// ------------------------------------------------------------------
+
+var capVars = new EventVariables();
+Check(ProductionManager.ResolveQueueCap(capVars, "Barracks") == ProductionManager.DefaultQueueCap &&
+      ProductionManager.DefaultQueueCap == 5,
+    "a building with no cap data holds five orders");
+capVars.SetGlobal(ProductionManager.DefaultQueueCapVariable, ValueBox.OfNumber(3));
+Check(ProductionManager.ResolveQueueCap(capVars, "Barracks") == 3,
+    "`ProductionQueueCap` caps every building's queue");
+capVars.SetGlobal("BarracksQueueCap", ValueBox.OfNumber(2));
+Check(ProductionManager.ResolveQueueCap(capVars, "Barracks") == 2 &&
+      ProductionManager.ResolveQueueCap(capVars, "Gateway") == 3,
+    "`<Building>QueueCap` wins for that building and leaves the others alone");
+capVars.SetGlobal("BarracksQueueCap", ValueBox.OfNumber(-4));
+Check(ProductionManager.ResolveQueueCap(capVars, "Barracks") == 0 &&
+      ProductionManager.ResolveQueueCap(capVars, "") == 3,
+    "a negative cap reads as zero, and a building with no name uses the global");
+
+var capEngine = FreshEngine(new FakeWorld());
+var capBarracks = new FakeActor("Barracks");
+capEngine.Variables.SetGlobal("BarracksQueueCap", ValueBox.OfNumber(2));
+Check(capEngine.Production.CanEnqueue(capEngine.Variables, capBarracks),
+    "a building that never trained has room for its first order");
+Check(!capEngine.Production.CanEnqueue(capEngine.Variables, null),
+    "nothing selected has no queue and no room");
+Check(capEngine.Production.Enqueue(capEngine.Variables, capEngine, capBarracks, "Barracks", "Marine") &&
+      capEngine.Production.CanEnqueue(capEngine.Variables, capBarracks),
+    "the first order fits and the queue still has room");
+Check(capEngine.Production.Enqueue(capEngine.Variables, capEngine, capBarracks, "Barracks", "Firebat") &&
+      !capEngine.Production.CanEnqueue(capEngine.Variables, capBarracks),
+    "the second order fills a cap of two");
+Check(!capEngine.Production.Enqueue(capEngine.Variables, capEngine, capBarracks, "Barracks", "Ghost") &&
+      capEngine.Production.QueueCount(capBarracks) == 2,
+    "an order past the cap is refused and the queue is left alone");
+Check(capEngine.Production.QueueCapOf(capEngine.Variables, capBarracks) == 2,
+    "`my queue cap` reads the cap the building actually uses");
+
+var timeEngine = FreshEngine(new FakeWorld());
+var timeBarracks = new FakeActor("Barracks");
+timeEngine.Variables.SetGlobal("MarineBuildTime", ValueBox.OfNumber(7));
+timeEngine.Production.Enqueue(timeEngine.Variables, timeEngine, timeBarracks, "Barracks", "Marine");
+Check(timeEngine.Production.CurrentDurationOf(timeBarracks) == 7 &&
+      ProductionManager.ResolveBuildTime(timeEngine.Variables, "Marine", "Barracks") == 7,
+    "`my train time` is the data-driven build time of the unit being trained");
+timeEngine.Production.Enqueue(timeEngine.Variables, timeEngine, timeBarracks, "Barracks", "Firebat");
+Check(timeEngine.Production.CurrentDurationOf(timeBarracks) == 7 &&
+      timeEngine.Production.RemainingOf(timeBarracks) == 7,
+    "a queued second unit does not change the active train time");
+var emptyBarracks = new FakeActor("EmptyBarracks");
+Check(timeEngine.Production.CurrentDurationOf(emptyBarracks) == 0 &&
+      timeEngine.Production.CurrentDurationOf(null) == 0,
+    "an idle building reads a train time of zero");
+
+var cardContext = new EventContext
+{
+    Variables = timeEngine.Variables,
+    World = timeEngine.World,
+    Runtime = timeEngine,
+    Me = timeBarracks,
+};
+Check(cardContext.ReadMy("train time").AsNumber() == 7 &&
+      cardContext.ReadMy("queue cap").AsNumber() == ProductionManager.DefaultQueueCap,
+    "a card reads `my train time` and `my queue cap` on the building's own sheet");
+
+var roomCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  queue has room").Events[0].Body[0].Words);
+Check(roomCondition.Kind == ConditionKind.QueueHasRoom,
+    "`queue has room` parses to the queue-cap condition");
+var roomEngine = FreshEngine(new FakeWorld());
+var roomBarracks = new FakeActor("Barracks");
+var roomContext = new EventContext
+{
+    Variables = roomEngine.Variables,
+    World = roomEngine.World,
+    Runtime = roomEngine,
+    Me = roomBarracks,
+};
+Check(Conditions.Evaluate(roomCondition, roomContext),
+    "an empty queue passes `queue has room`");
+roomEngine.Production.Enqueue(roomEngine.Variables, roomEngine, roomBarracks, "Barracks", "Marine");
+Check(Conditions.Evaluate(roomCondition, roomContext),
+    "one order in a five-slot queue still has room");
+roomEngine.Variables.SetGlobal("BarracksQueueCap", ValueBox.OfNumber(1));
+Check(!Conditions.Evaluate(roomCondition, roomContext),
+    "the condition reads the cap live, so tightening it greys the button immediately");
+
+var trainTimeProgram = parser.Parse("when game starts\n  set T to my train time");
+var trainTimeSet = (SetNode)trainTimeProgram.Events[0].Body[0].Statement;
+Check(trainTimeSet.Value is VariableValue trainTimeValue &&
+      trainTimeValue.Owner == "my" && trainTimeValue.Name == "train time",
+    "`my train time` parses as one value");
+var queueCapProgram = parser.Parse("when game starts\n  set C to my queue cap");
+var queueCapSet = (SetNode)queueCapProgram.Events[0].Body[0].Statement;
+Check(queueCapSet.Value is VariableValue queueCapValue &&
+      queueCapValue.Owner == "my" && queueCapValue.Name == "queue cap",
+    "`my queue cap` parses as one value");
+
 // Task 30 Part A - the save file's format and location.
 var saveProject = Path.Combine(Path.GetTempPath(), "event-manager-save-" + Guid.NewGuid().ToString("N"));
 try

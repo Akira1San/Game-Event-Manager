@@ -37,6 +37,15 @@ namespace Game
         /// <summary>Global that overrides <see cref="DefaultBuildTime"/> for every unit.</summary>
         public const string DefaultBuildTimeVariable = "ProductionBuildTime";
 
+        /// <summary>
+        /// How many orders one building's queue holds when no cap variable says otherwise
+        /// (Task 29 Part E). The cap is what a command card's Train button greys out at.
+        /// </summary>
+        public const double DefaultQueueCap = 5;
+
+        /// <summary>Global that overrides <see cref="DefaultQueueCap"/> for every building.</summary>
+        public const string DefaultQueueCapVariable = "ProductionQueueCap";
+
         private readonly Dictionary<object, ProductionQueue> _queues = new Dictionary<object, ProductionQueue>();
         /// <summary>Buildings whose work is on hold (a lifted-off building, Task 28 Part C).
         /// A paused queue keeps its orders and its elapsed time; it just stops advancing.</summary>
@@ -79,21 +88,72 @@ namespace Game
         }
 
         /// <summary>
+        /// How long the current order takes in total (what <c>my train time</c> reads), or 0 when
+        /// the queue is empty — the number a card shows next to the unit's icon.
+        /// </summary>
+        public double CurrentDurationOf(object building)
+        {
+            if (building == null || !_queues.TryGetValue(building, out ProductionQueue queue) || queue.Current == null)
+                return 0;
+            return Math.Max(0, queue.Current.Duration);
+        }
+
+        /// <summary>
+        /// The queue cap for one building: <c>&lt;Building&gt;QueueCap</c>, then
+        /// <see cref="DefaultQueueCapVariable"/>, then <see cref="DefaultQueueCap"/> — the same
+        /// data-first order the build time uses, so a game tunes both the same way.
+        /// </summary>
+        public static double ResolveQueueCap(EventVariables variables, string buildingName)
+        {
+            if (!string.IsNullOrEmpty(buildingName) &&
+                TryNumber(variables, buildingName + "QueueCap", out double cap))
+                return Math.Max(0, cap);
+            if (TryNumber(variables, DefaultQueueCapVariable, out cap))
+                return Math.Max(0, cap);
+            return DefaultQueueCap;
+        }
+
+        /// <summary>The queue cap of the building <paramref name="building"/> trains at.</summary>
+        public double QueueCapOf(EventVariables variables, object building)
+        {
+            string name = building != null && _queues.TryGetValue(building, out ProductionQueue queue)
+                ? queue.Building
+                : "";
+            return ResolveQueueCap(variables, name);
+        }
+
+        /// <summary>
+        /// True while the building's queue has room for one more order — what <c>queue has room</c>
+        /// asks, so a card's Train button and its hotkey share one gate.
+        /// </summary>
+        public bool CanEnqueue(EventVariables variables, object building)
+        {
+            if (building == null)
+                return false;
+            return QueueCount(building) < QueueCapOf(variables, building);
+        }
+
+        /// <summary>
         /// Adds <paramref name="unit"/> to the building's queue. Starting a unit that was idle
         /// raises <c>TrainingStarted</c> immediately; the completion edge comes from
-        /// <see cref="Tick"/>.
+        /// <see cref="Tick"/>. Returns false when the order was refused, which today only happens
+        /// at the queue cap (Task 29 Part E) — the command card's train button greys out at the
+        /// same number.
         /// </summary>
-        public void Enqueue(EventVariables variables, EventRuntime runtime, object building,
+        public bool Enqueue(EventVariables variables, EventRuntime runtime, object building,
                             string buildingName, string unit)
         {
             if (building == null || string.IsNullOrEmpty(unit))
-                return;
+                return false;
 
             ProductionQueue queue = EnsureQueue(building, buildingName);
+            if (queue.Items.Count >= QueueCapOf(variables, building))
+                return false;
             double duration = queue.DefaultDuration ?? ResolveBuildTime(variables, unit, queue.Building);
             queue.Items.Add(new ProductionOrder { Unit = unit, Duration = Math.Max(0, duration) });
             if (queue.Items.Count == 1)
                 RaiseStarted(runtime, building, queue, unit);
+            return true;
         }
 
         /// <summary>

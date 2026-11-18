@@ -75,6 +75,13 @@ namespace Game
                 return ValueBox.OfText(Runtime.Orders.OrderTargetName(Me));
             if (name == "order queue" || name == "OrderQueue")
                 return ValueBox.OfNumber(Runtime.Orders.OrderCount(Me));
+            // Production read-outs a command card shows (Task 29 Part E): `my train time` is how
+            // long the unit being trained takes in total (0 when the queue is empty) and
+            // `my queue cap` is the cap this building's queue fills up to.
+            if (name == "train time" || name == "TrainTime")
+                return ValueBox.OfNumber(Runtime.Production.CurrentDurationOf(Me));
+            if (name == "queue cap" || name == "QueueCap")
+                return ValueBox.OfNumber(Runtime.Production.QueueCapOf(Runtime.Variables, Me));
             // The selection as an event value (Task 29 Part D): what a shared command card
             // names instead of hard-coding one sheet per unit. `selected unit` is the first
             // selected unit, `selected building` the first building, `selected kind` the unit's

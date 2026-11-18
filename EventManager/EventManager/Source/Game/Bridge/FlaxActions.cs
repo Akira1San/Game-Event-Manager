@@ -3428,8 +3428,14 @@ namespace Game
             string buildingName = context.Runtime.Construction.BuildingOf(building);
             if (string.IsNullOrEmpty(buildingName))
                 buildingName = building.Name;
-            context.Runtime.Production.Enqueue(context.Variables, context.Runtime, building,
-                buildingName, spec.Thing);
+            string unit = spec.Thing;
+            if (context.Runtime.Production.Enqueue(context.Variables, context.Runtime, building,
+                    buildingName, unit))
+                return;
+            // The queue is full (Task 29 Part E): say so once rather than dropping the order
+            // silently. A card's Train button greys out at the same cap.
+            double cap = context.Runtime.Production.QueueCapOf(context.Variables, building);
+            WarnOnce($"\u201C{buildingName}\u201D already has {cap} unit{(cap == 1 ? "" : "s")} queued \u2014 its production queue is full, so \u201C{unit}\u201D was not queued.");
         }
 
         /// <summary><c>cancel training &lt;unit&gt;</c> — removes that unit from the acting

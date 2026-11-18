@@ -59,6 +59,8 @@ namespace Game
         // RTS production queues & unit training (Task 18 Part D)
         ProductionIdle,
         QueueCount,
+        /// <summary>`queue has room` — the queue is below its cap (Task 29 Part E).</summary>
+        QueueHasRoom,
         HasBuildQueue,
         // RTS orders & attack-move (Task 18 Part E)
         CurrentOrderIs,
@@ -479,6 +481,13 @@ namespace Game
             {
                 node.Kind = ConditionKind.QueueCount;
                 node.Right = ValueFrom(tokens, texts, 3);
+                return node;
+            }
+            // `queue has room` (Task 29 Part E) — one more order fits under the building's cap,
+            // so a card's Train button and its hotkey share the same gate as the enqueue itself.
+            if (texts.Length == 3 && texts[0] == "queue" && texts[1] == "has" && texts[2] == "room")
+            {
+                node.Kind = ConditionKind.QueueHasRoom;
                 return node;
             }
             // `me has build queue` — this actor is a production building (it has trained
@@ -983,6 +992,9 @@ namespace Game
                     double wanted = ValueEvaluator.Evaluate(node.Right, ContextResolver(context)).AsNumber();
                     return context.Runtime.Production.QueueCount(context.Me) == wanted;
                 }
+                case ConditionKind.QueueHasRoom:
+                    return context.Runtime != null &&
+                           context.Runtime.Production.CanEnqueue(context.Variables, context.Me);
                 case ConditionKind.HasBuildQueue:
                     return context.Runtime.Production.HasQueue(context.Me);
                 case ConditionKind.CurrentOrderIs:

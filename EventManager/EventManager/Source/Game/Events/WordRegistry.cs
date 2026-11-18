@@ -154,6 +154,7 @@ namespace Game
             new WordEntry { Kind = "condition", Word = "build progress is higher than <n>", Example = "build progress is higher than 100" },
             new WordEntry { Kind = "condition", Word = "<building> is idle", Example = "Barracks is idle" },
             new WordEntry { Kind = "condition", Word = "queue count is <n>", Example = "queue count is 0" },
+            new WordEntry { Kind = "condition", Word = "queue has room", Example = "queue has room", AltShape = "true while the building's queue is below its cap, so a card's Train button and its hotkey share one gate · the cap is `<Building>QueueCap`, then `ProductionQueueCap`, then 5 · `my queue cap` reads that number and `my train time` reads how long the unit being trained takes, both as values" },
             new WordEntry { Kind = "condition", Word = "me has build queue", Example = "me has build queue" },
             new WordEntry { Kind = "condition", Word = "me is land", Example = "me is land", AltShape = "`me is air` / `me is sea` read `my unit type`, which defaults to land" },
             new WordEntry { Kind = "condition", Word = "me is melee", Example = "me is melee", AltShape = "`me is ranged` strikes from `my attack range`; reads `my attack type`, which defaults to melee" },

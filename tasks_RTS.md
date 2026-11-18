@@ -1458,6 +1458,26 @@ selected", and no command-card scene/content exists.
 - Icon assets stay authored/content-side; the task ships the wiring and one card per example unit,
   not an art pipeline
 
+#### Part E notes — production gates (first slice, the part stays open)
+- **A queue cap now exists.** `ProductionManager.DefaultQueueCap` (5), overridden by
+  `<Building>QueueCap` and then `ProductionQueueCap`, resolved through `ResolveQueueCap` /
+  `QueueCapOf`. `Enqueue` returns false instead of silently overflowing, and `train` warns once
+  ("“Barracks” already has 5 units queued — its production queue is full"), so the acceptance
+  step "spam the icon to hit the queue cap" is a real refusal rather than a no-op.
+- **The gate a card shares.** `queue has room` (`ConditionKind.QueueHasRoom` → `CanEnqueue`) is
+  the sheet-facing form of the same question the enqueue itself asks, so a Train button and its
+  hotkey cannot drift from what the engine will accept.
+- **The two numbers a card shows.** `my train time` reads `CurrentDurationOf` — the data-driven
+  `<Unit>BuildTime` → `<Building>BuildTime` → `ProductionBuildTime` → 5 — and reads 0 when the
+  queue is empty; `my queue cap` reads the cap in force. Both are ordinary values, so a label can
+  `bind` to them.
+- **Still open in Part E:** the `CommandCard` widget itself with its named button actors and icon
+  sprites (editor content, not code), the hotkey column and hover tooltips, a conditional
+  colour/tint *bind* (today a tint is `set color of` as an action — `bind` only drives text and
+  progress, so "grey via bind" needs a polling card sheet or a new bind kind), selection-scoped
+  hotkeys (an existing `when W is pressed` fires whatever is selected, so the card's guards have to
+  sit above it), and the acceptance play-check.
+
 ### Part F — Words, tests, acceptance [ ]
 - `WordRegistry` rows and `keywords.html` rows for every new word (selection-as-value, the
   multi-unit order forms); an audit pass over `keywords.html` rows written by Tasks 18–28 so the
