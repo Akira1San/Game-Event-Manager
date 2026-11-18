@@ -75,6 +75,32 @@ namespace Game
                 return ValueBox.OfText(Runtime.Orders.OrderTargetName(Me));
             if (name == "order queue" || name == "OrderQueue")
                 return ValueBox.OfNumber(Runtime.Orders.OrderCount(Me));
+            // The selection as an event value (Task 29 Part D): what a shared command card
+            // names instead of hard-coding one sheet per unit. `selected unit` is the first
+            // selected unit, `selected building` the first building, `selected kind` the unit's
+            // `.events` name (so `my selected kind is "Marine"` works for every Marine), and
+            // `selected count` / `selection count` the number of actors. A selection that holds
+            // nothing of that sort reads "".
+            if (name == "selected count" || name == "selection count" ||
+                name == "SelectedCount" || name == "SelectionCount")
+                return ValueBox.OfNumber(Runtime.SelectedCount);
+            if (name == "selected unit" || name == "SelectedUnit")
+            {
+                object unit = SelectionInfo.FirstUnit(Runtime.Selection.Selected, Runtime.IsBuildingActor);
+                return ValueBox.OfText(unit == null ? "" : Runtime.NameOfActor(unit));
+            }
+            if (name == "selected building" || name == "SelectedBuilding")
+            {
+                object building = SelectionInfo.FirstBuilding(Runtime.Selection.Selected, Runtime.IsBuildingActor);
+                return ValueBox.OfText(building == null ? "" : Runtime.NameOfActor(building));
+            }
+            if (name == "selected kind" || name == "SelectedKind")
+            {
+                object unit = SelectionInfo.FirstUnit(Runtime.Selection.Selected, Runtime.IsBuildingActor);
+                // The bare kind name, so `my selected kind is Marine` compares equal to a sheet
+                // loaded from `Marine.events` (the same normalising `selection is all Marine` uses).
+                return ValueBox.OfText(unit == null ? "" : SelectionInfo.NormalizeKind(Runtime.KindOfActor(unit)));
+            }
             // `my aim x` / `my aim z` / `my aim target` (Task 27 Part A): the pick an `aim`
             // left behind, so a trigger body can read where the click landed.
             if (name == "aim x" || name == "AimX")
@@ -716,6 +742,47 @@ namespace Game
 
         /// <summary>How many actors are selected.</summary>
         public int SelectedCount => Selection.Selected.Count;
+
+        /// <summary>
+        /// True for an actor the RTS treats as a building: one the build registry placed, one that
+        /// lifted off, or one with a production queue. The command-card words (`selected
+        /// buildings`, `selection is all buildings`, `my selected building`) all ask this one
+        /// question, so "is this a building" has a single answer.
+        /// </summary>
+        public bool IsBuildingActor(object actor)
+        {
+            if (actor == null || actor is GlobalHost)
+                return false;
+            return Construction.IsBuilding(actor) ||
+                   LiftOff.BuildingOf(actor).Length > 0 ||
+                   Production.HasQueue(actor);
+        }
+
+        /// <summary>
+        /// An actor's kind for the selection words: the `.events` file driving it, so every Marine
+        /// instance reads `Marine` however the scene named it. An actor with no sheet reads its
+        /// own name.
+        /// </summary>
+        public string KindOfActor(object actor)
+        {
+            SheetInstance sheet = FindSheetFor(actor);
+            if (sheet != null && !string.IsNullOrEmpty(sheet.SourceName))
+                return sheet.SourceName;
+            return NameOfActor(actor);
+        }
+
+        /// <summary>`selection is all units` — something is selected and none of it is a building.</summary>
+        public bool SelectionAllUnits => SelectionInfo.AllUnits(Selection.Selected, IsBuildingActor);
+
+        /// <summary>`selection is all buildings` — something is selected and all of it is buildings.</summary>
+        public bool SelectionAllBuildings => SelectionInfo.AllBuildings(Selection.Selected, IsBuildingActor);
+
+        /// <summary>
+        /// `selection is all Marine` — every selected actor is one kind, matched by the `.events`
+        /// file (a trailing `.events` is optional and case does not matter).
+        /// </summary>
+        public bool SelectionAllKind(string kind)
+            => SelectionInfo.AllKind(Selection.Selected, KindOfActor, kind);
 
         /// <summary>One RTS resource's value; an unset resource reads as 0.</summary>
         public double ResourceValue(string name) => ResourceManager.ReadNumber(Variables, name);

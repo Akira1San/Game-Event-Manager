@@ -45,6 +45,11 @@ namespace Game
         // RTS selection (Task 18 Part A)
         Selected,
         SelectionCountIs,
+        /// <summary>
+        /// `selection is all units` / `selection is all buildings` / `selection is all Marine`
+        /// (Task 29 Part D) — one card can pick a unit or a building layout.
+        /// </summary>
+        SelectionAllIs,
         MyControlGroupAssigned,
         // RTS resource economy (Task 18 Part B)
         CanAfford,
@@ -382,6 +387,20 @@ namespace Game
                 node.Right = ValueFrom(tokens, texts, 3);
                 return node;
             }
+            // `selection is all units` / `selection is all buildings` / `selection is all Marine`
+            // (Task 29 Part D): what the selection is made of, so one shared card can show the
+            // unit layout or the building layout. Nothing selected is never "all" of anything.
+            if (texts.Length >= 4 && texts[0] == "selection" && texts[1] == "is" && texts[2] == "all")
+            {
+                node.Kind = ConditionKind.SelectionAllIs;
+                string tail = JoinTexts(texts, 3, texts.Length).Trim();
+                if (string.Equals(tail, "units", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(tail, "buildings", StringComparison.OrdinalIgnoreCase))
+                    node.Thing = tail.ToLowerInvariant();
+                else
+                    node.Name = tail;
+                return node;
+            }
             {
                 // `my control group 3 is assigned` (a unit's membership) and the global
                 // `control group 3 is assigned` (the group holds at least one unit).
@@ -477,7 +496,13 @@ namespace Game
             if (texts.Length >= 5 && texts[0] == "my" && texts[3] == "is")
             {
                 string subject = texts[1] + " " + texts[2];
-                if (subject == "current order" || subject == "order target" || subject == "order queue")
+                // `my selected count is 2` / `my selected kind is Marine` (Task 29 Part D) read
+                // the same computed selection values an expression does, so a card can ask its
+                // own question instead of setting a variable on every selection change.
+                if (subject == "current order" || subject == "order target" || subject == "order queue" ||
+                    subject == "selected count" || subject == "selection count" ||
+                    subject == "selected unit" || subject == "selected building" ||
+                    subject == "selected kind")
                 {
                     bool notFlag = texts.Length >= 6 && texts[4] == "not";
                     node.Kind = subject == "current order" && !notFlag
@@ -486,7 +511,7 @@ namespace Game
                     node.Owner = "my";
                     node.Name = subject;
                     int valueIndex = notFlag ? 5 : 4;
-                    if (subject == "order queue")
+                    if (subject == "order queue" || subject == "selected count" || subject == "selection count")
                     {
                         node.Right = ValueFrom(tokens, texts, valueIndex);
                     }
@@ -908,6 +933,18 @@ namespace Game
                         return false;
                     double wanted = ValueEvaluator.Evaluate(node.Right, ContextResolver(context)).AsNumber();
                     return context.Runtime.Selection.Count == wanted;
+                }
+                // `selection is all units` / `... all buildings` / `... all Marine`
+                // (Task 29 Part D): reads the live selection, not a mirrored variable.
+                case ConditionKind.SelectionAllIs:
+                {
+                    if (context.Runtime == null)
+                        return false;
+                    if (node.Thing == "units")
+                        return context.Runtime.SelectionAllUnits;
+                    if (node.Thing == "buildings")
+                        return context.Runtime.SelectionAllBuildings;
+                    return context.Runtime.SelectionAllKind(node.Name);
                 }
                 case ConditionKind.MyControlGroupAssigned:
                 {

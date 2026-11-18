@@ -1382,7 +1382,7 @@ selected", and no command-card scene/content exists.
   **1935 passed, 0 failed**; the Game module builds with 0 errors and the assembly carries the new
   symbols. Editor play-check of the actual click targeting, timing and camera feel still pending.
 
-### Part D — The selection as an event value [ ]
+### Part D — The selection as an event value [x]
 - Something a card can name, so one shared card serves any selection: `my selected unit`, `my
   selected building`, `selected count`, and "is the selection all one type" so a card can pick
   between a unit and a building layout
@@ -1390,6 +1390,58 @@ selected", and no command-card scene/content exists.
   pressed the button — `train Marine at Barracks` names its target today, and this part adds the
   form that means "whatever I selected"; the same for `attack` / `move` / `stop`
 - No C# UI rules: the card decides its own layout from these values
+
+#### Part D notes
+- **What a card reads.** Four computed values, handled in `EventContext.ReadMy` exactly like
+  `my current order` so a value and a condition never disagree: `my selected unit` (the first
+  selected unit, `""` when there is none), `my selected building` (the first building),
+  `my selected kind` (that unit's `.events` name, so every Marine answers `Marine` however the
+  scene named the instance) and `my selected count` / `my selection count` (the size). They read
+  the live `Selection`, so nothing has to be mirrored per tick.
+- **One answer to "is this a building".** `EventRuntime.IsBuildingActor` is the build registry, or
+  the lift-off state, or a production queue — the three ways this project already knows an actor
+  is a building. `selected buildings`, `selection is all buildings` and `my selected building` all
+  ask it, so they cannot disagree, and scenery counts as a unit (a shared card shows its unit
+  layout, and the scenery's own sheet decides what the buttons do).
+- **The layout question.** `selection is all units` / `selection is all buildings` /
+  `selection is all <kind>` (`ConditionKind.SelectionAllIs`, evaluated against the live selection).
+  Nothing selected is never "all" of anything, so an empty selection draws no card. Kind matching
+  lives in `SelectionInfo.SameKind`: case-insensitive, a trailing `.events` optional — deliberately
+  Part A's double-click notion (the file that drives the sheet), not `select all <type>`'s actor
+  names, so `selection is all Marine` works for `Marine`, `Marine2`, `Marine 7`.
+- **One button, the whole selection.** `selected units <order>`, `selected buildings <order>` and a
+  bare `selected <order>` (every selected actor, units and buildings together) are a prefix parsed
+  in `ActionWords.ParseSelected` and dispatched by `FlaxActions.ExecuteOnSelection`: the same spec
+  runs once per selected actor with `me` rebound and **that actor's** sheet attached, so formation
+  slots, attack range and its refusal, the `gather`/`repair` interaction range, rally points and a
+  per-building `train` all behave exactly as they do when the line sits on a unit's own sheet. A
+  card on the shared Game sheet and a card on `Marine.events` therefore issue the same order.
+  `SelectionInfo.AllowsOrderScope` is the whitelist — the order verbs (`goto`, `move`, `stop`,
+  `hold position`, `attack`, `attack-move`, `gather`, `repair`, `train`, `cancel training`,
+  `research`, `set rally point`, `clear orders`, `fly`, `lift off`, `land`, `cast`) — so
+  `selected print "hi"` is refused with a message instead of quietly running once per selected unit.
+  Two Barracks selected and `selected buildings train Marine` queues one Marine at **each**, which is
+  StarCraft's rule; `selected units goto there` still fans out over the Task 23 formation slots.
+- **Warnings stay one per press.** The per-actor path uses the same `WarnOnce`, so an empty
+  selection, a refused matchup or a missing production building says its piece once.
+- **Deliberately not built here.** No C# card, layout or icon rule: Part E owns the widget and the
+  content. `attack-move`'s targeting cursor (press the button, then click) is Part E content too —
+  the word already takes `there`, it just needs a card to set the point. A building keeps its own
+  sheet's words; there is no generic "building card" in the engine.
+- **The card can also ask directly.** `my selected count is <n>`, `my selected kind is <kind>`,
+  `my selected unit is <name>` and `my selected building is <name>` are conditions on the same
+  computed values (the Conditions parser reads the multiword subject as one state, exactly like
+  `my current order is`), so a card can branch without mirroring the selection into variables.
+  `my selected kind` reads the bare kind (`Marine` for `Marine.events`), which is what makes
+  `my selected kind is Marine` match.
+- 35 new checks (scope filtering and order, first-of-each, the empty selection, kind normalisation,
+  the verb whitelist, four parsed shapes plus two refusals, the runtime reads, the three
+  selection-shape conditions against live selections, the two value parses, and the two
+  value conditions) -> **1997 passed, 0 failed**. The Game module's
+  response file compiles with 0 errors. `Flax.Build` itself currently fails on a pre-existing,
+  unrelated problem: `Runtime/SaveFile.cs` (Task 30 Part A) uses `System.Text.Json` and the Game
+  target's reference set does not include it, so the editor target does not link until that
+  reference is added. Editor play-check of a real card press is still pending with Parts A-C.
 
 ### Part E — Command card content [ ]
 - A `CommandCard`/`CommandPanel` scene widget with icon buttons for the Mariner/Barracks/Gateway

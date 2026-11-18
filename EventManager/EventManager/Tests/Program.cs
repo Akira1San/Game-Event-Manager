@@ -11012,6 +11012,203 @@ Check(rallyEngine.Orders.HasRallyPoint(rallyDepot) &&
       !rallyEngine.Orders.RallyHasPointOf(rallyDepot),
     "the `set rally point to there` word still works and carries no stored point");
 
+Console.WriteLine();
+// ------------------------------------------------------------------
+// Task 29 Part D: the selection as an event value
+// ------------------------------------------------------------------
+
+var scopedMarine = new FakeActor("Marine");
+var scopedMarine2 = new FakeActor("Marine2");
+var scopedBarracks = new FakeActor("Barracks");
+Func<object, bool> isScopedBuilding = actor => ReferenceEquals(actor, scopedBarracks);
+var mixedSelection = new List<object> { scopedMarine, scopedBarracks, scopedMarine2 };
+
+Check(SelectionInfo.ForScope(mixedSelection, SelectionOrderScope.All, isScopedBuilding).Count == 3 &&
+      SelectionInfo.ForScope(mixedSelection, SelectionOrderScope.Units, isScopedBuilding).Count == 2 &&
+      SelectionInfo.ForScope(mixedSelection, SelectionOrderScope.Buildings, isScopedBuilding).Count == 1,
+    "`selected` takes the whole selection, `selected units` the units and `selected buildings` the buildings");
+Check(SelectionInfo.ForScope(mixedSelection, SelectionOrderScope.Buildings, isScopedBuilding)[0] == scopedBarracks &&
+      SelectionInfo.ForScope(mixedSelection, SelectionOrderScope.Units, isScopedBuilding)[0] == scopedMarine,
+    "the fan-out keeps selection order instead of re-sorting the group");
+Check(ReferenceEquals(SelectionInfo.FirstUnit(mixedSelection, isScopedBuilding), scopedMarine) &&
+      ReferenceEquals(SelectionInfo.FirstBuilding(mixedSelection, isScopedBuilding), scopedBarracks),
+    "`my selected unit` and `my selected building` pick the first of each sort");
+Check(SelectionInfo.FirstUnit(new List<object> { scopedBarracks }, isScopedBuilding) == null &&
+      SelectionInfo.FirstBuilding(new List<object> { scopedMarine }, isScopedBuilding) == null &&
+      SelectionInfo.FirstUnit(null, isScopedBuilding) == null,
+    "a selection with nothing of that sort reads nothing rather than guessing");
+
+Check(SelectionInfo.AllUnits(mixedSelection, isScopedBuilding) == false &&
+      SelectionInfo.AllBuildings(mixedSelection, isScopedBuilding) == false &&
+      SelectionInfo.AllUnits(new List<object> { scopedMarine, scopedMarine2 }, isScopedBuilding) &&
+      SelectionInfo.AllBuildings(new List<object> { scopedBarracks }, isScopedBuilding),
+    "a mixed selection is neither all units nor all buildings");
+Check(!SelectionInfo.AllUnits(new List<object>(), isScopedBuilding) &&
+      !SelectionInfo.AllBuildings(new List<object>(), isScopedBuilding) &&
+      !SelectionInfo.AllKind(new List<object>(), _ => "Marine", "Marine"),
+    "nothing selected is never all of anything, so no card draws for an empty selection");
+
+Check(SelectionInfo.AllKind(new List<object> { scopedMarine, scopedMarine2 },
+          _ => "Marine.events", "Marine") &&
+      SelectionInfo.AllKind(new List<object> { scopedMarine }, _ => "Marine.events", "marine.events") &&
+      !SelectionInfo.AllKind(new List<object> { scopedMarine, scopedBarracks }, _ => "Barracks", "Marine"),
+    "`selection is all Marine` matches the .events name, with or without the extension and in any case");
+Check(!SelectionInfo.AllKind(new List<object> { scopedMarine }, _ => "", "Marine") &&
+      SelectionInfo.NormalizeKind("  Marine.events  ") == "Marine" &&
+      SelectionInfo.NormalizeKind(null) == "",
+    "an actor with no kind matches nothing, and the kind name is normalised");
+
+Check(SelectionInfo.AllowsOrderScope(ActionVerb.Move) &&
+      SelectionInfo.AllowsOrderScope(ActionVerb.Train) &&
+      SelectionInfo.AllowsOrderScope(ActionVerb.StopOrder) &&
+      SelectionInfo.AllowsOrderScope(ActionVerb.HoldPosition) &&
+      SelectionInfo.AllowsOrderScope(ActionVerb.Gather) &&
+      SelectionInfo.AllowsOrderScope(ActionVerb.SetRallyPoint),
+    "the unit orders are what `selected` may prefix");
+Check(!SelectionInfo.AllowsOrderScope(ActionVerb.Print) &&
+      !SelectionInfo.AllowsOrderScope(ActionVerb.Select) &&
+      !SelectionInfo.AllowsOrderScope(ActionVerb.CameraFollow) &&
+      !SelectionInfo.AllowsOrderScope(ActionVerb.Unknown),
+    "`set`, `print`, `select` and camera words are not per-actor orders");
+
+var scopeParser = new EventParser();
+var scopeMoveProgram = scopeParser.Parse("when every 1 seconds\n  selected units goto there");
+var scopeMove = ActionWords.Parse(((RawActionNode)scopeMoveProgram.Events[0].Body[0].Statement).Words, _ => { });
+Check(scopeMove.Verb == ActionVerb.Goto && scopeMove.Thing == "there" &&
+      scopeMove.HasSelectionScope && scopeMove.SelectionScope == SelectionOrderScope.Units,
+    "`selected units goto there` parses as the normal click-walk order plus the unit scope");
+var scopeTrainProgram = scopeParser.Parse("when every 1 seconds\n  selected buildings train Marine");
+var scopeTrain = ActionWords.Parse(((RawActionNode)scopeTrainProgram.Events[0].Body[0].Statement).Words, _ => { });
+Check(scopeTrain.Verb == ActionVerb.Train && scopeTrain.HasSelectionScope &&
+      scopeTrain.SelectionScope == SelectionOrderScope.Buildings && scopeTrain.Thing == "Marine",
+    "`selected buildings train Marine` is one train order per selected building");
+var scopeStopProgram = scopeParser.Parse("when every 1 seconds\n  selected stop");
+var scopeStop = ActionWords.Parse(((RawActionNode)scopeStopProgram.Events[0].Body[0].Statement).Words, _ => { });
+Check(scopeStop.Verb == ActionVerb.StopOrder && scopeStop.HasSelectionScope &&
+      scopeStop.SelectionScope == SelectionOrderScope.All,
+    "a bare `selected stop` means the whole selection, units and buildings together");
+string scopeRefusal = "";
+var scopePrintProgram = scopeParser.Parse("when every 1 seconds\n  selected print \"hi\"");
+var scopePrint = ActionWords.Parse(((RawActionNode)scopePrintProgram.Events[0].Body[0].Statement).Words,
+    message => scopeRefusal = message);
+Check(scopePrint.Verb == ActionVerb.Unknown && !scopePrint.HasSelectionScope &&
+      scopeRefusal.Contains("only goes with orders", StringComparison.OrdinalIgnoreCase),
+    "a word with no per-actor meaning is refused instead of running once per selected actor");
+var scopeBareProgram = scopeParser.Parse("when every 1 seconds\n  selected");
+var scopeBare = ActionWords.Parse(((RawActionNode)scopeBareProgram.Events[0].Body[0].Statement).Words, _ => { });
+Check(scopeBare.Verb == ActionVerb.Unknown,
+    "`selected` on its own is a mistake, not an empty order");
+
+var selectionWorld = new FakeWorld();
+var selectionMarine = new FakeActor("Marine");
+var selectionMarine2 = new FakeActor("Marine2");
+var selectionBarracks = new FakeActor("Barracks");
+selectionWorld.AddActor(selectionMarine);
+selectionWorld.AddActor(selectionMarine2);
+selectionWorld.AddActor(selectionBarracks);
+var selectionEngine = FreshEngine(selectionWorld);
+selectionEngine.AddSheet(selectionMarine, parser.Parse("when me appears\n  set Ready to 1"), "Marine.events");
+selectionEngine.AddSheet(selectionMarine2, parser.Parse("when me appears\n  set Ready to 1"), "Marine.events");
+selectionEngine.AddSheet(selectionBarracks, parser.Parse("when me appears\n  set Ready to 1"), "Barracks.events");
+selectionEngine.Tick(0);
+selectionEngine.Construction.RegisterPlaced(selectionBarracks, "Barracks", selectionEngine.Variables);
+Check(selectionEngine.IsBuildingActor(selectionBarracks) && !selectionEngine.IsBuildingActor(selectionMarine),
+    "the build registry is what makes a selected actor a building");
+Check(!selectionEngine.IsBuildingActor(null) && !selectionEngine.IsBuildingActor(new GlobalHost()),
+    "the global Game sheet is never a building");
+
+var selectionContext = new EventContext
+{
+    Variables = selectionEngine.Variables,
+    World = selectionWorld,
+    Runtime = selectionEngine,
+};
+selectionEngine.Selection.ReplaceSelection(new object[] { selectionMarine, selectionBarracks });
+Check(selectionContext.ReadMy("selected count").AsNumber() == 2 &&
+      selectionContext.ReadMy("selection count").AsNumber() == 2,
+    "`my selected count` and `my selection count` read the live selection size");
+Check(selectionContext.ReadMy("selected unit").AsText() == "Marine" &&
+      selectionContext.ReadMy("selected building").AsText() == "Barracks",
+    "a mixed selection names its unit and its building separately");
+Check(selectionContext.ReadMy("selected kind").AsText() == "Marine",
+    "`my selected kind` is the .events name a shared card branches on, not the actor's own name");
+Check(!selectionEngine.SelectionAllUnits && !selectionEngine.SelectionAllBuildings,
+    "a mixed selection is neither card");
+
+selectionEngine.Selection.ReplaceSelection(new object[] { selectionMarine, selectionMarine2 });
+Check(selectionEngine.SelectionAllUnits &&
+      selectionEngine.SelectionAllKind("Marine") &&
+      selectionEngine.SelectionAllKind("marine.events") &&
+      !selectionEngine.SelectionAllKind("Barracks"),
+    "two Marines are all units and all one kind");
+selectionEngine.Selection.ReplaceSelection(new object[] { selectionBarracks });
+Check(selectionEngine.SelectionAllBuildings && !selectionEngine.SelectionAllUnits,
+    "one building is the building card");
+selectionEngine.Selection.Clear();
+Check(!selectionEngine.SelectionAllUnits && !selectionEngine.SelectionAllBuildings &&
+      !selectionEngine.SelectionAllKind("Marine") &&
+      selectionContext.ReadMy("selected unit").AsText() == "" &&
+      selectionContext.ReadMy("selected building").AsText() == "" &&
+      selectionContext.ReadMy("selected count").AsNumber() == 0,
+    "an empty selection reads blank values and matches no card");
+
+var allUnitsCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  selection is all units").Events[0].Body[0].Words);
+Check(allUnitsCondition.Kind == ConditionKind.SelectionAllIs && allUnitsCondition.Thing == "units" &&
+      allUnitsCondition.Name == "",
+    "`selection is all units` parses to the selection-kind condition");
+var allBuildingsCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  selection is all buildings").Events[0].Body[0].Words);
+Check(allBuildingsCondition.Kind == ConditionKind.SelectionAllIs && allBuildingsCondition.Thing == "buildings",
+    "`selection is all buildings` asks for the building card");
+var allMarinesCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  selection is all Marine").Events[0].Body[0].Words);
+Check(allMarinesCondition.Kind == ConditionKind.SelectionAllIs && allMarinesCondition.Name == "Marine" &&
+      allMarinesCondition.Thing == "",
+    "`selection is all Marine` keeps the kind name to compare with");
+Check(!Conditions.Evaluate(allMarinesCondition, selectionContext),
+    "an empty selection fails `selection is all Marine`");
+selectionEngine.Selection.ReplaceSelection(new object[] { selectionMarine, selectionMarine2 });
+Check(Conditions.Evaluate(allMarinesCondition, selectionContext) &&
+      Conditions.Evaluate(allUnitsCondition, selectionContext) &&
+      !Conditions.Evaluate(allBuildingsCondition, selectionContext),
+    "the condition reads the live selection: two Marines pass the unit and Marine forms, not the building form");
+selectionEngine.Selection.ReplaceSelection(new object[] { selectionBarracks });
+Check(Conditions.Evaluate(allBuildingsCondition, selectionContext) &&
+      !Conditions.Evaluate(allUnitsCondition, selectionContext) &&
+      !Conditions.Evaluate(allMarinesCondition, selectionContext),
+    "a selected building passes only the building form");
+
+var selectedValueProgram = parser.Parse("when game starts\n  set Kind to my selected kind");
+var selectedValueSet = (SetNode)selectedValueProgram.Events[0].Body[0].Statement;
+Check(selectedValueSet.Value is VariableValue selectedKindValue &&
+      selectedKindValue.Owner == "my" && selectedKindValue.Name == "selected kind",
+    "`my selected kind` parses as one value, like `my current order`");
+var selectedCountProgram = parser.Parse("when game starts\n  set Count to my selected count");
+var selectedCountSet = (SetNode)selectedCountProgram.Events[0].Body[0].Statement;
+Check(selectedCountSet.Value is VariableValue selectedCountValue &&
+      selectedCountValue.Owner == "my" && selectedCountValue.Name == "selected count",
+    "`my selected count` parses as one value");
+
+var selectedCountCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  my selected count is 2").Events[0].Body[0].Words);
+Check(selectedCountCondition.Kind == ConditionKind.Equal &&
+      selectedCountCondition.Name == "selected count",
+    "`my selected count is 2` compares the live count instead of an unset variable called \"selected\"");
+var selectedKindCondition = Conditions.Parse(
+    parser.Parse("when every 1 seconds\n  my selected kind is Marine").Events[0].Body[0].Words);
+Check(selectedKindCondition.Kind == ConditionKind.Equal &&
+      selectedKindCondition.Name == "selected kind",
+    "`my selected kind is Marine` compares the .events name");
+selectionEngine.Selection.ReplaceSelection(new object[] { selectionMarine, selectionMarine2 });
+Check(Conditions.Evaluate(selectedCountCondition, selectionContext) &&
+      Conditions.Evaluate(selectedKindCondition, selectionContext),
+    "both selection conditions read two Marines correctly");
+selectionEngine.Selection.ReplaceSelection(new object[] { selectionBarracks });
+Check(!Conditions.Evaluate(selectedCountCondition, selectionContext) &&
+      !Conditions.Evaluate(selectedKindCondition, selectionContext),
+    "a selected Barracks fails the count and the Marine-kind test");
+
 // Task 30 Part A - the save file's format and location.
 var saveProject = Path.Combine(Path.GetTempPath(), "event-manager-save-" + Guid.NewGuid().ToString("N"));
 try

@@ -777,8 +777,14 @@ namespace Game
                     string pair = words[index + 1].Text + " " + words[index + 2].Text;
                     // `my aim x` / `my aim z` / `my aim target` — the target-pick result
                     // (Task 27 Part A), read as one variable like the order state.
+                    // `my selected unit` / `my selected building` / `my selected kind` /
+                    // `my selected count` — the selection as a value (Task 29 Part D), read like
+                    // the order state so an expression and a condition see the same thing.
                     if (pair == "current order" || pair == "order target" || pair == "order queue" ||
-                        pair == "aim x" || pair == "aim z" || pair == "aim target")
+                        pair == "aim x" || pair == "aim z" || pair == "aim target" ||
+                        pair == "selected unit" || pair == "selected building" ||
+                        pair == "selected kind" || pair == "selected count" ||
+                        pair == "selection count")
                     {
                         index += 3;
                         return new VariableValue { Line = t.Line, Owner = "my", Name = pair };

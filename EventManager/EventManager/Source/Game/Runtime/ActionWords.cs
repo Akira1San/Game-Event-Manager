@@ -189,6 +189,13 @@ namespace Game
         /// <summary><c>cast "&lt;spell&gt;"</c>: the spell's name (also kept in
         /// <see cref="Thing"/> so warnings read the same as other actions).</summary>
         public string Spell = "";
+        /// <summary>
+        /// <c>selected units ...</c> (Task 29 Part D): the action runs once for every selected
+        /// actor in this scope instead of only for <c>me</c>. A bare <c>selected ...</c> is
+        /// <see cref="SelectionOrderScope.All"/>, so one card button can order a mixed selection.
+        /// </summary>
+        public bool HasSelectionScope;
+        public SelectionOrderScope SelectionScope = SelectionOrderScope.All;
         /// <summary><c>spawn Ring at me rarity "Rare"</c>: roll affixes on the clone (Task 9 E7).</summary>
         public string Rarity = "";
         public bool HasRarity;
@@ -325,6 +332,11 @@ namespace Game
 
         public static ActionSpec Parse(List<Token> words, Action<string> warn)
         {
+            // `selected units move there` (Task 29 Part D): the order applies to the whole
+            // selection. Checked first so every existing shape below is untouched — the prefix
+            // is stripped and the rest of the line is parsed exactly as it always was.
+            if (words.Count > 0 && words[0].Type == TokenType.Word && words[0].Text == "selected")
+                return ParseSelected(words, warn);
             var spec = new ActionSpec();
             if (words.Count == 0)
                 return Unknown(spec, words, "", warn);
@@ -2026,6 +2038,43 @@ namespace Game
                 if (word == direction)
                     return true;
             return false;
+        }
+
+        /// <summary>
+        /// <c>selected &lt;order&gt;</c> / <c>selected units &lt;order&gt;</c> /
+        /// <c>selected buildings &lt;order&gt;</c> (Task 29 Part D). The order itself is parsed by
+        /// <see cref="Parse"/> unchanged, so `selected units train Marine` is the same spec as
+        /// `train Marine` plus the scope the bridge fans out on.
+        /// </summary>
+        private static ActionSpec ParseSelected(List<Token> words, Action<string> warn)
+        {
+            var scope = SelectionOrderScope.All;
+            int index = 1;
+            if (index < words.Count && words[index].Type == TokenType.Word &&
+                SelectionInfo.TryScopeWord(words[index].Text, out SelectionOrderScope readScope))
+            {
+                scope = readScope;
+                index++;
+            }
+            var spec = new ActionSpec();
+            if (index >= words.Count)
+            {
+                return Unknown(spec, words,
+                    "\u201Cselected\u201D needs an order after it \u2014 like \u201Cselected units stop\u201D or \u201Cselected buildings train Marine\u201D",
+                    warn);
+            }
+            var rest = words.GetRange(index, words.Count - index);
+            ActionSpec order = Parse(rest, warn);
+            if (!SelectionInfo.AllowsOrderScope(order.Verb))
+            {
+                order.Verb = ActionVerb.Unknown;
+                if (warn != null)
+                    warn("\u201Cselected\u201D only goes with orders \u2014 \u201Cselected units goto there\u201D, \u201Cselected units stop\u201D, \u201Cselected units attack Enemy\u201D, \u201Cselected units gather GoldMine\u201D, \u201Cselected buildings train Marine\u201D, \u201Cselected units set rally point to there\u201D");
+                return order;
+            }
+            order.HasSelectionScope = true;
+            order.SelectionScope = scope;
+            return order;
         }
 
         private static ActionSpec Finish(ActionSpec spec, ActionVerb verb, List<Token> words, int consumed)

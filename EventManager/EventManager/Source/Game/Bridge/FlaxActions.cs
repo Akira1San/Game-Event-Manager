@@ -697,6 +697,15 @@ namespace Game
 
         public static void Execute(EventContext context, ActionSpec spec)
         {
+            // `selected units ...` / `selected buildings ...` / `selected ...` (Task 29 Part D):
+            // the order runs once per selected actor, with `me` bound to that actor, so a single
+            // command-card button commands the whole selection. A card button on one unit's sheet
+            // and a card button on the shared Game sheet therefore behave the same.
+            if (spec.HasSelectionScope)
+            {
+                ExecuteOnSelection(context, spec);
+                return;
+            }
             switch (spec.Verb)
             {
                 case ActionVerb.Jump:
@@ -1398,6 +1407,59 @@ namespace Game
                 return;
             }
             context.Runtime.DeselectActor(target);
+        }
+
+        /// <summary>
+        /// Runs one <c>selected ...</c> order for every selected actor of the asked-for kind.
+        /// The spec is parsed once and the scope flag is cleared while it runs, so the per-actor
+        /// dispatch is the ordinary action path and every verb (including its warnings, range and
+        /// formation handling) behaves exactly as it does on a unit's own sheet. Warnings stay
+        /// one-per-press because they are raised through <see cref="WarnOnce"/>.
+        /// </summary>
+        private static void ExecuteOnSelection(EventContext context, ActionSpec spec)
+        {
+            EventRuntime runtime = context.Runtime;
+            if (runtime == null)
+            {
+                WarnOnce("\u201Cselected\u201D needs the running game \u2014 it reads the live selection.");
+                return;
+            }
+            var targets = SelectionInfo.ForScope(runtime.Selection.Selected, spec.SelectionScope,
+                runtime.IsBuildingActor);
+            if (targets.Count == 0)
+            {
+                WarnOnce(spec.SelectionScope == SelectionOrderScope.Buildings
+                    ? "\u201Cselected buildings\u201D needs a building selected \u2014 nothing was ordered."
+                    : spec.SelectionScope == SelectionOrderScope.Units
+                        ? "\u201Cselected units\u201D needs a unit selected \u2014 nothing was ordered."
+                        : "\u201Cselected\u201D needs something selected \u2014 nothing was ordered.");
+                return;
+            }
+
+            spec.HasSelectionScope = false;
+            try
+            {
+                foreach (object item in targets)
+                {
+                    Actor actor = item as Actor;
+                    if (actor == null || actor.Scene == null)
+                        continue;
+                    var perActor = new EventContext
+                    {
+                        Variables = context.Variables,
+                        World = context.World,
+                        Runtime = runtime,
+                        Me = actor,
+                        Other = context.Other,
+                        Sheet = runtime.FindSheetFor(actor),
+                    };
+                    Execute(perActor, spec);
+                }
+            }
+            finally
+            {
+                spec.HasSelectionScope = true;
+            }
         }
 
         private static void Remember(OngoingMove move)
