@@ -925,8 +925,14 @@ namespace Game
                     // each unit's queue instead of replacing it.
                     if (!rightUiHit)
                     {
-                        FlaxActions.IssueDefaultOrder(Runtime, rightTarget, clickPoint.HasValue,
-                            clickPoint ?? Vector3.Zero, Input.GetKey(KeyboardKeys.Shift));
+                        // Scenery (the floor, a wall, a prop) catches the ray but carries no event
+                        // sheet, so it is bare ground, not a friendly actor: the aim pick already
+                        // draws the line there. Without this the floor classified as a healthy
+                        // ally, which `RightClickOrders.Resolve` answers with "no order" — so a
+                        // right click on the ground moved nobody while a click at the sky did.
+                        bool targetIsActor = rightTarget != null && Runtime.FindSheetFor(rightTarget) != null;
+                        FlaxActions.IssueDefaultOrder(Runtime, targetIsActor ? rightTarget : null,
+                            clickPoint.HasValue, clickPoint ?? Vector3.Zero, Input.GetKey(KeyboardKeys.Shift));
                     }
                 }
             }

@@ -1666,6 +1666,45 @@ selected", and no command-card scene/content exists.
   walls, or — with no NavMesh covering the Marine — one "No NavMesh route …" warning, a straight
   walk and **no** `Marine: path blocked` line.
 
+##### Part F follow-up 3 — the floor was an ally
+- **What the play-check showed.** After follow-up 2, clicking the empty sky moved the Marines but
+  clicking the floor under them did nothing. The two clicks get different answers from the ray:
+  the sky misses everything, so `RightClickPoint` falls back to the y=0 plane and the order has a
+  point and no actor, while the floor's `MeshCollider` catches the ray and the order gets
+  `target = Floor`.
+- **Why that stopped the walk.** An actor-carrying right click goes through `RightClickOrders`.
+  `Classify` saw the Floor as an actor that is not a building, not hostile and not a resource node,
+  so it answered `Friendly`; `Resolve` answers a healthy friendly with **no order**, so the Marine
+  was told nothing. Scenery was being read as an ally because classification only asked what the
+  actor *was not*.
+- **What changed.** The bridge now decides what "an actor" means before it classifies: if the hit
+  actor carries no `EventSheet`, it is bare ground, not a unit or a building — the same rule
+  `TryAimPick` already used for aiming — so the order passes `target = null` with the hit point and
+  walks there, exactly like a click on the sky. A sheet is what makes an actor something that can
+  hold orders; a prop, a wall or the floor has no sheet by definition, and a scene cannot fake it
+  into being an ally.
+- **Checks:** no new pure tests (`RightClickOrders` is unchanged — this is which target the bridge
+  hands it); the existing 2057 checks still pass and `Flax.Build -target=GameEditorTarget` exits 0.
+- **Not verified:** unplayed in the editor. Next play-check: select a Marine, right click the floor
+  directly under it, and expect the same walk a click on the sky produces.
+
+#### Play-check answers noted during this round
+- **Why a Marine does not settle onto the floor.** The marines are `StaticModel` + `BoxCollider`
+  actors with no body: `BoxCollider` is a query shape for raycasts and sweeps, not a collider that
+  resolves contact. Nothing in the scene has a `RigidBody`/`CharacterController`, and the sheets do
+  not set `Use Physics Movement`, so a marine simply stays at its authored Y
+  (`Marine1` 37.55, `Marine2` 37.07) and pans along X/Z. Contact with the floor needs a body: a
+  `CharacterController` (with the sheet's `Use Physics Movement` ticked, so `MoveSubject` drives it)
+  or a dynamic `RigidBody`, both editor-side changes.
+- **Built-in NavMesh or an RTS-specific one.** Keep Flax's `Navigation` for now. It answers what an
+  RTS needs at this scale — a click-to-point walk, a path around props, and a truthful "blocked" —
+  and a grid, flow field or coroutine-based group pathing system is a rewrite that a playtest has
+  not asked for. The seam is already in place for it: every walk asks one question,
+  `FlaxActions.QueryNavRoute`, and every answer is one of `NavRoute.Classify`'s three cases, so a
+  different backend replaces that function without touching a single `.events` file. Build the
+  substitute when a measured problem (many units on one corridor, formation jitter, cost of
+  per-unit paths) shows up, not before.
+
 ### Open questions for this task
 - Shift-to-add on click: is `Selection.Add` enough, or does the selection need a "primary" actor for
   the card to read?
