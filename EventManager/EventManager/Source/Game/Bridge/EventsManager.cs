@@ -1103,20 +1103,28 @@ namespace Game
             // 3D actors under the cursor: raycast from the scene camera through the mouse.
             if (!FlaxWorld.TryGetMouseRay(mousePos, out Ray ray))
                 return;
-            if (!Physics.LineCastAll(ray.Position, ray.Position + ray.Direction * 10000f, out var hits, ~0u, true))
-                return;
             Actor bestActor = null;
-            float best = float.MaxValue;
-            foreach (var hit in hits)
+            if (Physics.LineCastAll(ray.Position, ray.Position + ray.Direction * 10000f, out var hits, ~0u, true))
             {
-                if (hit.Distance < best)
+                float best = float.MaxValue;
+                foreach (var hit in hits)
                 {
-                    best = hit.Distance;
-                    bestActor = ActorOfHit(hit.Collider);
+                    if (hit.Distance < best)
+                    {
+                        best = hit.Distance;
+                        bestActor = ActorOfHit(hit.Collider);
+                    }
                 }
             }
             if (bestActor != null)
-                HandleClick(bestActor, kind);
+            {
+                HandleWorldClick(bestActor, kind);
+                return;
+            }
+            // Bare ground (or nothing at all) on a plain left click clears the selection
+            // (Task 29 Part A); Shift keeps it, so a shift-click miss is harmless.
+            if (kind == TriggerKind.Clicked)
+                Runtime.SelectOnClick(null, Input.GetKey(KeyboardKeys.Shift));
         }
 
         /// <summary>Raises a click (or double-click) on <paramref name="actor"/>. A second left
@@ -1126,11 +1134,61 @@ namespace Game
         {
             if (actor == null)
                 return;
+            bool doubleClick = RecordClick(actor, kind);
+            Runtime.RaiseClick(actor, doubleClick ? TriggerKind.DoubleClicked : kind);
+        }
+
+        /// <summary>
+        /// A click in the 3D world. The default StarCraft selection runs first (Task 29 Part A)
+        /// and the authored click trigger second, so a sheet's <c>when me is clicked</c> already
+        /// sees <c>me is selected</c> and can still overrule the default (pushes run later in
+        /// the tick, so an authored <c>deselect all</c> wins as it always did).
+        /// </summary>
+        private void HandleWorldClick(Actor actor, TriggerKind kind)
+        {
+            if (actor == null)
+                return;
+            bool doubleClick = RecordClick(actor, kind);
+            if (kind == TriggerKind.Clicked)
+            {
+                bool shift = Input.GetKey(KeyboardKeys.Shift);
+                if (doubleClick)
+                    SelectSameKindOnScreen(actor, shift);
+                else
+                    Runtime.SelectOnClick(actor, shift);
+            }
+            Runtime.RaiseClick(actor, doubleClick ? TriggerKind.DoubleClicked : kind);
+        }
+
+        /// <summary>Double click: every unit on screen driven by the same <c>.events</c> file
+        /// joins the selection (Shift adds them to the existing one).</summary>
+        private void SelectSameKindOnScreen(Actor reference, bool shift)
+        {
+            var visible = new List<object>();
+            FlaxEngine.Camera camera = FlaxWorld.FindCamera();
+            foreach (Actor actor in SceneActors())
+            {
+                if (actor == null || !actor.IsActive || actor is UIControl)
+                    continue;
+                if (Runtime.FindSheetFor(actor) == null)
+                    continue;
+                // A camera-less scene (a tool window, a test) selects by kind alone.
+                if (camera != null && !camera.IsPointOnView(actor.Position))
+                    continue;
+                visible.Add(actor);
+            }
+            Runtime.SelectSameKind(reference, visible, shift);
+        }
+
+        /// <summary>Records a click on an actor and answers whether it was the second left click
+        /// inside <see cref="DoubleClickSeconds"/>.</summary>
+        private bool RecordClick(Actor actor, TriggerKind kind)
+        {
             double now = Time.GameTime;
             bool doubleClick = kind == TriggerKind.Clicked &&
                 _buttonLastClickTime.TryGetValue(actor, out double last) && now - last < DoubleClickSeconds;
             _buttonLastClickTime[actor] = now;
-            Runtime.RaiseClick(actor, doubleClick ? TriggerKind.DoubleClicked : kind);
+            return doubleClick;
         }
 
         /// <summary>Polls every UI Button for press/release edges, raising <c>ButtonPressed</c>/

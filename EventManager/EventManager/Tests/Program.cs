@@ -10534,7 +10534,147 @@ Check(WordRegistry.All.Any(e => e.Word == "target is air") &&
       WordRegistry.All.Any(e => e.Word == "me can attack air"),
     "the registry documents the air target gate");
 
+// ------------------------------------------------------------------
+// Task 28 Part E: the shipped air content (Observer + flying Barracks)
+// ------------------------------------------------------------------
+
+var observerFile = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Observer.events"));
+Check(observerFile.Events.Count >= 5,
+    $"Observer.events parses into its events (got {observerFile.Events.Count})");
+var observerSpecs = SpecsOf(observerFile);
+Check(observerSpecs.Any(s => s.Verb == ActionVerb.Fly && s.Thing == "there" && s.AmountNode != null) &&
+      observerSpecs.Any(s => s.Verb == ActionVerb.Land),
+    "Observer flies at its own cruise height and lands with the Part B/C words");
+
+var observerWorld = new FakeWorld();
+var observerUnit = new FakeActor("Observer");
+observerWorld.AddActor(observerUnit);
+var observerEngine = FreshEngine(observerWorld);
+observerEngine.AddSheet(observerUnit, observerFile);
+observerEngine.Tick(0);
+Check(UnitTypes.TypeOf(observerEngine.Variables, observerUnit) == UnitTypes.Air,
+    "Observer spawns as an `air` unit");
+Check(Math.Abs(Altitude.Of(observerEngine.Variables, observerUnit) - 140) < 1e-9 &&
+      AirPath.IsFlying(observerEngine.Variables, observerUnit),
+    "Observer spawns hovering at its CruiseHeight (140)");
+
+var observerContext = new EventContext
+{
+    Variables = observerEngine.Variables,
+    World = observerWorld,
+    Me = observerUnit,
+    Runtime = observerEngine,
+};
+Check(AirTargeting.CanAttackType(observerContext, "air"),
+    "Observer is the anti-air half of the walkthrough: an air attacker engages aircraft");
+var observerMarine = new FakeActor("Marine");
+observerWorld.AddActor(observerMarine);
+var marineContext = new EventContext
+{
+    Variables = observerEngine.Variables,
+    World = observerWorld,
+    Me = observerMarine,
+    Runtime = observerEngine,
+};
+Check((AirTargeting.Refusal(marineContext, observerUnit) ?? "").Contains("LandCanAttackAir"),
+    "a Marine's `attack` on the Observer is refused by the default table");
+
+var untouchedUnit = new FakeActor("Rifleman");
+observerWorld.AddActor(untouchedUnit);
+Check(!AirPath.IsFlying(observerEngine.Variables, untouchedUnit) &&
+      !Altitude.IsAirborne(observerEngine.Variables, untouchedUnit) &&
+      AirTargeting.EffectiveTypeOf(observerEngine.Variables, untouchedUnit) == UnitTypes.Land,
+    "a unit that writes none of the new words is still a plain ground unit");
+
+Check(barracksSpecs.Any(s => s.Verb == ActionVerb.LiftOff) &&
+      barracksSpecs.Any(s => s.Verb == ActionVerb.Land),
+    "Barracks lifts off and lands with the Part C words");
+
 Console.WriteLine();
+// ------------------------------------------------------------------
+// Task 29 Part A: click-to-select
+// ------------------------------------------------------------------
+
+var clickVars = new EventVariables();
+var clickMarine = new FakeActor("Marine");
+Check(!ClickSelect.IsSelectable(clickVars, clickMarine, false) &&
+      ClickSelect.IsSelectable(clickVars, clickMarine, true),
+    "an actor with a sheet is clickable; scenery without one never is");
+clickVars.SetLocal(clickMarine, "Selectable", ValueBox.OfNumber(0));
+Check(!ClickSelect.IsSelectable(clickVars, clickMarine, true),
+    "`set my Selectable to 0` opts a sheet out of click selection");
+clickVars.SetLocal(clickMarine, "Selectable", ValueBox.OfText("no"));
+Check(!ClickSelect.IsSelectable(clickVars, clickMarine, true),
+    "a written `no` reads as not selectable");
+clickVars.SetLocal(clickMarine, "Selectable", ValueBox.OfNumber(1));
+Check(ClickSelect.IsSelectable(clickVars, clickMarine, true) &&
+      ClickSelect.IsVariableName("selectable") && !ClickSelect.IsVariableName("Selectables"),
+    "`my Selectable` opts back in and both spellings are one value");
+
+Check(ClickSelect.Resolve(true, true, false, false) == ClickSelectMode.Replace &&
+      ClickSelect.Resolve(true, true, true, false) == ClickSelectMode.Replace,
+    "a plain click selects the clicked actor and drops the rest");
+Check(ClickSelect.Resolve(true, true, false, true) == ClickSelectMode.Add &&
+      ClickSelect.Resolve(true, true, true, true) == ClickSelectMode.Remove,
+    "Shift-click adds an unselected actor and removes a selected one");
+Check(ClickSelect.Resolve(true, false, false, false) == ClickSelectMode.None &&
+      ClickSelect.Resolve(false, true, false, false) == ClickSelectMode.None,
+    "an unselectable actor and one without a sheet both leave the selection alone");
+Check(ClickSelect.ClearsOnGround(false) && !ClickSelect.ClearsOnGround(true),
+    "a plain click on bare ground clears the selection and Shift keeps it");
+Check(ClickSelect.SameKind("Marine", "marine") && !ClickSelect.SameKind("Marine", "Barracks") &&
+      !ClickSelect.SameKind("", ""),
+    "double click matches units driven by the same .events file");
+
+var pickWorld = new FakeWorld();
+var pickUnit = new FakeActor("Marine");
+var pickDoodad = new FakeActor("Doodad");
+pickWorld.AddActor(pickUnit);
+pickWorld.AddActor(pickDoodad);
+var pickEngine = FreshEngine(pickWorld);
+pickEngine.AddSheet(pickUnit, parser.Parse("when me appears\n  set Ready to 1"));
+pickEngine.AddSheet(pickDoodad, parser.Parse("when me appears\n  set my Selectable to 0"));
+pickEngine.Tick(0);
+Check(pickEngine.SelectOnClick(pickUnit, false) == ClickSelectMode.Replace &&
+      pickEngine.Selection.Count == 1 && pickEngine.Selection.IsSelected(pickUnit),
+    "a click selects the unit whose own sheet is running");
+Check(pickEngine.SelectOnClick(pickUnit, true) == ClickSelectMode.Remove &&
+      pickEngine.Selection.Count == 0,
+    "Shift-click on the selected unit removes it again");
+Check(pickEngine.SelectOnClick(pickDoodad, false) == ClickSelectMode.None &&
+      pickEngine.Selection.Count == 0 &&
+      !ClickSelect.IsSelectable(pickEngine.Variables, pickDoodad, true),
+    "a sheet that opted out is not selected by a click");
+Check(pickEngine.SelectOnClick(null, false) == ClickSelectMode.None &&
+      pickEngine.Selection.Count == 0,
+    "clicking bare ground with nothing selected is a no-op");
+pickEngine.SelectOnClick(pickUnit, false);
+Check(pickEngine.SelectOnClick(null, false) == ClickSelectMode.None &&
+      pickEngine.Selection.Count == 0,
+    "clicking bare ground clears the selection");
+
+var kindWorld = new FakeWorld();
+var kindMarine = new FakeActor("Marine");
+var kindMarine2 = new FakeActor("Marine2");
+var kindBarracks = new FakeActor("Barracks");
+kindWorld.AddActor(kindMarine);
+kindWorld.AddActor(kindMarine2);
+kindWorld.AddActor(kindBarracks);
+var kindEngine = FreshEngine(kindWorld);
+kindEngine.AddSheet(kindMarine, parser.Parse("when me appears\n  set Ready to 1"), "Marine.events");
+kindEngine.AddSheet(kindMarine2, parser.Parse("when me appears\n  set Ready to 1"), "Marine.events");
+kindEngine.AddSheet(kindBarracks, parser.Parse("when me appears\n  set Ready to 1"), "Barracks.events");
+kindEngine.Tick(0);
+var kindScenery = new[] { (object)kindMarine, kindMarine2, kindBarracks };
+Check(kindEngine.SelectSameKind(kindMarine, kindScenery, false) &&
+      kindEngine.Selection.Count == 2 && kindEngine.Selection.IsSelected(kindMarine2) &&
+      !kindEngine.Selection.IsSelected(kindBarracks),
+    "double click selects every actor on screen driven by the same sheet");
+Check(kindEngine.SelectSameKind(kindBarracks, kindScenery, true) && kindEngine.Selection.Count == 3,
+    "Shift + double click adds the other kind instead of replacing");
+Check(kindEngine.SelectSameKind(new FakeActor("NoSheet"), kindScenery, false) == false,
+    "double click on an actor with no sheet selects nothing");
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);

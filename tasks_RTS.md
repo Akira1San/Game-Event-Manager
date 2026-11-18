@@ -934,7 +934,7 @@ cooldowns cost one polling trigger per unit.
 
 ---
 
-## Task 28 — Air units, hover height and lift-off [ ]
+## Task 28 — Air units, hover height and lift-off [x]
 
 Goal: StarCraft-style flight on a **2.5D plane** (the answer to open question 6): units and
 buildings keep a height but still move over the XZ plane, so nothing needs full 3D pathfinding.
@@ -1112,7 +1112,7 @@ land for buildings, and no targeting gate that refuses an air target for a land-
   so `me can attack other`, `me can attack target`, the `attack` refusal and the runtime's
   damage drop all agree — a ground army cannot hit a lifted building by any of those paths.
 
-### Part E — Content, words, tests, acceptance [ ]
+### Part E — Content, words, tests, acceptance [x]
 - Example content: an air unit (`Observer.events` or a Wraith-style sheet) that hovers, crosses
   water and marked void, and a flying building example extending `Barracks.events`
 - `WordRegistry` rows and `keywords.html` rows for every new word; pure tests for altitude
@@ -1121,6 +1121,192 @@ land for buildings, and no targeting gate that refuses an air target for a land-
 - Acceptance: an air unit hovers and flies over a wall and a lake, then lands on ground; a
   barracks lifts off, moves, is refused over water and lands; a marine refuses an air target while
   an anti-air unit engages it; a scene that writes none of the new words behaves exactly as before
+
+#### Part E notes
+- **`Observer.events`** is the air unit. `when me appears` writes `my unit type` `air`, its stats,
+  and `my CruiseHeight` 140 copied into `my Altitude`, so the spawn height and every later flight
+  height are one authored number. `F` runs `fly to there at my CruiseHeight` (one straight XZ
+  line, no NavMesh, no terrain gate), `G` runs `land` and `when me lands` prints, and
+  `when my Health becomes 0` destroys it. The header names it as the anti-air half of the
+  walkthrough: air-versus-air is allowed by `AirCanAttackAir`, while a Marine's `attack` on it is
+  refused by `LandCanAttackAir` being false — the default table, no new rows.
+- **`Barracks.events`** became the flying building. `when me appears` already set `unit type`
+  `land`, so it is a genuine land-typed building that leaves the ground: `L` sets `my Altitude`
+  to 200 and runs `lift off`, `K` runs `land`, and `when me lifts off` / `when me lands` print.
+  The `train Marine` press now starts with `unless my Altitude is higher than 0`, which is the
+  flying gate; it reads the altitude rather than `me is airborne` on purpose, so a building
+  standing on its own ground never depends on a ground probe (the airborne condition's second
+  half is `!World.IsOnGround`) and training cannot be blocked by a static model's collider.
+- **Words**: `WordRegistry` already had `lift`, `land`, `fly` and `target is air` from Parts B–D, but
+  `keywords.html` had the lift-off trigger row and no *action* rows for `lift off` / `land`. Both
+  rows were added next to `fly to`, describing the height precedence, the paused queues, the freed
+  grid footprint, the two landing refusals, and the altitude-counts-as-air rule.
+- **Tests** (8 new checks, 1870 total): `Observer.events` parses into 5 events and its `fly` spec
+  carries a height; running the sheet headlessly on a `FakeActor` leaves an `air` unit hovering at
+  140 with `AirPath.IsFlying` true; it can itself engage aircraft; a Marine's `attack` on it is
+  refused naming `LandCanAttackAir`; a unit that writes none of the new words stays a plain
+  ground unit; and the extended `Barracks.events` parses with a `lift off` and a `land` spec.
+  The earlier parts' pure checks already cover altitude retention, the air path, lift/land state,
+  terrain refusal, queue pausing and the gate, so Part E adds the content that uses them rather
+  than repeating them.
+- **Acceptance (editor, not run here — the movement/lift half is bridge code with no unit tests):**
+  1. `Observer` on a unit with `Observer` as its Event File: it spawns ~140 above the floor with
+     a ring, `F` flies it over a wall and a water cell marked with `mark water …`, and `G` puts
+     it down on the ground underneath.
+  2. `Barracks` with a `train Marine` queued: `L` raises it 200 up, the progress bar stops, its
+     grid cell turns free, `K` over marked water warns `that spot is water` and keeps it flying,
+     and `K` over land lands it and resumes the queue.
+  3. A `Marine` ordered to `attack` the airborne `Observer` warns once naming `LandCanAttackAir`
+     and never walks to it; the `Observer` ordered to `attack` the Marine engages.
+  4. A scene with none of the new words (any pre-Task-28 sheet) behaves exactly as before: no
+     altitude, `me is airborne` unchanged, land-versus-land matchups unchanged.
+
+---
+
+## Task 29 — StarCraft-style mouse input & command card [ ]
+
+Goal: make the RTS playable with the mouse the way StarCraft is — click or drag to select,
+right-click to order, and a command card whose icon buttons train, build and cast for whatever is
+selected — without adding a single hard-coded UI or unit rule to the C# runtime. This is the
+implementation half of Task 20 Part A: that part's acceptance check is "select units via click /
+box-select, then issue orders", and today none of it is authored.
+
+### What events already do (so the task only fills gaps)
+
+- **Click detection**: `EventsManager` raycasts the scene (`Physics.LineCastAll`, UI first, then the
+  nearest 3D hit) and broadcasts the click *by name* — the clicked actor's own `when me is clicked`
+  fires, other sheets can listen with `when Ground is clicked`, and a second left click inside
+  `DoubleClickSeconds` becomes `when me is double clicked`. `RightClicked` / `MiddleClicked` exist
+  too, and a right click that cancels an `aim` (Task 27 Part A) does not broadcast.
+- **Selection state**: `Selection.ReplaceSelection` / `Add` / `Remove` / `Clear`, `me is selected`,
+  `selection count is <n>`, `when selection changes`, `select me` / `select all <type>` /
+  `deselect all`, control groups on 1–0 (host-recalled, `set my control group to <n>` in a sheet),
+  `Selection.OnSelectionChanged` for the ring/label views. `EventRuntime.SelectActor` is how bridge
+  code selects.
+- **Orders**: `move` / `goto` / `attack-move` / `attack <target>` / `stop` / `hold position` / rally
+  / queued orders, formations, air path and the air targeting gate (Tasks 21, 23, 28).
+- **Icon widgets**: UI `Button` press/release edges raise `when <button> is pressed`, and `bind`
+  copies a label/bar to a variable, so a card can already be drawn from authored controls.
+- **A `Mouse` target** exists for `place` / `mark` / `goto there`, but `FlaxActions.LastClickPosition`
+  is written **only on a left click** that was not consumed by `aim`, and the minimap's
+  `SelectionView.SelectRect` is the only rectangle-select in the project.
+
+The gaps are specific: nothing selects on click (the bridge broadcasts and stops), there is no 3D
+drag-select, right click has no world position and no order, a card cannot name "what is currently
+selected", and no command-card scene/content exists.
+
+### Part A — Click-to-select [x]
+- Default left-click behaviour without breaking existing sheets: clicking a unit or building with an
+  event sheet selects it and clears the previous selection, shift-click adds or removes, and a click
+  on empty ground clears — so a scene that authored nothing still behaves the same and one that
+  wrote its own `when me is clicked` handler keeps it (`select me` remains the authored path)
+- Opt-in and per-actor, not hard-coded: a `selectable` / `selection priority` opt-out for scenery,
+  ground planes and UI controls so clicking a floor decal does not select it
+- A scripted/draggable actor that is clicked should not also be dragged or shot by that click
+- Double click selects every on-screen unit of the same type (StarCraft's double-click), reusing the
+  existing `DoubleClicked` trigger
+- Which sheet selects: the clicked actor's own sheet if it has one, otherwise nothing — no global
+  "RtsSelection.events" magic
+
+#### Part A notes
+- `Runtime/ClickSelect.cs` is the pure half: `ClickSelectMode` (`None` / `Replace` / `Add` /
+  `Remove`), `IsSelectable` (an actor with a sheet is clickable; one without a sheet never is —
+  that is the ground, a prop, a bullet, a UIControl — and a written `my Selectable` overrules in
+  either direction, with `0`, `false`, `no` and `off` all meaning opt-out), `Resolve` (plain click
+  replaces, Shift adds an unselected actor and removes a selected one), `ClearsOnGround` (a plain
+  click clears, Shift keeps) and `SameKind`, which matches two units by the `.events` file driving
+  their sheets rather than by a hard-coded unit table.
+- Runtime: `EventRuntime.SelectOnClick(actor, shift)` applies that decision to the live `Selection`
+  (`ReplaceSelection` / `Select` / `Deselect` / `Clear`) and returns the mode, so the bridge can
+  tell a unit click from a ground click; `SelectSameKind(reference, candidates, shift)` replaces
+  (or extends, with Shift) with every candidate whose sheet has the reference's `SourceName`.
+- Bridge (`EventsManager.cs`): the 3D raycast branch goes through `HandleWorldClick`, which records
+  the double click (the shared `RecordClick` also serves the UI path) and applies the default
+  selection **before** `RaiseClick`. A double click calls `SelectSameKindOnScreen`: `SceneActors()`
+  filtered by `Runtime.FindSheetFor`, non-`UIControl`, and `camera.IsPointOnView(actor.Position)`
+  (no camera in the scene = no filtering). A click that hits no collider, or an actor with no
+  sheet, falls through to `Runtime.SelectOnClick(null, shift)`, which is the ground clear. UI
+  clicks keep the old path and never select anything.
+- Authoring is unchanged: pushes are queued and run later in the tick, so a `when me is clicked`
+  handler sees `me is selected` and can still `deselect all` and win, exactly as before. A scene
+  that authored nothing now gets StarCraft selection; a sheet that wants to be scenery with a
+  sheet writes `set my Selectable to 0`.
+- 17 new pure checks (selectable default, opt-out, opt-in and both spellings, the resolve matrix,
+  the ground clear with and without Shift, same-kind matching, headless select / Shift-remove /
+  opt-out / ground-clear against a real `EventRuntime`, and a double click selecting two Marines
+  but not the Barracks, then Shift adding it) -> **1887 passed, 0 failed**; the module builds with
+  0 errors (`Flax.Build -build -arch=x64 -platform=Windows -configuration=Debug
+  -target=GameEditorTarget`).
+- The picking half (raycast, camera test, Shift read) has no unit tests, as usual; editor
+  play-check pending (click a Marine and see its ring, Shift-click a second, click the ground to
+  clear, double-click a Marine and see every Marine on screen selected). Drag-select is Part B.
+
+### Part B — Box (drag) select [ ]
+- Left-drag on empty ground draws a marquee and selects the friendly units inside it on release;
+  a drag below a few pixels stays a plain click, Escape cancels, and the drag runs through
+  `Selection.ReplaceSelection` so rings, labels and `when selection changes` fire once
+- The rectangle is screen-space over projected actor positions (no physics volume needed), the same
+  way `MinimapView.SelectRect` already picks minimap blips; buildings are only included if the
+  marquee covers them whole, as in StarCraft, and `Shift` keeps the old selection
+- The marquee itself is a `UIControl` (a scene-authored frame) so the runtime owns no drawing, and
+  the existing edge-pan and camera controls (Task 26) must not fight it while dragging
+
+### Part C — Right-click orders [ ]
+- Right click records a world position like a left click does (`LastClickPosition` today is
+  left-only) so `there` / `Mouse` mean "where I last clicked with either button"
+- Context-sensitive default order for whatever is selected, authored in one sheet: enemy under the
+  cursor → `attack` it, friendly damaged unit → nothing/repair, own building → no order, resource
+  node → `gather`, empty ground → `move` there; shift keeps the order-queue append behaviour
+- An order given while an ability `aim` is pending is cancelled first (already true) and an order
+  given to nothing selected does nothing
+- Buildings and lifted buildings (Task 28) accept the same right click for `set rally` / move
+
+### Part D — The selection as an event value [ ]
+- Something a card can name, so one shared card serves any selection: `my selected unit`, `my
+  selected building`, `selected count`, and "is the selection all one type" so a card can pick
+  between a unit and a building layout
+- Orders issued by a card must apply to the **whole** selection, not just the actor whose sheet
+  pressed the button — `train Marine at Barracks` names its target today, and this part adds the
+  form that means "whatever I selected"; the same for `attack` / `move` / `stop`
+- No C# UI rules: the card decides its own layout from these values
+
+### Part E — Command card content [ ]
+- A `CommandCard`/`CommandPanel` scene widget with icon buttons for the Mariner/Barracks/Gateway
+  example units: move, stop, hold, attack-move, plus unit-specific `train <unit>` / `build
+  <building>` / ability buttons, each one a `when <button> is pressed` block in the selected unit's
+  own sheet
+- Affordability and cooldown feedback from data the project already has: mineral/gas cost
+  (`can afford`), `my train time`, queue length (below a queue cap), Task 27 `cooldowns` and the
+  flying-building gate — a disabled button must show why, either as a grey tint via `bind` or a
+  printed reason
+- A hotkey column that reuses the existing key triggers, tooltip on hover (`Hovered` already fires),
+  and a current-order readout (`my current order`, `my order queue`) so the player can see what the
+  unit is doing
+- Icon assets stay authored/content-side; the task ships the wiring and one card per example unit,
+  not an art pipeline
+
+### Part F — Words, tests, acceptance [ ]
+- `WordRegistry` rows and `keywords.html` rows for every new word (selection-as-value, the
+  multi-unit order forms); an audit pass over `keywords.html` rows written by Tasks 18–28 so the
+  documented shapes and the parser agree
+- Pure tests: click routing decisions (select / add / clear / ignore), marquee bounds math, the
+  right-click order resolution table, the multi-unit order fan-out and its refusal path
+- Acceptance in the editor (the Task 20 Part A walkthrough): click a marine and see its ring and its
+  card, drag a box over three marines and command one move, right-click an enemy and watch the
+  group attack it, click a barracks and train a marine from its icon, spam the icon to hit the queue
+  cap and see it greyed, and confirm a scene with no selection/UI content still plays as before
+- The bridge half (raycast picking, marquee drawing, UI hit-testing) has no unit tests by the
+  project's convention; note the play-check results in this task's notes
+
+### Open questions for this task
+- Shift-to-add on click: is `Selection.Add` enough, or does the selection need a "primary" actor for
+  the card to read?
+- Does the card live on one sheet that hears `when selection changes`, or on every unit sheet with a
+  `bind`ed layout swap?
+- Marquee over buildings whole-vs-any: StarCraft uses whole for buildings and any for units — copy
+  both?
+- Click-to-select as an opt-in `selectable` word, or a default with an opt-out for scenery? The
+  default changes behaviour for existing scenes that intentionally made a unit non-selectable.
 
 ---
 

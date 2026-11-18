@@ -561,6 +561,68 @@ namespace Game
             return Selection.Deselect(actor);
         }
 
+        /// <summary>
+        /// The default left click (Task 29 Part A): select the clicked actor, add/remove it with
+        /// Shift held, or clear the selection when nothing selectable was clicked. The decision
+        /// itself is <see cref="ClickSelect"/>; this applies it to the live selection. Returns
+        /// what the click did, so the bridge can tell "clicked a unit" from "clicked the ground".
+        /// </summary>
+        public ClickSelectMode SelectOnClick(object actor, bool shift)
+        {
+            bool hasSheet = actor != null && FindSheetFor(actor) != null;
+            bool selectable = ClickSelect.IsSelectable(Variables, actor, hasSheet);
+            ClickSelectMode mode = ClickSelect.Resolve(hasSheet, selectable, Selection.IsSelected(actor), shift);
+            switch (mode)
+            {
+                case ClickSelectMode.Replace:
+                    Selection.ReplaceSelection(new[] { actor });
+                    break;
+                case ClickSelectMode.Add:
+                    Selection.Select(actor);
+                    break;
+                case ClickSelectMode.Remove:
+                    Selection.Deselect(actor);
+                    break;
+                default:
+                    if (ClickSelect.ClearsOnGround(shift))
+                        Selection.Clear();
+                    break;
+            }
+            return mode;
+        }
+
+        /// <summary>
+        /// Replace the selection with every selectable actor driven by <paramref name="reference"/>'s
+        /// own <c>.events</c> file (StarCraft's double click), adding to the selection when Shift is
+        /// held. <paramref name="onScreen"/> is the bridge's camera test; a null list means every
+        /// actor in the scene.
+        /// </summary>
+        public bool SelectSameKind(object reference, IEnumerable<object> candidates, bool shift)
+        {
+            SheetInstance referenceSheet = FindSheetFor(reference);
+            if (referenceSheet == null || candidates == null)
+                return false;
+            var wanted = new List<object>();
+            if (shift)
+                wanted.AddRange(Selection.Selected);
+            foreach (object candidate in candidates)
+            {
+                SheetInstance sheet = FindSheetFor(candidate);
+                if (sheet == null)
+                    continue;
+                if (!ClickSelect.SameKind(referenceSheet.SourceName, sheet.SourceName))
+                    continue;
+                if (!ClickSelect.IsSelectable(Variables, candidate, true))
+                    continue;
+                if (!wanted.Contains(candidate))
+                    wanted.Add(candidate);
+            }
+            if (wanted.Count == 0)
+                return false;
+            Selection.ReplaceSelection(wanted);
+            return true;
+        }
+
         /// <summary>Recall a control group (pressing 1–0 in the engine bridge).</summary>
         public bool SelectControlGroup(int group)
         {
