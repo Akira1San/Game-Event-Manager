@@ -17,6 +17,46 @@ namespace Game
         public const string GridSizeVariable = "BuildGridSize";
         public const double DefaultGridSize = 64.0;
 
+        /// <summary>
+        /// The per-actor variable that declares a scene-authored actor a building (Task 29 Part E).
+        /// A building this runtime placed carries registry, queue and lift-off state; one dropped
+        /// into a scene by hand has none of that, so its sheet writes <c>set my Building to 1</c>
+        /// and the building command card, <c>selected buildings</c> and right-click rally all
+        /// treat it as a building from its first frame.
+        /// </summary>
+        public const string MarkVariable = "Building";
+
+        /// <summary>Every spelling the language accepts.</summary>
+        public static readonly string[] MarkVariableNames = { "Building", "building" };
+
+        /// <summary>True for either spelling of the mark variable.</summary>
+        public static bool IsMarkVariable(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return false;
+            foreach (string candidate in MarkVariableNames)
+                if (string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
+
+        /// <summary>
+        /// True when the actor's sheet marked it a building with <c>my Building</c>. Read with the
+        /// same flag rules as <c>my Selectable</c>: 0, false, "no" and "off" all mean no.
+        /// </summary>
+        public static bool IsMarkedBuilding(EventVariables variables, object actor)
+        {
+            if (variables == null || actor == null)
+                return false;
+            foreach (string name in MarkVariableNames)
+            {
+                if (!variables.HasLocal(actor, name))
+                    continue;
+                return ClickSelect.ReadFlag(variables.GetLocal(actor, name));
+            }
+            return false;
+        }
+
         private sealed class BuildState
         {
             public string Building = "";

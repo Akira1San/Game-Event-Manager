@@ -22,6 +22,10 @@ when me appears
   set my MaxHealth to 1000
   set my Health to 1000
   set my unit type to "land"
+  # A building dropped into a scene by hand was never placed by the build registry, so it has no
+  # building state for the card to read (Task 29 Part E). This one line is what makes
+  # `selection is all buildings`, the building command card and the right-click rally see it.
+  set my Building to 1
 
 # ---- train a Marine (W): one order per press, gated on the unit's cost variables ---------
 when W is pressed

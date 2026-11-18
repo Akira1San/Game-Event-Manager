@@ -1471,12 +1471,50 @@ selected", and no command-card scene/content exists.
   `<Unit>BuildTime` → `<Building>BuildTime` → `ProductionBuildTime` → 5 — and reads 0 when the
   queue is empty; `my queue cap` reads the cap in force. Both are ordinary values, so a label can
   `bind` to them.
-- **Still open in Part E:** the `CommandCard` widget itself with its named button actors and icon
-  sprites (editor content, not code), the hotkey column and hover tooltips, a conditional
-  colour/tint *bind* (today a tint is `set color of` as an action — `bind` only drives text and
-  progress, so "grey via bind" needs a polling card sheet or a new bind kind), selection-scoped
-  hotkeys (an existing `when W is pressed` fires whatever is selected, so the card's guards have to
-  sit above it), and the acceptance play-check.
+- **One manager per scene decides where the card lives.** `EventsManager` keeps a single
+  `Instance` and disables any second one with a warning, and its button poll only walks its own
+  scene's actors — so a card cannot be an additive HUD scene with its own manager, and no
+  `RtsCommandCard.scene` was authored. The card UI belongs in the gameplay scene, with this sheet
+  attached to that scene's manager actor.
+- **The authored scene.** `Content/scenes/RTS_Test_0.scene` now carries the whole card: a `ui
+  canvas`, the seven `Button` UIControls (`StopButton`, `HoldButton`, `TrainMarineButton`,
+  `CancelMarineButton`, `LiftButton`, `LandButton`, `ResearchButton`, anchored to the bottom-right
+  corner), one `RTS` actor holding the scene's `EventsManager` plus an `EventSheet` on
+  `CommandCard`, and a `Barracks` with two `Marine`s built from the project's box model with the
+  shipped sheets attached, so the card has something to select and order on the first play. The
+  scene files were written as scene JSON by hand (the editor is not available here), so nothing in
+  it has been loaded, seen or play-checked.
+- **A building says it is one.** A building dropped into a scene by hand was never placed by the
+  build registry, so it had no building state at all — `selection is all buildings` was false and
+  the card would have shown the unit layout. `set my Building to 1` (`ConstructionManager.
+  MarkVariable`, both spellings, same flag rules as `my Selectable`) is now a fourth answer inside
+  `EventRuntime.IsBuildingActor`, which is what `Barracks.events` writes in `when me appears`. The
+  right-click rally asks the same method rather than `Construction.IsBuilding`, so a scene-authored
+  building also takes orders instead of being walked into.
+- **The card sheet ships.** `GameFiles/CommandCard.events` is the shared card: `when scene
+  starts` hides every button, `when selection changes` shows the unit buttons or the building
+  buttons from `selection is all units` / `all buildings` (a hidden button stops polling, so the
+  other layout cannot be clicked), and the buttons are the Part D orders —
+  `selected units stop` / `hold position` on the unit panel, `selected buildings train Marine` /
+  `cancel training Marine` / `lift off` / `land` / `research "Stim Pack"` on the building panel —
+  each behind the same stacked gates its hotkey uses (`can afford`, `queue has room`, the selection
+  kind). Four `when every 0.5 seconds` blocks drive Train's greying — disabled when the layout is
+  wrong, when the unit is unaffordable, or when the queue is full, and enabled only when all three
+  hold — because a body cannot branch on "which gate failed". Seven checks pin the sheet: it
+  parses, every action and condition line is a known word, it carries a `set button` and a
+  queue-cap gate, and Train/Stop/Lift/Research come out as the right verb and scope.
+- **Still open in Part E:** the card's icons, per-button labels and hover tooltips (the shipped
+  buttons are text-only `Button` controls in the editor's default style), real unit art in place
+  of the placeholder boxes, the `Marquee` drag rectangle (needs a UIControl whose control type is
+  `MarqueePanel`, a custom control the editor has to instantiate), a conditional colour/tint *bind* (today a tint is
+  `set color of` as an action — `bind` only drives text and progress, so "grey via bind" needs a
+  polling card sheet or a new bind kind; the shipped sheet greys through `set button ... disabled`
+  instead), selection-scoped hotkeys (an existing `when W is pressed` fires whatever is selected,
+  so the card's guards have to sit above it), and the acceptance play-check. Two content gaps the
+  sheet documents: Move/Attack/Attack-Move buttons need a targeting cursor no word offers yet (the
+  right click already issues those orders), and an ability button cannot reuse the unit's own
+  `when Q is pressed` block because nothing runs another sheet's block for every selected unit —
+  so Stim stays on `Marine.events` and a card `train`/`stop` is all a button can reuse.
 
 ### Part F — Words, tests, acceptance [ ]
 - `WordRegistry` rows and `keywords.html` rows for every new word (selection-as-value, the

@@ -11309,6 +11309,130 @@ Check(queueCapSet.Value is VariableValue queueCapValue &&
       queueCapValue.Owner == "my" && queueCapValue.Name == "queue cap",
     "`my queue cap` parses as one value");
 
+// The shipped command card (Task 29 Part E) must stay a sheet the language can actually read.
+var cardSheet = parser.Parse(File.ReadAllText("Source/Game/GameFiles/CommandCard.events"));
+Check(cardSheet.Events.Count >= 12,
+    "the shipped command-card sheet parses into its layout, button and refresh blocks");
+
+int cardActions = 0;
+bool cardUnknown = false;
+bool cardSetButton = false;
+bool cardQueueGate = false;
+bool cardAllUnits = false;
+foreach (var cardEvent in cardSheet.Events)
+{
+    foreach (var cardLine in cardEvent.Body)
+    {
+        if (cardLine.Statement is SetButtonEnabledNode)
+            cardSetButton = true;
+        if (cardLine.IsCondition)
+        {
+            var cardCondition = Conditions.Parse(cardLine.Words);
+            if (cardCondition.Kind == ConditionKind.QueueHasRoom)
+                cardQueueGate = true;
+            if (cardCondition.Kind == ConditionKind.SelectionAllIs && cardCondition.Thing == "units")
+                cardAllUnits = true;
+            if (cardCondition.Kind == ConditionKind.Unknown)
+                cardUnknown = true;
+        }
+        if (cardLine.Statement is RawActionNode cardRaw)
+        {
+            cardActions++;
+            if (ActionWords.Parse(cardRaw.Words, _ => { }).Verb == ActionVerb.Unknown)
+                cardUnknown = true;
+        }
+    }
+}
+Check(!cardUnknown,
+    "every action and condition line in the command card is a word the language knows");
+Check(cardActions >= 10 && cardSetButton && cardQueueGate && cardAllUnits,
+    "the card orders the selection, greys its buttons and gates Train on the queue cap");
+
+var cardTrainProgram = cardSheet;
+ActionSpec CardSpec(string button)
+{
+    foreach (var cardEvent in cardTrainProgram.Events)
+    {
+        bool namesButton = false;
+        bool isPressed = false;
+        foreach (var token in cardEvent.Trigger)
+        {
+            if (token.Text == button)
+                namesButton = true;
+            if (token.Text == "pressed")
+                isPressed = true;
+        }
+        if (!namesButton || !isPressed)
+            continue;
+        foreach (var cardLine in cardEvent.Body)
+            if (cardLine.Statement is RawActionNode raw)
+                return ActionWords.Parse(raw.Words, _ => { });
+    }
+    return new ActionSpec();
+}
+
+var cardTrain = CardSpec("TrainMarineButton");
+Check(cardTrain.Verb == ActionVerb.Train && cardTrain.Thing == "Marine" &&
+      cardTrain.HasSelectionScope && cardTrain.SelectionScope == SelectionOrderScope.Buildings,
+    "the card's Train button queues a Marine at every selected building");
+var cardStop = CardSpec("StopButton");
+Check(cardStop.Verb == ActionVerb.StopOrder && cardStop.HasSelectionScope &&
+      cardStop.SelectionScope == SelectionOrderScope.Units,
+    "the card's Stop button stops the selected units");
+var cardLift = CardSpec("LiftButton");
+Check(cardLift.Verb == ActionVerb.LiftOff && cardLift.SelectionScope == SelectionOrderScope.Buildings,
+    "the card's Lift button lifts every selected building off");
+var cardResearch = CardSpec("ResearchButton");
+Check(cardResearch.Verb == ActionVerb.Research && cardResearch.Thing == "Stim Pack",
+    "the card's Research button queues the named upgrade");
+
+// Task 29 Part E (scene-authored buildings): a building dropped into a scene by hand was never
+// placed by the build registry, so `set my Building to 1` is what makes the building card, the
+// selection words and the right-click rally see it.
+Check(ConstructionManager.IsMarkVariable("Building") &&
+      ConstructionManager.IsMarkVariable("building") &&
+      !ConstructionManager.IsMarkVariable("Unit") &&
+      !ConstructionManager.IsMarkVariable(null),
+    "`my Building` accepts both spellings and nothing else");
+var markVars = new EventVariables();
+var markedActor = new FakeActor("Barracks");
+var unmarkedActor = new FakeActor("Marine");
+Check(!ConstructionManager.IsMarkedBuilding(markVars, markedActor),
+    "an actor that never wrote `my Building` is not a building");
+markVars.SetLocal(markedActor, "Building", ValueBox.OfNumber(1));
+Check(ConstructionManager.IsMarkedBuilding(markVars, markedActor) &&
+      !ConstructionManager.IsMarkedBuilding(markVars, unmarkedActor),
+    "`set my Building to 1` marks that actor alone");
+markVars.SetLocal(markedActor, "Building", ValueBox.OfText("off"));
+Check(!ConstructionManager.IsMarkedBuilding(markVars, markedActor),
+    "`my Building` follows the same flag rules as `my Selectable`");
+markVars.SetLocal(markedActor, "Building", ValueBox.OfBoolean(true));
+Check(ConstructionManager.IsMarkedBuilding(markVars, markedActor) &&
+      !ConstructionManager.IsMarkedBuilding(null, markedActor) &&
+      !ConstructionManager.IsMarkedBuilding(markVars, null),
+    "a true flag marks the building; missing variables or actors never do");
+
+var markEngine = FreshEngine(new FakeWorld());
+var sceneBuilding = new FakeActor("Barracks");
+var sceneUnit = new FakeActor("Marine");
+Check(!markEngine.IsBuildingActor(sceneBuilding),
+    "a hand-dropped building is not a building until its sheet says so");
+markEngine.Variables.SetLocal(sceneBuilding, "Building", ValueBox.OfNumber(1));
+Check(markEngine.IsBuildingActor(sceneBuilding) && !markEngine.IsBuildingActor(sceneUnit) &&
+      !markEngine.IsBuildingActor(null),
+    "the runtime's single building answer honours `my Building` with no registry or queue");
+
+var barracksSheet = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Barracks.events"));
+bool barracksMarked = false;
+foreach (var barracksEvent in barracksSheet.Events)
+    foreach (var barracksLine in barracksEvent.Body)
+        if (barracksLine.Statement is SetNode barracksSet &&
+            barracksSet.Target.Owner == "my" &&
+            ConstructionManager.IsMarkVariable(barracksSet.Target.Name))
+            barracksMarked = true;
+Check(barracksMarked,
+    "the shipped Barracks marks itself a building on its first frame");
+
 // Task 30 Part A - the save file's format and location.
 var saveProject = Path.Combine(Path.GetTempPath(), "event-manager-save-" + Guid.NewGuid().ToString("N"));
 try

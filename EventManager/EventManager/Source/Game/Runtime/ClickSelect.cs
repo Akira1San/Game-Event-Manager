@@ -106,9 +106,9 @@ namespace Game
             return string.Equals(sourceA, sourceB, StringComparison.OrdinalIgnoreCase);
         }
 
-        /// <summary>A written <c>my Selectable</c> read as a flag: 0, false, "no" and "off"
-        /// all mean "not selectable", everything else means selectable.</summary>
-        private static bool ReadFlag(ValueBox value)
+        /// <summary>A written <c>my Selectable</c> (or <c>my Building</c>) read as a flag: 0,
+        /// false, "no" and "off" all mean false, everything else means true.</summary>
+        public static bool ReadFlag(ValueBox value)
         {
             if (value == null || value.IsNone())
                 return false;

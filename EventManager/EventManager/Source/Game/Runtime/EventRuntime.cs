@@ -752,9 +752,11 @@ namespace Game
 
         /// <summary>
         /// True for an actor the RTS treats as a building: one the build registry placed, one that
-        /// lifted off, or one with a production queue. The command-card words (`selected
-        /// buildings`, `selection is all buildings`, `my selected building`) all ask this one
-        /// question, so "is this a building" has a single answer.
+        /// lifted off, one with a production queue, or one whose sheet wrote `set my Building to
+        /// 1` — the last is how a scene-authored building (dropped in by hand, never placed) joins
+        /// in. The command-card words (`selected buildings`, `selection is all buildings`, `my
+        /// selected building`) and the right-click rally all ask this one question, so "is this a
+        /// building" has a single answer.
         /// </summary>
         public bool IsBuildingActor(object actor)
         {
@@ -762,7 +764,8 @@ namespace Game
                 return false;
             return Construction.IsBuilding(actor) ||
                    LiftOff.BuildingOf(actor).Length > 0 ||
-                   Production.HasQueue(actor);
+                   Production.HasQueue(actor) ||
+                   ConstructionManager.IsMarkedBuilding(Variables, actor);
         }
 
         /// <summary>

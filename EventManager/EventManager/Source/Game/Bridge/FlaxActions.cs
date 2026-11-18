@@ -3775,7 +3775,7 @@ namespace Game
                 bool samePlayer = SamePlayerAs(runtime, me, target);
                 RightClickTarget kind = RightClickOrders.Classify(
                     target != null, hasPoint,
-                    isBuilding: runtime.Construction.IsBuilding(target),
+                    isBuilding: runtime.IsBuildingActor(target),
                     samePlayer: samePlayer,
                     isResourceNode: RightClickOrders.IsResourceNode(runtime.Variables, target),
                     hostile: RightClickOrders.IsDeclaredEnemy(runtime.Variables, me, target),

@@ -1,0 +1,125 @@
+# ---------------- CommandCard.events (Task 29 Part E) ----------------
+# One shared RTS command card: it reads what is selected (Task 29 Part D) and orders the whole
+# selection, instead of every unit sheet carrying its own copy of the buttons.
+#
+# SETUP (editor) — the card lives in the gameplay scene. `Content/scenes/RTS_Test_0.scene`
+# already has this whole setup (canvas, seven buttons, the manager, the sheet, a Barracks and two
+# Marines on placeholder geometry), so it is the working example to copy from:
+#   · one actor carries this sheet: an EventSheet whose Event File is `CommandCard`. It can sit on
+#     the same actor as the scene's EventsManager; button presses are broadcast by name to every
+#     sheet, so which actor holds it does not matter.
+#   · a UICanvas with six Button UIControls named `StopButton`, `HoldButton`, `TrainMarineButton`,
+#     `CancelMarineButton`, `LiftButton`, `LandButton` (the research button is optional).
+#   · the card must be in the SAME scene as the units: exactly one EventsManager runs per scene
+#     (a second one is disabled with a warning), and its button poll only sees its own scene — so
+#     do not put the card in an additive HUD scene with its own manager. Attach the sheet to the
+#     manager actor in the gameplay scene instead.
+#   · per-actor labels stay on the unit/building sheets: a card sheet cannot read another actor's
+#     `my train time` or `my "stim" cooldown`, so `Marine.events` keeps `bind StimLabel ...` and
+#     `Barracks.events` keeps `bind ResearchLabel ...`.
+#   · a building dropped into a scene by hand needs `set my Building to 1` in `when me appears`
+#     before `selection is all buildings` can be true of it — `Barracks.events` already does this.
+#
+# WHAT THIS SHEET DOES NOT DO YET (recorded in tasks_RTS.md Part E notes):
+#   · Move / Attack / Attack-Move buttons need a targeting cursor (press the button, then click),
+#     which no word offers yet — the right click already issues those orders (Task 29 Part C).
+#   · An ability button (Stim) cannot reuse the unit's own `when Q is pressed` block: there is no
+#     word that runs another sheet's block for every selected unit. Stim stays on `Marine.events`.
+#   · The card cannot grey a button *because of one specific reason* — a body has no way to say
+#     "if unaffordable print this, if the queue is full print that". Train greys out for both
+#     reasons, and `train` already warns which one it was when the queue is full.
+
+# Nothing selected, nothing on screen. A hidden button also stops polling, so it cannot be clicked
+# while it belongs to the other layout.
+when scene starts
+  hide StopButton
+  hide HoldButton
+  hide TrainMarineButton
+  hide CancelMarineButton
+  hide LiftButton
+  hide LandButton
+  hide ResearchButton
+
+# The layout is chosen from the selection, not from C#: everything selected is a unit -> the unit
+# buttons, everything is a building -> the building buttons, nothing selected -> neither.
+when selection changes
+  hide StopButton
+  hide HoldButton
+  hide TrainMarineButton
+  hide CancelMarineButton
+  hide LiftButton
+  hide LandButton
+  hide ResearchButton
+  if selection is all units
+  show StopButton
+  show HoldButton
+  if selection is all buildings
+  show TrainMarineButton
+  show CancelMarineButton
+  show LiftButton
+  show LandButton
+  show ResearchButton
+
+# ---- unit layout ---------------------------------------------------------------------------
+# Move, attack and attack-move are right-click orders (Task 29 Part C), so the card only carries
+# the orders that have no click of their own.
+when StopButton is pressed
+  selection is all units
+  selected units stop
+
+when HoldButton is pressed
+  selection is all units
+  selected units hold position
+
+# ---- building layout -----------------------------------------------------------------------
+# One press trains one Marine at every selected Barracks, the StarCraft rule. The three stacked
+# gates are the same ones `Barracks.events` uses on its W key, so a card press and a hotkey can
+# never disagree with what the engine will accept.
+when TrainMarineButton is pressed
+  selection is all buildings
+  can afford Marine
+  queue has room
+  selected buildings train Marine
+
+when CancelMarineButton is pressed
+  selection is all buildings
+  selected buildings cancel training Marine
+
+when LiftButton is pressed
+  selection is all buildings
+  selected buildings lift off
+
+when LandButton is pressed
+  selection is all buildings
+  selected buildings land
+
+# The price comes from Upgrades.events, so it is checked by the manager rather than by
+# `can afford` (which reads live globals only) — an unaffordable press is refused with a warning.
+when ResearchButton is pressed
+  selection is all buildings
+  selected buildings research "Stim Pack"
+
+# ---- affordability / cap feedback ----------------------------------------------------------
+# Train is the one button whose state is data. A greyed button is `Control.Enabled = false`, which
+# is also what stops the mouse from pressing it; the blocks are ordered so the last word wins —
+# disabled when the layout is wrong, when the unit is unaffordable, or when the queue is full, and
+# enabled only when all three are true.
+when every 0.5 seconds
+  unless selection is all buildings
+  set button TrainMarineButton disabled
+
+when every 0.5 seconds
+  selection is all buildings
+  unless can afford Marine
+  set button TrainMarineButton disabled
+
+when every 0.5 seconds
+  selection is all buildings
+  unless queue has room
+  set button TrainMarineButton disabled
+
+when every 0.5 seconds
+  selection is all buildings
+  can afford Marine
+  queue has room
+  set button TrainMarineButton enabled
