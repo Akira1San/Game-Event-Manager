@@ -240,5 +240,17 @@ namespace Game
                     return "";
             }
         }
+
+        /// <summary>
+        /// Whether a click should start the walk right away. A replacing order always does, even
+        /// when the unit is already walking to a previous click: the bridge drops the old path, so
+        /// the click retargets the unit instead of being eaten when the first walk arrives. An
+        /// appended (Shift) order waits behind a running one, and starts at once when nothing was
+        /// running to queue behind.
+        /// </summary>
+        public static bool StartsWalkNow(bool append, bool hasOrders)
+        {
+            return !append || !hasOrders;
+        }
     }
 }

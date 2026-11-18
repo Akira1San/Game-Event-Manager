@@ -1325,6 +1325,13 @@ selected", and no command-card scene/content exists.
   not have shipped without. `attack`/`attack-move to there` and `set rally point to there` capture
   the click at issue time too, and `UnitOrderQueue` keeps `RallyHasPoint`/`RallyX/Y/Z` so
   `ApplyRally` hands a trained unit the spot the player picked, not the last click anywhere.
+- **A second click retargets.** `IssueDefaultOrder` used to start the walk only when the unit had
+  no orders, so a right click on a unit already walking replaced the order in the queue but left
+  the old path running: the unit finished the first walk, and `FinishGoto`'s `Complete` then ate
+  the new order, so the second destination was dropped. `RightClickOrders.StartsWalkNow(append,
+  hasOrders)` now answers that question — a replacing order always walks, an appended one only
+  when nothing was running to queue behind — and `BeginOrderMove`'s `Remember` drops the stale
+  `Goto` move for the subject, so the click retargets mid-walk instead of fighting the old path.
 - **Right click records a position.** `EventsManager` now runs the same world raycast for the right
   button and writes `FlaxActions.LastClickPosition` before broadcasting `RightClicked`, so the
   authored `when … is right-clicked` handler and the order both see it. The right button alone
@@ -1357,6 +1364,8 @@ selected", and no command-card scene/content exists.
   no `set my Player to 1` anywhere, while two hostile actors stay one side. Authored players still
   win where they exist (different players are enemies whether or not either is hostile), and a
   scene that wants its enemies silent leaves `Hostile` off — same flag, no second switch.
+  Accepting both signals is on purpose: a scene can mix RTS content (`my Player` teams) with
+  other-game content that only knows `my Hostile`, and neither author has to set the other.
 - **Fog hides models, not colliders.** `SetFogVisibility` only swaps draw passes, so a unit the
   local player cannot see still catches the right click's ray. `HiddenFromPlayer` (different fog
   player *and* not `IsVisibleTo`) answers `Classify`'s `hidden`, which reads the click as bare

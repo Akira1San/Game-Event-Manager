@@ -10977,6 +10977,26 @@ Check(pointEngine.Orders.Complete(pointEngine.Variables, pointEngine, pointUnit)
       queuedMove.HasPoint && queuedMove.PointX == 10 && queuedMove.PointZ == 20,
     "the promoted order still carries the point it was given");
 
+Check(RightClickOrders.StartsWalkNow(append: false, hasOrders: true) &&
+      RightClickOrders.StartsWalkNow(append: false, hasOrders: false),
+    "a replacing click starts the walk even while the unit walks to the previous one");
+Check(!RightClickOrders.StartsWalkNow(append: true, hasOrders: true) &&
+      RightClickOrders.StartsWalkNow(append: true, hasOrders: false),
+    "a Shift click waits behind a running order and walks at once when nothing was running");
+
+var retargetEngine = FreshEngine(new FakeWorld());
+var retargetUnit = new FakeActor("Marine");
+var firstWalk = new UnitOrder { Kind = UnitOrderKind.Move, Name = "move", TargetName = "there", HasPositionTarget = true };
+firstWalk.SetPoint(30, 0, 30);
+retargetEngine.Orders.StartOrder(retargetEngine.Variables, retargetEngine, retargetUnit, firstWalk);
+var secondWalk = new UnitOrder { Kind = UnitOrderKind.Move, Name = "move", TargetName = "there", HasPositionTarget = true };
+secondWalk.SetPoint(-20, 0, 70);
+retargetEngine.Orders.StartOrder(retargetEngine.Variables, retargetEngine, retargetUnit, secondWalk);
+Check(retargetEngine.Orders.OrderCount(retargetUnit) == 1 &&
+      ReferenceEquals(retargetEngine.Orders.CurrentOrderOf(retargetUnit), secondWalk) &&
+      secondWalk.PointX == -20 && secondWalk.PointZ == 70,
+    "a second click on a walking unit leaves the new order as the one an arrival completes");
+
 var rallyEngine = FreshEngine(new FakeWorld());
 var rallyDepot = new FakeActor("Barracks");
 rallyEngine.Orders.SetRallyPoint(rallyDepot, null, "there", true, 40, 0, -60);

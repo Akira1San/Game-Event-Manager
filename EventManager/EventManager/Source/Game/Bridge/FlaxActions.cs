@@ -3753,7 +3753,7 @@ namespace Game
                     }
                 }
 
-                bool startsNow = !runtime.Orders.HasOrders(me);
+                bool hadOrders = runtime.Orders.HasOrders(me);
                 UnitOrderKind kindOfOrder = UnitOrderKindOf(order);
                 var unitOrder = new UnitOrder
                 {
@@ -3771,9 +3771,9 @@ namespace Game
                 else
                     runtime.Orders.StartOrder(runtime.Variables, runtime, me, unitOrder);
                 issued++;
-                // Appended behind a running order, it starts when that one finishes (the bridge's
-                // pending-order loop), so nothing moves yet.
-                if (!startsNow)
+                // Appended behind a running order, it waits for the bridge's pending-order loop;
+                // a replacing order always walks, so a second click retargets a moving unit.
+                if (!RightClickOrders.StartsWalkNow(append, hadOrders))
                     continue;
                 double range = kindOfOrder == UnitOrderKind.Attack ? OrderManager.StopDistanceFor(context)
                     : kindOfOrder == UnitOrderKind.Move ? 0
