@@ -1134,8 +1134,24 @@ window around a broken runtime.
   real machinery joins only when an actual game outgrows buttons-and-panels.
 - **Richer camera work:** pans, zooms, cutscene framing beyond `camera looks at` /
   `camera follows`. Minimal pair ships with the point & click batch; the rest is parked.
-- **Saving:** do global variables persist to disk across game restarts? Later; a `save`/`load game`
-  word pair is the natural shape when it matters.
+- **Save files (Task 30 Part A, decided):** a save is one pretty-printed JSON file at
+  `<ProjectFolder>/Saves/<slot>.json` (`default.json` for the default slot), written and read by
+  `Runtime/SaveFile.cs`. This is not a Flax asset and does not live under `Content/`. The root
+  carries `"format": "event-manager-save"` and `"version": 1`; a file missing either is reported
+  as damaged instead of half-read, a newer schema is refused without touching the running game,
+  and an older schema loads with a warning. Slot names are trimmed and every character that is
+  not a letter, digit, space, `-` or `_` becomes `_`, so `save game to "../x"` still lands inside
+  `Saves/`; writes go through a `.tmp` file and one replacing move so a crash cannot leave a
+  half-written slot. The schema already names every section Parts B–D will fill — scene name,
+  additive scene list, `LevelName`/`LevelNumber`, every global, one record per sheet/actor
+  (`SourceName`, actor name, player, physics flag, active, position/orientation/scale, all
+  per-object variables, bag stacks, equipped names, `CurrentState`, `spawnedFrom`), spawned
+  prefab/scene/clone roots, and the RNG seed. `SaveVariable` converts a `ValueBox` both ways, so
+  numbers, text, booleans and never-set values keep their kind. `save stats` / `load stats`
+  remain the in-memory checkpoint; `save game` / `load game` are the disk pair and belong to
+  Part E. Not saved in v1, by design: in-flight `wait` continuations, active tweens, particle
+  lifetimes, queued pushes and the current path — those restart cleanly rather than resuming
+  mid-air.
 - **Project name:** "Event Manager" is a placeholder. Candidates for a real name welcome.
 - **`unless my bag has Sword` gate:** DESIGN §5's Player.equip line reads `unless my bag has Sword /
   equip Sword`, which only equips when the sword is NOT already in the bag — the opposite of the

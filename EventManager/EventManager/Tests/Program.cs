@@ -11012,6 +11012,166 @@ Check(rallyEngine.Orders.HasRallyPoint(rallyDepot) &&
       !rallyEngine.Orders.RallyHasPointOf(rallyDepot),
     "the `set rally point to there` word still works and carries no stored point");
 
+// Task 30 Part A - the save file's format and location.
+var saveProject = Path.Combine(Path.GetTempPath(), "event-manager-save-" + Guid.NewGuid().ToString("N"));
+try
+{
+    Check(SaveFile.DefaultSlot == "default" && SaveFile.SchemaVersion == 1,
+        "a save has a default slot and schema version 1");
+    CheckStrings(Path.Combine(saveProject, "Saves", "slot1.json"),
+        SaveFile.PathFor(saveProject, "slot1"),
+        "a named slot lives under the project's Saves folder");
+    CheckStrings(Path.Combine(saveProject, "Saves", "default.json"),
+        SaveFile.PathFor(saveProject, " "),
+        "a blank slot name falls back to the default slot");
+    string escapedSlot = SaveFile.PathFor(saveProject, "../slot1");
+    Check(escapedSlot.StartsWith(Path.Combine(saveProject, "Saves") + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
+          !escapedSlot.Contains("..", StringComparison.Ordinal),
+        "a slot name cannot escape the save folder");
+
+    var save = new SaveData();
+    save.Scene.Name = "Level1";
+    save.Scene.Additive.Add("HUD");
+    save.Scene.LevelName = "Level1";
+    save.Scene.LevelNumber = 2;
+    save.Globals.Add(SaveVariable.FromBox("Score", ValueBox.OfNumber(42)));
+    save.Globals.Add(SaveVariable.FromBox("Title", ValueBox.OfText("Welcome back")));
+    save.Globals.Add(SaveVariable.FromBox("HasKey", ValueBox.OfBoolean(true)));
+    save.Globals.Add(SaveVariable.FromBox("NeverSet", new ValueBox()));
+
+    var savedPlayer = new SaveActor
+    {
+        Source = "Player",
+        Actor = "Player",
+        Player = 1,
+        Physics = true,
+        Active = true,
+        State = "playing",
+        SpawnedFrom = "Hero",
+    };
+    savedPlayer.Transform.Position.X = 120;
+    savedPlayer.Transform.Position.Y = 35;
+    savedPlayer.Transform.Position.Z = -40;
+    savedPlayer.Transform.Orientation.Y = 0.5;
+    savedPlayer.Transform.Orientation.W = 0.8660254;
+    savedPlayer.Transform.Scale.X = 2;
+    savedPlayer.Variables.Add(SaveVariable.FromBox("Health", ValueBox.OfNumber(75)));
+    savedPlayer.Bag.Add(new SaveBagEntry { Thing = "Sword", Count = 2 });
+    savedPlayer.Equipped.Add("Ring");
+    save.Actors.Add(savedPlayer);
+
+    var savedSpawn = new SaveSpawned { Kind = "prefab", Source = "Hero", Name = "Hero 2", Parent = "Level" };
+    savedSpawn.Transform.Position.X = 10;
+    save.Spawned.Add(savedSpawn);
+    save.Rng.Seed = 1234;
+
+    SaveFile.Write(saveProject, "slot1", save);
+    Check(File.Exists(SaveFile.PathFor(saveProject, "slot1")) && SaveFile.Exists(saveProject, "slot1"),
+        "writing a save creates the Saves folder and the slot file");
+    string savedJson = File.ReadAllText(SaveFile.PathFor(saveProject, "slot1"));
+    Check(savedJson.Contains("\"format\": \"event-manager-save\"", StringComparison.Ordinal) &&
+          savedJson.Contains("\"version\": 1", StringComparison.Ordinal),
+        "the file carries the format marker and schema version");
+
+    SaveFileResult loadedSave = SaveFile.TryRead(saveProject, "slot1");
+    Check(loadedSave.Status == SaveFileStatus.Ok && loadedSave.Loaded && loadedSave.Data != null &&
+          loadedSave.Data.Version == 1,
+        "a written save reads back cleanly");
+    SaveData loadedData = loadedSave.Data;
+    Check(loadedData.Scene.Name == "Level1" && loadedData.Scene.Additive.Count == 1 &&
+          loadedData.Scene.Additive[0] == "HUD" && loadedData.Scene.LevelName == "Level1" &&
+          loadedData.Scene.LevelNumber == 2,
+        "scene name, additive scenes and level round-trip");
+    Check(loadedData.Globals.Count == 4 &&
+          loadedData.Globals[0].Name == "Score" &&
+          Math.Abs(loadedData.Globals[0].ToBox().AsNumber() - 42) < 0.000001 &&
+          loadedData.Globals[1].ToBox().AsText() == "Welcome back" &&
+          loadedData.Globals[2].ToBox().AsBoolean() &&
+          loadedData.Globals[3].ToBox().IsNone(),
+        "globals round-trip as numbers, text, booleans and never-set values");
+    SaveActor loadedPlayer = loadedData.Actors.Count == 1 ? loadedData.Actors[0] : null;
+    Check(loadedPlayer != null && loadedPlayer.Source == "Player" && loadedPlayer.Actor == "Player" &&
+          loadedPlayer.Player == 1 && loadedPlayer.Physics && loadedPlayer.Active &&
+          loadedPlayer.State == "playing" && loadedPlayer.SpawnedFrom == "Hero",
+        "a sheet's source, actor, player, physics, active state and state round-trip");
+    Check(loadedPlayer != null &&
+          Math.Abs(loadedPlayer.Transform.Position.X - 120) < 0.000001 &&
+          Math.Abs(loadedPlayer.Transform.Position.Z + 40) < 0.000001 &&
+          Math.Abs(loadedPlayer.Transform.Scale.X - 2) < 0.000001 &&
+          Math.Abs(loadedPlayer.Transform.Orientation.W - 0.8660254) < 0.000001,
+        "position, orientation and scale round-trip");
+    Check(loadedPlayer != null && loadedPlayer.Variables.Count == 1 &&
+          loadedPlayer.Variables[0].Name == "Health" &&
+          Math.Abs(loadedPlayer.Variables[0].ToBox().AsNumber() - 75) < 0.000001 &&
+          loadedPlayer.Bag.Count == 1 && loadedPlayer.Bag[0].Thing == "Sword" &&
+          loadedPlayer.Bag[0].Count == 2 && loadedPlayer.Equipped.Count == 1 &&
+          loadedPlayer.Equipped[0] == "Ring",
+        "per-object variables, bag stacks and equipment round-trip");
+    Check(loadedData.Spawned.Count == 1 && loadedData.Spawned[0].Kind == "prefab" &&
+          loadedData.Spawned[0].Name == "Hero 2" && loadedData.Spawned[0].Parent == "Level" &&
+          loadedData.Rng.Seed == 1234,
+        "spawned records and the RNG seed round-trip");
+
+    SaveFileResult missingSave = SaveFile.TryRead(saveProject, "missing");
+    Check(missingSave.Status == SaveFileStatus.Missing && !missingSave.Loaded &&
+          missingSave.Message.Contains("no save file", StringComparison.OrdinalIgnoreCase),
+        "a missing slot is a quiet missing status with a friendly message");
+
+    File.WriteAllText(SaveFile.PathFor(saveProject, "broken"), "{ this is not json");
+    SaveFileResult brokenSave = SaveFile.TryRead(saveProject, "broken");
+    Check(brokenSave.Status == SaveFileStatus.Corrupt && !brokenSave.Loaded &&
+          brokenSave.Message.Contains("damaged", StringComparison.OrdinalIgnoreCase),
+        "a damaged file is a corrupt status, not an exception");
+
+    File.WriteAllText(SaveFile.PathFor(saveProject, "noformat"),
+        "{\"version\":1,\"globals\":[]}");
+    SaveFileResult noFormatSave = SaveFile.TryRead(saveProject, "noformat");
+    Check(noFormatSave.Status == SaveFileStatus.Corrupt && !noFormatSave.Loaded,
+        "a JSON file without the save format marker is not half-loaded");
+
+    File.WriteAllText(SaveFile.PathFor(saveProject, "noversion"),
+        "{\"format\":\"event-manager-save\",\"globals\":[]}");
+    SaveFileResult noVersionSave = SaveFile.TryRead(saveProject, "noversion");
+    Check(noVersionSave.Status == SaveFileStatus.Corrupt && !noVersionSave.Loaded,
+        "a save without a schema version is damaged, not guessed");
+
+    File.WriteAllText(SaveFile.PathFor(saveProject, "newer"),
+        "{\"format\":\"event-manager-save\",\"version\":99,\"globals\":[]}");
+    SaveFileResult newerSave = SaveFile.TryRead(saveProject, "newer");
+    Check(newerSave.Status == SaveFileStatus.NewerVersion && newerSave.Data == null &&
+          newerSave.Message.Contains("newer", StringComparison.OrdinalIgnoreCase),
+        "a newer schema is refused without touching the running game");
+
+    File.WriteAllText(SaveFile.PathFor(saveProject, "older"),
+        "{\"format\":\"event-manager-save\",\"version\":0,\"globals\":[{\"name\":\"Old\",\"kind\":\"number\",\"number\":7}]}");
+    SaveFileResult olderSave = SaveFile.TryRead(saveProject, "older");
+    Check(olderSave.Status == SaveFileStatus.OlderVersion && olderSave.Loaded && olderSave.HasWarning &&
+          olderSave.Data.Globals[0].ToBox().AsNumber() == 7 &&
+          olderSave.Message.Contains("older", StringComparison.OrdinalIgnoreCase),
+        "an older schema loads with a warning");
+
+    File.WriteAllText(SaveFile.PathFor(saveProject, "header"),
+        "{\"format\":\"event-manager-save\",\"version\":1}");
+    SaveFileResult headerOnly = SaveFile.TryRead(saveProject, "header");
+    Check(headerOnly.Status == SaveFileStatus.Ok && headerOnly.Data.Scene != null &&
+          headerOnly.Data.Globals != null && headerOnly.Data.Actors != null &&
+          headerOnly.Data.Spawned != null && headerOnly.Data.Rng != null,
+        "a save with only the header gets empty sections");
+
+    SaveFile.Write(saveProject, "slot2", new SaveData());
+    Check(SaveFile.Exists(saveProject, "slot1") && SaveFile.Exists(saveProject, "slot2"),
+        "two slots keep their own files");
+    Check(SaveFile.Delete(saveProject, "slot1") && !SaveFile.Exists(saveProject, "slot1"),
+        "delete save removes one slot");
+    Check(!SaveFile.Delete(saveProject, "slot1"),
+        "deleting a missing slot reports that nothing was deleted");
+}
+finally
+{
+    if (Directory.Exists(saveProject))
+        Directory.Delete(saveProject, true);
+}
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);

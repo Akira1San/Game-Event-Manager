@@ -11,6 +11,9 @@ Source/*.Gen.*
 # Local files
 imgui.ini
 
+# Player save files (Task 30 Part A: <project>/Saves)
+/Saves/
+
 # Ignore Visual Studio project files (generated locally)
 *.csproj
 *.sln

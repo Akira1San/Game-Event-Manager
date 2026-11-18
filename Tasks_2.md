@@ -287,7 +287,7 @@ and reads 0, never a silent wrong number.
 
 ---
 
-## Task 30 — Save/Load Game & World Snapshot `[ ]`
+## Task 30 — Save/Load Game & World Snapshot `[~]`
 
 Goal: a real save file. Today `save stats` / `load stats` is an in-memory checkpoint of globals
 only (`EventVariables.cs:14,45`; the task notes call it per-session). Quitting the game loses
@@ -352,9 +352,20 @@ when me touches Checkpoint
 
 ### Parts
 
-- [ ] **Part A — File format and location.** A versioned JSON (or Flax `JsonAsset`-friendly) file
+- [x] **Part A — File format and location.** A versioned JSON (or Flax `JsonAsset`-friendly) file
       under the project’s save folder, with a schema version field. The format is an implementation
       detail; the words are the contract.
+      *Landed:* `Runtime/SaveFile.cs` owns the contract — one pretty-printed JSON file at
+      `<ProjectFolder>/Saves/<slot>.json`, `default.json` for the default slot, with
+      `"format": "event-manager-save"` and `"version": 1`. Slot names are trimmed and every
+      character that is not a letter, digit, space, `-` or `_` becomes `_`, so a save can never
+      leave `Saves/`. Writes go through a `.tmp` file and one replaced move. `TryRead` reports
+      missing / damaged / newer / older instead of throwing, a newer schema is refused untouched,
+      an older one loads with a warning, and a file without the format marker or version is
+      damaged rather than half-read. The `SaveData` sections are already fixed for Parts B–D
+      (scene + additive list + level, globals, per-actor transform/active/locals/bag/equipment/
+      state/spawn marker, spawned prefab/scene/clone records, RNG seed); `SaveVariable` converts
+      `ValueBox` values both ways. Nothing is wired to the words yet — that is Part E.
 - [ ] **Part B — Global + scene snapshot.** Persist every global, the current scene and additive
       scenes, and the level name/number. Loading reloads the scene then restores variables in the
       right order.
