@@ -630,6 +630,22 @@ namespace Game
         }
 
         /// <summary>
+        /// Box (drag) select (Task 29 Part B): replaces the selection with the actors the released
+        /// marquee covers, or extends the current selection when Shift is held. The decision is
+        /// <see cref="BoxSelect"/>; the bridge projects the actors and draws the rectangle. Goes
+        /// through one <see cref="Selection.ReplaceSelection"/>, so rings, labels and
+        /// <c>when selection changes</c> fire once for the whole drag.
+        /// Returns how many actors the rectangle ends up selecting.
+        /// </summary>
+        public int SelectInBox(BoxScreenRect marquee, IEnumerable<BoxSelectCandidate> candidates, bool shift)
+        {
+            var keep = shift ? new List<object>(Selection.Selected) : null;
+            var wanted = BoxSelect.Resolve(marquee, candidates, keep);
+            Selection.ReplaceSelection(wanted);
+            return wanted.Count;
+        }
+
+        /// <summary>
         /// Assign the current selection to a control group (Ctrl+1–0 in the engine bridge,
         /// the same thing a global sheet's <c>set my control group to &lt;n&gt;</c> does).
         /// An empty selection assigns nothing rather than wiping the group.

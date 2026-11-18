@@ -10675,6 +10675,151 @@ Check(kindEngine.SelectSameKind(kindBarracks, kindScenery, true) && kindEngine.S
 Check(kindEngine.SelectSameKind(new FakeActor("NoSheet"), kindScenery, false) == false,
     "double click on an actor with no sheet selects nothing");
 
+Console.WriteLine();
+// ------------------------------------------------------------------
+// Task 29 Part B: box (drag) select
+// ------------------------------------------------------------------
+
+var dragRect = BoxScreenRect.FromCorners(300, 200, 100, 400);
+Check(dragRect.MinX == 100 && dragRect.MaxX == 300 && dragRect.MinY == 200 && dragRect.MaxY == 400 &&
+      dragRect.Contains(100, 200) && dragRect.Contains(300, 400) &&
+      !dragRect.Contains(99, 200) && !dragRect.Contains(200, 401),
+    "a marquee normalises from either corner and counts its edges as inside");
+var insideRect = BoxScreenRect.FromCorners(120, 220, 280, 380);
+var spillingRect = BoxScreenRect.FromCorners(120, 220, 320, 380);
+Check(dragRect.Covers(insideRect) && !dragRect.Covers(spillingRect),
+    "Covers needs the whole rectangle inside, not just an overlap");
+Check(!BoxSelect.IsDrag(100, 100, 103, 100) && BoxSelect.IsDrag(100, 100, 105, 100) &&
+      BoxSelect.IsDrag(100, 100, 100, 94),
+    "a few pixels of movement stay a plain click; past the threshold it is a marquee");
+
+var boxUnitA = new FakeActor("Marine");
+var boxUnitB = new FakeActor("Marine2");
+var boxUnitC = new FakeActor("Marine3");
+var boxBarracksA = new FakeActor("Barracks");
+
+var unitInside = new BoxSelectCandidate
+{
+    Actor = boxUnitA, X = 200, Y = 300, Selectable = true, Friendly = true, OnScreen = true,
+};
+var unitOnEdge = new BoxSelectCandidate
+{
+    Actor = boxUnitB, X = 300, Y = 400, Selectable = true, Friendly = true, OnScreen = true,
+};
+var unitOutside = new BoxSelectCandidate
+{
+    Actor = boxUnitC, X = 301, Y = 300, Selectable = true, Friendly = true, OnScreen = true,
+};
+Check(BoxSelect.Includes(dragRect, unitInside) && BoxSelect.Includes(dragRect, unitOnEdge) &&
+      !BoxSelect.Includes(dragRect, unitOutside),
+    "a unit joins when its projected centre is inside the rectangle");
+
+var barracksWhole = new BoxSelectCandidate
+{
+    Actor = boxBarracksA, Building = true, Selectable = true, Friendly = true, OnScreen = true,
+};
+barracksWhole.AddCorner(150, 250);
+barracksWhole.AddCorner(250, 350);
+var barracksClipped = new BoxSelectCandidate
+{
+    Actor = new FakeActor("Barracks2"), Building = true, Selectable = true, Friendly = true, OnScreen = true,
+};
+barracksClipped.AddCorner(150, 250);
+barracksClipped.AddCorner(250, 450);
+var barracksUnmeasured = new BoxSelectCandidate
+{
+    Actor = new FakeActor("Barracks3"), Building = true, Selectable = true, Friendly = true, OnScreen = true,
+};
+Check(BoxSelect.Includes(dragRect, barracksWhole) &&
+      !BoxSelect.Includes(dragRect, barracksClipped) &&
+      !BoxSelect.Includes(dragRect, barracksUnmeasured),
+    "a building only joins when the marquee covers its whole box");
+
+Check(!BoxSelect.Includes(dragRect, new BoxSelectCandidate
+      { Actor = boxUnitA, X = 200, Y = 300, Selectable = false, Friendly = true, OnScreen = true }) &&
+      !BoxSelect.Includes(dragRect, new BoxSelectCandidate
+      { Actor = boxUnitA, X = 200, Y = 300, Selectable = true, Friendly = false, OnScreen = true }) &&
+      !BoxSelect.Includes(dragRect, new BoxSelectCandidate
+      { Actor = boxUnitA, X = 200, Y = 300, Selectable = true, Friendly = true, OnScreen = false }) &&
+      !BoxSelect.Includes(dragRect, new BoxSelectCandidate
+      { X = 200, Y = 300, Selectable = true, Friendly = true, OnScreen = true }),
+    "unselectable, enemy, off-screen and actorless candidates stay out of a drag");
+
+var boxKept = new FakeActor("Kept");
+var boxCandidates = new[]
+{
+    unitInside, unitOnEdge, unitOutside, barracksWhole, barracksClipped, barracksUnmeasured,
+};
+var replacedBox = BoxSelect.Resolve(dragRect, boxCandidates, null);
+Check(replacedBox.Count == 3 && replacedBox.Contains(boxUnitA) && replacedBox.Contains(boxUnitB) &&
+      replacedBox.Contains(boxBarracksA) && !replacedBox.Contains(boxUnitC),
+    "a plain drag takes the units and the fully covered building, and nothing else");
+var keptBox = BoxSelect.Resolve(dragRect, boxCandidates, new object[] { boxKept, boxUnitA });
+Check(keptBox.Count == 4 && keptBox[0] == boxKept && keptBox[1] == boxUnitA &&
+      keptBox.Contains(boxUnitB) && keptBox.Contains(boxBarracksA),
+    "Shift keeps the old selection and appends what the marquee adds, once each");
+Check(BoxSelect.Resolve(BoxScreenRect.FromCorners(0, 0, 10, 10), boxCandidates, null).Count == 0,
+    "a drag over empty ground selects nothing, which clears the selection");
+
+var boxWorld = new FakeWorld();
+var boxMarine = new FakeActor("Marine");
+var boxMarine2 = new FakeActor("Marine2");
+var boxBarracks = new FakeActor("Barracks");
+boxWorld.AddActor(boxMarine);
+boxWorld.AddActor(boxMarine2);
+boxWorld.AddActor(boxBarracks);
+var boxEngine = FreshEngine(boxWorld);
+boxEngine.AddSheet(boxMarine, parser.Parse("when me appears\n  set Ready to 1"));
+boxEngine.AddSheet(boxMarine2, parser.Parse("when me appears\n  set Ready to 1"));
+boxEngine.AddSheet(boxBarracks, parser.Parse("when me appears\n  set Ready to 1"));
+boxEngine.Tick(0);
+
+var engineUnitA = new BoxSelectCandidate
+{
+    Actor = boxMarine, X = 150, Y = 150, Selectable = true, Friendly = true, OnScreen = true,
+};
+var engineUnitB = new BoxSelectCandidate
+{
+    Actor = boxMarine2, X = 250, Y = 200, Selectable = true, Friendly = true, OnScreen = true,
+};
+var engineBarracks = new BoxSelectCandidate
+{
+    Actor = boxBarracks, Building = true, Selectable = true, Friendly = true, OnScreen = true,
+};
+engineBarracks.AddCorner(300, 300);
+engineBarracks.AddCorner(360, 380);
+var engineCandidates = new[] { engineUnitA, engineUnitB, engineBarracks };
+
+int boxChangedEvents = 0;
+int boxSelectedEvents = 0;
+boxEngine.Selection.OnSelectionChanged = () => boxChangedEvents++;
+boxEngine.Selection.OnActorSelected = _ => boxSelectedEvents++;
+Check(boxEngine.SelectInBox(BoxScreenRect.FromCorners(100, 100, 280, 280), engineCandidates, false) == 2 &&
+      boxEngine.Selection.IsSelected(boxMarine) && boxEngine.Selection.IsSelected(boxMarine2) &&
+      !boxEngine.Selection.IsSelected(boxBarracks),
+    "a released marquee selects the units inside it and leaves the building it half-covers");
+Check(boxChangedEvents == 1 && boxSelectedEvents == 2,
+    "one drag is one `when selection changes` and one Selected per new unit");
+Check(boxEngine.SelectInBox(BoxScreenRect.FromCorners(120, 120, 420, 420), engineCandidates, false) == 3 &&
+      boxEngine.Selection.IsSelected(boxBarracks),
+    "the building joins once the rectangle covers its whole box");
+Check(boxEngine.SelectInBox(BoxScreenRect.FromCorners(120, 120, 340, 340), engineCandidates, false) == 2 &&
+      !boxEngine.Selection.IsSelected(boxBarracks),
+    "shrinking the marquee drops the building again instead of keeping it");
+
+boxEngine.SelectInBox(BoxScreenRect.FromCorners(100, 100, 200, 200), engineCandidates, false);
+Check(boxEngine.Selection.Count == 1 && boxEngine.Selection.IsSelected(boxMarine),
+    "a small drag leaves just the one unit it covers");
+Check(boxEngine.SelectInBox(BoxScreenRect.FromCorners(230, 180, 280, 220), engineCandidates, true) == 2 &&
+      boxEngine.Selection.IsSelected(boxMarine) && boxEngine.Selection.IsSelected(boxMarine2),
+    "Shift + drag keeps the old selection and adds the units in the new rectangle");
+Check(boxEngine.SelectInBox(BoxScreenRect.FromCorners(0, 0, 20, 20), engineCandidates, true) == 2 &&
+      boxEngine.Selection.Count == 2,
+    "Shift + drag over empty ground changes nothing");
+Check(boxEngine.SelectInBox(BoxScreenRect.FromCorners(0, 0, 20, 20), engineCandidates, false) == 0 &&
+      boxEngine.Selection.Count == 0,
+    "a plain drag over empty ground clears the selection");
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);

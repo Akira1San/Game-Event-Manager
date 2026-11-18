@@ -1241,7 +1241,7 @@ selected", and no command-card scene/content exists.
   play-check pending (click a Marine and see its ring, Shift-click a second, click the ground to
   clear, double-click a Marine and see every Marine on screen selected). Drag-select is Part B.
 
-### Part B — Box (drag) select [ ]
+### Part B — Box (drag) select [x]
 - Left-drag on empty ground draws a marquee and selects the friendly units inside it on release;
   a drag below a few pixels stays a plain click, Escape cancels, and the drag runs through
   `Selection.ReplaceSelection` so rings, labels and `when selection changes` fire once
@@ -1250,6 +1250,46 @@ selected", and no command-card scene/content exists.
   marquee covers them whole, as in StarCraft, and `Shift` keeps the old selection
 - The marquee itself is a `UIControl` (a scene-authored frame) so the runtime owns no drawing, and
   the existing edge-pan and camera controls (Task 26) must not fight it while dragging
+
+#### Part B notes
+- `Runtime/BoxSelect.cs` is the pure half: `BoxScreenRect` (`FromCorners` normalises either drag
+  direction, `Contains` counts the edges as inside, `Covers` is the whole-rectangle test buildings
+  need) and `BoxSelectCandidate` (projected centre, projected bounds, `Building` / `Selectable` /
+  `OnScreen` / `Friendly`). `BoxSelect.IsDrag` is the threshold (4 px, compared on the squared
+  distance), `Includes` is one actor's verdict — a unit joins when its centre is inside, a building
+  only when the rectangle covers its whole projected box, and a building with no measured box never
+  joins — and `Resolve` builds the selection: kept actors first (Shift), then the new ones, deduped,
+  with an empty result meaning "clear".
+- Runtime: `EventRuntime.SelectInBox(marquee, candidates, shift)` resolves and applies it with one
+  `Selection.ReplaceSelection`, so rings, labels and `when selection changes` fire once per drag.
+- Bridge (`EventsManager.cs`): `HandleMouseClick` now answers with a bool — true when the click
+  belonged to a UI control or a selectable actor, false for bare ground or scenery — and only a
+  false press calls `BeginBoxSelect`, so a press on a unit stays a Part A click. `UpdateBoxSelect`
+  shows the marquee once the pointer clears the threshold, `EndBoxSelect` applies it on release (a
+  sub-threshold press was already the click) and Escape calls `CancelBoxSelect`. `UpdateCameraPan`
+  skips edge panning while `_boxDragging`, so the camera no longer slides the world under the
+  rectangle; arrow/WASD panning still works and the drag re-projects on release.
+- Bridge (`MarqueeView.cs`): `MarqueePanel` is a scene-authored `UIControl` (translucent fill plus
+  border) named `Marquee`; the runtime only sets its corners — converted into control space with
+  `PointFromParent`, so a scaled canvas still lines up — and toggles the actor active, owning no
+  drawing. `MarqueeView.Candidates` projects every non-UI actor with `Camera.ProjectPoint`, takes
+  the eight corners of `Actor.BoundingBox` for buildings, and marks a unit friendly/visible exactly
+  the way `MinimapView.SelectRect` does (fog on: `PlayerOf == LocalPlayer` and `IsVisibleTo`; fog
+  off: everything counts). A camera-less scene falls back to the ground plane and the bounding
+  sphere, so a test or tool scene still box-selects. Without the `Marquee` actor a drag still
+  selects, it just draws nothing — one warning if the control type is wrong, the same rule the
+  minimap follows.
+- 17 new checks (rect normalisation and edges, `Covers`, the 4 px threshold on both axes, unit
+  centre vs building whole, the four filters, plain/Shift/empty `Resolve`, and the runtime path:
+  two units in one drag with exactly one `SelectionChanged` and two `Selected`, a half-covered
+  building staying out then joining when covered whole, Shift keeping the old selection, and a
+  plain empty drag clearing) -> **1904 passed, 0 failed**; the module builds with 0 errors
+  (`Flax.Build -build -arch=x64 -platform=Windows -configuration=Debug -target=GameEditorTarget
+  -workspace=<project>`).
+- Picking and drawing are bridge code, so as usual they have no unit tests: editor play-check still
+  pending (drag a box on the ground to see the frame, release to select the Marines inside,
+  Shift-drag to add, Escape to cancel, and drag toward a screen edge to confirm the camera no longer
+  pans under the rectangle).
 
 ### Part C — Right-click orders [ ]
 - Right click records a world position like a left click does (`LastClickPosition` today is

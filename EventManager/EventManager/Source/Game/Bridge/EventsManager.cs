@@ -77,6 +77,15 @@ namespace Game
         private const string AimMarkerName = "AimMarker";
         private Actor _aimMarker;
         private bool _aimMarkerSearched;
+        /// <summary>Left button went down on bare ground, so a drag may become a marquee
+        /// (Task 29 Part B). A press on a unit, a building or a UIControl never sets this.</summary>
+        private bool _boxPressed;
+        /// <summary>The press grew past <see cref="BoxSelect.DragThreshold"/>: a marquee is showing.</summary>
+        private bool _boxDragging;
+        /// <summary>Where the button went down, in screen pixels.</summary>
+        private Float2 _boxStart;
+        /// <summary>Shift as it was when the drag began, so the modifier is read once, not at release.</summary>
+        private bool _boxShift;
 
         [Tooltip("How touches/overlaps are detected. Distance needs no colliders; Colliders uses Flax trigger events; Both compares them without double-firing.")]
         public EventContactMode ContactMode = EventContactMode.Both;
@@ -608,7 +617,9 @@ namespace Game
             double directionX = 0;
             double directionZ = 0;
 
-            if (variables.GetGlobal(CameraRig.EdgePanVariable).AsNumber() > 0)
+            // A box select (Task 29 Part B) owns the mouse while it is being dragged: edge
+            // panning would slide the world under the rectangle the player is drawing.
+            if (!_boxDragging && variables.GetGlobal(CameraRig.EdgePanVariable).AsNumber() > 0)
             {
                 Float2 mouse = Input.MousePosition;
                 Float2 size = Screen.Size;
@@ -798,6 +809,11 @@ namespace Game
             // When nothing is aiming it stays an ordinary key press, so menus are unchanged.
             bool escapedAim = Input.GetKeyDown(KeyboardKeys.Escape) && Runtime.CancelAim();
 
+            // Escape also drops an in-flight marquee (Task 29 Part B): the press already did the
+            // click's work, so a cancelled drag leaves the scene as a plain click would.
+            if (Input.GetKeyDown(KeyboardKeys.Escape) && _boxPressed)
+                CancelBoxSelect();
+
             foreach (string key in ActionWords.KeyNamesForScanning)
             {
                 bool held = _world.IsKeyHeld(key);
@@ -867,13 +883,27 @@ namespace Game
                 // click still runs its ordinary path.
                 if (!TryAimPick(mousePos))
                 {
-                    HandleMouseClick(mousePos, screenCenter, TriggerKind.Clicked);
+                    bool tookClick = HandleMouseClick(mousePos, screenCenter, TriggerKind.Clicked);
                     var clickWorld = RaycastToWorld(mousePos);
                     if (clickWorld.HasValue)
                         FlaxActions.LastClickPosition = clickWorld.Value;
+                    // Box select (Task 29 Part B) only starts on bare ground: a press that landed
+                    // on a unit, a building or a UIControl keeps its Part A behaviour and can
+                    // never turn into a drag.
+                    if (!tookClick)
+                        BeginBoxSelect(mousePos);
                 }
             }
             _leftMouseDownLastFrame = leftMouseDown;
+
+            // The marquee follows the mouse while the button is held and lands on release.
+            if (_boxPressed)
+            {
+                if (!Input.GetMouseButton(MouseButton.Left))
+                    EndBoxSelect(mousePos);
+                else
+                    UpdateBoxSelect(mousePos);
+            }
 
             bool rightMouseDown = Input.GetMouseButtonDown(MouseButton.Right);
             if (rightMouseDown && !_rightMouseDownLastFrame)
@@ -1077,8 +1107,12 @@ namespace Game
         /// <summary>Raises <paramref name="kind"/> on the actor under the cursor. UIControls
         /// are hit-tested in screen space; everything else (the ground, a chest, ...) is
         /// hit-tested with a camera-through-mouse physics raycast — "the ground is just
-        /// another actor", so <c>when Ground is clicked</c> works on any actor.</summary>
-        private void HandleMouseClick(Float2 mousePos, Float2 screenCenter, TriggerKind kind)
+        /// another actor", so <c>when Ground is clicked</c> works on any actor.
+        ///
+        /// Returns true when the click belonged to a UI control or a selectable actor, and false
+        /// when it landed on bare ground (or scenery), which is what lets a drag select begin
+        /// there (Task 29 Part B).</summary>
+        private bool HandleMouseClick(Float2 mousePos, Float2 screenCenter, TriggerKind kind)
         {
             var actors = SceneActors();
             bool uiHit = false;
@@ -1098,11 +1132,11 @@ namespace Game
                 }
             }
             if (uiHit)
-                return;
+                return true;
 
             // 3D actors under the cursor: raycast from the scene camera through the mouse.
             if (!FlaxWorld.TryGetMouseRay(mousePos, out Ray ray))
-                return;
+                return false;
             Actor bestActor = null;
             if (Physics.LineCastAll(ray.Position, ray.Position + ray.Direction * 10000f, out var hits, ~0u, true))
             {
@@ -1119,12 +1153,14 @@ namespace Game
             if (bestActor != null)
             {
                 HandleWorldClick(bestActor, kind);
-                return;
+                bool hasSheet = Runtime.FindSheetFor(bestActor) != null;
+                return ClickSelect.IsSelectable(Runtime.Variables, bestActor, hasSheet);
             }
             // Bare ground (or nothing at all) on a plain left click clears the selection
             // (Task 29 Part A); Shift keeps it, so a shift-click miss is harmless.
             if (kind == TriggerKind.Clicked)
                 Runtime.SelectOnClick(null, Input.GetKey(KeyboardKeys.Shift));
+            return false;
         }
 
         /// <summary>Raises a click (or double-click) on <paramref name="actor"/>. A second left
@@ -1178,6 +1214,53 @@ namespace Game
                 visible.Add(actor);
             }
             Runtime.SelectSameKind(reference, visible, shift);
+        }
+
+        /// <summary>Starts tracking a possible drag (Task 29 Part B). Nothing is drawn yet —
+        /// the rectangle appears only once the mouse clears <see cref="BoxSelect.DragThreshold"/>,
+        /// so a shaky click stays a click.</summary>
+        private void BeginBoxSelect(Float2 pressPosition)
+        {
+            _boxPressed = true;
+            _boxDragging = false;
+            _boxStart = pressPosition;
+            _boxShift = Input.GetKey(KeyboardKeys.Shift);
+        }
+
+        /// <summary>Extends the marquee while the button is down.</summary>
+        private void UpdateBoxSelect(Float2 mousePos)
+        {
+            if (!_boxDragging &&
+                !BoxSelect.IsDrag(_boxStart.X, _boxStart.Y, mousePos.X, mousePos.Y))
+                return;
+            _boxDragging = true;
+            MarqueeView.Show(Runtime, _boxStart, mousePos);
+        }
+
+        /// <summary>
+        /// Releases the drag: past the threshold the marquee selects (Shift keeps the old
+        /// selection and adds), below it the press was only a click and has already done its
+        /// Part A work, so nothing else happens.
+        /// </summary>
+        private void EndBoxSelect(Float2 releasePosition)
+        {
+            bool dragging = _boxDragging;
+            _boxPressed = false;
+            _boxDragging = false;
+            MarqueeView.Hide();
+            if (!dragging)
+                return;
+            var marquee = BoxScreenRect.FromCorners(
+                _boxStart.X, _boxStart.Y, releasePosition.X, releasePosition.Y);
+            Runtime.SelectInBox(marquee, MarqueeView.Candidates(Runtime), _boxShift);
+        }
+
+        /// <summary>Escape during a drag: drop the rectangle and select nothing.</summary>
+        private void CancelBoxSelect()
+        {
+            _boxPressed = false;
+            _boxDragging = false;
+            MarqueeView.Hide();
         }
 
         /// <summary>Records a click on an actor and answers whether it was the second left click
