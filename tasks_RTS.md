@@ -1304,8 +1304,9 @@ selected", and no command-card scene/content exists.
 #### Part C notes
 - **Where the rules live.** `Runtime/RightClickOrders.cs` holds the table as data:
   `RightClickTarget` (nothing / ground / enemy / friendly / own building / resource node),
-  `DefaultOrderKind` (none / move / attack / rally) and `RightClickRule[] Table` — enemy →
-  `attack`, ground and resource node → move there, friendly and own building → no order. Editing
+  `DefaultOrderKind` (none / move / attack / gather / repair / rally) and `RightClickRule[] Table`
+  — enemy → `attack`, ground → move, resource node → `gather`, damaged friendly → `repair`, own
+  building and a healthy ally → no order. Editing
   `Table` (or `RuleFor`) is how a game changes the default; the runtime itself has no unit rule.
   `Classify` turns the hit into a target from four facts (an actor was hit, a point was recorded,
   it is a building, its fog player matches) and `Resolve` adds the selection's own shape: nothing
@@ -1331,12 +1332,22 @@ selected", and no command-card scene/content exists.
   collider-only), so an order still lands on a floor with no collider. `HandleMouseClick` now
   reports the 3D actor it hit and whether a `UIControl` swallowed the click, and a UI hit issues
   no order — a command-card button never also orders the selection.
-- **Two spec points that did not survive contact.** (1) `Mouse` is not a click: only `place`/`mark`
+- **One spec point that did not survive contact.** `Mouse` is not a click: only `place`/`mark`
   read it, live from the cursor, and it was left that way — only `there` was widened to both
-  buttons. (2) `gather` and `repair` do not exist as words or order kinds, and the economy task
-  (Task 30 Part B) keeps income authored, so a resource node (`my ResourceNode` / `my NodeAmount`)
-  is a move to the node and a friendly unit is no order. Adding `gather`/`repair` later means one
-  row in `Table` plus the action word, not a rewrite.
+  buttons.
+- **`gather` and `repair` are orders, not jobs.** Both words exist (`gather <node>`,
+  `repair <target>`), `UnitOrderKind` gained `Gather`/`Repair` so the queue, `my current order`
+  and `when gather order completes` read them by name, and the table now answers a resource node
+  with `gather` and a damaged friendly with `repair`. What the engine does is still only the walk:
+  the order stops `OrderManager.DefaultInteractionRange` (60) short of its target — near enough to
+  touch, far enough that a building's own footprint stays reachable — and the sheet works from
+  `me is near …`. Task 30 Part B still owns income, so no mining or healing engine was added, and
+  a unit without a repair line simply walks over. `RightClickOrders.IsDamaged` (`my Health` below
+  `my MaxHealth`, read through `HealthManager` so a sheet spelling it `my HP` answers too) gates
+  the friendly row: a healthy ally is still no order, and an actor with no health variables is
+  never damaged, which keeps repair off scenery and off the older TK sheets.
+  `FlaxActions.StartGather`/`StartRepair` warn once when the target carries no node tag or is at
+  full health.
 - **Enemy means another fog player, or `my Hostile`.** `RightClickOrders.Classify` takes
   `samePlayer` from `FogOfWarManager.PlayerOf`, which reads `my Player` (default 0). On its own
   that made every unauthored scene one team, so the default attack never fired against the
@@ -1357,8 +1368,9 @@ selected", and no command-card scene/content exists.
   selected does nothing and warns nothing, and a click on a `UIControl` raises only its authored
   trigger. 19 new checks (table, classification, rally-vs-move-vs-attack, the lifted-building
   rule, node tagging, the stored point surviving a queue promotion, rally coordinates, plus 4
-  follow-up checks for the `my Hostile` fallback and the fog-hidden case) ->
-  **1927 passed, 0 failed**; the Game module builds with 0 errors and the assembly carries the new
+  follow-up checks for the `my Hostile` fallback and the fog-hidden case, plus 8 for the
+  `gather`/`repair` words, the damage gate and the order names) ->
+  **1935 passed, 0 failed**; the Game module builds with 0 errors and the assembly carries the new
   symbols. Editor play-check of the actual click targeting, timing and camera feel still pending.
 
 ### Part D — The selection as an event value [ ]

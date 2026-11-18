@@ -254,6 +254,8 @@ namespace Game
             new WordEntry { Kind = "action", Word = "add <n> to build progress of <building>", Example = "add 10 to build progress of Barracks" },
             new WordEntry { Kind = "action", Word = "attack-move", Example = "attack-move to Enemy" },
             new WordEntry { Kind = "action", Word = "attack", Example = "attack Enemy" },
+            new WordEntry { Kind = "action", Word = "gather", Example = "gather MineralField", AltShape = "walks to the node on a `gather` order; the node's own sheet mines, so the economy stays authored" },
+            new WordEntry { Kind = "action", Word = "repair", Example = "repair Tank", AltShape = "walks to a damaged friendly and stops beside it; the sheet's own `me is near …` block heals it" },
             new WordEntry { Kind = "action", Word = "stop", Example = "stop" },
             new WordEntry { Kind = "action", Word = "hold", Example = "hold position" },
             new WordEntry { Kind = "action", Word = "add order to queue", Example = "add order to queue" },

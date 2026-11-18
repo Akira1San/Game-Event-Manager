@@ -98,6 +98,10 @@ namespace Game
         // RTS orders & attack-move (Task 18 Part E)
         AttackMove,
         AttackOrder,
+        /// <summary><c>gather &lt;node&gt;</c> — walk a worker to a resource node (Task 29 Part C).</summary>
+        Gather,
+        /// <summary><c>repair &lt;target&gt;</c> — walk to a damaged friendly (Task 29 Part C).</summary>
+        Repair,
         StopOrder,
         HoldPosition,
         AddOrderToQueue,
@@ -639,6 +643,30 @@ namespace Game
                     }
                     return Unknown(spec, words, "\u201Cattack\u201D needs a target, like \u201Cattack Enemy\u201D", warn);
                 }
+
+                case "gather":
+                {
+                    // `gather MineralField` — the order is the walk; the node's sheet mines.
+                    string gatherTarget = ThingAt(words, 1, out int gatherUsed);
+                    if (gatherTarget != null)
+                    {
+                        spec.Thing = gatherTarget;
+                        return Finish(spec, ActionVerb.Gather, words, 1 + gatherUsed);
+                    }
+                    return Unknown(spec, words, "\u201Cgather\u201D needs a node, like \u201Cgather MineralField\u201D", warn);
+                }
+
+                case "repair":
+                {
+                    string repairTarget = ThingAt(words, 1, out int repairUsed);
+                    if (repairTarget != null)
+                    {
+                        spec.Thing = repairTarget;
+                        return Finish(spec, ActionVerb.Repair, words, 1 + repairUsed);
+                    }
+                    return Unknown(spec, words, "\u201Crepair\u201D needs a target, like \u201Crepair Tank\u201D", warn);
+                }
+
 
                 case "hold":
                     if (words.Count >= 2 && words[1].Text == "position")

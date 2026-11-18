@@ -26,6 +26,10 @@ namespace Game
         None,
         Move,
         Attack,
+        /// <summary>Walk a worker to a resource node and let its sheet do the mining.</summary>
+        Gather,
+        /// <summary>Walk to a damaged friendly unit or building and let its sheet repair it.</summary>
+        Repair,
         /// <summary>A production building's rally point (the click picks where new units walk).</summary>
         Rally,
     }
@@ -64,11 +68,11 @@ namespace Game
         public const string HostileVariable = "Hostile";
 
         /// <summary>
-        /// What every target means, in one place. Enemy → attack, ground and resource nodes →
-        /// move there, everything friendly (units and buildings) → no order, which is StarCraft's
-        /// "don't walk off and do something surprising" rule. Repair and gather have no words yet
-        /// (the economy task owns them), so a damaged friendly and a resource node both stay on
-        /// the safe side of the line: no order, and a walk to the node respectively.
+        /// What every target means, in one place: enemy → attack, ground → move, a resource
+        /// node → gather, a damaged friendly → repair, and your own buildings → no order. The
+        /// last part is StarCraft's "don't walk off and do something surprising" rule — an ally
+        /// nobody needs to fix orders nothing, and a building only takes a rally point because a
+        /// selection of units has no business walking into its own base.
         /// </summary>
         public static readonly RightClickRule[] Table =
         {
@@ -89,14 +93,14 @@ namespace Game
             new RightClickRule
             {
                 Target = RightClickTarget.ResourceNode,
-                Order = DefaultOrderKind.Move,
-                Reason = "no gather word exists yet, so workers walk to the node and the sheet takes over",
+                Order = DefaultOrderKind.Gather,
+                Reason = "a worker walks to the node on a gather order and the sheet's own tick does the mining",
             },
             new RightClickRule
             {
                 Target = RightClickTarget.Friendly,
-                Order = DefaultOrderKind.None,
-                Reason = "a friendly unit is never attacked and repair has no word yet",
+                Order = DefaultOrderKind.Repair,
+                Reason = "a damaged ally is repaired; Resolve sends a healthy one back to no order",
             },
             new RightClickRule
             {
@@ -172,18 +176,39 @@ namespace Game
         }
 
         /// <summary>
+        /// Whether an actor is missing health it could get back (`my Health` below
+        /// `my MaxHealth`). Read through <see cref="HealthManager"/> so whichever spelling the
+        /// sheet wrote (`my Health`, `my HP`) answers; an actor that declared no health at all
+        /// is not damaged, which keeps repair off scenery and off older sheets.
+        /// </summary>
+        public static bool IsDamaged(EventVariables variables, object actor)
+        {
+            if (variables == null || actor == null)
+                return false;
+            double max = HealthManager.Read(variables, actor, HealthManager.MaxHealth);
+            if (max <= 0)
+                return false;
+            return HealthManager.Read(variables, actor, HealthManager.Health) < max;
+        }
+
+        /// <summary>
         /// The order a right click issues. A standing building sets a rally point instead of
         /// taking an order itself — what comes out of it walks where you clicked — while a
         /// lifted building (Task 28) is airborne and takes the unit rules. Nothing selected is
         /// the no-op the task asks for, and so is a target with no answer in the table.
+        /// <paramref name="targetDamaged"/> is whether the clicked ally needs fixing: the table
+        /// says repair, so a healthy one is the case this rule overrides — nobody walks across
+        /// the map to polish an undamaged unit.
         /// </summary>
         public static DefaultOrderKind Resolve(bool hasSelection, bool buildingSelection,
-            bool liftedBuilding, RightClickTarget target)
+            bool liftedBuilding, RightClickTarget target, bool targetDamaged = true)
         {
             if (!hasSelection || target == RightClickTarget.Nothing)
                 return DefaultOrderKind.None;
             if (buildingSelection && !liftedBuilding)
                 return DefaultOrderKind.Rally;
+            if (target == RightClickTarget.Friendly && !targetDamaged)
+                return DefaultOrderKind.None;
             return RuleFor(target);
         }
 
@@ -205,6 +230,10 @@ namespace Game
                     return "move";
                 case DefaultOrderKind.Attack:
                     return "attack";
+                case DefaultOrderKind.Gather:
+                    return "gather";
+                case DefaultOrderKind.Repair:
+                    return "repair";
                 case DefaultOrderKind.Rally:
                     return "rally";
                 default:

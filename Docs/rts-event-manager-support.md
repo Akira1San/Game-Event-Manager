@@ -125,6 +125,9 @@ add <n> to Minerals             // resource management
 deduct <n> from Minerals
 train <unit> at <building>      // production
 attack-move to <target>         // combat order
+attack <target>                  // close to attack range and hold there
+gather <node>                    // walk a worker to a resource node
+repair <target>                  // walk to a damaged friendly
 stop                             // cancel current order
 hold position                    // freeze movement
 ```
@@ -366,6 +369,8 @@ when Barracks finishes training Marine
 **New actions:**
 - `attack-move to <target>`
 - `attack <target>`
+- `gather <node>`
+- `repair <target>`
 - `stop`
 - `hold position`
 - `add order to queue`

@@ -5264,6 +5264,19 @@ Check(attackMoveSpec.Verb == ActionVerb.AttackMove && attackMoveSpec.Thing == "E
 var attackSpec = ActionWords.Parse(((RawActionNode)orderProg.Events[0].Body[1].Statement).Words, null);
 Check(attackSpec.Verb == ActionVerb.AttackOrder && attackSpec.Thing == "Enemy",
       "`attack Enemy` parses to AttackOrder");
+
+// The work words a right click can also issue (Task 29 Part C follow-up).
+var workProg = parser.Parse("when game starts\n  gather MineralField\n  repair Tank\n");
+var gatherSpec = ActionWords.Parse(((RawActionNode)workProg.Events[0].Body[0].Statement).Words, null);
+Check(gatherSpec.Verb == ActionVerb.Gather && gatherSpec.Thing == "MineralField",
+      "`gather MineralField` parses to Gather");
+var repairSpec = ActionWords.Parse(((RawActionNode)workProg.Events[0].Body[1].Statement).Words, null);
+Check(repairSpec.Verb == ActionVerb.Repair && repairSpec.Thing == "Tank",
+      "`repair Tank` parses to Repair");
+var bareGatherProg = parser.Parse("when game starts\n  gather\n");
+var bareGatherSpec = ActionWords.Parse(((RawActionNode)bareGatherProg.Events[0].Body[0].Statement).Words, null);
+Check(bareGatherSpec.Verb == ActionVerb.Unknown,
+      "a `gather` with no node is refused rather than guessed");
 var stopOrderSpec = ActionWords.Parse(((RawActionNode)orderProg.Events[0].Body[2].Statement).Words, null);
 Check(stopOrderSpec.Verb == ActionVerb.StopOrder,
       "bare `stop` parses to StopOrder");
@@ -10870,11 +10883,11 @@ Check(RightClickOrders.Classify(true, true, false, true, false, hidden: true) ==
 
 Check(RightClickOrders.RuleFor(RightClickTarget.Enemy) == DefaultOrderKind.Attack &&
       RightClickOrders.RuleFor(RightClickTarget.Ground) == DefaultOrderKind.Move &&
-      RightClickOrders.RuleFor(RightClickTarget.ResourceNode) == DefaultOrderKind.Move &&
-      RightClickOrders.RuleFor(RightClickTarget.Friendly) == DefaultOrderKind.None &&
+      RightClickOrders.RuleFor(RightClickTarget.ResourceNode) == DefaultOrderKind.Gather &&
+      RightClickOrders.RuleFor(RightClickTarget.Friendly) == DefaultOrderKind.Repair &&
       RightClickOrders.RuleFor(RightClickTarget.OwnBuilding) == DefaultOrderKind.None &&
       RightClickOrders.RuleFor(RightClickTarget.Nothing) == DefaultOrderKind.None,
-    "the table reads enemy -> attack, ground and node -> move, friendly -> nothing");
+    "the table reads enemy -> attack, ground -> move, node -> gather, friendly -> repair");
 Check(RightClickOrders.Table.Length == 6 &&
       RightClickOrders.OrderName(DefaultOrderKind.Move) == "move" &&
       RightClickOrders.OrderName(DefaultOrderKind.Attack) == "attack" &&
@@ -10885,9 +10898,9 @@ Check(RightClickOrders.Table.Length == 6 &&
 Check(RightClickOrders.Resolve(false, false, false, RightClickTarget.Enemy) == DefaultOrderKind.None,
     "an order with nothing selected does nothing");
 Check(RightClickOrders.Resolve(true, false, false, RightClickTarget.Enemy) == DefaultOrderKind.Attack &&
-      RightClickOrders.Resolve(true, false, false, RightClickTarget.Friendly) == DefaultOrderKind.None &&
+      RightClickOrders.Resolve(true, false, false, RightClickTarget.Friendly) == DefaultOrderKind.Repair &&
       RightClickOrders.Resolve(true, false, false, RightClickTarget.Ground) == DefaultOrderKind.Move,
-    "units attack an enemy, move to the ground and leave a friendly alone");
+    "units attack an enemy, move to the ground and repair a damaged ally");
 Check(RightClickOrders.Resolve(true, true, false, RightClickTarget.Ground) == DefaultOrderKind.Rally &&
       RightClickOrders.Resolve(true, true, false, RightClickTarget.Friendly) == DefaultOrderKind.Rally,
     "a standing building sets a rally point wherever the click landed");
@@ -10906,6 +10919,42 @@ Check(!RightClickOrders.IsResourceNode(nodeVars, plainRock) &&
 nodeVars.SetLocal(nodeActor, "NodeAmount", ValueBox.OfNumber(1500));
 Check(RightClickOrders.IsResourceNode(nodeVars, nodeActor),
     "`my NodeAmount` tags an actor as a resource node");
+
+// gather / repair: the node is an order, and so is a damaged ally (the follow-up words).
+var friendVars = new EventVariables();
+var damagedMarine = new FakeActor("DamagedMarine");
+var healthyMarine = new FakeActor("HealthyMarine");
+var healthlessRock = new FakeActor("Rock");
+friendVars.SetLocal(damagedMarine, "MaxHealth", ValueBox.OfNumber(45));
+friendVars.SetLocal(damagedMarine, "Health", ValueBox.OfNumber(12));
+friendVars.SetLocal(healthyMarine, "MaxHealth", ValueBox.OfNumber(45));
+friendVars.SetLocal(healthyMarine, "Health", ValueBox.OfNumber(45));
+Check(RightClickOrders.IsDamaged(friendVars, damagedMarine) &&
+      !RightClickOrders.IsDamaged(friendVars, healthyMarine) &&
+      !RightClickOrders.IsDamaged(friendVars, healthlessRock) &&
+      !RightClickOrders.IsDamaged(friendVars, null),
+    "`my Health` below `my MaxHealth` is damaged, and an actor with no health is not");
+Check(RightClickOrders.Resolve(true, false, false, RightClickTarget.Friendly, targetDamaged: true) == DefaultOrderKind.Repair &&
+      RightClickOrders.Resolve(true, false, false, RightClickTarget.Friendly, targetDamaged: false) == DefaultOrderKind.None,
+    "a damaged ally is repaired and a healthy one orders nothing");
+Check(RightClickOrders.Resolve(true, false, false, RightClickTarget.ResourceNode) == DefaultOrderKind.Gather &&
+      RightClickOrders.OrderName(DefaultOrderKind.Gather) == "gather" &&
+      RightClickOrders.OrderName(DefaultOrderKind.Repair) == "repair",
+    "a resource node is a gather order, and both new orders write their own name");
+
+var workEngine = FreshEngine(new FakeWorld());
+var workUnit = new FakeActor("SCV");
+workEngine.Orders.StartOrder(workEngine.Variables, workEngine, workUnit,
+    new UnitOrder { Kind = UnitOrderKind.Gather, Name = "gather", Target = nodeActor, TargetName = "MineralField" });
+Check(workEngine.Orders.CurrentOrderName(workUnit) == "gather" &&
+      workEngine.Orders.CurrentOrderOf(workUnit).Kind == UnitOrderKind.Gather &&
+      ReferenceEquals(workEngine.Orders.CurrentOrderOf(workUnit).Target, nodeActor),
+    "a gather order reads back as gather, not as a move, and keeps the node it was given");
+workEngine.Orders.StartOrder(workEngine.Variables, workEngine, workUnit,
+    new UnitOrder { Kind = UnitOrderKind.Repair, Name = "repair", Target = healthyMarine, TargetName = "HealthyMarine" });
+Check(workEngine.Orders.CurrentOrderName(workUnit) == "repair" &&
+      workEngine.Orders.CurrentOrderOf(workUnit).Kind == UnitOrderKind.Repair,
+    "a repair order reads back as repair");
 
 var pointOrder = new UnitOrder { Kind = UnitOrderKind.Move, Name = "move", HasPositionTarget = true };
 Check(!pointOrder.HasPoint, "an order starts without a point of its own");

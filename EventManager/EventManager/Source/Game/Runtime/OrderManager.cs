@@ -10,6 +10,10 @@ namespace Game
         Move,
         AttackMove,
         Attack,
+        /// <summary>Walk to a resource node; the node's sheet ticks the income (Task 29 Part C).</summary>
+        Gather,
+        /// <summary>Walk to a damaged friendly and let a sheet heal it (Task 29 Part C).</summary>
+        Repair,
         Build,
         Hold,
         Stop,
@@ -79,6 +83,14 @@ namespace Game
         /// enough to be a melee hit, so `me is in range of …` means something on day one.
         /// </summary>
         public const double DefaultAttackRange = 50;
+
+        /// <summary>
+        /// How close a gather or repair order stops from its target (Task 29 Part C): near enough
+        /// to be touching, far enough that the path does not have to reach the target's own
+        /// centre — a building's footprint would otherwise be unreachable. A sheet that wants a
+        /// longer arm gates on its own `me is near …` line.
+        /// </summary>
+        public const double DefaultInteractionRange = 60;
 
         /// <summary>Both spellings the language accepts for the range the sheet declares.</summary>
         private static readonly string[] AttackRangeNames = { "attack range", "AttackRange" };

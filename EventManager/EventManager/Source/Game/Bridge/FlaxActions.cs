@@ -1122,6 +1122,12 @@ namespace Game
                 case ActionVerb.AttackOrder:
                     StartAttack(context, spec);
                     break;
+                case ActionVerb.Gather:
+                    StartGather(context, spec);
+                    break;
+                case ActionVerb.Repair:
+                    StartRepair(context, spec);
+                    break;
                 case ActionVerb.StopOrder:
                     StopOrder(context);
                     break;
@@ -3557,6 +3563,66 @@ namespace Game
             context.Runtime.Orders.Stop(context.Variables, me);
         }
 
+        /// <summary><c>gather &lt;node&gt;</c> — walk a worker to a resource node and stop beside
+        /// it. The economy stays authored (Task 30 Part B), so the word is the order and not the
+        /// mining: on arrival `when gather order completes` fires and the node's own sheet ticks
+        /// the income. The node is the order's target, so a queued or selection-wide gather walks
+        /// to the node it was given for.</summary>
+        private static void StartGather(EventContext context, ActionSpec spec)
+        {
+            Actor me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Cgather\u201D needs to run on a unit's sheet \u2014 the global Game sheet has no body to move.");
+                return;
+            }
+            if (!TryResolveOrderTarget(context, spec.Thing, out object target, out string targetName, out bool isPosition))
+                return;
+            if (target is Actor node && !RightClickOrders.IsResourceNode(context.Variables, node))
+                WarnOnce($"\u201C{node.Name}\u201D isn't tagged as a resource node \u2014 give it \u201Cset my NodeAmount to 1500\u201D before gathering from it.");
+            context.Runtime.Wander.Clear(me);
+            var order = new UnitOrder
+            {
+                Kind = UnitOrderKind.Gather,
+                Name = "gather",
+                Target = target,
+                TargetName = targetName,
+                HasPositionTarget = isPosition,
+            };
+            CaptureOrderPoint(order, isPosition);
+            context.Runtime.Orders.StartOrder(context.Variables, context.Runtime, me, order);
+            BeginOrderMove(context.Runtime, me, order, 5, OrderManager.DefaultInteractionRange);
+        }
+
+        /// <summary><c>repair &lt;target&gt;</c> — walk to a damaged friendly unit or building and
+        /// stop beside it, where the sheet's own `me is near …` block heals it. The repair itself
+        /// stays authored, so a unit without a repair line simply walks over.</summary>
+        private static void StartRepair(EventContext context, ActionSpec spec)
+        {
+            Actor me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Crepair\u201D needs to run on a unit's sheet \u2014 the global Game sheet has no body to move.");
+                return;
+            }
+            if (!TryResolveOrderTarget(context, spec.Thing, out object target, out string targetName, out bool isPosition))
+                return;
+            if (target is Actor ally && !RightClickOrders.IsDamaged(context.Variables, ally))
+                WarnOnce($"\u201C{ally.Name}\u201D isn't damaged \u2014 nothing to repair yet.");
+            context.Runtime.Wander.Clear(me);
+            var order = new UnitOrder
+            {
+                Kind = UnitOrderKind.Repair,
+                Name = "repair",
+                Target = target,
+                TargetName = targetName,
+                HasPositionTarget = isPosition,
+            };
+            CaptureOrderPoint(order, isPosition);
+            context.Runtime.Orders.StartOrder(context.Variables, context.Runtime, me, order);
+            BeginOrderMove(context.Runtime, me, order, 5, OrderManager.DefaultInteractionRange);
+        }
+
         /// <summary><c>hold position</c> — drop queued orders and freeze in place.</summary>
         private static void HoldPosition(EventContext context)
         {
@@ -3647,7 +3713,8 @@ namespace Game
                     hostile: RightClickOrders.IsDeclaredEnemy(runtime.Variables, me, target),
                     hidden: HiddenFromPlayer(runtime, samePlayer, target));
                 DefaultOrderKind order = RightClickOrders.Resolve(
-                    hasSelection: true, buildingSelection: isBuilding, liftedBuilding: lifted, target: kind);
+                    hasSelection: true, buildingSelection: isBuilding, liftedBuilding: lifted, target: kind,
+                    targetDamaged: RightClickOrders.IsDamaged(runtime.Variables, target));
                 if (order == DefaultOrderKind.None)
                     continue;
 
@@ -3687,9 +3754,10 @@ namespace Game
                 }
 
                 bool startsNow = !runtime.Orders.HasOrders(me);
+                UnitOrderKind kindOfOrder = UnitOrderKindOf(order);
                 var unitOrder = new UnitOrder
                 {
-                    Kind = order == DefaultOrderKind.Attack ? UnitOrderKind.Attack : UnitOrderKind.Move,
+                    Kind = kindOfOrder,
                     Name = RightClickOrders.OrderName(order),
                     Target = target,
                     TargetName = target == null ? "there" : target.Name,
@@ -3707,10 +3775,32 @@ namespace Game
                 // pending-order loop), so nothing moves yet.
                 if (!startsNow)
                     continue;
-                double range = order == DefaultOrderKind.Attack ? OrderManager.StopDistanceFor(context) : 0;
+                double range = kindOfOrder == UnitOrderKind.Attack ? OrderManager.StopDistanceFor(context)
+                    : kindOfOrder == UnitOrderKind.Move ? 0
+                    : OrderManager.DefaultInteractionRange;
                 BeginOrderMove(runtime, me, unitOrder, 5, range);
             }
             return issued;
+        }
+
+        /// <summary>
+        /// The order kind a table decision writes. The queue, the order triggers and
+        /// `my current order` all name it, so `gather` and `repair` read back as themselves
+        /// instead of as a move.
+        /// </summary>
+        private static UnitOrderKind UnitOrderKindOf(DefaultOrderKind order)
+        {
+            switch (order)
+            {
+                case DefaultOrderKind.Attack:
+                    return UnitOrderKind.Attack;
+                case DefaultOrderKind.Gather:
+                    return UnitOrderKind.Gather;
+                case DefaultOrderKind.Repair:
+                    return UnitOrderKind.Repair;
+                default:
+                    return UnitOrderKind.Move;
+            }
         }
 
         /// <summary>
