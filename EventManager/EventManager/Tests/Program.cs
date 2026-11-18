@@ -10820,6 +10820,129 @@ Check(boxEngine.SelectInBox(BoxScreenRect.FromCorners(0, 0, 20, 20), engineCandi
       boxEngine.Selection.Count == 0,
     "a plain drag over empty ground clears the selection");
 
+Console.WriteLine();
+// ------------------------------------------------------------------
+// Task 29 Part C: right-click orders
+// ------------------------------------------------------------------
+
+Check(RightClickOrders.Classify(false, false, false, true, false) == RightClickTarget.Nothing &&
+      RightClickOrders.Classify(false, true, false, true, false) == RightClickTarget.Ground,
+    "a right click that missed the world is nothing, and bare ground with a point is ground");
+Check(RightClickOrders.Classify(true, true, false, true, true) == RightClickTarget.ResourceNode &&
+      RightClickOrders.Classify(true, true, true, true, false) == RightClickTarget.OwnBuilding &&
+      RightClickOrders.Classify(true, true, true, false, false) == RightClickTarget.Enemy,
+    "a node is a node, a same-player building is your own, and another player's building is an enemy");
+Check(RightClickOrders.Classify(true, false, false, true, false) == RightClickTarget.Friendly &&
+      RightClickOrders.Classify(true, false, false, false, false) == RightClickTarget.Enemy,
+    "the fog grid's player decides friend from enemy");
+
+// A normal scene authors no players, so every actor is on fog player 0 and the grid cannot
+// tell friend from enemy. `my Hostile` — what `enemy type` writes and `when all enemies dead`
+// reads — is the fallback, so the shipped enemy sheets are attackable with no setup.
+var hostileVars = new EventVariables();
+var hostileWorker = new FakeActor("Worker");
+var hostileZombie = new FakeActor("Zombie");
+var hostileCivilian = new FakeActor("Civilian");
+hostileVars.SetLocal(hostileZombie, "Hostile", ValueBox.OfBoolean(true));
+hostileVars.SetLocal(hostileCivilian, "Hostile", ValueBox.OfBoolean(false));
+Check(!RightClickOrders.IsHostile(hostileVars, hostileWorker) &&
+      RightClickOrders.IsHostile(hostileVars, hostileZombie) &&
+      !RightClickOrders.IsHostile(hostileVars, hostileCivilian) &&
+      !RightClickOrders.IsHostile(hostileVars, null),
+    "`my Hostile` is the enemy flag, and an actor that never wrote it is not hostile");
+Check(RightClickOrders.IsDeclaredEnemy(hostileVars, hostileWorker, hostileZombie) &&
+      !RightClickOrders.IsDeclaredEnemy(hostileVars, hostileWorker, hostileCivilian) &&
+      !RightClickOrders.IsDeclaredEnemy(hostileVars, hostileWorker, hostileWorker) &&
+      !RightClickOrders.IsDeclaredEnemy(hostileVars, hostileZombie, hostileCivilian),
+    "a hostile actor is an enemy of a non-hostile one, and two hostiles stay one team");
+Check(RightClickOrders.Classify(true, true, false, true, false, hostile: true) == RightClickTarget.Enemy &&
+      RightClickOrders.Resolve(true, false, false,
+          RightClickOrders.Classify(true, true, false, true, false, hostile: true)) == DefaultOrderKind.Attack &&
+      RightClickOrders.Classify(true, true, false, true, false) == RightClickTarget.Friendly &&
+      RightClickOrders.Classify(true, true, true, true, false, hostile: true) == RightClickTarget.Enemy &&
+      RightClickOrders.Classify(true, true, false, true, true, hostile: true) == RightClickTarget.ResourceNode,
+    "a normal scene with no players authored still right-clicks a hostile unit (or building) as attack");
+Check(RightClickOrders.Classify(true, true, false, true, false, hidden: true) == RightClickTarget.Ground &&
+      RightClickOrders.Classify(true, false, false, true, false, hidden: true) == RightClickTarget.Nothing &&
+      RightClickOrders.Classify(true, true, true, true, false, hidden: true) == RightClickTarget.Ground &&
+      RightClickOrders.Resolve(true, false, false, RightClickTarget.Ground) == DefaultOrderKind.Move,
+    "an actor the fog hides is bare ground: the click moves there instead of attacking it");
+
+Check(RightClickOrders.RuleFor(RightClickTarget.Enemy) == DefaultOrderKind.Attack &&
+      RightClickOrders.RuleFor(RightClickTarget.Ground) == DefaultOrderKind.Move &&
+      RightClickOrders.RuleFor(RightClickTarget.ResourceNode) == DefaultOrderKind.Move &&
+      RightClickOrders.RuleFor(RightClickTarget.Friendly) == DefaultOrderKind.None &&
+      RightClickOrders.RuleFor(RightClickTarget.OwnBuilding) == DefaultOrderKind.None &&
+      RightClickOrders.RuleFor(RightClickTarget.Nothing) == DefaultOrderKind.None,
+    "the table reads enemy -> attack, ground and node -> move, friendly -> nothing");
+Check(RightClickOrders.Table.Length == 6 &&
+      RightClickOrders.OrderName(DefaultOrderKind.Move) == "move" &&
+      RightClickOrders.OrderName(DefaultOrderKind.Attack) == "attack" &&
+      RightClickOrders.OrderName(DefaultOrderKind.Rally) == "rally" &&
+      RightClickOrders.OrderName(DefaultOrderKind.None) == "",
+    "every target has one row and each order writes its canonical name");
+
+Check(RightClickOrders.Resolve(false, false, false, RightClickTarget.Enemy) == DefaultOrderKind.None,
+    "an order with nothing selected does nothing");
+Check(RightClickOrders.Resolve(true, false, false, RightClickTarget.Enemy) == DefaultOrderKind.Attack &&
+      RightClickOrders.Resolve(true, false, false, RightClickTarget.Friendly) == DefaultOrderKind.None &&
+      RightClickOrders.Resolve(true, false, false, RightClickTarget.Ground) == DefaultOrderKind.Move,
+    "units attack an enemy, move to the ground and leave a friendly alone");
+Check(RightClickOrders.Resolve(true, true, false, RightClickTarget.Ground) == DefaultOrderKind.Rally &&
+      RightClickOrders.Resolve(true, true, false, RightClickTarget.Friendly) == DefaultOrderKind.Rally,
+    "a standing building sets a rally point wherever the click landed");
+Check(RightClickOrders.Resolve(true, true, false, RightClickTarget.Nothing) == DefaultOrderKind.None,
+    "a building gets no rally from a click that missed the world");
+Check(RightClickOrders.Resolve(true, true, true, RightClickTarget.Ground) == DefaultOrderKind.Move &&
+      RightClickOrders.Resolve(true, true, true, RightClickTarget.Enemy) == DefaultOrderKind.Attack,
+    "a lifted building is airborne and takes the unit rules instead of a rally");
+
+var nodeVars = new EventVariables();
+var nodeActor = new FakeActor("MineralField");
+var plainRock = new FakeActor("Rock");
+Check(!RightClickOrders.IsResourceNode(nodeVars, plainRock) &&
+      !RightClickOrders.IsResourceNode(nodeVars, null),
+    "an actor with no node data is not a resource node");
+nodeVars.SetLocal(nodeActor, "NodeAmount", ValueBox.OfNumber(1500));
+Check(RightClickOrders.IsResourceNode(nodeVars, nodeActor),
+    "`my NodeAmount` tags an actor as a resource node");
+
+var pointOrder = new UnitOrder { Kind = UnitOrderKind.Move, Name = "move", HasPositionTarget = true };
+Check(!pointOrder.HasPoint, "an order starts without a point of its own");
+pointOrder.SetPoint(120, 0, -40);
+Check(pointOrder.HasPoint && pointOrder.PointX == 120 && pointOrder.PointZ == -40,
+    "SetPoint keeps the clicked destination on the order itself");
+
+var pointEngine = FreshEngine(new FakeWorld());
+var pointUnit = new FakeActor("Marine");
+pointEngine.Orders.StartOrder(pointEngine.Variables, pointEngine, pointUnit,
+    new UnitOrder { Kind = UnitOrderKind.Move, Name = "move", TargetName = "there", HasPositionTarget = true });
+var queuedMove = new UnitOrder { Kind = UnitOrderKind.Move, Name = "move", TargetName = "there", HasPositionTarget = true };
+queuedMove.SetPoint(10, 0, 20);
+pointEngine.Orders.AddOrder(pointEngine.Variables, pointEngine, pointUnit, queuedMove);
+Check(pointEngine.Orders.OrderCount(pointUnit) == 2 &&
+      !pointEngine.Orders.CurrentOrderOf(pointUnit).HasPoint,
+    "a Shift-queued move waits behind the running order instead of replacing it");
+Check(pointEngine.Orders.Complete(pointEngine.Variables, pointEngine, pointUnit) &&
+      pointEngine.Orders.CurrentOrderOf(pointUnit) == queuedMove &&
+      queuedMove.HasPoint && queuedMove.PointX == 10 && queuedMove.PointZ == 20,
+    "the promoted order still carries the point it was given");
+
+var rallyEngine = FreshEngine(new FakeWorld());
+var rallyDepot = new FakeActor("Barracks");
+rallyEngine.Orders.SetRallyPoint(rallyDepot, null, "there", true, 40, 0, -60);
+Check(rallyEngine.Orders.HasRallyPoint(rallyDepot) &&
+      rallyEngine.Orders.RallyHasPointOf(rallyDepot) &&
+      rallyEngine.Orders.RallyPointOf(rallyDepot) == null,
+    "a clicked rally is a point, not an actor");
+rallyEngine.Orders.RallyPointPositionOf(rallyDepot, out double rallyX, out double rallyY, out double rallyZ);
+Check(rallyX == 40 && rallyY == 0 && rallyZ == -60,
+    "the rally keeps the clicked point for the unit trained later");
+rallyEngine.Orders.SetRallyPoint(rallyDepot, null, "there");
+Check(rallyEngine.Orders.HasRallyPoint(rallyDepot) &&
+      !rallyEngine.Orders.RallyHasPointOf(rallyDepot),
+    "the `set rally point to there` word still works and carries no stored point");
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);

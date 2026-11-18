@@ -1291,7 +1291,7 @@ selected", and no command-card scene/content exists.
   Shift-drag to add, Escape to cancel, and drag toward a screen edge to confirm the camera no longer
   pans under the rectangle).
 
-### Part C — Right-click orders [ ]
+### Part C — Right-click orders [x]
 - Right click records a world position like a left click does (`LastClickPosition` today is
   left-only) so `there` / `Mouse` mean "where I last clicked with either button"
 - Context-sensitive default order for whatever is selected, authored in one sheet: enemy under the
@@ -1300,6 +1300,66 @@ selected", and no command-card scene/content exists.
 - An order given while an ability `aim` is pending is cancelled first (already true) and an order
   given to nothing selected does nothing
 - Buildings and lifted buildings (Task 28) accept the same right click for `set rally` / move
+
+#### Part C notes
+- **Where the rules live.** `Runtime/RightClickOrders.cs` holds the table as data:
+  `RightClickTarget` (nothing / ground / enemy / friendly / own building / resource node),
+  `DefaultOrderKind` (none / move / attack / rally) and `RightClickRule[] Table` — enemy →
+  `attack`, ground and resource node → move there, friendly and own building → no order. Editing
+  `Table` (or `RuleFor`) is how a game changes the default; the runtime itself has no unit rule.
+  `Classify` turns the hit into a target from four facts (an actor was hit, a point was recorded,
+  it is a building, its fog player matches) and `Resolve` adds the selection's own shape: nothing
+  selected → no order, a standing building → `rally` wherever the click landed, a lifted building
+  → the unit rules (it is airborne, so it can be ordered about).
+- **The whole selection, Shift-aware.** `FlaxActions.IssueDefaultOrder` walks
+  `Runtime.Selection.Selected`, decides per actor (a mixed selection can therefore rally its
+  buildings and move its units with one click), and writes either `StartOrder` or — with Shift —
+  `AddOrder`, then starts the walk only for actors whose queue was empty. A promoted queued order
+  is started by the bridge's existing `PendingOrderMoves` loop. An attack goes through
+  `AirTargeting.Refusal` (one warning for the click, not one per unit) and stops at the unit's
+  attack range; moves spread over formation slots as `goto there` already did.
+- **Orders own their destination.** `UnitOrder` gained `HasPoint`/`PointX/Y/Z` (`SetPoint`), and
+  `BeginOrderMove` prefers it over the global `LastClickPosition`. Without this a Shift-queued move
+  or a five-unit fan-out would all have walked to the most recent click — the bug this part could
+  not have shipped without. `attack`/`attack-move to there` and `set rally point to there` capture
+  the click at issue time too, and `UnitOrderQueue` keeps `RallyHasPoint`/`RallyX/Y/Z` so
+  `ApplyRally` hands a trained unit the spot the player picked, not the last click anywhere.
+- **Right click records a position.** `EventsManager` now runs the same world raycast for the right
+  button and writes `FlaxActions.LastClickPosition` before broadcasting `RightClicked`, so the
+  authored `when … is right-clicked` handler and the order both see it. The right button alone
+  falls back to the y = 0 ground plane when there is no collider (the left click stays
+  collider-only), so an order still lands on a floor with no collider. `HandleMouseClick` now
+  reports the 3D actor it hit and whether a `UIControl` swallowed the click, and a UI hit issues
+  no order — a command-card button never also orders the selection.
+- **Two spec points that did not survive contact.** (1) `Mouse` is not a click: only `place`/`mark`
+  read it, live from the cursor, and it was left that way — only `there` was widened to both
+  buttons. (2) `gather` and `repair` do not exist as words or order kinds, and the economy task
+  (Task 30 Part B) keeps income authored, so a resource node (`my ResourceNode` / `my NodeAmount`)
+  is a move to the node and a friendly unit is no order. Adding `gather`/`repair` later means one
+  row in `Table` plus the action word, not a rewrite.
+- **Enemy means another fog player, or `my Hostile`.** `RightClickOrders.Classify` takes
+  `samePlayer` from `FogOfWarManager.PlayerOf`, which reads `my Player` (default 0). On its own
+  that made every unauthored scene one team, so the default attack never fired against the
+  shipped enemy sheets. The fallback is the flag those sheets already carry: `my Hostile`, which
+  `enemy type` writes and `when all enemies dead` reads. `RightClickOrders.IsDeclaredEnemy` asks
+  for `IsHostile(target) && !IsHostile(me)`, so a `Worker` right-clicking a `Zombie` attacks with
+  no `set my Player to 1` anywhere, while two hostile actors stay one side. Authored players still
+  win where they exist (different players are enemies whether or not either is hostile), and a
+  scene that wants its enemies silent leaves `Hostile` off — same flag, no second switch.
+- **Fog hides models, not colliders.** `SetFogVisibility` only swaps draw passes, so a unit the
+  local player cannot see still catches the right click's ray. `HiddenFromPlayer` (different fog
+  player *and* not `IsVisibleTo`) answers `Classify`'s `hidden`, which reads the click as bare
+  ground: the selection walks to the point instead of attacking something the player cannot see,
+  and no enemy position leaks. An unauthored scene is untouched because everyone sits on fog
+  player 0, which is the local player — never hidden.
+- **Kept deliberately.** A right click that cancels an `aim` is still swallowed (Task 27 Part A
+  documented that, and a move order on the abort click would be a surprise), an order with nothing
+  selected does nothing and warns nothing, and a click on a `UIControl` raises only its authored
+  trigger. 19 new checks (table, classification, rally-vs-move-vs-attack, the lifted-building
+  rule, node tagging, the stored point surviving a queue promotion, rally coordinates, plus 4
+  follow-up checks for the `my Hostile` fallback and the fog-hidden case) ->
+  **1927 passed, 0 failed**; the Game module builds with 0 errors and the assembly carries the new
+  symbols. Editor play-check of the actual click targeting, timing and camera feel still pending.
 
 ### Part D — The selection as an event value [ ]
 - Something a card can name, so one shared card serves any selection: `my selected unit`, `my

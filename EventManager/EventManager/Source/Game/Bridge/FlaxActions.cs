@@ -3487,6 +3487,7 @@ namespace Game
                 TargetName = targetName,
                 HasPositionTarget = isPosition,
             };
+            CaptureOrderPoint(order, isPosition);
             context.Runtime.Orders.StartOrder(context.Variables, context.Runtime, me, order);
             BeginOrderMove(context.Runtime, me, order, 5);
         }
@@ -3523,6 +3524,7 @@ namespace Game
                 TargetName = targetName,
                 HasPositionTarget = isPosition,
             };
+            CaptureOrderPoint(order, isPosition);
             context.Runtime.Orders.StartOrder(context.Variables, context.Runtime, me, order);
             // A `ranged` unit (Task 23 Part A) stops at its attack range — declared, or the
             // ranged default. A melee unit without a declared range keeps the old behaviour and
@@ -3600,6 +3602,145 @@ namespace Game
             context.Runtime.Orders.Clear(context.Variables, me);
         }
 
+        /// <summary>
+        /// Remembers where <c>there</c> pointed when the order was written (Task 29 Part C), so
+        /// the order owns its destination instead of reading the latest click when it starts.
+        /// </summary>
+        private static void CaptureOrderPoint(UnitOrder order, bool isPosition)
+        {
+            if (order == null || !isPosition || !LastClickPosition.HasValue)
+                return;
+            Vector3 point = LastClickPosition.Value;
+            order.SetPoint(point.X, point.Y, point.Z);
+        }
+
+        /// <summary>
+        /// The right click's default order (Task 29 Part C): one decision from
+        /// <see cref="RightClickOrders"/> applied to every selected actor, so a drag-selected
+        /// group all moves, attacks or sets a rally point. Shift appends to each unit's queue
+        /// instead of replacing it, and a selection the table answers with "no order" is left
+        /// alone. Returns how many actors took an order.
+        /// The target's team comes from the fog grid's `my Player` and, when that separates
+        /// nobody, from `my Hostile` (`enemy type` writes it); a fog-hidden target is ground.
+        /// </summary>
+        public static int IssueDefaultOrder(EventRuntime runtime, Actor target, bool hasPoint,
+            Vector3 point, bool append)
+        {
+            if (runtime == null || runtime.Selection.Count == 0)
+                return 0;
+            var selected = new List<object>(runtime.Selection.Selected);
+            int issued = 0;
+            bool warnedRefusal = false;
+            foreach (object item in selected)
+            {
+                Actor me = item as Actor;
+                if (me == null || me.Scene == null)
+                    continue;
+                bool isBuilding = runtime.Construction.IsBuilding(me);
+                bool lifted = runtime.LiftOff.IsFlying(me);
+                bool samePlayer = SamePlayerAs(runtime, me, target);
+                RightClickTarget kind = RightClickOrders.Classify(
+                    target != null, hasPoint,
+                    isBuilding: runtime.Construction.IsBuilding(target),
+                    samePlayer: samePlayer,
+                    isResourceNode: RightClickOrders.IsResourceNode(runtime.Variables, target),
+                    hostile: RightClickOrders.IsDeclaredEnemy(runtime.Variables, me, target),
+                    hidden: HiddenFromPlayer(runtime, samePlayer, target));
+                DefaultOrderKind order = RightClickOrders.Resolve(
+                    hasSelection: true, buildingSelection: isBuilding, liftedBuilding: lifted, target: kind);
+                if (order == DefaultOrderKind.None)
+                    continue;
+
+                var context = new EventContext
+                {
+                    Variables = runtime.Variables,
+                    World = runtime.World,
+                    Runtime = runtime,
+                    Me = me,
+                    Other = target,
+                    Sheet = runtime.FindSheetFor(me),
+                };
+
+                if (order == DefaultOrderKind.Rally)
+                {
+                    runtime.Orders.SetRallyPoint(me, target, target == null ? "there" : target.Name,
+                        hasPoint, point.X, point.Y, point.Z);
+                    issued++;
+                    continue;
+                }
+
+                if (order == DefaultOrderKind.Attack)
+                {
+                    // The same matchup gate an authored `attack` order uses (Task 28 Part D), so
+                    // a ground unit is not walked over to swing at the sky. One warning for the
+                    // whole click, not one per selected actor.
+                    string refusal = AirTargeting.Refusal(context, target);
+                    if (refusal != null)
+                    {
+                        if (!warnedRefusal)
+                        {
+                            WarnOnce(refusal);
+                            warnedRefusal = true;
+                        }
+                        continue;
+                    }
+                }
+
+                bool startsNow = !runtime.Orders.HasOrders(me);
+                var unitOrder = new UnitOrder
+                {
+                    Kind = order == DefaultOrderKind.Attack ? UnitOrderKind.Attack : UnitOrderKind.Move,
+                    Name = RightClickOrders.OrderName(order),
+                    Target = target,
+                    TargetName = target == null ? "there" : target.Name,
+                    HasPositionTarget = target == null && hasPoint,
+                };
+                if (target == null && hasPoint)
+                    unitOrder.SetPoint(point.X, point.Y, point.Z);
+                runtime.Wander.Clear(me);
+                if (append)
+                    runtime.Orders.AddOrder(runtime.Variables, runtime, me, unitOrder);
+                else
+                    runtime.Orders.StartOrder(runtime.Variables, runtime, me, unitOrder);
+                issued++;
+                // Appended behind a running order, it starts when that one finishes (the bridge's
+                // pending-order loop), so nothing moves yet.
+                if (!startsNow)
+                    continue;
+                double range = order == DefaultOrderKind.Attack ? OrderManager.StopDistanceFor(context) : 0;
+                BeginOrderMove(runtime, me, unitOrder, 5, range);
+            }
+            return issued;
+        }
+
+        /// <summary>
+        /// Whether two actors belong to the same player as the fog grid records it (`my Player`,
+        /// default 0). A scene that never wrote a player therefore reads as one team here, which
+        /// is why <see cref="RightClickOrders.IsDeclaredEnemy"/> is the second half of the enemy
+        /// test: `my Hostile` still marks the enemies in an unauthored scene.
+        /// </summary>
+        private static bool SamePlayerAs(EventRuntime runtime, Actor me, Actor other)
+        {
+            if (runtime == null || me == null || other == null)
+                return true;
+            return runtime.Fog.PlayerOf(me) == runtime.Fog.PlayerOf(other);
+        }
+
+        /// <summary>
+        /// Whether fog is hiding <paramref name="other"/> from the local player. Fog only swaps
+        /// draw passes, so a hidden unit's collider still catches the right click's ray; the
+        /// click then reads as bare ground instead of ordering an attack on a unit nobody can
+        /// see. Only an actor the grid knows and places on another team can be hidden, so a
+        /// scene with no players authored (everyone on player 0) is never affected.
+        /// </summary>
+        private static bool HiddenFromPlayer(EventRuntime runtime, bool samePlayer, Actor other)
+        {
+            if (runtime == null || other == null || samePlayer)
+                return false;
+            FogOfWarManager fog = runtime.Fog;
+            return fog != null && fog.Enabled && !fog.IsVisibleTo(fog.LocalPlayer, other);
+        }
+
         /// <summary><c>set rally point to &lt;target&gt;</c> — where this building's newly
         /// spawned units should walk.</summary>
         private static void SetRallyPoint(EventContext context, ActionSpec spec)
@@ -3612,7 +3753,11 @@ namespace Game
             }
             if (!TryResolveOrderTarget(context, spec.Thing, out object target, out string targetName, out bool isPosition))
                 return;
-            context.Runtime.Orders.SetRallyPoint(me, target, isPosition ? "there" : targetName);
+            // A clicked rally keeps its own point (Task 29 Part C), so a unit trained later
+            // walks to the spot the player picked rather than the last click anywhere.
+            Vector3? rallyPoint = isPosition ? LastClickPosition : null;
+            context.Runtime.Orders.SetRallyPoint(me, target, isPosition ? "there" : targetName,
+                rallyPoint.HasValue, rallyPoint?.X ?? 0, rallyPoint?.Y ?? 0, rallyPoint?.Z ?? 0);
         }
 
         /// <summary>Resolves an order's target actor or the last clicked ground position.</summary>
@@ -3745,9 +3890,15 @@ namespace Game
             }
             else if (positionTarget)
             {
-                if (!LastClickPosition.HasValue)
+                // An order keeps the point it was given (Task 29 Part C), so a queued or
+                // selection-wide order does not follow a later click. Only orders written
+                // before this existed still read the last click.
+                if (order.HasPoint)
+                    destination = new Vector3((float)order.PointX, (float)order.PointY, (float)order.PointZ);
+                else if (LastClickPosition.HasValue)
+                    destination = LastClickPosition.Value;
+                else
                     return;
-                destination = LastClickPosition.Value;
             }
             else
                 return;
@@ -3828,6 +3979,12 @@ namespace Game
                 HasPositionTarget = runtime.Orders.RallyPointOf(spawnAt) == null &&
                                     runtime.Orders.RallyTargetNameOf(spawnAt) == "there",
             };
+            if (runtime.Orders.RallyHasPointOf(spawnAt))
+            {
+                runtime.Orders.RallyPointPositionOf(spawnAt,
+                    out double rallyX, out double rallyY, out double rallyZ);
+                order.SetPoint(rallyX, rallyY, rallyZ);
+            }
             runtime.Orders.StartOrder(context.Variables, runtime, clone, order);
             BeginOrderMove(runtime, clone, order, 5);
         }

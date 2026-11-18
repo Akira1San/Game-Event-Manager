@@ -883,7 +883,8 @@ namespace Game
                 // click still runs its ordinary path.
                 if (!TryAimPick(mousePos))
                 {
-                    bool tookClick = HandleMouseClick(mousePos, screenCenter, TriggerKind.Clicked);
+                    bool tookClick = HandleMouseClick(mousePos, screenCenter, TriggerKind.Clicked,
+                        out _, out _);
                     var clickWorld = RaycastToWorld(mousePos);
                     if (clickWorld.HasValue)
                         FlaxActions.LastClickPosition = clickWorld.Value;
@@ -910,13 +911,30 @@ namespace Game
             {
                 // A right click cancels an aim instead of issuing an order.
                 if (!Runtime.CancelAim())
-                    HandleMouseClick(mousePos, screenCenter, TriggerKind.RightClicked);
+                {
+                    // `there` means where the last click landed, whichever button made it
+                    // (Task 29 Part C), so the point is recorded before the click is broadcast
+                    // and before any order is issued from it.
+                    Vector3? clickPoint = RightClickPoint(mousePos);
+                    if (clickPoint.HasValue)
+                        FlaxActions.LastClickPosition = clickPoint.Value;
+                    HandleMouseClick(mousePos, screenCenter, TriggerKind.RightClicked,
+                        out Actor rightTarget, out bool rightUiHit);
+                    // A UI control took the click: its authored trigger runs and nothing else, so
+                    // a command-card button never also orders the selection. Shift appends to
+                    // each unit's queue instead of replacing it.
+                    if (!rightUiHit)
+                    {
+                        FlaxActions.IssueDefaultOrder(Runtime, rightTarget, clickPoint.HasValue,
+                            clickPoint ?? Vector3.Zero, Input.GetKey(KeyboardKeys.Shift));
+                    }
+                }
             }
             _rightMouseDownLastFrame = rightMouseDown;
 
             bool middleMouseDown = Input.GetMouseButtonDown(MouseButton.Middle);
             if (middleMouseDown && !_middleMouseDownLastFrame)
-                HandleMouseClick(mousePos, screenCenter, TriggerKind.MiddleClicked);
+                HandleMouseClick(mousePos, screenCenter, TriggerKind.MiddleClicked, out _, out _);
             _middleMouseDownLastFrame = middleMouseDown;
         }
 
@@ -1111,11 +1129,16 @@ namespace Game
         ///
         /// Returns true when the click belonged to a UI control or a selectable actor, and false
         /// when it landed on bare ground (or scenery), which is what lets a drag select begin
-        /// there (Task 29 Part B).</summary>
-        private bool HandleMouseClick(Float2 mousePos, Float2 screenCenter, TriggerKind kind)
+        /// there (Task 29 Part B). <paramref name="worldTarget"/> is the 3D actor under the
+        /// cursor (null for a UI hit or a miss) and <paramref name="uiHit"/> says whether a
+        /// control swallowed the click, which is what tells the right click (Task 29 Part C) not
+        /// to order the selection under a card button.</summary>
+        private bool HandleMouseClick(Float2 mousePos, Float2 screenCenter, TriggerKind kind,
+            out Actor worldTarget, out bool uiHit)
         {
             var actors = SceneActors();
-            bool uiHit = false;
+            worldTarget = null;
+            uiHit = false;
             foreach (Actor actor in actors)
             {
                 if (actor == null || !actor.IsActive)
@@ -1152,6 +1175,7 @@ namespace Game
             }
             if (bestActor != null)
             {
+                worldTarget = bestActor;
                 HandleWorldClick(bestActor, kind);
                 bool hasSheet = Runtime.FindSheetFor(bestActor) != null;
                 return ClickSelect.IsSelectable(Runtime.Variables, bestActor, hasSheet);
@@ -1621,6 +1645,21 @@ namespace Game
                 }
             }
             return bestPoint;
+        }
+
+        /// <summary>The world point a right click points at (Task 29 Part C): the nearest
+        /// collider under the cursor, falling back to the y = 0 ground plane so an order still
+        /// has a destination over a floor with no collider. The left click keeps its stricter
+        /// collider-only raycast, so a click at the sky still records no position.</summary>
+        private static Vector3? RightClickPoint(Float2 mousePos)
+        {
+            Vector3? hit = RaycastToWorld(mousePos);
+            if (hit.HasValue)
+                return hit;
+            if (!FlaxWorld.TryGetMouseRay(mousePos, out Ray ray) || ray.Direction.Y >= -0.0001f)
+                return null;
+            float along = -ray.Position.Y / ray.Direction.Y;
+            return along > 0 ? ray.Position + ray.Direction * along : (Vector3?)null;
         }
 
         /// <summary>Screen-space center of a UIControl (top-left origin, Y down), matching

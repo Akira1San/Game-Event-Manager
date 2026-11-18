@@ -27,6 +27,25 @@ namespace Game
         public string TargetName = "";
         /// <summary>True when <see cref="TargetName"/> is a clicked world position.</summary>
         public bool HasPositionTarget;
+        /// <summary>
+        /// The clicked point the order was written for, captured when it was given (Task 29
+        /// Part C). An order without it falls back to the last click, which is what every
+        /// order written before this existed does; a queued or selection-wide order keeps its
+        /// own destination instead of following a later click.
+        /// </summary>
+        public bool HasPoint;
+        public double PointX;
+        public double PointY;
+        public double PointZ;
+
+        /// <summary>Copies the clicked point onto this order (a no-op when it has none).</summary>
+        public void SetPoint(double x, double y, double z)
+        {
+            HasPoint = true;
+            PointX = x;
+            PointY = y;
+            PointZ = z;
+        }
     }
 
     /// <summary>One unit's active order plus the commands waiting behind it.</summary>
@@ -38,6 +57,11 @@ namespace Game
         /// <summary>Where newly trained units should walk (a rally point on a building).</summary>
         public object RallyTarget;
         public string RallyTargetName = "";
+        /// <summary>The clicked point the rally was set at, captured at set time (Task 29 Part C).</summary>
+        public bool RallyHasPoint;
+        public double RallyX;
+        public double RallyY;
+        public double RallyZ;
 
         public UnitOrder Current => Items.Count > 0 ? Items[0] : null;
     }
@@ -305,11 +329,46 @@ namespace Game
         /// <summary><c>set rally point to &lt;target&gt;</c> on a production building.</summary>
         public void SetRallyPoint(object building, object target, string targetName)
         {
+            SetRallyPoint(building, target, targetName, false, 0, 0, 0);
+        }
+
+        /// <summary>
+        /// The right click's rally point (Task 29 Part C): the same state, plus the world point
+        /// the click landed on so a unit trained later still walks to the spot the player chose
+        /// rather than to wherever the mouse was last clicked.
+        /// </summary>
+        public void SetRallyPoint(object building, object target, string targetName,
+            bool hasPoint, double x, double y, double z)
+        {
             if (building == null)
                 return;
             UnitOrderQueue queue = EnsureQueue(building);
             queue.RallyTarget = target;
             queue.RallyTargetName = targetName ?? "";
+            queue.RallyHasPoint = hasPoint;
+            queue.RallyX = x;
+            queue.RallyY = y;
+            queue.RallyZ = z;
+        }
+
+        /// <summary>Whether the rally point carries a clicked world position.</summary>
+        public bool RallyHasPointOf(object building)
+        {
+            return building != null && _queues.TryGetValue(building, out UnitOrderQueue queue) &&
+                   queue.RallyHasPoint;
+        }
+
+        /// <summary>The clicked point a rally was set at; zeroes when it was set to an actor.</summary>
+        public void RallyPointPositionOf(object building, out double x, out double y, out double z)
+        {
+            x = 0;
+            y = 0;
+            z = 0;
+            if (building == null || !_queues.TryGetValue(building, out UnitOrderQueue queue))
+                return;
+            x = queue.RallyX;
+            y = queue.RallyY;
+            z = queue.RallyZ;
         }
 
         public object RallyPointOf(object building)
