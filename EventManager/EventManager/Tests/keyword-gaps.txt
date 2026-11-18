@@ -1,0 +1,9 @@
+# Words the editor offers (WordRegistry) that keywords.html has no row for.
+#
+# The audit in Tests/Program.cs keeps this honest in both directions: a word that is registered
+# but never documented fails the test unless its shape is listed here, and a line here that has
+# since been documented fails too, so closing a gap means writing the row and deleting its line.
+#
+# The list is empty: Task 29 Part F documented all 73 words it found (the Task 15/16/18/20/27/28
+# triggers, the production, buff and fog triggers, the input verbs, and the value forms). Add a
+# shape here only when a word really is undocumented and documenting it is a separate job.

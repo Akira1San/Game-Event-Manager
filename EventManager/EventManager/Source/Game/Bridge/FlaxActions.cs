@@ -480,7 +480,8 @@ namespace Game
                     {
                         UnitOrder next = orderRuntime.Orders.CurrentOrderOf(actor);
                         if (next != null && actor != null && actor.Scene != null)
-                            BeginOrderMove(orderRuntime, actor, next, 5);
+                            BeginOrderMove(orderRuntime, actor, next,
+                                OrderManager.MoveSpeedOf(orderRuntime.Variables, actor));
                     }
                 }
             }
@@ -970,6 +971,12 @@ namespace Game
                         WarnOnce("\u201Cgoto\u201D needs to run on an actor's sheet — the global Game sheet has no body to move.");
                         break;
                     }
+                    // A `goto` with no `speed` walks at the unit's own `my Speed` (100 for a sheet
+                    // that never set one), so a Marine that wrote `set my Speed to 90` moves at 90
+                    // rather than the bare fallback 5; an explicit `speed <n>` still wins.
+                    double gotoSpeed = spec.AmountNode == null
+                        ? OrderManager.MoveSpeedOf(context.Variables, me)
+                        : spec.Number;
                     context.Runtime.Wander.Clear(me);
                     if (spec.Thing == "there")
                     {
@@ -985,13 +992,26 @@ namespace Game
                         // A flyer takes the straight line and never asks the NavMesh (Task 28 Part B).
                         if (IsFlyingActor(me))
                         {
-                            RememberDirectMove(me, clickTarget, spec.Number);
+                            RememberDirectMove(me, clickTarget, gotoSpeed);
                             break;
                         }
-                        if (!Navigation.FindPath(me.Position, clickTarget, out Vector3[] clickPath) || clickPath == null || clickPath.Length == 0)
+                        NavRouteAnswer clickAnswer = QueryNavRoute(me.Position, clickTarget,
+                            out Vector3[] clickPath);
+                        if (NavRoute.Stops(clickAnswer))
                         {
-                            WarnOnce($"No NavMesh path from \u201C{me.Name}\u201D to the clicked spot — bake a NavMesh for this level first.");
+                            // The mesh answered and the way is closed: stop here, and let the
+                            // sheet hear `when path blocked` for the walk that did not happen.
+                            context.Runtime.Orders.ReportPathBlocked(context.Runtime, me);
+                            WarnPathBlocked(me, "the clicked spot");
                             break;
+                        }
+                        if (NavRoute.WalksStraight(clickAnswer))
+                        {
+                            // A click just off the baked mesh, a mesh Flax is still baking, or a
+                            // level with no mesh at all: nothing is in the way, so walk one
+                            // straight waypoint in the same body mode a route would have used.
+                            WarnNoNavRoute(me, "the clicked spot");
+                            clickPath = DirectRoute(clickTarget);
                         }
                         Remember(new OngoingMove
                         {
@@ -1001,7 +1021,7 @@ namespace Game
                             PositionTarget = clickTarget,
                             Path = clickPath,
                             PathIndex = 0,
-                            Speed = spec.Number,
+                            Speed = gotoSpeed,
                             Mode = ResolveMoveMode(me, context.Sheet != null && context.Sheet.UsePhysicsMovement),
                         });
                         break;
@@ -1017,17 +1037,29 @@ namespace Game
                     if (IsFlyingActor(me))
                     {
                         ChaseAltitude(context.Runtime, me, target);
-                        RememberDirectMove(me, target.Position, spec.Number, spec.FaceForward);
+                        RememberDirectMove(me, target.Position, gotoSpeed, spec.FaceForward);
                         break;
                     }
-                    if (!Navigation.FindPath(me.Position, target.Position, out Vector3[] path) || path == null || path.Length == 0)
+                    NavRouteAnswer chaseAnswer = QueryNavRoute(me.Position, target.Position,
+                        out Vector3[] path);
+                    if (NavRoute.Stops(chaseAnswer))
+                    {
+                        // Both ends are on the mesh and there is no way between them: the chase
+                        // really stops, and the sheet hears `when path blocked`.
+                        context.Runtime.Orders.ReportPathBlocked(context.Runtime, me);
+                        WarnPathBlocked(me, $"\u201C{target.Name}\u201D");
+                        break;
+                    }
+                    if (NavRoute.WalksStraight(chaseAnswer))
                     {
                         // Off the navmesh (pushed, or spawned there): walk a tick toward the
                         // closest navigable point so a later `goto` can path again, instead of
-                        // warning once and freezing the chase forever.
-                        if (!StepOntoNavMesh(context, me, spec.Number))
-                            WarnOnce($"No NavMesh path from \u201C{me.Name}\u201D to \u201C{target.Name}\u201D — bake a NavMesh for this level first.");
-                        break;
+                        // freezing the chase forever. With nothing on the mesh to walk to, the
+                        // chase carries on along the straight line rather than stopping dead.
+                        if (StepOntoNavMesh(context, me, gotoSpeed))
+                            break;
+                        WarnNoNavRoute(me, $"\u201C{target.Name}\u201D");
+                        path = DirectRoute(target.Position);
                     }
                     Remember(new OngoingMove
                     {
@@ -1037,7 +1069,7 @@ namespace Game
                         FaceForward = spec.FaceForward,
                         Path = path,
                         PathIndex = 0,
-                        Speed = spec.Number,
+                        Speed = gotoSpeed,
                         Mode = ResolveMoveMode(me, context.Sheet != null && context.Sheet.UsePhysicsMovement),
                     });
                     break;
@@ -1833,6 +1865,74 @@ namespace Game
         private static Vector3[] DirectRoute(Vector3 spot)
         {
             return new[] { spot };
+        }
+
+        /// <summary>
+        /// Asks the NavMesh about a walk and says which of the three things happened (Task 29
+        /// play-check follow-up): a route, a genuine block, or a mesh that cannot answer.
+        ///
+        /// The plain query runs first, then the same query with both ends snapped onto the mesh —
+        /// a body whose pivot sits just under the baked mesh, or a point a hair off it, answers
+        /// "no path" on the plain query for a walk that is perfectly fine. The distinction between
+        /// the last two answers is the point: snapping tells us whether the mesh actually covers
+        /// the spots, and only a mesh that covers both and still finds no way through is a block
+        /// the unit should stop for. A missing mesh, one Flax is still baking, and a point off the
+        /// mesh are all "cannot answer" — the walk takes the straight line and no trigger fires.
+        /// </summary>
+        private static NavRouteAnswer QueryNavRoute(Vector3 start, Vector3 end, out Vector3[] path)
+        {
+            path = null;
+            if (Navigation.FindPath(start, end, out Vector3[] direct) && direct != null && direct.Length > 0)
+            {
+                path = direct;
+                return NavRouteAnswer.Found;
+            }
+            bool startOnMesh = Navigation.FindClosestPoint(start, out Vector3 onMeshStart);
+            bool endOnMesh = Navigation.FindClosestPoint(end, out Vector3 onMeshEnd);
+            double startOff = startOnMesh
+                ? NavRoute.OffMesh(start.X, start.Z, onMeshStart.X, onMeshStart.Z)
+                : double.PositiveInfinity;
+            double endOff = endOnMesh
+                ? NavRoute.OffMesh(end.X, end.Z, onMeshEnd.X, onMeshEnd.Z)
+                : double.PositiveInfinity;
+            bool snappedPathFound = false;
+            if (startOnMesh && endOnMesh &&
+                startOff <= NavRoute.OnMeshTolerance && endOff <= NavRoute.OnMeshTolerance &&
+                Navigation.FindPath(onMeshStart, onMeshEnd, out Vector3[] snapped) &&
+                snapped != null && snapped.Length > 0)
+            {
+                path = snapped;
+                snappedPathFound = true;
+            }
+            NavRouteAnswer answer = NavRoute.Classify(Navigation.IsBuildingNavMesh, false,
+                startOnMesh, startOff, endOnMesh, endOff, snappedPathFound);
+            if (answer != NavRouteAnswer.Found)
+                path = null;
+            return answer;
+        }
+
+        /// <summary>
+        /// Says once why the NavMesh could not answer, and that the walk is carrying on anyway:
+        /// the usual causes are a missing or too small <c>NavMeshBoundsVolume</c> and a mesh Flax
+        /// is still baking in the background, so the message names both. This is not a blocked
+        /// path — nothing is in the way; the mesh just has no opinion — so it never raises
+        /// <c>when path blocked</c>.
+        /// </summary>
+        private static void WarnNoNavRoute(Actor me, string where)
+        {
+            string building = Navigation.IsBuildingNavMesh ? " (the mesh is still building)" : "";
+            string who = me == null ? "a unit" : $"\u201C{me.Name}\u201D";
+            WarnOnce($"No NavMesh route from {who} to {where}{building} \u2014 check that a NavMeshBoundsVolume covers both points and that the floor under them is walkable. Walking the straight line instead.");
+        }
+
+        /// <summary>
+        /// Says once that the mesh did answer and the way really is closed, so the unit stopped:
+        /// the other half of <see cref="WarnNoNavRoute"/>, and the case that raised the trigger.
+        /// </summary>
+        private static void WarnPathBlocked(Actor me, string where)
+        {
+            string who = me == null ? "a unit" : $"\u201C{me.Name}\u201D";
+            WarnOnce($"\u201C{who}\u201D has no way through to {where} \u2014 a wall, a prop or terrain marks are in the way. Stopped and raised `when path blocked`.");
         }
 
         /// <summary>
@@ -3563,7 +3663,7 @@ namespace Game
             };
             CaptureOrderPoint(order, isPosition);
             context.Runtime.Orders.StartOrder(context.Variables, context.Runtime, me, order);
-            BeginOrderMove(context.Runtime, me, order, 5);
+            BeginOrderMove(context.Runtime, me, order, OrderManager.MoveSpeedOf(context.Variables, me));
         }
 
         /// <summary><c>attack &lt;target&gt;</c> — close to the edge of this unit's own attack
@@ -3611,10 +3711,10 @@ namespace Game
                 double dz = me.Position.Z - targetActor.Position.Z;
                 if (System.Math.Sqrt(dx * dx + dz * dz) <= range)
                     return;
-                BeginOrderMove(context.Runtime, me, order, 5, range);
+                BeginOrderMove(context.Runtime, me, order, OrderManager.MoveSpeedOf(context.Variables, me), range);
                 return;
             }
-            BeginOrderMove(context.Runtime, me, order, 5);
+            BeginOrderMove(context.Runtime, me, order, OrderManager.MoveSpeedOf(context.Variables, me));
         }
 
         /// <summary><c>stop</c> — cancel the current and queued orders and leave the unit idle.</summary>
@@ -3659,7 +3759,8 @@ namespace Game
             };
             CaptureOrderPoint(order, isPosition);
             context.Runtime.Orders.StartOrder(context.Variables, context.Runtime, me, order);
-            BeginOrderMove(context.Runtime, me, order, 5, OrderManager.DefaultInteractionRange);
+            BeginOrderMove(context.Runtime, me, order, OrderManager.MoveSpeedOf(context.Variables, me),
+                OrderManager.DefaultInteractionRange);
         }
 
         /// <summary><c>repair &lt;target&gt;</c> — walk to a damaged friendly unit or building and
@@ -3688,7 +3789,8 @@ namespace Game
             };
             CaptureOrderPoint(order, isPosition);
             context.Runtime.Orders.StartOrder(context.Variables, context.Runtime, me, order);
-            BeginOrderMove(context.Runtime, me, order, 5, OrderManager.DefaultInteractionRange);
+            BeginOrderMove(context.Runtime, me, order, OrderManager.MoveSpeedOf(context.Variables, me),
+                OrderManager.DefaultInteractionRange);
         }
 
         /// <summary><c>hold position</c> — drop queued orders and freeze in place.</summary>
@@ -3846,7 +3948,7 @@ namespace Game
                 double range = kindOfOrder == UnitOrderKind.Attack ? OrderManager.StopDistanceFor(context)
                     : kindOfOrder == UnitOrderKind.Move ? 0
                     : OrderManager.DefaultInteractionRange;
-                BeginOrderMove(runtime, me, unitOrder, 5, range);
+                BeginOrderMove(runtime, me, unitOrder, OrderManager.MoveSpeedOf(context.Variables, me), range);
             }
             return issued;
         }
@@ -4017,9 +4119,11 @@ namespace Game
                 now.X, now.Z, next.X, next.Z);
         }
 
-        /// <summary>Starts NavMesh movement for an order; a blocked path raises
-        /// <c>when path blocked</c> instead of walking through walls. <paramref name="stopDistance"/>
-        /// shortens the walk to that distance from the target (attack range).</summary>
+        /// <summary>Starts NavMesh movement for an order; a path the mesh refutes raises
+        /// <c>when path blocked</c> and stops the unit instead of walking through walls, while a
+        /// mesh that cannot answer at all (nothing baked, still building, a point off it) walks
+        /// the straight line and raises nothing. <paramref name="stopDistance"/> shortens the walk
+        /// to that distance from the target (attack range).</summary>
         private static void BeginOrderMove(EventRuntime runtime, Actor me, UnitOrder order, double speed,
             double stopDistance = 0)
         {
@@ -4100,10 +4204,23 @@ namespace Game
                 return;
             }
 
-            if (!Navigation.FindPath(me.Position, destination, out Vector3[] path) || path == null || path.Length == 0)
+            NavRouteAnswer answer = QueryNavRoute(me.Position, destination, out Vector3[] route);
+            if (NavRoute.Stops(answer))
             {
+                // Both ends sit on a baked mesh that has no way between them: this is a real
+                // block, so the unit stops and `when path blocked` fires. Walking the straight
+                // line here is what used to put units through walls.
                 runtime.Orders.ReportPathBlocked(runtime, me);
+                WarnPathBlocked(me, positionTarget ? "the clicked spot" : "its target");
                 return;
+            }
+            if (NavRoute.WalksStraight(answer))
+            {
+                // The mesh could not answer — nothing baked, still building, or a point off it —
+                // so nothing is actually in the way: walk the straight line and raise no
+                // trigger, because the unit never stopped.
+                WarnNoNavRoute(me, positionTarget ? "the clicked spot" : "its target");
+                route = DirectRoute(destination);
             }
 
             Remember(new OngoingMove
@@ -4113,7 +4230,7 @@ namespace Game
                 Goto = true,
                 HasPositionTarget = positionTarget,
                 PositionTarget = destination,
-                Path = path,
+                Path = route,
                 PathIndex = 0,
                 Speed = speed,
                 Mode = ResolveMoveMode(me, runtime.FindSheetFor(me)?.UsePhysicsMovement ?? false),
@@ -4144,7 +4261,7 @@ namespace Game
                 order.SetPoint(rallyX, rallyY, rallyZ);
             }
             runtime.Orders.StartOrder(context.Variables, runtime, clone, order);
-            BeginOrderMove(runtime, clone, order, 5);
+            BeginOrderMove(runtime, clone, order, OrderManager.MoveSpeedOf(context.Variables, clone));
         }
 
         private static void SpawnPrefab(EventContext context, ActionSpec spec)

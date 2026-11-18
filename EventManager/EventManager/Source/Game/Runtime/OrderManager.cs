@@ -92,6 +92,39 @@ namespace Game
         /// </summary>
         public const double DefaultInteractionRange = 60;
 
+        /// <summary>
+        /// The pace a unit's orders walk at when the sheet names none, in cm/s. It is the sheet's
+        /// job to say how fast a unit is (<c>set my Speed to 90</c>); this is only the answer for a
+        /// sheet that never wrote one, and it is fast enough to be seen moving.
+        /// </summary>
+        public const double DefaultMoveSpeed = 100;
+
+        /// <summary>Both spellings a sheet may use for its own walking pace.</summary>
+        private static readonly string[] MoveSpeedNames = { "Speed", "MoveSpeed" };
+
+        /// <summary>
+        /// The speed a unit walks its orders at: its own <c>my Speed</c> (or <c>my MoveSpeed</c>),
+        /// never a literal in the bridge, so <c>set my Speed to 90</c> really walks at 90. A sheet
+        /// that never set one gets <see cref="DefaultMoveSpeed"/>; a zero or negative value counts
+        /// as unset rather than freezing the unit in place. Read without the unset-variable
+        /// warning, so an idle unit asking its pace is silent.
+        /// </summary>
+        public static double MoveSpeedOf(EventVariables variables, object unit)
+        {
+            if (variables != null && unit != null)
+            {
+                foreach (string name in MoveSpeedNames)
+                {
+                    if (!variables.HasLocal(unit, name))
+                        continue;
+                    double speed = variables.GetLocal(unit, name).AsNumber();
+                    if (speed > 0)
+                        return speed;
+                }
+            }
+            return DefaultMoveSpeed;
+        }
+
         /// <summary>Both spellings the language accepts for the range the sheet declares.</summary>
         private static readonly string[] AttackRangeNames = { "attack range", "AttackRange" };
 

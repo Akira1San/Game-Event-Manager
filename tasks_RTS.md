@@ -1516,18 +1516,155 @@ selected", and no command-card scene/content exists.
   `when Q is pressed` block because nothing runs another sheet's block for every selected unit —
   so Stim stays on `Marine.events` and a card `train`/`stop` is all a button can reuse.
 
-### Part F — Words, tests, acceptance [ ]
-- `WordRegistry` rows and `keywords.html` rows for every new word (selection-as-value, the
-  multi-unit order forms); an audit pass over `keywords.html` rows written by Tasks 18–28 so the
-  documented shapes and the parser agree
-- Pure tests: click routing decisions (select / add / clear / ignore), marquee bounds math, the
+### Part F — Words, tests, acceptance [x]
+- [x] `WordRegistry` rows and `keywords.html` rows for every new word (selection-as-value, the
+  multi-unit order forms); an audit pass so the documented shapes and the parser agree
+- [x] Pure tests: click routing decisions (select / add / clear / ignore), marquee bounds math, the
   right-click order resolution table, the multi-unit order fan-out and its refusal path
-- Acceptance in the editor (the Task 20 Part A walkthrough): click a marine and see its ring and its
-  card, drag a box over three marines and command one move, right-click an enemy and watch the
-  group attack it, click a barracks and train a marine from its icon, spam the icon to hit the queue
-  cap and see it greyed, and confirm a scene with no selection/UI content still plays as before
-- The bridge half (raycast picking, marquee drawing, UI hit-testing) has no unit tests by the
-  project's convention; note the play-check results in this task's notes
+- [x] Acceptance list written (the steps below); it has **not** been played through — that needs the
+  editor and this task's notes say so
+- [x] The bridge half (raycast picking, marquee drawing, UI hit-testing) has no unit tests by the
+  project's convention; recorded in the notes
+
+#### Part F notes
+- **The audit runs as a test, in both directions.** `Tests/Program.cs` reads `keywords.html` from
+  the repo root, strips markup and then decodes entities — that order matters, because `&lt;thing&gt;`
+  is a placeholder in the *text*, so decoding first would let the tag strip delete every `<thing>`
+  — and asks two questions: every example the reference prints is a line the parser accepts, and
+  every word `WordRegistry` offers has a row there. The first direction passes clean, which is the
+  answer the audit was for: no documented shape has drifted from the parser.
+- **The second direction found the real backlog, and it is now closed.** It started at 73 words the
+  registry offers with no row in the reference — all older than this task: the UI triggers
+  (`when <thing> text changes`, `is focused` / `loses focus` / `submits` / `is double-clicked` /
+  `is right-clicked` / `is pressed` / `is released`, `<thing> is pressed`/`is released`/`is
+  disabled`/`is focused`, `text of <thing> is <value>`), the production and research edges
+  (`when <building> construction completes`, `finishes training <unit>`, `starts producing <unit>`,
+  `production queue is empty` and its named form, `starts`/`finishes researching <name>`,
+  `when research finishes`, `<order> order completes`, `queue count is <n>`, `<building> is idle`,
+  `me has build queue`, `set build time`), the buff words (`when buff "<name>" starts`/`ends`,
+  `my "<name>" time left`, `add buff`, `remove buff`), fog and aiming (`area becomes revealed` /
+  `hidden`, `<unit> enters fog`, `me is visible to enemy`, `me is hidden`, `reveal`, `hide area
+  around me by <radius>`, `set visibility to <radius>`, `when aim picks a target`), the input verbs
+  (`enable`/`disable`/`toggle`/`unfocus`/`navigate`), the camera and combat words, the two- and
+  three-operator `set`, and the remaining value forms. **All 73 rows are written now**, in the section
+  each word belongs to — 31 triggers, 16 conditions, 17 actions, and 6 value forms plus the
+  `bind … format "<template>"` variant next to the other binds — and `Tests/keyword-gaps.txt` is
+  empty apart from its header. The mechanism stays: a registered word with no row fails the test
+  unless it is listed there, and a listed word that has since been documented fails it too, so a
+  future gap has to be named deliberately.
+- **Two shapes cannot be read as ordinary lines**, and the audit says why instead of skipping quietly:
+  `bind` is sugar that expands into its own top-level event (so it is parsed as one), and
+  `otherwise` only means something under the condition line above it (so it is the one documented
+  sample outside the parse check, alongside the handful of rows whose example contains a
+  placeholder).
+- **The four pure-test bullets were already covered**, so Part F points at them rather than
+  duplicating assertions: click routing in the Part A block (`ClickSelect.Resolve`'s replace/add/
+  remove/none table, `ClearsOnGround`, the sheet/`my Selectable` rules and `SelectOnClick` against a
+  live selection), marquee bounds in Part B (`BoxScreenRect.FromCorners`/`Contains`/`Covers`,
+  `BoxSelect.IsDrag`, unit-centre vs whole-building-box inclusion, and `BoxSelect.Resolve` keeping
+  the old selection on Shift), the right-click table in Part C (`RightClickOrders.Classify`'s six
+  targets plus `IsHostile`/`IsDeclaredEnemy`/`Resolve`), and the fan-out in Part D (scope filtering
+  and order, `SelectionInfo.AllowsOrderScope`'s verb whitelist and its refusal message, and the
+  per-actor `train`).
+- **What has no test** is the bridge: raycast picking, the marquee's `SetCorners` projection, the
+  UI hit-test that decides a press belongs to a button, and the `ExecuteOnSelection` loop itself
+  (it needs Flax types). Those are the play-check's job.
+- **The gathered finding is a documentation gap, not a language bug.** `my Building` (added earlier
+  in this part) joined the building words, and the reference already documents it; nothing in the
+  parse audit was wrong, so no word changed shape in this slice.
+- **The audit's shape comparison had one trap of its own:** block-level tags become a space but
+  inline ones vanish, because a row's own spacing lives in the text — `when buff "` + `<name>` +
+  `" starts` must read back with no gaps around the placeholder. Replacing every tag with a space
+  (the first attempt) made exactly the eight rows that wrap a placeholder in quotes look
+  undocumented.
+- 9 new checks (the reference exists and lists samples, no new gap, no stale gap, the pinned count
+  matches, every printed example parses, only the declared shape rows skip, and every word this
+  task added is in both the registry and the reference) -> **2041 passed, 0 failed** with the gap
+  list empty.
+- **Acceptance list (not yet run — needs the editor):**
+  1. Open `Content/scenes/RTS_Test_0.scene` and press play. The two Marines stand on the floor and
+     the Barracks is the large box; no card buttons are visible yet.
+  2. Left click a Marine: its selection ring appears and the unit card's two buttons (`Stop`,
+     `Hold`) fade in at the bottom right of the canvas.
+  3. Drag a box over both Marines: both get rings, both stay selected on release.
+  4. Press `S` (or the Stop button) with both selected: both stop, and the sheet prints nothing odd
+     in the console.
+  5. Right click near the Barracks: both Marines walk there — the group order comes from one click.
+  6. Left click the Barracks: the unit buttons go away, the building buttons appear, and `Train
+     Marine` is greyed only while the Marine is unaffordable or the queue is full.
+  7. Press `W` (or Train) five times: five Marines queue, the sixth press is refused with the
+     "production queue is full" warning, and the button is greyed while the queue is full.
+  8. Click empty ground: no card, no selection ring.
+  9. Open a scene with no selection or UI content (for example `Content/scenes/PhysicsTest.scene`)
+     and confirm it still plays exactly as before — the selection code is opt-in per scene through
+     its sheets and the manager's button poll finds no buttons there.
+
+#### Part F follow-up — the play-check found right-click doing nothing
+- **What the play-check showed.** Step 5 failed: selecting a Marine worked (`Marine selected`
+  printed), but a right click on the floor produced `Marine: order started` and `Marine: path
+  blocked` in the same millisecond, twice, and the unit never moved — even after the scene got box
+  colliders and a NavMesh. Two separate causes, both in the bridge:
+  1. **The order speed was a literal.** `BeginOrderMove` was called with `5` at every site (move,
+     attack, attack-move, gather, repair, build, rally, and the queued-order promotion), so the
+     Marine's `set my Speed to 90` was ignored and any walk would have been 5 cm/s — invisible.
+  2. **A failed `Navigation.FindPath` was treated as a dead end.** A click a few centimetres off
+     the baked mesh, a body whose pivot sits under it, or a mesh Flax is still baking (it bakes in
+     the background, `Navigation.IsBuildingNavMesh`) all answer "no path", and the order stopped
+     there after raising the trigger.
+- **What changed.** `OrderManager.MoveSpeedOf(variables, unit)` is now the one answer for a unit's
+  pace: `my Speed`, else `my MoveSpeed`, else `DefaultMoveSpeed` (100) — a zero or negative value
+  counts as unset, because a sheet writing 0 should not freeze a unit. Every `BeginOrderMove` call
+  passes it instead of `5`, the queued-order promotion and the rally read the same helper, and
+  `goto` with no written `speed` uses it too (an explicit `speed <n>` still wins). `TryNavRoute`
+  queries the mesh and, if that fails, snaps both ends with `Navigation.FindClosestPoint` and asks
+  again; `goto there`, `goto <actor>` and every order use it. When even the snapped query has no
+  answer the unit hears `when path blocked` (the route really was not found) and then walks the
+  straight line, so a level whose mesh is missing, still building or smaller than the click moves
+  the unit instead of leaving it standing. `WarnNoNavRoute` says once which actor and which point,
+  whether the mesh is still building, and what to check (`NavMeshBoundsVolume` coverage, walkable
+  floor) so the scene problem is visible instead of silent.
+- **Checks:** 5 new pure ones (`MoveSpeedOf` default, `my Speed`, zero, `my MoveSpeed`, and the
+  null-variable/null-unit reads) -> **2046 passed, 0 failed**; `GameEditorTarget` builds with 0
+  errors and 0 warnings. `keywords.html` gained the note on `goto` (pace from `my Speed`, default
+  100; straight line when the mesh has no route) and on `when path blocked` (the walk still starts
+  along the straight line).
+- **Not verified:** the fix has not been played in the editor. The next play-check is: select a
+  Marine, right click the floor, and expect either a NavMesh walk or a single
+  "No NavMesh route … Walking the straight line instead" warning followed by movement at
+  `my Speed` (90), then `Marine: order complete` on arrival.
+
+##### Part F follow-up 2 — a fallback that contradicts the trigger
+- **The contradiction.** Follow-up 1 made a failed `Navigation.FindPath` mean both "the path is
+  blocked" and "walk anyway". That is two different claims at once: the straight line sent a unit
+  through walls whenever the mesh *had* answered with no route, and the sheet heard `when path
+  blocked` for a walk that was still going. A trigger named "blocked" has to mean the unit
+  stopped.
+- **The rule now.** One query, three answers, decided by `NavRoute.Classify`
+  (`Source/Game/Runtime/NavRoute.cs`, pure and testable):
+  - **`Found`** — a route, walked as given. The raw query runs first, then the same query between
+    both ends snapped by `Navigation.FindClosestPoint`, which is what rescues a pivot a hair under
+    the mesh or a click on the floor's very edge.
+  - **`Blocked`** — both ends sit on a baked mesh (within `NavRoute.OnMeshTolerance`, measured
+    horizontally, so a unit's pivot above the floor still counts as on it) and even the snapped
+    query has no route. The unit really stops and `when path blocked` fires. Walls, props, the
+    terrain grid and a refused landing are all this case.
+  - **`Unavailable`** — the mesh has no opinion: `Navigation.IsBuildingNavMesh`, no nearest point
+    at all (nothing baked), or a point that snapped further than the tolerance (a click off the
+    mesh, a body pushed onto geometry). Nothing is in the way, so the unit walks the straight line
+    and **no** trigger fires.
+- **Where it is wired.** `FlaxActions.QueryNavRoute` replaced `TryNavRoute` and returns the
+  answer; `goto there`, `goto <actor>` and `BeginOrderMove` (orders, rally, queued promotion) each
+  branch on it. `NavRoute.Stops` is the only path that raises the trigger; `NavRoute.WalksStraight`
+  is the only path that takes the straight line. `WarnPathBlocked` joins `WarnNoNavRoute` so the
+  log says which of the two happened, once per scene.
+- **Checks:** 11 new pure ones over the decision table (`Found` beats everything, a building mesh
+  never blocks, a missing mesh is not a block, an off-mesh click is not a block, a stranded unit
+  walks straight, a snapped query recovering a route, on-mesh with no route is the block, and that
+  only `Unavailable` walks straight / only `Blocked` stops) -> **2057 passed, 0 failed**;
+  `GameEditorTarget` builds with 0 errors.
+- **Not verified:** still an editor play-check: right click the floor and either path around the
+  walls, or — with no NavMesh covering the Marine — one "No NavMesh route …" warning, a straight
+  walk and **no** `Marine: path blocked` line.
 
 ### Open questions for this task
 - Shift-to-add on click: is `Selection.Add` enough, or does the selection need a "primary" actor for

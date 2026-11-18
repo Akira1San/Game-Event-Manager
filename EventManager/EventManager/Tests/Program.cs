@@ -5747,6 +5747,61 @@ meleeRangeVars.SetLocal(meleeRangeUnit, "attack range", ValueBox.OfNumber(80));
 Check(Math.Abs(OrderManager.StopDistanceFor(RangeContext(meleeRangeVars, meleeRangeUnit)) - 80) < 0.0001,
       "a melee unit that declared a range stops at it too");
 
+// A unit walks its orders at its own `my Speed`, never at a literal in the bridge (Task 29
+// follow-up): a Marine that wrote 90 was crawling along at the hardcoded 5.
+var paceVars = new EventVariables();
+var paceUnit = new FakeActor("Marine");
+Check(Math.Abs(OrderManager.MoveSpeedOf(paceVars, paceUnit) - OrderManager.DefaultMoveSpeed) < 0.0001,
+      "a unit that never set a speed walks at the default pace");
+paceVars.SetLocal(paceUnit, "Speed", ValueBox.OfNumber(90));
+Check(Math.Abs(OrderManager.MoveSpeedOf(paceVars, paceUnit) - 90) < 0.0001,
+      "`set my Speed to 90` is the pace the unit's orders walk at");
+paceVars.SetLocal(paceUnit, "Speed", ValueBox.OfNumber(0));
+Check(Math.Abs(OrderManager.MoveSpeedOf(paceVars, paceUnit) - OrderManager.DefaultMoveSpeed) < 0.0001,
+      "a zero speed does not freeze the unit — it falls back to the default pace");
+var paceMoveVars = new EventVariables();
+var paceMoveUnit = new FakeActor("Marine");
+paceMoveVars.SetLocal(paceMoveUnit, "MoveSpeed", ValueBox.OfNumber(60));
+Check(Math.Abs(OrderManager.MoveSpeedOf(paceMoveVars, paceMoveUnit) - 60) < 0.0001,
+      "`my MoveSpeed` is the pace too, for a sheet that spells it that way");
+Check(Math.Abs(OrderManager.MoveSpeedOf(null, paceMoveUnit) - OrderManager.DefaultMoveSpeed) < 0.0001 &&
+      Math.Abs(OrderManager.MoveSpeedOf(paceMoveVars, null) - OrderManager.DefaultMoveSpeed) < 0.0001,
+      "the pace read is safe with no variables or no unit (the global Game sheet)");
+
+// A walk's NavMesh answer is three things, not two (Task 29 play-check follow-up): a route, a way
+// that is really closed, and a mesh that simply cannot answer. Only the closed way stops the unit
+// and fires `when path blocked`; a mesh that is missing, still building or off the clicked point
+// walks the straight line and raises nothing, because nothing is actually in the way.
+Check(NavRoute.Classify(false, true, false, double.PositiveInfinity, false,
+          double.PositiveInfinity, false) == NavRouteAnswer.Found,
+      "a route the mesh found is walked as it is");
+Check(NavRoute.Classify(true, false, false, double.PositiveInfinity, false,
+          double.PositiveInfinity, false) == NavRouteAnswer.Unavailable,
+      "a mesh Flax is still baking is not a block — the unit walks the straight line");
+Check(NavRoute.Classify(false, false, false, double.PositiveInfinity, false,
+          double.PositiveInfinity, false) == NavRouteAnswer.Unavailable,
+      "a level with no baked mesh is not a block either");
+Check(NavRoute.Classify(false, false, true, 0, false, double.PositiveInfinity, false) ==
+      NavRouteAnswer.Unavailable,
+      "a click off the mesh is not a block — the spot has no mesh under it");
+Check(NavRoute.Classify(false, false, true, 300, true, 0, false) == NavRouteAnswer.Unavailable,
+      "a unit stranded far off the mesh walks straight rather than reporting a blocked path");
+Check(NavRoute.Classify(false, false, true, 0.4, true, 0.4, true) == NavRouteAnswer.Found,
+      "both ends snapping onto the mesh finds the route the raw query missed");
+Check(NavRoute.Classify(false, false, true, 0, true, 0, false) == NavRouteAnswer.Blocked,
+      "both ends on a baked mesh with no way between them is a real block");
+Check(NavRoute.Classify(true, false, true, 0, true, 0, false) == NavRouteAnswer.Unavailable,
+      "a mesh that is still building cannot refute a route yet, so it never blocks");
+Check(NavRoute.WalksStraight(NavRouteAnswer.Unavailable) &&
+      !NavRoute.WalksStraight(NavRouteAnswer.Blocked) &&
+      !NavRoute.WalksStraight(NavRouteAnswer.Found),
+      "only a mesh that cannot answer sends the unit along the straight line");
+Check(NavRoute.Stops(NavRouteAnswer.Blocked) && !NavRoute.Stops(NavRouteAnswer.Unavailable) &&
+      !NavRoute.Stops(NavRouteAnswer.Found),
+      "`when path blocked` is raised only when the unit really stops");
+Check(Math.Abs(NavRoute.OffMesh(0, 0, 3, 4) - 5) < 0.0001,
+      "the off-mesh distance is horizontal, so a pivot above the floor still counts as on it");
+
 // The two type axes are independent: a ranged air unit is both.
 var mixedVars = new EventVariables();
 var mixedUnit = new FakeActor("Bomber");
@@ -11432,6 +11487,199 @@ foreach (var barracksEvent in barracksSheet.Events)
             barracksMarked = true;
 Check(barracksMarked,
     "the shipped Barracks marks itself a building on its first frame");
+
+// ------------------------------------------------------------------
+// Task 29 Part F: the word audit — the keyword reference and the language must agree
+// ------------------------------------------------------------------
+
+// `keywords.html` is the reference a game author reads, so both directions are checked: every
+// word the editor offers (WordRegistry) has its example in the reference, and every example the
+// reference prints is something the parser actually accepts.
+string referencePath = Path.Combine("..", "..", "keywords.html");
+Check(File.Exists(referencePath), "the keyword reference sits at the repo root");
+string referenceHtml = File.Exists(referencePath) ? File.ReadAllText(referencePath) : "";
+string referenceText = System.Net.WebUtility.HtmlDecode(referenceHtml);
+
+var exampleSpans = new System.Text.RegularExpressions.Regex(
+    "<span class=\"example\">(.*?)</span>",
+    System.Text.RegularExpressions.RegexOptions.Singleline);
+var documentedExamples = new List<string>();
+foreach (System.Text.RegularExpressions.Match span in exampleSpans.Matches(referenceHtml))
+{
+    string sample = System.Net.WebUtility.HtmlDecode(span.Groups[1].Value).Trim();
+    if (sample.Length > 0 && !documentedExamples.Contains(sample))
+        documentedExamples.Add(sample);
+}
+Check(documentedExamples.Count > 200,
+    "the keyword reference prints a sample for each word it documents");
+
+// Shapes are compared with the markup stripped, because a documented shape is spread over several
+// `<span>` pieces (`when me sees <thing> by <dist>`) while the registry stores it as one string.
+// Tags go first and decoding second: `&lt;thing&gt;` is a placeholder in the text, not markup, so
+// decoding before stripping would delete every `<thing>` with the tags. Block-level tags become a
+// space (so two cells never run together) but inline ones vanish, because a row's own spaces are
+// already in the text — `when buff "` + `<name>` + `" starts` must read back with no gaps.
+string shapeHtml = System.Text.RegularExpressions.Regex.Replace(
+    referenceHtml,
+    "<(br|/td|/tr|/th|/p|/h2|/h3|/div|/section|/li)[^>]*>",
+    " ",
+    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+string referenceShapes = System.Net.WebUtility.HtmlDecode(
+    System.Text.RegularExpressions.Regex.Replace(shapeHtml, "<[^>]+>", ""));
+referenceShapes = System.Text.RegularExpressions.Regex.Replace(referenceShapes, "\\s+", " ");
+var undocumented = new List<string>();
+foreach (WordEntry entry in WordRegistry.All)
+    if (!referenceShapes.Contains(entry.Word))
+        undocumented.Add(entry.Word);
+// The reference stopped growing while the registry kept going, so the words it has no row for are
+// pinned in `Tests/keyword-gaps.txt` rather than ignored: a new undocumented word fails the test,
+// and a pinned gap that has since been documented fails it too, so the list only shrinks.
+string gapPath = Path.Combine("Tests", "keyword-gaps.txt");
+Check(File.Exists(gapPath), "the pinned keyword-gap list sits next to the tests");
+var knownGaps = new List<string>();
+if (File.Exists(gapPath))
+{
+    foreach (string gapLine in File.ReadAllLines(gapPath))
+    {
+        string trimmed = gapLine.Trim();
+        if (trimmed.Length > 0 && !trimmed.StartsWith("#", StringComparison.Ordinal))
+            knownGaps.Add(trimmed);
+    }
+}
+var newGaps = new List<string>();
+foreach (string shape in undocumented)
+    if (!knownGaps.Contains(shape))
+        newGaps.Add(shape);
+var closedGaps = new List<string>();
+foreach (string shape in knownGaps)
+    if (!undocumented.Contains(shape))
+        closedGaps.Add(shape);
+foreach (string missing in newGaps)
+    Console.WriteLine("  UNDOCUMENTED: " + missing);
+Check(newGaps.Count == 0,
+    "a word the editor offers cannot be missing from keywords.html without joining the pinned list");
+Check(closedGaps.Count == 0,
+    "the pinned keyword-gap list carries no stale line: documenting a word means deleting its row");
+Check(undocumented.Count == knownGaps.Count,
+    "the pinned list is exactly the current documentation backlog");
+
+// An example is read as what its row is: a `when` line is a whole trigger with a body under it,
+// anything else is one body line (a condition or an action), or a value when it only makes sense
+// after `set X to`. A sample that contains a placeholder or an ellipsis is a shape, not a sample,
+// so it is counted separately instead of being parsed.
+bool DocumentedLineParses(string sample)
+{
+    // `bind` is sugar that expands into its own event, so it stands on its own top level line
+    // instead of sitting in a body.
+    if (sample.StartsWith("bind ", StringComparison.Ordinal))
+    {
+        try
+        {
+            parser.Parse(sample);
+            return true;
+        }
+        catch (ParseException)
+        {
+            return false;
+        }
+        catch (LexException)
+        {
+            return false;
+        }
+    }
+    if (sample.StartsWith("when ", StringComparison.Ordinal))
+    {
+        try
+        {
+            parser.Parse(sample + "\n  print \"audit\"");
+            return true;
+        }
+        catch (ParseException)
+        {
+            return false;
+        }
+        catch (LexException)
+        {
+            return false;
+        }
+    }
+
+    try
+    {
+        var lineProgram = parser.Parse("when game starts\n  " + sample);
+        if (lineProgram.Events.Count == 1 && lineProgram.Events[0].Body.Count == 1)
+            return true;
+    }
+    catch (ParseException)
+    {
+    }
+    catch (LexException)
+    {
+    }
+
+    try
+    {
+        parser.Parse("when game starts\n  set AuditProbe to " + sample);
+        return true;
+    }
+    catch (ParseException)
+    {
+        return false;
+    }
+    catch (LexException)
+    {
+        return false;
+    }
+}
+
+// `otherwise` opens the block under the condition line above it, so it is the one sample that
+// cannot be read on its own.
+var contextOnly = new[] { "otherwise", "else" };
+
+var shapeExamples = new List<string>();
+var unparsedExamples = new List<string>();
+foreach (string sample in documentedExamples)
+{
+    if (sample.Contains('<') || sample.Contains('…') || sample.Contains('\n'))
+    {
+        shapeExamples.Add(sample);
+        continue;
+    }
+    if (Array.IndexOf(contextOnly, sample) >= 0)
+        continue;
+    if (!DocumentedLineParses(sample))
+        unparsedExamples.Add(sample);
+}
+foreach (string broken in unparsedExamples.Take(12))
+    Console.WriteLine("  UNPARSED: " + broken);
+Check(unparsedExamples.Count == 0,
+    "every example keywords.html prints is a line the parser accepts");
+Check(shapeExamples.Count <= 6,
+    "only the handful of shape rows (a placeholder inside the example) skip the parse check");
+
+// The words this task added have to be in both places, not just in one.
+string[] task29Words =
+{
+    "select all Marine", "selection count is 2", "selection is all units",
+    "my selected kind is Marine", "selected units goto there", "queue has room",
+    "when selection changes", "when me is selected", "me is selected",
+};
+var task29Missing = new List<string>();
+foreach (string sample in task29Words)
+{
+    bool registered = false;
+    foreach (WordEntry entry in WordRegistry.All)
+        if (entry.Example == sample)
+            registered = true;
+    if (!registered)
+        task29Missing.Add("registry: " + sample);
+    if (!referenceText.Contains(sample))
+        task29Missing.Add("keywords.html: " + sample);
+}
+foreach (string missing in task29Missing)
+    Console.WriteLine("  MISSING: " + missing);
+Check(task29Missing.Count == 0,
+    "every word Task 29 added is in the registry and in the keyword reference");
 
 // Task 30 Part A - the save file's format and location.
 var saveProject = Path.Combine(Path.GetTempPath(), "event-manager-save-" + Guid.NewGuid().ToString("N"));
