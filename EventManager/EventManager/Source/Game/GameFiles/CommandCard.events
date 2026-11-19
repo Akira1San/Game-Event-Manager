@@ -79,6 +79,7 @@ when TrainMarineButton is pressed
   selection is all buildings
   can afford Marine
   queue has room
+  print "Card: train Marine"
   selected buildings train Marine
 
 when CancelMarineButton is pressed
@@ -87,10 +88,12 @@ when CancelMarineButton is pressed
 
 when LiftButton is pressed
   selection is all buildings
+  print "Card: lift off"
   selected buildings lift off
 
 when LandButton is pressed
   selection is all buildings
+  print "Card: land"
   selected buildings land
 
 # The price comes from Upgrades.events, so it is checked by the manager rather than by

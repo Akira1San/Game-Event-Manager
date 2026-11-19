@@ -5,18 +5,34 @@
 # WHAT IT SHOWS
 #   · `train Marine` queues production through ProductionManager (cost/affordance held by the
 #     `can afford` gate, exactly as the building sheets do)
+#   · a finished Marine is spawned beside the building, so training ends with a unit on the map
+#     (`when Barracks finishes training Marine` -> `spawn Marine at me offset 120`); the scene
+#     needs an actor called `Marine` to stage the clones, even a hidden one
+#   · the card's Train button doubles as the readout: `my queue count` is how many Marines are
+#     still queued and `my train left` how many whole seconds the active one has left
 #   · `research "Stim Pack"` queues the upgrade from Upgrades.events, charging the owner's bank
 #   · `when research finishes` fires once when the level lands (`Player1 StimPack`)
 #   · `bind progress of ResearchBar to my ResearchProgress` paints the bar from the 0-100 value
 #     ResearchManager writes on this building while it works, and `ResearchName` labels it
+#   · `lift off` / `land` (Task 28 Part E): the building rises to `my LiftHeight`, its queues
+#     pause and its build-grid cell frees while it is up, then it lands and the work resumes
+#
+# HOTKEYS ARE SELECTION-SCOPED (Task 29 Part E): `when W is pressed` fires on every sheet in the
+# scene, so each block starts with `me is selected`. Without that gate a key pressed anywhere
+# would train, research or lift a building the player was not even looking at — the card's
+# buttons were the only scoped route, and the hotkeys were global.
 #
 # SETUP (editor): an EventSheet on the building, Event File = `Barracks`. `ResearchBar` and
-# `ResearchLabel` are optional UI actors; without them the binds simply do nothing.
+# `ResearchLabel` are optional UI actors; without them the binds simply do nothing. The Train
+# readout binds to the card's `TrainMarineButton`, so it needs that button in the scene.
 #
 # `StimPackRequires` in Upgrades.events names `Barracks`, so researching it anywhere else is
 # refused by the manager (with one warning) instead of silently working.
 bind progress of ResearchBar to my ResearchProgress
 bind ResearchLabel to my ResearchName
+# The card's Train button is also this building's readout, so there is no second label to place:
+# "Train Marine (W)  2 left, 4s" while it works and "0 left, 0s" when the queue is empty.
+bind TrainMarineButton to my queue count and my train left format "Train Marine (W)  {0} left, {1}s"
 
 when me appears
   set my MaxHealth to 1000
@@ -26,9 +42,24 @@ when me appears
   # building state for the card to read (Task 29 Part E). This one line is what makes
   # `selection is all buildings`, the building command card and the right-click rally see it.
   set my Building to 1
+  # How high this building rises. `lift off` reads it before `LiftOffHeight` or the 200 default,
+  # so the L key and the card's Lift button cannot lift it to two different heights.
+  set my LiftHeight to 20
+
+# ---- selection feedback ---------------------------------------------------------------
+when me is selected
+  print "Barracks selected"
+
+when me is deselected
+  print "Barracks deselected"
 
 # ---- train a Marine (W): one order per press, gated on the unit's cost variables ---------
+# The `unless my Altitude ...` line is the flying gate from Task 28 Part C — no training while
+# the building is up in the air. It reads the altitude rather than `me is airborne` so a
+# building standing on its own ground needs no ground probe.
 when W is pressed
+  me is selected
+  unless my Altitude is higher than 0
   can afford Marine
   train Marine
 
@@ -36,6 +67,7 @@ when W is pressed
 # The price comes from Upgrades.events (`StimPackCost`), so the manager checks the bank and
 # refuses with one warning when it is short — a `can afford` gate would read only live globals.
 when R is pressed
+  me is selected
   research "Stim Pack"
 
 # The level is already applied (`Player1 StimPack` is 1) before this event runs, so a
@@ -45,3 +77,32 @@ when research finishes
 
 when production queue is empty
   print "Barracks: idle"
+
+# ---- the finished unit walks out of the building ---------------------------------------
+# Production itself only empties the queue; something has to put the unit on the map, which is
+# this sheet's job (the engine has no unit table to spawn from). The offset puts it at the
+# building's door instead of inside its model, and the clone keeps this scene's `Marine` sheet.
+when Barracks starts producing Marine
+  print "Barracks: training Marine"
+
+when Barracks finishes training Marine
+  spawn Marine at me offset 120
+  print "Barracks: Marine ready"
+
+# ---- lift off / land (L / K): the flying barracks from Task 28 Part E ---------------------
+# Both keys are selection-scoped like the training hotkeys. `lift off` rises to `my LiftHeight`
+# (20) and, without one, to `LiftOffHeight` or 200; `land` needs none: it puts the building down
+# on the ground under it.
+when L is pressed
+  me is selected
+  lift off
+
+when K is pressed
+  me is selected
+  land
+
+when me lifts off
+  print "Barracks: airborne"
+
+when me lands
+  print "Barracks: down"

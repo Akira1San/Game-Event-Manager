@@ -782,7 +782,8 @@ namespace Game
                     // the order state so an expression and a condition see the same thing.
                     // `my train time` / `my queue cap` — the production read-outs a command card
                     // shows (Task 29 Part E).
-                    if (pair == "train time" || pair == "queue cap")
+                    if (pair == "train time" || pair == "queue cap" ||
+                        pair == "queue count" || pair == "train left")
                     {
                         index += 3;
                         return new VariableValue { Line = t.Line, Owner = "my", Name = pair };

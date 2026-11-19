@@ -76,12 +76,21 @@ namespace Game
             if (name == "order queue" || name == "OrderQueue")
                 return ValueBox.OfNumber(Runtime.Orders.OrderCount(Me));
             // Production read-outs a command card shows (Task 29 Part E): `my train time` is how
-            // long the unit being trained takes in total (0 when the queue is empty) and
-            // `my queue cap` is the cap this building's queue fills up to.
+            // long the unit being trained takes in total (0 when the queue is empty),
+            // `my queue cap` is the cap this building's queue fills up to, `my queue count` is
+            // how many orders are waiting and `my train left` the seconds left on the active one.
             if (name == "train time" || name == "TrainTime")
                 return ValueBox.OfNumber(Runtime.Production.CurrentDurationOf(Me));
             if (name == "queue cap" || name == "QueueCap")
                 return ValueBox.OfNumber(Runtime.Production.QueueCapOf(Runtime.Variables, Me));
+            // The two live numbers a card shows beside a Train button: how many units are still
+            // queued, and how many whole seconds the active one has left (0 when idle). Both are
+            // computed reads, so a `bind` polls them every tick and a countdown updates itself
+            // without the sheet mirroring a timer into a variable.
+            if (name == "queue count" || name == "QueueCount")
+                return ValueBox.OfNumber(Runtime.Production.QueueCount(Me));
+            if (name == "train left" || name == "TrainLeft")
+                return ValueBox.OfNumber(System.Math.Ceiling(Runtime.Production.RemainingOf(Me)));
             // The selection as an event value (Task 29 Part D): what a shared command card
             // names instead of hard-coding one sheet per unit. `selected unit` is the first
             // selected unit, `selected building` the first building, `selected kind` the unit's

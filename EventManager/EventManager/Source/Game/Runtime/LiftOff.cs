@@ -45,6 +45,14 @@ namespace Game
         /// <summary>Global that sets the rise height when the sheet wrote neither a number nor an altitude.</summary>
         public const string HeightVariable = "LiftOffHeight";
 
+        /// <summary>
+        /// Per-building variable that names the height <c>lift off</c> rises to, so a building's
+        /// own sheet can write it once in <c>when me appears</c> and every route that lifts it —
+        /// the L key, the card's Lift button, <c>selected buildings lift off</c> — rises by the
+        /// same number instead of each writer having to set <c>my Altitude</c> first.
+        /// </summary>
+        public const string LiftHeightVariable = "LiftHeight";
+
         /// <summary>Default rise height in world units: clearly off the ground, still on screen.</summary>
         public const double DefaultHeight = 200.0;
 
@@ -57,8 +65,25 @@ namespace Game
         /// </summary>
         public static double ResolveHeight(EventVariables variables, double requested)
         {
+            return ResolveHeight(variables, null, requested);
+        }
+
+        /// <summary>
+        /// The height a specific building rises to: the number the word carries, then that
+        /// building's <see cref="LiftHeightVariable"/>, then the global, then the default. The
+        /// per-building value is what keeps a hotkey and a command-card button from disagreeing
+        /// about how high the same barracks goes.
+        /// </summary>
+        public static double ResolveHeight(EventVariables variables, object actor, double requested)
+        {
             if (requested > 0)
                 return requested;
+            if (variables != null && actor != null && variables.HasLocal(actor, LiftHeightVariable))
+            {
+                double local = variables.GetLocal(actor, LiftHeightVariable).AsNumber();
+                if (local > 0)
+                    return local;
+            }
             if (variables != null && variables.HasGlobal(HeightVariable))
             {
                 double global = variables.GetGlobal(HeightVariable).AsNumber();
@@ -114,7 +139,7 @@ namespace Game
             if (actor == null || IsFlying(actor))
                 return false;
 
-            double height = ResolveHeight(variables, requestedHeight);
+            double height = ResolveHeight(variables, actor, requestedHeight);
             _states[actor] = new LiftOffState
             {
                 Building = building ?? "",

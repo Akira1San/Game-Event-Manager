@@ -10187,6 +10187,9 @@ bEngine.Variables.SetGlobal("Minerals", ValueBox.OfNumber(200));
 bEngine.Variables.SetGlobal("StimPackTime", ValueBox.OfNumber(2));
 bEngine.AddSheet(fBarracks, barracksFile);
 bEngine.Tick(0);
+// Hotkeys are selection-scoped (the play-check found W firing on a building nobody had
+// selected), so the acceptance test selects the Barracks the way a player would first.
+bEngine.Selection.ReplaceSelection(new object[] { fBarracks });
 bEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "R" });
 bEngine.Tick(1);
 Check(bEngine.Research.CurrentUpgrade(fBarracks) == "Stim Pack" &&
@@ -11330,6 +11333,23 @@ var cardContext = new EventContext
 Check(cardContext.ReadMy("train time").AsNumber() == 7 &&
       cardContext.ReadMy("queue cap").AsNumber() == ProductionManager.DefaultQueueCap,
     "a card reads `my train time` and `my queue cap` on the building's own sheet");
+Check(cardContext.ReadMy("queue count").AsNumber() == 2 &&
+      cardContext.ReadMy("train left").AsNumber() == 7,
+    "`my queue count` and `my train left` are the live numbers a Train button shows");
+timeEngine.Production.Tick(timeEngine, 0);
+timeEngine.Production.Tick(timeEngine, 2.5);
+Check(cardContext.ReadMy("train left").AsNumber() == 5,
+    "`my train left` counts down in whole seconds, so a bind can print it as text");
+var idleContext = new EventContext
+{
+    Variables = timeEngine.Variables,
+    World = timeEngine.World,
+    Runtime = timeEngine,
+    Me = emptyBarracks,
+};
+Check(idleContext.ReadMy("queue count").AsNumber() == 0 &&
+      idleContext.ReadMy("train left").AsNumber() == 0,
+    "an idle building reads no queued units and no seconds left");
 
 var roomCondition = Conditions.Parse(
     parser.Parse("when every 1 seconds\n  queue has room").Events[0].Body[0].Words);
@@ -11363,6 +11383,34 @@ var queueCapSet = (SetNode)queueCapProgram.Events[0].Body[0].Statement;
 Check(queueCapSet.Value is VariableValue queueCapValue &&
       queueCapValue.Owner == "my" && queueCapValue.Name == "queue cap",
     "`my queue cap` parses as one value");
+var queueCountProgram = parser.Parse("when game starts\n  set C to my queue count");
+var queueCountSet = (SetNode)queueCountProgram.Events[0].Body[0].Statement;
+Check(queueCountSet.Value is VariableValue queueCountValue &&
+      queueCountValue.Owner == "my" && queueCountValue.Name == "queue count",
+    "`my queue count` parses as one value");
+var trainLeftProgram = parser.Parse("when game starts\n  set L to my train left");
+var trainLeftSet = (SetNode)trainLeftProgram.Events[0].Body[0].Statement;
+Check(trainLeftSet.Value is VariableValue trainLeftValue &&
+      trainLeftValue.Owner == "my" && trainLeftValue.Name == "train left",
+    "`my train left` parses as one value");
+
+// A building's own lift height, so the L key and the card's Lift button rise the same amount.
+var liftHeightVars = new EventVariables();
+Check(LiftOffManager.ResolveHeight(liftHeightVars, null, 0) == LiftOffManager.DefaultHeight,
+    "`lift off` still falls back to the default height");
+liftHeightVars.SetGlobal(LiftOffManager.HeightVariable, ValueBox.OfNumber(120));
+Check(LiftOffManager.ResolveHeight(liftHeightVars, null, 0) == 120,
+    "`LiftOffHeight` sets the rise height for every building");
+Check(LiftOffManager.ResolveHeight(liftHeightVars, null, 40) == 40,
+    "a height written on the word wins over the global");
+var liftHeightActor = new FakeActor("Barracks");
+liftHeightVars.SetLocal(liftHeightActor, LiftOffManager.LiftHeightVariable, ValueBox.OfNumber(20));
+Check(LiftOffManager.ResolveHeight(liftHeightVars, liftHeightActor, 0) == 20 &&
+      LiftOffManager.ResolveHeight(liftHeightVars, null, 0) == 120,
+    "`my LiftHeight` wins for that building and leaves every other building on the global");
+liftHeightVars.SetLocal(liftHeightActor, LiftOffManager.LiftHeightVariable, ValueBox.OfNumber(0));
+Check(LiftOffManager.ResolveHeight(liftHeightVars, liftHeightActor, 0) == 120,
+    "a LiftHeight of zero counts as unset, like every other height");
 
 // The shipped command card (Task 29 Part E) must stay a sheet the language can actually read.
 var cardSheet = parser.Parse(File.ReadAllText("Source/Game/GameFiles/CommandCard.events"));
@@ -11403,6 +11451,42 @@ Check(!cardUnknown,
 Check(cardActions >= 10 && cardSetButton && cardQueueGate && cardAllUnits,
     "the card orders the selection, greys its buttons and gates Train on the queue cap");
 
+// The shipped Barracks sheet (Task 29 Part E follow-up): its hotkeys are selection-scoped, its
+// finished unit reaches the map, and its Train button shows the queue as numbers.
+var barracksText = File.ReadAllText("Source/Game/GameFiles/Barracks.events");
+var barracksShip = parser.Parse(barracksText);
+bool ShipBlockIsScoped(string key)
+{
+    foreach (var shipEvent in barracksShip.Events)
+    {
+        if (shipEvent.Trigger.Count < 3 ||
+            shipEvent.Trigger[0].Text != key || shipEvent.Trigger[1].Text != "is" ||
+            shipEvent.Trigger[2].Text != "pressed")
+            continue;
+        foreach (var line in shipEvent.Body)
+            if (line.IsCondition && Conditions.Parse(line.Words).Kind == ConditionKind.Selected)
+                return true;
+        return false;
+    }
+    return false;
+}
+Check(ShipBlockIsScoped("W") && ShipBlockIsScoped("L") && ShipBlockIsScoped("K"),
+    "the Barracks hotkeys only fire while the building is selected");
+ActionSpec shipSpawn = null;
+foreach (var shipEvent in barracksShip.Events)
+    foreach (var line in shipEvent.Body)
+        if (line.Statement is RawActionNode shipRaw)
+        {
+            var shipSpec = ActionWords.Parse(shipRaw.Words, _ => { });
+            if (shipSpec.Verb == ActionVerb.Spawn)
+                shipSpawn = shipSpec;
+        }
+Check(shipSpawn != null && shipSpawn.Thing == "Marine" && shipSpawn.To == "me",
+    "a trained Marine is spawned at the building, so production ends with a unit on the map");
+Check(barracksText.Contains("bind TrainMarineButton to my queue count and my train left") &&
+      barracksText.Contains("set my LiftHeight to 20"),
+    "the sheet shows the queue numbers on Train and lifts to its own authored height");
+
 var cardTrainProgram = cardSheet;
 ActionSpec CardSpec(string button)
 {
@@ -11421,7 +11505,13 @@ ActionSpec CardSpec(string button)
             continue;
         foreach (var cardLine in cardEvent.Body)
             if (cardLine.Statement is RawActionNode raw)
-                return ActionWords.Parse(raw.Words, _ => { });
+            {
+                var parsed = ActionWords.Parse(raw.Words, _ => { });
+                // Skip the diagnostic print each card button now carries; the order is the word
+                // the test is about.
+                if (parsed.Verb != ActionVerb.Print && parsed.Verb != ActionVerb.Unknown)
+                    return parsed;
+            }
     }
     return new ActionSpec();
 }

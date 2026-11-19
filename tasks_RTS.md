@@ -1688,6 +1688,58 @@ selected", and no command-card scene/content exists.
 - **Not verified:** unplayed in the editor. Next play-check: select a Marine, right click the floor
   directly under it, and expect the same walk a click on the sky produces.
 
+##### Part E follow-up — hotkeys were global, and training produced nothing
+- **What the play-check showed.** Three things were wrong at once on `RTS_Test_0`: pressing `L`
+  lifted the Barracks without selecting it, `K` seemed to do nothing, pressing the card's Lift
+  button did not lift it, and pressing Train queued an invisible Marine — no readout, no unit on
+  the map.
+- **Why the keys were global.** A key press is broadcast to every sheet in the scene
+  (`RaisePushAll` with the key name), so `when L is pressed` on the Barracks sheet ran whether or
+  not the building was selected. Nothing in a sheet said "only when I am the selection".
+  `when W is pressed`, `when R is pressed`, `when L is pressed` and `when K is pressed` now each
+  begin with `me is selected`, which is the same gate the card's buttons get from
+  `selection is all buildings` — so a hotkey and its button can no longer disagree about who they
+  act on. `K` was most likely never broken as a word: the landing only makes sense once the
+  building is up, and the play-check mixed up which presses had actually taken effect; the gate
+  plus the existing `Barracks: airborne` / `Barracks: down` prints now make the state visible in
+  the log.
+- **Why the card's Lift did not lift.** `lift off` took its height from the number on the word,
+  then `my Altitude`, then the `LiftOffHeight` global, then 200. The L key set `my Altitude` to 20
+  first, but the card could only say `selected buildings lift off` — a card cannot write another
+  actor's variables — so the button lifted the same building to the 200 default. The building
+  shot up out of the camera's view and looked untouched. `LiftOffManager.LiftHeightVariable`
+  (`my LiftHeight`) is now the per-building rise height, read before the global and the default,
+  and `Barracks.events` writes `set my LiftHeight to 20` once in `when me appears`. The L key, the
+  card's Lift button and `selected buildings lift off` therefore all rise by 20, and the L block
+  no longer has to pre-set `my Altitude` to get there.
+- **Why training produced nothing.** `train Marine` only fills a queue; nothing in the project
+  ever put the finished unit on the map. `when Barracks finishes training Marine` now
+  `spawn Marine at me offset 120`, so the unit appears at the building's door with that scene's
+  `Marine` sheet attached. The scene gained a `Marine` staging actor for the clone (the pattern
+  `spawn` documents: "place an actor with that name in the scene, hidden if you like"); it sits
+  below the floor at y = -500 so it is never seen or selected, and every clone is repositioned by
+  the spawn itself.
+- **The numbers.** Two computed reads join the production read-outs: `my queue count` (orders
+  waiting) and `my train left` (whole seconds left on the active one, `Math.Ceiling` so a label
+  never prints `4.0000001`). Both are read through `ReadMy`, so `bind` polls them each tick and a
+  countdown updates with no timer mirrored into a variable. The Barracks sheet binds the card's
+  own Train button to both — `bind TrainMarineButton to my queue count and my train left format
+  "Train Marine (W)  {0} left, {1}s"` — so the button doubles as the readout instead of needing
+  another label actor in the scene. The card's three button blocks also print what was pressed
+  (`Card: train Marine`, `Card: lift off`, `Card: land`), which is what tells a play-check whether
+  a press arrived at all.
+- **Checks:** 13 new ones (`my queue count` and `my train left` reads including the countdown and
+  the idle zero, both new names parsing as one value, `my LiftHeight` beating the global while a
+  written height beats both and a zero LiftHeight counting as unset, the three hotkey blocks being
+  selection-scoped, the spawn naming `Marine` at `me`, and the sheet carrying the readout bind and
+  its own lift height) -> **2070 passed, 0 failed**; `Flax.Build -target=GameEditorTarget` exits 0.
+  The two card tests that read a button's first action were adjusted to skip the diagnostic print.
+- **Not verified:** none of this has been played. The next play-check is: click the Barracks, press
+  `W` and watch the Train button count down and a Marine appear beside the building; press `L` (it
+  rises 20) then `K` (it comes down); click the card's Lift and Land buttons for the same two
+  moves; finally click a Marine and press `W` — nothing should be queued, because the Barracks is
+  no longer selected.
+
 #### Play-check answers noted during this round
 - **Why a Marine does not settle onto the floor.** The marines are `StaticModel` + `BoxCollider`
   actors with no body: `BoxCollider` is a query shape for raycasts and sweeps, not a collider that
