@@ -12285,6 +12285,126 @@ BoxSelectCandidate BoxCandidate(double x, double y, bool building = false,
         "the SelectionBox panel is still the scene's one selection look, under the ui canvas");
 }
 
+// ------------------------------------------------------------------
+// Cursors (Task 48 Part E): the pure model, the automatic rules, the words
+// ------------------------------------------------------------------
+
+var cursorParser = new EventParser();
+var cursorLibrary = new CursorLibrary();
+cursorLibrary.Define("Attack", new[] { "a0", "a1" }, 10, 2, 3);
+cursorLibrary.Define("Hand", new[] { "hand" }, 0, 4, 4, CursorFallback.Hand);
+
+Check(cursorLibrary.Has("attack") && cursorLibrary.Find("ATTACK").FrameCount == 2,
+    "cursor names resolve case-insensitively");
+Check(cursorLibrary.Find("nope").Name == CursorLibrary.DefaultName && !cursorLibrary.Find("nope").HasArt,
+    "an unknown cursor resolves to default, which has no art so the OS pointer stays");
+
+var cursorAttack = cursorLibrary.Find("Attack");
+Check(cursorAttack.FrameIndexAt(0.0) == 0 && cursorAttack.FrameIndexAt(0.15) == 1 &&
+      cursorAttack.FrameIndexAt(0.2) == 0,
+    "frames step at their fps and wrap around");
+Check(cursorLibrary.Find("Hand").FrameIndexAt(99) == 0 && !cursorLibrary.Find("Hand").IsAnimated,
+    "a one-frame cursor holds still no matter what the clock says");
+Check(cursorAttack.DrawX(100) == 98 && cursorAttack.DrawY(100) == 97,
+    "the hotspot is subtracted from the pointer");
+
+var cursorStack = new CursorStack();
+cursorStack.Push("Attack");
+cursorStack.Push("Hand");
+Check(cursorStack.Peek() == "Hand" && cursorStack.Pop() == "Hand" && cursorStack.Peek() == "Attack",
+    "push and pop are last in, first out");
+cursorStack.Pop();
+Check(cursorStack.Pop() == null && cursorStack.Peek() == CursorLibrary.DefaultName,
+    "popping past the bottom keeps default, so a forgotten pop cannot strand the cursor");
+
+var cursorRules = CursorRules.Defaults();
+Check(cursorRules.Hover(CursorHoverKind.Selectable, false) == "Hand" &&
+      cursorRules.Hover(CursorHoverKind.Hostile, false) == "Attack" &&
+      cursorRules.Hover(CursorHoverKind.None, true) == "Cross",
+    "the shipped rules map a selectable actor to Hand, a hostile one to Attack and a drag to Cross");
+Check(cursorRules.Hover(CursorHoverKind.Selectable | CursorHoverKind.Hostile, false) == "Attack",
+    "an enemy unit is Attack even though it is also selectable");
+Check(cursorRules.Hover(CursorHoverKind.None, false) == null && cursorRules.Aiming() == "Attack",
+    "nothing hovered asks for nothing, and an armed aim asks for Attack");
+
+var foggedKind = CursorRules.KindOf(selectable: true, interactive: false, hostile: true,
+    hostileVisible: false);
+Check((foggedKind & CursorHoverKind.Hostile) == 0 && cursorRules.Hover(foggedKind, false) == "Hand",
+    "a hostile actor the player cannot see does not advertise an attack");
+
+var cursorOverrides = new EventVariables();
+cursorOverrides.SetGlobal(CursorRules.HandVariable, ValueBox.OfText("Point"));
+var renamedRules = CursorRules.Read(cursorOverrides);
+Check(renamedRules.Hand == "Point", "a sheet can rename a rule's cursor with `Cursor hand`");
+cursorOverrides.SetGlobal(CursorRules.AutoVariable, ValueBox.OfNumber(0));
+var offRules = CursorRules.Read(cursorOverrides);
+Check(!offRules.Enabled && offRules.Hover(CursorHoverKind.Hostile, false) == null,
+    "`Cursor auto` at 0 switches every automatic source off");
+
+var hiddenState = CursorState.For(cursorLibrary, cursorStack, "Hand", "Attack", "Attack", true);
+Check(hiddenState.Hidden && hiddenState.Source == CursorSource.Hidden && !hiddenState.HasArt &&
+      hiddenState.UsesOsPointer,
+    "hide cursor answers a hidden state with no art to draw");
+
+cursorStack.Push("Hand");
+var stackState = CursorState.For(cursorLibrary, cursorStack, "Hand", "Attack", "Attack");
+Check(stackState.Name == "Hand" && stackState.Source == CursorSource.Stack,
+    "a pushed cursor outranks aim, hover and a sheet's own set cursor");
+cursorStack.Clear();
+var sheetState = CursorState.For(cursorLibrary, cursorStack, "Hand", "Attack", "Attack");
+Check(sheetState.Name == "Attack" && sheetState.Source == CursorSource.Sheet,
+    "an explicit set cursor beats the automatic sources");
+var hoverState = CursorState.For(cursorLibrary, cursorStack, "Hand", null);
+Check(hoverState.Name == "Hand" && hoverState.Source == CursorSource.Hover,
+    "hover answers when nothing else asks for a cursor");
+var emptyState = CursorState.For(cursorLibrary, cursorStack, null, null);
+Check(emptyState.Name == CursorLibrary.DefaultName && emptyState.Source == CursorSource.Default,
+    "nothing asking for anything leaves the default cursor");
+
+string cursorWordSheet = "when game starts\n"
+    + "  set cursor \"Attack\"\n"
+    + "  set cursor to default\n"
+    + "  push cursor \"Hand\"\n"
+    + "  pop cursor\n"
+    + "  hide cursor\n"
+    + "  show cursor\n"
+    + "  if my cursor is \"Attack\"\n";
+var cursorWords = cursorParser.Parse(cursorWordSheet);
+var cursorOps = new List<CursorOp>();
+var cursorNames = new List<string>();
+foreach (var cursorLine in cursorWords.Events[0].Body)
+{
+    if (cursorLine.Statement is CursorNode wordNode)
+    {
+        cursorOps.Add(wordNode.Op);
+        cursorNames.Add(wordNode.Name);
+    }
+}
+Check(cursorOps.Count == 6 &&
+      cursorOps[0] == CursorOp.Set && cursorNames[0] == "Attack" &&
+      cursorOps[1] == CursorOp.Set && cursorNames[1] == "default" &&
+      cursorOps[2] == CursorOp.Push && cursorNames[2] == "Hand" &&
+      cursorOps[3] == CursorOp.Pop && cursorOps[4] == CursorOp.Hide && cursorOps[5] == CursorOp.Show,
+    "set/push/pop/hide/show cursor parse as their own statement, and `my cursor` parses as a value");
+
+var cursorEngine = FreshEngine(new FakeWorld());
+cursorEngine.AddSheet(new GlobalHost(),
+    cursorParser.Parse("when game starts\n  set cursor \"Attack\"\n  push cursor \"Hand\"\n"));
+cursorEngine.SessionStarted();
+cursorEngine.Tick(0);
+Check(cursorEngine.CursorName == "Attack" && cursorEngine.CursorStack.Peek() == "Hand",
+    "set cursor and push cursor reach the runtime from a sheet");
+cursorEngine.RemoveAllSheets();
+Check(cursorEngine.CursorName == "" && cursorEngine.CursorStack.Depth == 0 && !cursorEngine.CursorHidden,
+    "a new scene starts on the default pointer instead of inheriting a cursor mode");
+
+var cursorChangesTrigger = TriggerClassifier.Classify(
+    cursorParser.Parse(@"when cursor changes
+  print ""changed""").Events[0]);
+Check(cursorChangesTrigger.Kind == TriggerKind.WatchChanges &&
+      cursorChangesTrigger.WatchName == EventRuntime.CursorGlobal,
+    "`when cursor changes` watches the cursor global the bridge keeps in sync");
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);

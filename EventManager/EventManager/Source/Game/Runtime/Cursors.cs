@@ -35,6 +35,10 @@ namespace Game
         Aim,
         /// <summary>A hover rule asked for a cursor (Part D's <c>CursorRules</c>).</summary>
         Hover,
+        /// <summary>The sheet asked for one with <c>set cursor</c>.</summary>
+        Sheet,
+        /// <summary><c>hide cursor</c>: no pointer and no art at all.</summary>
+        Hidden,
     }
 
     /// <summary>
@@ -430,8 +434,11 @@ namespace Game
         /// <summary>True when the winning source named a cursor the library does not have.</summary>
         public bool Missing;
 
-        /// <summary>Which source won: stack, aim, hover or the default.</summary>
+        /// <summary>Which source won: stack, sheet, aim, hover, the default or <c>hide cursor</c>.</summary>
         public CursorSource Source;
+
+        /// <summary><c>hide cursor</c> won: draw nothing and hide the OS pointer too.</summary>
+        public bool Hidden;
 
         /// <summary>The def in effect. Never null after <see cref="For"/>.</summary>
         public CursorDef Def;
@@ -486,23 +493,46 @@ namespace Game
         }
 
         /// <summary>
-        /// The one resolved answer for this tick. <paramref name="hover"/> and
-        /// <paramref name="aiming"/> are cursor names (Part D supplies them); blank means "this
-        /// source asks for nothing". A null library or stack is tolerated and answers the
+        /// The one resolved answer for this tick. <paramref name="sheet"/> is a name a sheet set
+        /// with <c>set cursor</c>, <paramref name="aiming"/> and <paramref name="hover"/> are the
+        /// automatic sources (Part D), and <paramref name="hidden"/> is <c>hide cursor</c>. Blank
+        /// means "this source asks for nothing". Precedence: hidden, then the push stack (a mode
+        /// owns the pointer), then the sheet's own request (explicit beats automatic), then aim,
+        /// then hover, then <c>default</c>. A null library or stack is tolerated and answers the
         /// built-in default.
         /// </summary>
         public static CursorState For(CursorLibrary library, CursorStack stack, string hover,
-            string aiming)
+            string aiming, string sheet = null, bool hidden = false)
         {
             if (library == null)
                 library = new CursorLibrary();
 
             string requested;
             CursorSource source;
+            if (hidden)
+            {
+                // `hide cursor`: no pointer and nothing drawn. The default def carries no art,
+                // so the view has nothing to draw either way, and `Hidden` is the flag it acts on.
+                CursorDef hiddenDef = library.Default;
+                return new CursorState
+                {
+                    Name = hiddenDef != null ? hiddenDef.Name : CursorLibrary.DefaultName,
+                    Requested = "",
+                    Missing = false,
+                    Source = CursorSource.Hidden,
+                    Hidden = true,
+                    Def = hiddenDef,
+                };
+            }
             if (stack != null && stack.Depth > 0)
             {
                 requested = stack.Peek();
                 source = CursorSource.Stack;
+            }
+            else if (!string.IsNullOrWhiteSpace(sheet))
+            {
+                requested = sheet;
+                source = CursorSource.Sheet;
             }
             else if (!string.IsNullOrWhiteSpace(aiming))
             {

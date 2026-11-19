@@ -230,6 +230,15 @@ namespace Game
             new WordEntry { Kind = "action", Word = "teleport", Example = "teleport me to SpawnPoint" },
             new WordEntry { Kind = "action", Word = "push", Example = "push other up strength 10" },
             new WordEntry { Kind = "action", Word = "push", Example = "push other back strength 100 for 0.2 seconds" },
+            // Cursors (Task 48 Part E). The art is scene content: an actor called `Cursor_<Name>`
+            // with an Image control, or child Image actors for an animated strip.
+            new WordEntry { Kind = "action", Word = "set cursor \"<name>\"", Example = "set cursor \"Attack\"", AltShape = "`set cursor to default` goes back to the plain pointer · the name must match a scene actor called `Cursor_<Name>`, whose Image (or child Image actors, in order) is the art · it outranks hovering and aiming until something is pushed over it" },
+            new WordEntry { Kind = "action", Word = "push cursor \"<name>\"", Example = "push cursor \"Attack\"", AltShape = "a mode owns the pointer; `pop cursor` restores what was underneath · popping past the bottom keeps `default`, so a sheet that forgets a pop cannot strand the game on the combat cursor" },
+            new WordEntry { Kind = "action", Word = "pop cursor", Example = "pop cursor" },
+            new WordEntry { Kind = "action", Word = "hide cursor", Example = "hide cursor", AltShape = "`show cursor` brings it back · no pointer and no art, for a cutscene" },
+            new WordEntry { Kind = "action", Word = "show cursor", Example = "show cursor" },
+            new WordEntry { Kind = "value", Word = "my cursor", Example = "print my cursor", AltShape = "the cursor in effect right now — `default` when nothing is set, hovered or aiming" },
+            new WordEntry { Kind = "trigger", Word = "when cursor changes", Example = "when cursor changes", AltShape = "one block per state change · `when my cursor changes` is the same trigger" },
             new WordEntry { Kind = "action", Word = "parent", Example = "parent Box to me" },
             new WordEntry { Kind = "action", Word = "unparent", Example = "unparent Box" },
             new WordEntry { Kind = "action", Word = "scale", Example = "scale Box 2" },

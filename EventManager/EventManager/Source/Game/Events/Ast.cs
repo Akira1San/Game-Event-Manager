@@ -52,6 +52,28 @@ namespace Game
         public VariableValue Target = new VariableValue();
     }
 
+    /// <summary>What a cursor word does (Task 48 Part E).</summary>
+    public enum CursorOp
+    {
+        /// <summary><c>set cursor "Attack"</c> / <c>set cursor to default</c>.</summary>
+        Set,
+        /// <summary><c>push cursor "Attack"</c>.</summary>
+        Push,
+        /// <summary><c>pop cursor</c>.</summary>
+        Pop,
+        /// <summary><c>hide cursor</c>.</summary>
+        Hide,
+        /// <summary><c>show cursor</c>.</summary>
+        Show,
+    }
+
+    /// <summary>One cursor word (Task 48 Part E): set, push, pop, hide or show.</summary>
+    public class CursorNode : StatementNode
+    {
+        public CursorOp Op;
+        public string Name = "";
+    }
+
     public class BagRemoveNode : StatementNode
     {
         public string Thing = "";

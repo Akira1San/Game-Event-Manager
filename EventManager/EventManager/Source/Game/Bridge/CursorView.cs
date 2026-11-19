@@ -75,6 +75,19 @@ namespace Game
                 return;
             }
 
+            // `hide cursor`: no art and no OS pointer at all, for a cutscene or a scripted beat.
+            // `_osApplied` is cleared so the next visible answer sets its type again instead of
+            // being skipped as "already applied".
+            if (state.Hidden)
+            {
+                HideArt();
+                SetPointerVisible(false);
+                _osApplied = false;
+                _appliedFallback = null;
+                _appliedImage = null;
+                return;
+            }
+
             // The game viewport owns the pointer only while it is focused: in the editor the
             // player may be clicking another panel, and a drawn cursor chasing the editor mouse
             // would be wrong.

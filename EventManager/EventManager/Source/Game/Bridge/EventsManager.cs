@@ -632,13 +632,15 @@ namespace Game
         private void UpdateCursor()
         {
             CursorLibrary library = Cursors.Library;
-            if (Cursors.Count <= 1)
+            // Nothing authored and nothing asked for: no raycast, no pointer writes.
+            if (Cursors.Count <= 1 && Runtime.CursorStack.Depth == 0 &&
+                string.IsNullOrEmpty(Runtime.CursorName) && !Runtime.CursorHidden)
                 return;
 
             CursorRules rules = CursorRules.Read(Runtime.Variables);
             string hover = null;
             string aim = null;
-            if (rules.Enabled && Engine.HasGameViewportFocus)
+            if (rules.Enabled && Cursors.Count > 1 && Engine.HasGameViewportFocus)
             {
                 // Over a UI control the pointer belongs to the button, not to the world under it.
                 if (_hoveredUI == null)
@@ -649,7 +651,23 @@ namespace Game
                 if (Runtime.Targeting.IsAiming)
                     aim = Ask(library, rules.Aiming());
             }
-            CursorView.Apply(CursorState.For(library, null, hover, aim), Cursors);
+            CursorState answer = CursorState.For(library, Runtime.CursorStack, hover, aim,
+                Runtime.CursorName, Runtime.CursorHidden);
+            CursorView.Apply(answer, Cursors);
+            WriteCursorGlobal(answer);
+        }
+
+        /// <summary>
+        /// Keeps the `Cursor` global in step with the drawn answer (Task 48 Part E), so
+        /// `my cursor` reads the name in effect and `when my cursor changes` fires on a change.
+        /// Written only when it differs, so the change watcher has one edge per change.
+        /// </summary>
+        private void WriteCursorGlobal(CursorState answer)
+        {
+            string name = answer == null || answer.Hidden ? "" : answer.Name;
+            string before = Runtime.Variables.GetGlobal(EventRuntime.CursorGlobal).AsText();
+            if (!string.Equals(before, name, System.StringComparison.OrdinalIgnoreCase))
+                Runtime.Variables.SetGlobal(EventRuntime.CursorGlobal, ValueBox.OfText(name));
         }
 
         /// <summary>Only ask for a cursor the scene actually authored; a name the library does not

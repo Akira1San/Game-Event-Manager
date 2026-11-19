@@ -484,6 +484,14 @@ namespace Game
                 return new TriggerDescriptor { Kind = TriggerKind.ResourceChanges };
             if (words.Length == 1 && string.Equals(words[0], "ResourcesChange", StringComparison.OrdinalIgnoreCase))
                 return new TriggerDescriptor { Kind = TriggerKind.ResourceChanges };
+            // `when cursor changes` / `when my cursor changes` — the cursor the bridge resolved
+            // (Task 48 Part E), watched as the ordinary global change so one edge per state
+            // change falls out of the machinery that already exists.
+            if (words.Length == 2 && words[0] == "cursor" && words[1] == "changes")
+                return CursorChanges();
+            if (words.Length == 3 && words[0] == "my" && words[1] == "cursor" &&
+                words[2] == "changes")
+                return CursorChanges();
             if (words.Length >= 2 && words[words.Length - 1] == "changes")
             {
                 var changes = new TriggerDescriptor { Kind = TriggerKind.WatchChanges };
@@ -491,6 +499,16 @@ namespace Game
                 return changes;
             }
             return new TriggerDescriptor { Kind = TriggerKind.Unknown };
+        }
+
+        private static TriggerDescriptor CursorChanges()
+        {
+            return new TriggerDescriptor
+            {
+                Kind = TriggerKind.WatchChanges,
+                WatchOwner = "",
+                WatchName = EventRuntime.CursorGlobal,
+            };
         }
 
         private static TriggerDescriptor EveryDescriptor(List<Token> trigger, EventNode ev)

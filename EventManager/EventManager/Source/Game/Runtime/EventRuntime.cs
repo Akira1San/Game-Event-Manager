@@ -343,6 +343,19 @@ namespace Game
         public SpellClock Spells = new SpellClock();
         /// <summary>Target-pick mode behind `aim` (Task 27 Part A).</summary>
         public TargetingManager Targeting = new TargetingManager();
+
+        /// <summary>The global `my cursor` reads and `when cursor changes` watches (Task 48
+        /// Part E). The bridge writes the resolved name here every frame.</summary>
+        public const string CursorGlobal = "Cursor";
+
+        /// <summary>Cursor names a sheet pushed with <c>push cursor</c> (Task 48 Part E).</summary>
+        public readonly CursorStack CursorStack = new CursorStack();
+
+        /// <summary>The name <c>set cursor</c> wrote, or blank (Task 48 Part E).</summary>
+        public string CursorName = "";
+
+        /// <summary>True between <c>hide cursor</c> and <c>show cursor</c>.</summary>
+        public bool CursorHidden;
         /// <summary>Last tick time, so the aim timeout advances with real tick delta.</summary>
         private double lastTargetingTick;
         /// <summary>Rolled item instances and what they added to their wearer (Task 9 E7).</summary>
@@ -507,6 +520,11 @@ namespace Game
         {
             sheets.Clear();
             spawnSources.Clear();
+            // Cursor modes belong to the scene that set them (Task 48 Part E): a new scene starts
+            // on the default pointer instead of inheriting a `hide cursor` from the last one.
+            CursorStack.Clear();
+            CursorName = "";
+            CursorHidden = false;
         }
 
         public void RemoveActorSheet(object actor)
@@ -1993,7 +2011,11 @@ namespace Game
                 }
                 stacking = false;
                 var statement = line.Statement;
-                if (statement is SetNode set)
+                if (statement is CursorNode cursor)
+                {
+                    ExecuteCursor(cursor);
+                }
+                else if (statement is SetNode set)
                 {
                     ExecuteSet(context, set);
                 }
@@ -2208,6 +2230,34 @@ namespace Game
                     }
                     OnRawAction(context, raw.Words);
                 }
+            }
+        }
+
+        /// <summary>
+        /// The five cursor words (Task 48 Part E). They write game-wide state, not an actor's
+        /// variables: the pointer belongs to the game, and a pushed mode is restored by
+        /// <see cref="CursorStack"/> even when the sheet that pushed it never pops.
+        /// </summary>
+        private void ExecuteCursor(CursorNode node)
+        {
+            switch (node.Op)
+            {
+                case CursorOp.Set:
+                    CursorName = string.IsNullOrWhiteSpace(node.Name) ? "" : node.Name.Trim();
+                    CursorHidden = false;
+                    break;
+                case CursorOp.Push:
+                    CursorStack.Push(node.Name);
+                    break;
+                case CursorOp.Pop:
+                    CursorStack.Pop();
+                    break;
+                case CursorOp.Hide:
+                    CursorHidden = true;
+                    break;
+                case CursorOp.Show:
+                    CursorHidden = false;
+                    break;
             }
         }
 

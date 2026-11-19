@@ -423,6 +423,21 @@ namespace Game
             }
             // Action verbs take priority over condition marks, so `print W is held`
             // isn't misclassified as a condition just because `is` is a condition mark.
+            // Cursor words (Task 48 Part E): `set cursor "Attack"`, `set cursor to default`,
+            // `push cursor "Attack"` / `pop cursor`, `hide cursor` / `show cursor`. They are
+            // checked before the word table because `pop` is not an action word anywhere else -
+            // and before the generic `set` / `push` / `hide` forms, so "cursor" is never read as
+            // a variable name or as an actor to hide.
+            if (line.Words.Count >= 2 && line.Words[1].Type == TokenType.Word &&
+                line.Words[1].Text == "cursor")
+            {
+                CursorNode cursor = ParseCursor(line);
+                if (cursor != null)
+                {
+                    line.Statement = cursor;
+                    return;
+                }
+            }
             if (Array.IndexOf(WordRegistry.ActionWords, first.Text) >= 0)
             {
             if (first.Text == "set")
@@ -743,6 +758,42 @@ namespace Game
             return ReadVariable(words, ref index, flagLine, "`random`");
         }
 
+        /// <summary>
+        /// Parses the five cursor words (Task 48 Part E) into one node: the name is the quoted or
+        /// bare word after <c>cursor</c>, and <c>to default</c> is spelled the long way so a sheet
+        /// reads as English. A shape this method does not recognise answers null, which lets the
+        /// ordinary `set` parser warn about it instead of silently doing nothing.
+        /// </summary>
+        private static CursorNode ParseCursor(BodyLineNode line)
+        {
+            List<Token> words = line.Words;
+            string first = words[0].Text;
+            if (first == "set")
+            {
+                string name = null;
+                if (words.Count == 3)
+                    name = words[2].Text;
+                else if (words.Count == 4 && words[2].Type == TokenType.Word && words[2].Text == "to")
+                    name = words[3].Text;
+                if (string.IsNullOrWhiteSpace(name))
+                    return null;
+                return new CursorNode { Line = line.Line, Op = CursorOp.Set, Name = name };
+            }
+            if (first == "push" && words.Count == 3)
+                return new CursorNode { Line = line.Line, Op = CursorOp.Push, Name = words[2].Text };
+            if (first == "pop" && words.Count == 2)
+                return new CursorNode { Line = line.Line, Op = CursorOp.Pop };
+            if ((first == "hide" || first == "show") && words.Count == 2)
+            {
+                return new CursorNode
+                {
+                    Line = line.Line,
+                    Op = first == "hide" ? CursorOp.Hide : CursorOp.Show,
+                };
+            }
+            return null;
+        }
+
         private VariableValue ReadVariable(List<Token> words, ref int index, int flagLine, string afterWhat)
         {
             if (index >= words.Count)
@@ -770,6 +821,16 @@ namespace Game
                     string timerName = words[index + 1].Text;
                     index += 3;
                     return new VariableValue { Line = t.Line, Owner = "my", Name = Cooldowns.VariableName(timerName) };
+                }
+                // `my cursor` — the cursor in effect right now (Task 48 Part E). It reads the
+                // global the bridge keeps in sync each frame, so a condition can compare it and
+                // `when my cursor changes` can watch it with the ordinary changes trigger.
+                if (index + 1 < words.Count && words[index].Type == TokenType.Word &&
+                    words[index].Text == "my" && words[index + 1].Type == TokenType.Word &&
+                    words[index + 1].Text == "cursor")
+                {
+                    index += 2;
+                    return new VariableValue { Line = t.Line, Owner = "", Name = EventRuntime.CursorGlobal };
                 }
                 // `my Cursor fps` / `my Cursor hotspot` / `my Cursor fallback` / `my Cursor image`
                 // — the settings a cursor actor carries for its own art (Task 48 Part C). They

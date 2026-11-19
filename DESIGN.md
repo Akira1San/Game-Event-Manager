@@ -1247,6 +1247,20 @@ window around a broken runtime.
 
 ---
 
+- **Cursor stack and automatic cursors (Task 48):** the pointer has one resolved answer per tick,
+  and `CursorState.For` is the whole rule: `hide cursor`, then the `push cursor` stack, then the
+  sheet's own `set cursor`, then an armed `aim`, then the automatic hover rule, then `default`.
+  The stack never empties — popping past the bottom leaves `default` — so a mode that forgets its
+  pop cannot strand the game on the combat cursor, which is also why `aim` pushes nothing itself:
+  it fills the aim slot, and the runtime ends that mode on a pick, a cancel or a timeout. Cursor
+  art stays content (`Cursor_<Name>` actors with `Cursor fps` / `hotspot` / `fallback` / `image`),
+  and a rule only asks for a name the scene actually authored, so a project that never mentions
+  cursors keeps the plain OS pointer and pays no raycast. Parked: per-ability aim cursors
+  (`aim "bolt"` → `Cursor_Bolt`), per-player cursors for local multiplayer, and a per-rule fallback
+  instead of `Cursor hand` / `Cursor attack` / `Cursor drag` globals.
+
+---
+
 ## 10. The one-paragraph pitch
 
 Event Manager is a text-first game-logic system for non-programmers, inspired by Blender Game
