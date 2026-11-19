@@ -10,11 +10,16 @@ namespace Game
     ///
     /// An operating system has one static pointer and no frame stepping, so an animated cursor has
     /// to be drawn by the game. This view owns that half: while the resolved cursor has frames it
-    /// hides the OS pointer (<c>Screen.CursorVisible = false</c>) and moves a scene-authored
-    /// <c>Image</c> under the mouse, stepping its frames from <see cref="CursorState.FrameAt"/> on
-    /// <c>Time.GameTime</c> so animation needs no coroutine and no tick loop of its own. When the
-    /// cursor has no art — or the scene never authored the actor for it — the pointer comes back
-    /// and the OS fallback (<see cref="CursorFallback"/>) is set instead.
+    /// hides the OS pointer (<c>Screen.CursorVisible = false</c>) and moves the scene's
+    /// <c>Cursor_&lt;Name&gt;</c> actor under the mouse, stepping its frames from
+    /// <see cref="CursorState.FrameIndexAt"/> on <c>Time.GameTime</c> so animation needs no
+    /// coroutine and no tick loop of its own. When the cursor has no art — or the scene never
+    /// authored the actor for it — the pointer comes back and the OS fallback
+    /// (<see cref="CursorFallback"/>) is set instead.
+    ///
+    /// The art itself comes from <see cref="CursorCatalog"/> (Part C), which scans the scene and
+    /// owns both the library and each cursor's frame brushes. This class never searches the scene
+    /// on its own, so the name the runtime resolved and the art on screen cannot disagree.
     ///
     /// Nothing here decides *when* a cursor is right. Part A's <see cref="CursorState.For"/> makes
     /// that decision and this class only draws what it answers, so a sheet, an aiming mode or a
@@ -22,11 +27,14 @@ namespace Game
     ///
     /// Authoring (the actor half): one UIControl per cursor under the UI canvas, named
     /// <c>Cursor_&lt;Name&gt;</c> for the resolved name (<c>Cursor_Attack</c>, <c>Cursor_Hand</c>),
-    /// whose control is an <c>Image</c>. Frames, fps and the hotspot come from the def in Part A,
-    /// which Part C builds from the actor's own variables. Place the actor last under the canvas so
-    /// it draws above the HUD, keep its pivot at the top-left and leave its anchors alone — the
-    /// view writes <c>Position</c> every tick and a layout anchor would overwrite it. The frame's
-    /// top-left corner is the cursor's reference point; the hotspot is subtracted from the mouse.
+    /// whose control is an <c>Image</c>. A single Image is a static cursor; give it child Image
+    /// actors to animate, one frame each in child order (leave those children inactive). Frames,
+    /// fps and the hotspot come from the catalog def, built from the actor's own variables —
+    /// <c>my Cursor fps</c>, <c>my Cursor hotspot</c>, <c>my Cursor fallback</c>,
+    /// <c>my Cursor image</c>. Place the actor last under the canvas so it draws above the HUD,
+    /// keep its pivot at the top-left and leave its anchors alone — the view writes
+    /// <c>Location</c> every tick and a layout anchor would overwrite it. The frame's top-left
+    /// corner is the cursor's reference point; the hotspot is subtracted from the mouse.
     /// </summary>
     public static class CursorView
     {
@@ -39,7 +47,8 @@ namespace Game
         private static UIControl _actor;
         private static string _actorName;
 
-        /// <summary>The frame currently on the Image, so the brush is replaced only on a change.</summary>
+        /// <summary>The brush currently on the drawer, so it is replaced only on a frame change.</summary>
+        private static IBrush _brush;
         private static string _frameName;
         private static Image _brushOwner;
 
@@ -57,7 +66,7 @@ namespace Game
         /// pointer when the answer actually asks for a pointer, and it never hides the pointer
         /// without something to draw in its place.
         /// </summary>
-        public static void Apply(CursorState state)
+        public static void Apply(CursorState state, CursorCatalog catalog)
         {
             Current = state;
             if (state == null)
@@ -70,31 +79,56 @@ namespace Game
             // player may be clicking another panel, and a drawn cursor chasing the editor mouse
             // would be wrong.
             bool focused = Engine.HasGameViewportFocus;
-            Image image = focused && state.HasArt ? FindImage(state.Name) : null;
+            CursorCatalog.CursorArt art = null;
+            if (focused && state.HasArt && catalog != null)
+                catalog.TryGetArt(state.Name, out art);
 
-            if (image != null)
+            if (art != null && art.Drawer != null && art.Frames.Count > 0)
             {
-                FlaxEngine.Texture texture = FrameTexture(state);
-                if (texture != null)
+                int index = state.FrameIndexAt(Time.GameTime);
+                if (index < 0 || index >= art.Frames.Count)
+                    index = 0;
+                string frameName = index < art.FrameNames.Count ? art.FrameNames[index] : null;
+
+                _actor = art.Actor;
+                _actorName = art.Actor != null ? art.Actor.Name : null;
+                if (art.Actor != null && !art.Actor.IsActive)
+                    art.Actor.IsActive = true;
+
+                // Same brush reference means the frame did not change: the catalog rebuilds its
+                // table a few times a second but copies the scene's brushes by reference, so a
+                // static cursor does no GUI work at all.
+                if (_brushOwner != art.Drawer || !ReferenceEquals(_brush, art.Frames[index]))
                 {
-                    UIControl actor = _actor;
-                    if (actor != null && !actor.IsActive)
-                        actor.IsActive = true;
-
-                    if (_brushOwner != image || !string.Equals(_frameName, FrameAt(state),
-                            StringComparison.OrdinalIgnoreCase))
-                    {
-                        image.Brush = new TextureBrush { Texture = texture };
-                        _brushOwner = image;
-                        _frameName = FrameAt(state);
-                    }
-
-                    Place(image, state);
-                    SetPointerVisible(false);
-                    return;
+                    art.Drawer.Brush = art.Frames[index];
+                    _brushOwner = art.Drawer;
+                    _brush = art.Frames[index];
+                    _frameName = frameName;
                 }
-                // The frame's texture is missing (already warned): fall through to the OS pointer
-                // rather than hide it with nothing to draw.
+                else if (!string.Equals(_frameName, frameName, StringComparison.OrdinalIgnoreCase))
+                {
+                    _frameName = frameName;
+                }
+
+                Place(art.Drawer, state);
+                SetPointerVisible(false);
+                return;
+            }
+
+            if (focused && state.HasArt && catalog != null)
+            {
+                if (art == null)
+                {
+                    FlaxActions.WarnOnce($"The cursor \u201C{state.Name}\u201D has art but the scene has no " +
+                        $"actor named \u201C{ActorPrefix + state.Name}\u201D. Add a UIControl with an Image " +
+                        $"control called \u201C{ActorPrefix + state.Name}\u201D under the UI canvas, or give the " +
+                        $"cursor no frames so the OS pointer shows. Image actors in this scene: {ImageActorNames()}.");
+                }
+                else if (art.Frames.Count == 0)
+                {
+                    FlaxActions.WarnOnce($"\u201C{art.Actor.Name}\u201D needs its cursor art on its own Image " +
+                        "control or on child Image actors. The OS pointer stays until it has some.");
+                }
             }
 
             ShowOsPointer(state);
@@ -111,6 +145,7 @@ namespace Game
             HideArt();
             _actor = null;
             _actorName = null;
+            _brush = null;
             _frameName = null;
             _brushOwner = null;
 
@@ -192,67 +227,6 @@ namespace Game
         {
             if (Screen.CursorVisible != visible)
                 Screen.CursorVisible = visible;
-        }
-
-        /// <summary>
-        /// The Image that draws <paramref name="cursorName"/>, or null when the scene has no
-        /// <c>Cursor_&lt;Name&gt;</c> UIControl with an Image. Everything that goes wrong here is
-        /// said once: without the actor the OS pointer simply stays, which is the safe answer.
-        /// </summary>
-        private static Image FindImage(string cursorName)
-        {
-            string wanted = ActorPrefix + cursorName;
-            if (_actor != null && _actor.Scene != null &&
-                string.Equals(_actorName, wanted, StringComparison.OrdinalIgnoreCase))
-                return _actor.Control as Image;
-
-            _actor = Level.FindActor(wanted) as UIControl;
-            _actorName = wanted;
-            if (_actor == null)
-            {
-                FlaxActions.WarnOnce($"The cursor \u201C{cursorName}\u201D has art but the scene has no actor " +
-                    $"named \u201C{wanted}\u201D. Add a UIControl with an Image control called " +
-                    $"\u201C{wanted}\u201D under the UI canvas, or give the cursor no frames so the OS pointer shows. " +
-                    $"Image actors in this scene: {ImageActorNames()}.");
-                return null;
-            }
-
-            var image = _actor.Control as Image;
-            if (image == null)
-            {
-                FlaxActions.WarnOnce($"\u201C{wanted}\u201D needs an Image control to draw the cursor. " +
-                    $"Set the UI Control control type to Image, or give the cursor no frames. " +
-                    $"Image actors in this scene: {ImageActorNames()}.");
-            }
-            return image;
-        }
-
-        /// <summary>
-        /// The texture for the cursor's frame right now. The frame name comes from
-        /// <see cref="CursorState.FrameAt"/> (already stepped by <c>Time.GameTime * Fps</c>), and
-        /// the brush is only rebuilt when the frame changes, so a static cursor does no work.
-        /// </summary>
-        private static FlaxEngine.Texture FrameTexture(CursorState state)
-        {
-            string frame = FrameAt(state);
-            if (string.IsNullOrEmpty(frame))
-                return null;
-            if (_brushOwner != null && string.Equals(_frameName, frame,
-                    StringComparison.OrdinalIgnoreCase))
-                return _brushOwner.Brush is TextureBrush brush ? brush.Texture : null;
-
-            FlaxEngine.Texture texture = FlaxActions.LoadTexture(frame);
-            if (texture == null)
-            {
-                FlaxActions.WarnOnce($"The cursor \u201C{state.Name}\u201D frame \u201C{frame}\u201D " +
-                    "is not an imported texture. The OS pointer stays until it exists.");
-            }
-            return texture;
-        }
-
-        private static string FrameAt(CursorState state)
-        {
-            return state.FrameAt(Time.GameTime);
         }
 
         /// <summary>

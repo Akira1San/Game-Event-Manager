@@ -771,6 +771,26 @@ namespace Game
                     index += 3;
                     return new VariableValue { Line = t.Line, Owner = "my", Name = Cooldowns.VariableName(timerName) };
                 }
+                // `my Cursor fps` / `my Cursor hotspot` / `my Cursor fallback` / `my Cursor image`
+                // — the settings a cursor actor carries for its own art (Task 48 Part C). They
+                // are one variable each, so `set my Cursor fps to 12` lands on that actor.
+                if (index + 2 < words.Count && words[index + 1].Type == TokenType.Word &&
+                    words[index + 2].Type == TokenType.Word && words[index + 1].Text == "Cursor")
+                {
+                    string cursorVariable = null;
+                    switch (words[index + 2].Text)
+                    {
+                        case "fps": cursorVariable = CursorVariables.FpsVariable; break;
+                        case "hotspot": cursorVariable = CursorVariables.HotspotVariable; break;
+                        case "fallback": cursorVariable = CursorVariables.FallbackVariable; break;
+                        case "image": cursorVariable = CursorVariables.ImageVariable; break;
+                    }
+                    if (cursorVariable != null)
+                    {
+                        index += 3;
+                        return new VariableValue { Line = t.Line, Owner = "my", Name = cursorVariable };
+                    }
+                }
                 if (index + 2 < words.Count && words[index + 1].Type == TokenType.Word &&
                     words[index + 2].Type == TokenType.Word)
                 {

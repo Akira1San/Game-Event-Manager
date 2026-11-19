@@ -20,6 +20,9 @@ namespace Game
         public static EventsManager Instance;
 
         public EventRuntime Runtime = new EventRuntime();
+        /// <summary>The cursors this scene authors (<c>Cursor_&lt;Name&gt;</c>) and their art
+        /// (Task 48 Part C). Rescanned a few times a second after the tick.</summary>
+        public readonly CursorCatalog Cursors = new CursorCatalog();
         private readonly FlaxWorld _world = new FlaxWorld();
         private readonly Dictionary<string, bool> _heldLastTick = new Dictionary<string, bool>();
         /// <summary>"player actionId" → was that gamepad button held last tick.</summary>
@@ -568,6 +571,7 @@ namespace Game
             // The pointer is engine-wide state: stopping play must not leave it hidden on a
             // cursor the game drew (Task 48 Part B).
             CursorView.Reset();
+            Cursors.Reset();
             FlaxActions.ClearSession();
             _components.Clear();
             Runtime.Selection.Reset();
@@ -597,6 +601,9 @@ namespace Game
             // the draw modes need the refreshed grid after the tick (Task 18 Part F).
             UpdateFogActors();
             Runtime.Tick(Time.GameTime);
+            // Cursor art is scene content (Task 48 Part C): rescan after the tick so a sheet that
+            // changed `my Cursor fps` this frame is seen by the next scan, which the view draws.
+            Cursors.Update(Runtime.Variables, Time.GameTime);
             UpdateFogVisibility();
             // Follow last: the tick is what moves the player (`move forward` lands immediately),
             // so a camera snapped before it trailed the subject by one frame and shimmered.
