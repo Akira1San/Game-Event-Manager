@@ -1,5 +1,6 @@
 using Game;
 using System.Text;
+using System.Text.Json;
 
 int passed = 0;
 int failed = 0;
@@ -12096,6 +12097,62 @@ finally
         if (Directory.Exists(partBProject))
             Directory.Delete(partBProject, true);
     }
+}
+
+// ------------------------------------------------------------------
+// RTS Task 32 Part A: the drag rectangle is authored content
+// ------------------------------------------------------------------
+// The Marquee actor is written into the scene by hand, so a typo in the control type, a
+// missing entry or an active one would only show up as a play-check that draws nothing.
+// These checks read the scene the way the engine will: the actor exists, it is parented to
+// the canvas, its control type is the script control, it is authored inactive, and it comes
+// before the card's buttons so the rectangle draws underneath them.
+{
+    string sceneFile = FindUpward(Path.Combine("Content", "scenes", "RTS_Test_0.scene"));
+    string canvasId = null;
+    string marqueeId = null;
+    string marqueeParent = null;
+    string marqueeControl = null;
+    bool marqueeInactive = false;
+    bool parsed = true;
+    int marqueeOrder = -1;
+    int firstButtonOrder = -1;
+    int actorOrder = 0;
+    try
+    {
+        using var scene = JsonDocument.Parse(File.ReadAllText(sceneFile));
+        foreach (var actor in scene.RootElement.GetProperty("Data").EnumerateArray())
+        {
+            string name = actor.TryGetProperty("Name", out var nameValue) ? nameValue.GetString() : null;
+            string id = actor.TryGetProperty("ID", out var idValue) ? idValue.GetString() : null;
+            string control = actor.TryGetProperty("Control", out var controlValue) ? controlValue.GetString() : null;
+            if (name == "ui canvas")
+                canvasId = id;
+            if (name == "Marquee")
+            {
+                marqueeId = id;
+                marqueeOrder = actorOrder;
+                marqueeParent = actor.TryGetProperty("ParentID", out var parentValue) ? parentValue.GetString() : null;
+                marqueeControl = control;
+                marqueeInactive = actor.TryGetProperty("IsActive", out var activeValue) && !activeValue.GetBoolean();
+            }
+            if (control == "FlaxEngine.GUI.Button" && firstButtonOrder < 0)
+                firstButtonOrder = actorOrder;
+            actorOrder++;
+        }
+    }
+    catch (Exception e) when (e is JsonException or IOException or KeyNotFoundException or InvalidOperationException)
+    {
+        parsed = false;
+        Console.WriteLine($"FAIL  RTS_Test_0.scene did not read as a scene -> {e.Message}");
+    }
+
+    Check(parsed && canvasId != null && marqueeId != null,
+        "the RTS test scene parses and authors a Marquee actor");
+    Check(marqueeParent == canvasId && marqueeControl == "Game.MarqueePanel" && marqueeInactive,
+        "the Marquee is an inactive Game.MarqueePanel under the ui canvas");
+    Check(marqueeOrder >= 0 && firstButtonOrder >= 0 && marqueeOrder < firstButtonOrder,
+        "the Marquee is created before the command card, so the drag rectangle draws under it");
 }
 
 Console.WriteLine($"{passed} passed, {failed} failed");

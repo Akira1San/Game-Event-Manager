@@ -1591,8 +1591,7 @@ selected", and no command-card scene/content exists.
   queue-cap gate, and Train/Stop/Lift/Research come out as the right verb and scope.
 - **Still open in Part E:** the card's icons, per-button labels and hover tooltips (the shipped
   buttons are text-only `Button` controls in the editor's default style), real unit art in place
-  of the placeholder boxes, the `Marquee` drag rectangle (needs a UIControl whose control type is
-  `MarqueePanel`, a custom control the editor has to instantiate), a conditional colour/tint *bind* (today a tint is
+  of the placeholder boxes, a conditional colour/tint *bind* (today a tint is
   `set color of` as an action — `bind` only drives text and progress, so "grey via bind" needs a
   polling card sheet or a new bind kind; the shipped sheet greys through `set button ... disabled`
   instead), selection-scoped hotkeys (an existing `when W is pressed` fires whatever is selected,
@@ -1601,6 +1600,9 @@ selected", and no command-card scene/content exists.
   right click already issues those orders), and an ability button cannot reuse the unit's own
   `when Q is pressed` block because nothing runs another sheet's block for every selected unit —
   so Stim stays on `Marine.events` and a card `train`/`stop` is all a button can reuse.
+  The two selection visuals — the drag rectangle and a box around each selected unit — are **no
+  longer tracked here**: they live in **Task 32 — Selection feedback**, which also owns steps 2–3
+  of the acceptance list below and the `Marquee`/`SelectionRing` scene content they need.
 
 ### Part F — Words, tests, acceptance [x]
 - [x] `WordRegistry` rows and `keywords.html` rows for every new word (selection-as-value, the
@@ -1826,6 +1828,57 @@ selected", and no command-card scene/content exists.
   moves; finally click a Marine and press `W` — nothing should be queued, because the Barracks is
   no longer selected.
 
+##### Part E follow-up 5 (open task, not yet fixed) — the buttons still train nothing and lift nothing
+- **What the play-check showed.** After follow-up 4 the layout is right and the card stays empty with
+  nothing selected, but clicking `Train Marine` on a selected Barracks spawns no Marine and clicking
+  `Lift` does not raise the building. The keyboard path was made selection-scoped in the previous
+  follow-up, so the remaining fault is between the mouse and the button, or between the button and
+  the sheet.
+- **The first log line decides which fault.** The press path already prints its own answers
+  (`EventsManager.HandleMouseClick`, ~line 1180):
+  - nothing at all — the click never matched a control, so the hit test is the bug (suspect 1);
+  - `Click: TrainMarineButton (UI button) is disabled.` — the card's own greying kept it disabled
+    (suspect 2);
+  - `Click: TrainMarineButton (UI button) pressed.` with no `Card: train Marine` after it — the
+    press never reached the sheet's block (suspect 3);
+  - `Card: train Marine` with no Marine — the order ran and was refused (suspect 4).
+- **Suspect 1 — the hit test never lands on the button.** `MouseOverUIControl`
+  (`Source/Game/Bridge/EventsManager.cs:1714`) trusts `Control.IsMouseOver` when Flax's own GUI saw
+  the mouse, and otherwise rebuilds the rect from the actor's UI translation:
+  `topLeft = (ui.Position.X, -ui.Position.Y)`, size `control.Width × control.Height`. That is not
+  the control's screen rect: `ui.Position` is a canvas-space translation (the scene's buttons are
+  anchored bottom-right with translations like `1500,820`), the canvas scales and offsets to the
+  game window, and the Y flip assumes the canvas is exactly the screen height. On any window that is
+  not the authored resolution the rect sits somewhere else, so a press on the visible button tests
+  false and the click falls through to the world (which also explains a stray deselect). The fix is
+  to hit-test through the control tree — `control.Bounds` / `PointFromScreen` (or the root control's
+  own hit test) instead of arithmetic on the actor transform — and to log the computed rect and
+  `Input.MousePosition` once per left click so the next play log proves which side was wrong.
+- **Suspect 2 — the button is disabled when it is pressed.** The manager refuses to press a disabled
+  control, and `set button … disabled` is written from the same bridge path as the readout. The
+  card's 0.5 s rules grey Train when `can afford` is false, and `RTS_Test_0` never sets a mineral
+  balance, so Train may be permanently grey in this scene. Lift has no cost, which is why both
+  buttons failing points at suspect 1 rather than at affordability: one shared gate would have to be
+  wrong for both.
+- **Suspect 3 — the press arrives but `me` is the button.** `ButtonPressed` is broadcast with
+  `Name = actor.Name, Other = actor`. If the card's blocks carry a `me is selected` gate inherited
+  from the hotkey work, that gate is false on the sheet that hears the press (the card is on the
+  scene's own `RTS` actor, not on the Barracks). Rule for the fixing session: a card button block
+  gates on `selection is all buildings` / `selection is all units` and on the order's own
+  preconditions, never on `me is selected`.
+- **Suspect 4 — the order runs and is refused.** `selected buildings train Marine` with nothing
+  selected does nothing, `can afford` can refuse the queue, the queue cap can be full, and
+  `LiftOffManager` can refuse a lift (already airborne, or no height). The warnings each name their
+  reason, so the log distinguishes them; `Barracks: airborne` / `Barracks: down` say whether a lift
+  happened at all.
+- **What the fixing session ships.** Reproduce with the log, fix only the suspect the log proves,
+  keep every layout and gate decision in `.events`, add a pure test when the fault is in the runtime
+  half (hit-test arithmetic and the button state machine are bridge code; `Cursor`/UI hit-testing
+  has no unit tests by this project's split), then record the result here, in `Session Log.md` and
+  in the acceptance list. Do not move card rules into C#, and do not replace the Flax `Button`s —
+  the press path is already the manager's own hit test, so custom widgets would remove no work.
+- **Not verified:** unplayed since follow-up 4; this entry is the queued fix, not the fix.
+
 #### Play-check answers noted during this round
 - **Why a Marine does not settle onto the floor.** The marines are `StaticModel` + `BoxCollider`
   actors with no body: `BoxCollider` is a query shape for raycasts and sweeps, not a collider that
@@ -1852,6 +1905,213 @@ selected", and no command-card scene/content exists.
   both?
 - Click-to-select as an opt-in `selectable` word, or a default with an opt-out for scenery? The
   default changes behaviour for existing scenes that intentionally made a unit non-selectable.
+
+---
+
+## Task 31 — Pathfinding and unit flow at scale (200+ units) [ ]
+
+Goal: the current walk answers one unit, one query at a time — `FlaxActions.QueryNavRoute` calls Flax
+`Navigation.FindPath` and the bridge moves the body along the returned points. That is honest at ten
+units and will not survive two hundred: one path query per unit per order, no avoidance, no shared
+route for a group, and a synchronous bake-prone API. This task keeps every `.events` word as it is
+and replaces only what sits behind `QueryNavRoute`.
+
+Depends on Tasks 23 (formation slots), 26 (camera) and 29 (selection/orders). **C# + Flax bridge**
+(P1, but only when a playtest measures a problem).
+
+### How RTS games actually solve this
+
+- **One path per group, not per unit.** StarCraft 2, Age of Empires II and Company of Heroes plan a
+  route once for the clicked group, then hand each unit a formation slot along it. Per-unit queries
+  are the exception (a unit whose slot is unreachable), not the rule.
+- **A coarse grid plus a fine grid.** AoE II and StarCraft use a low-resolution grid for the long
+  search and a finer one near the destination, and cache the result by (start cell, goal cell) so a
+  second unit walking the same corridor reuses the first answer.
+- **Flow fields for large groups.** Supreme Commander, Planetary Annihilation and modern Total War
+  compute a vector field over the whole area once per destination; every unit then reads its own
+  cell. Cost is independent of unit count, which is exactly the 200-unit case.
+- **A steering layer under the path layer.** StarCraft 2 and Company of Heroes split "where am I
+  heading" (path) from "how do I get there without shoving" (seek, separation, collision)
+  — RVO/ORCA-style local avoidance — and give the path only one or two frames of authority while
+  the steering handles crowds.
+- **A pathfinding budget per tick.** AoE II time-slices: a queue of requests, N served per frame, the
+  rest keep their old order. A unit never stalls the frame, it just waits its turn.
+- **Spatial hash for neighbours.** Nothing in a crowd system scans all units; a uniform grid gives
+  each body its eight neighbouring cells.
+- **Off-screen / idle LOD.** Units far from the camera or moving in a straight line drop to a cheaper
+  update rate. RTS titles also process movement on a fixed tick, so a 200-unit group is
+  deterministic and replayable.
+
+### Design for this project
+
+- **Keep the seam.** Every walk already asks `FlaxActions.QueryNavRoute` and branches on
+  `NavRoute.Classify`'s three answers, so all of the below goes behind that function and no sheet
+  changes. `NavRoute` stays the contract: a route, "blocked", or "mesh has no opinion".
+- **Part A — Measure before building anything.** A scene with 200 authored Marines, one right click,
+  and a stopwatch: log per-frame `Time.DeltaTime`, the number of `FindPath` calls per order, and the
+  peak frame. The acceptance target is written from that measurement (for example: 200 units ordered
+  to one point hold 60 fps with a 4 ms path cost, and arrive without jitter through a doorway).
+- **Part B — Group path and slots.** `Runtime/GroupPath.cs` (pure): one `FindPath` for the group, a
+  polyline, formation slots projected along it in order of march (reusing `Formation`'s slot ring for
+  the last stretch), and a per-unit slice assigned deterministically by actor ID so two runs of the
+  same click match. Each unit then walks its slice plus its own last leg.
+- **Part C — Steering under the path.** `Runtime/Steering.cs` (pure) with three forces — seek to the
+  next waypoint, separation from the nearest neighbours, and a wall bias from the path — and a
+  bridge half that applies the result through `MoveSubject`/`CharacterController`. The path stays
+  authoritative for the corridor; steering only resolves who goes left in it.
+- **Part D — Neighbour grid.** `Runtime/SpatialHash.cs` (pure): uniform cells keyed by actor radius,
+  queried for eight neighbours, rebuilt once per tick for moved actors only. This is also the first
+  thing Task 29's marquee and Task 25's AI army want.
+- **Part E — Budget queue.** `Runtime/PathQueue.cs` (pure): requests, a per-frame budget
+  (`PathRequestsPerFrame`, default from Part A's measurement), "keep the current order while
+  waiting", and a once-per-frame summary warning when the queue is longer than N ticks. A refused or
+  still-building NavMesh falls through to `NavRoute.Unavailable` exactly as today.
+- **Part F — Flow field, only if Part B/C still miss the target.** A coarse walkable grid cached from
+  the NavMesh at bake time, a vector field per destination computed breadth-first from the goal, and
+  units reading their own cell. Only for one destination with many units; a single unit keeps the
+  polyline.
+- **Part G — Tests and acceptance.** Pure tests for `GroupPath` (one route, deterministic slices,
+  slots ordered along the polyline), `Steering` (separation pushes apart, seek closes, wall bias
+  wins at a corner), `SpatialHash` (neighbour set at cell edges) and `PathQueue` (budget honoured,
+  order kept while waiting). Bridge-side: the 200-unit scene, a wall gap, the camera zoomed in and
+  out, and the same click twice for determinism.
+
+### Done-when
+
+- Two hundred units ordered to one point do not spend a `FindPath` each, do not vibrate in place, and
+  arrive in the same order on two consecutive runs.
+- Frame time stays above the measured target (Part A's number, written into this section when the
+  task starts) with a 200-unit group ordered through a wall gap.
+- A scene with no NavMesh still walks the straight line, `when path blocked` still only fires when a
+  unit really stops, and a ten-unit scene is no slower than today.
+- `keywords.html` gains nothing: no word changes. If a knob is worth exposing (`path budget`, a
+  formation spacing), it is a variable read by the runner, not a new verb.
+
+### Open questions
+
+- NavMesh-only, or does the flow field need a walkability grid separate from Flax's bake (props,
+  dynamic blockers)?
+- Desync risk: separation makes movement frame-rate dependent unless it runs on the fixed tick — is
+  the fixed tick (Task 44) a prerequisite for the deterministic-slots claim?
+- Does 200 units include rendering/animator cost on this machine, or is the target pathing-only?
+
+---
+
+## Task 32 — Selection feedback: a visible box around selected units and a visible drag rectangle [ ]
+
+Goal: the player must be able to *see* what is selected and *see* the box they are dragging. Today
+neither happens, even though both code paths exist. `SelectionView.SetRing(actor, true)` looks for a
+child actor named `SelectionRing` and `MarqueeView.Show(start, end)` looks for a `UIControl` named
+`Marquee` whose control type is `MarqueePanel` — `Content/scenes/RTS_Test_0.scene` contains neither
+(authoring it by hand means instantiating a custom control type), so both calls find nothing, return
+quietly, and the play-check sees a click select a Marine with no feedback and a drag that selects
+with no rectangle. This task makes the feedback real and makes a missing visual *say* it is missing
+instead of failing silently.
+
+Depends on Task 29 Part A (click select) and Part B (marquee bounds/`BoxSelect`). **C# + scene
+content** (P0 — without this the input feature cannot be evaluated by eye at all).
+
+### What RTS games actually draw
+
+- **A ring or a ground decal under the unit** (StarCraft, Warcraft III, Age of Empires): a flat
+  circle/ellipse on the ground, green for yours, red for hostile — world-space, so it follows the
+  unit and is occluded by nothing at ground level. Needs a decal/quad per unit and a material.
+- **A screen-space bracket box** (Command & Conquer, Company of Heroes, Total War): four corner
+  brackets or a full outline drawn *around the unit's projected bounds*. Reads at any zoom, needs no
+  per-unit art, and the same projection code draws the drag rectangle — one system, two users.
+- **The drag rectangle itself** (all of them): a translucent fill plus a 1–2 px border, always on
+  top of the world but below the command card, and it must survive the pointer leaving the window
+  (clamped to the viewport, never inverted when dragged up-left).
+- **A pre-selection hover cue** is a separate, later thing (Task 29 Part E's hover work); this task
+  is only the two boxes the player already expects from a click and a drag.
+
+### Design for this project
+
+- **Part A — Draw the drag rectangle, for real.** The `Marquee` actor is authored content, not code:
+  a `UIControl` under the canvas, control type `MarqueePanel`, inactive, named `Marquee`, with a
+  translucent fill and a border. Write it into `RTS_Test_0.scene` by hand (copy the JSON shape of an
+  existing `Button`/`Container` block and swap the control type) and confirm the editor loads it
+  without dropping the control. `MarqueeView.Show` keeps doing the corner conversion, but gains one
+  one-time `Debug.LogWarning` when the actor or the panel is missing, so the next play-check names
+  the cause instead of showing nothing. `Hide` resets corners so a stale rectangle cannot linger. [x]
+
+#### Part A notes
+- **What shipped.** `Content/scenes/RTS_Test_0.scene` carries the drag rectangle now: a `UIControl`
+  named `Marquee` under the `ui canvas`, authored `"IsActive": false`, whose `"Control"` is
+  `Game.MarqueePanel` and whose `Data` block holds full-canvas anchors (`AnchorMin 0,0` /
+  `AnchorMax 1,1` / zero offsets) plus the panel's `Fill`/`Border` colours, so the look is scene
+  content rather than only a field initialiser. Writing the type by hand is legitimate: the engine's
+  `UIControl::Serialize` writes `_control.GetType().FullName` and `Deserialize` rebuilds it with
+  `Activator.CreateInstance`, so a script control needs no editor pass. The actor sits before
+  `StopButton` in the actor array, which is what puts the rectangle under the command card.
+- **The silence names itself.** `MarqueeView.Show` used to return quietly when no `Marquee` actor
+  existed; it now logs once per scene — `Marquee: add a UIControl actor named "Marquee" under a UI
+  Canvas (control type MarqueePanel) to see the drag rectangle.` The wrong-control-type warning
+  (`PanelOf`) was already there and still fires, so the two ways a drag draws nothing are told
+  apart in the log. `Hide` now zeroes `From`/`To` as well as clearing `Showing`, so a leftover
+  rectangle cannot be drawn by the next drag before its own corners arrive.
+- **The hand-written block is checked, not assumed.** Three checks read the scene as JSON: it parses
+  and has a `Marquee` actor, that actor is an inactive `Game.MarqueePanel` parented to the `ui
+  canvas`, and it is created before the card's first `FlaxEngine.GUI.Button` (draw order). The scene
+  still has not been loaded by the editor, so whether Flax resolves `Game.MarqueePanel` at load is
+  the play-check's question — and if it does not, the new warning says exactly that.
+- **Checks:** `dotnet run --project Tests/EventManagerTests.csproj` -> **2092 passed, 0 failed**
+  (2089 + 3); `dotnet build Source/Game.csproj -c Editor.Windows.Debug` 0 errors (the same 11
+  pre-existing XML-comment warnings elsewhere); `Flax.Build -target=GameEditorTarget` exits 0.
+- **Not verified:** unplayed. The play-check is: drag on the floor and expect a translucent blue
+  rectangle that tracks the cursor from press to release, stays the right way up when dragged
+  up-left, and sits under the card's buttons; the release still selects the Marines. If the
+  rectangle is offset from the cursor on a scaled canvas, the corner conversion (`PointFromParent`
+  fed screen pixels) is the suspect — Part A deliberately kept that conversion as it was.
+
+- **Part B — Draw a box around each selected unit.** Prefer the screen-space route, because it needs
+  no per-unit art and it shares Part A's projection: a pure `Runtime/SelectionBoxes.cs` that takes
+  the same `BoxSelectCandidate` list the marquee already builds (projected centre plus projected
+  `Actor.BoundingBox` corners) and returns one rectangle per selected actor, with a minimum size so a
+  tiny or distant unit still gets a visible box, clamped into the viewport. The bridge draws them
+  with one reusable `SelectionPanel` control (thin border, no fill) sized/positioned per selected
+  actor, or with a pooled set of four controls when several units are selected — one control per
+  actor, released when the selection changes.
+- **Part C — Keep it in sync with the selection.** `Selection.OnActorSelected`/`OnActorDeselected`
+  already drive `SelectionView`; extend that to add/remove a box, and rebuild all boxes on
+  `OnSelectionChanged` (control groups recall, marquee release, `select all …`). The boxes follow the
+  camera: refresh them in the same per-frame pass that already updates the hover/button state, and
+  refresh radius only for actors still selected — never scan the whole scene every frame.
+- **Part D — Scene content.** A `SelectionRing` child actor under each Marine and the Barracks (a
+  thin quad or decal with an unlit material) remains supported for scenes that want the ring look:
+  `SelectionView.SetRing` stays as-is, and the same one-time-warning treatment applies when a unit
+  has no ring and no box. Document in the scene notes which of the two looks the test scene uses.
+- **Part E — Tests and acceptance.** Pure tests for `SelectionBoxes`: a box around one candidate has
+  the expected corners, a box for a building uses the whole projected bounds while a unit uses the
+  centre with the minimum size, a box off-screen is clamped or dropped, the list order follows the
+  candidate order so two runs match, and an empty selection yields no boxes. Bridge-side acceptance:
+  click one Marine (one box), drag over both (two boxes plus the drag rectangle while held),
+  Shift-drag (old plus new), click empty ground (nothing), recall a control group (boxes move with
+  the units), and drag up-left (rectangle not inverted).
+
+### Done-when
+
+- A left click on a unit puts a visible box around it in `RTS_Test_0.scene`; a drag shows a
+  translucent rectangle from press to release, clamped to the viewport, above the world and below
+  the command card.
+- Deselecting, clicking ground, or replacing the selection removes every box in the same frame — no
+  orphan control is left behind on later selections.
+- A scene with no `Marquee` actor and no selection visuals still plays exactly as before, and the
+  console says once per scene which visual is missing.
+- `keywords.html` gains nothing: no `.events` word changes. The look (colours, border width,
+  minimum box size) is a variable or a control property read by the runner, never a literal in the
+  drawing code.
+
+### Open questions
+
+- Box per selected actor, or a single box around the whole selection's projected bounds (StarCraft
+  wraps the group, C&C boxes each unit)? Group box is one control, per-unit boxes read the count —
+  decide by which the play-check finds easier to count units with.
+- Border-only box, corner brackets, or the ground ring from Part D — and does a hostile selection
+  need a second colour now? (The project has no team/colour binding yet, so the answer may be "one
+  colour until Task 25 owns teams".)
+- Does the drag rectangle need to be pixel-crisp (a 1 px control border can land on a half pixel on
+  a scaled canvas) — keep the border at canvas scale 1, or accept a fractional edge?
 
 ---
 

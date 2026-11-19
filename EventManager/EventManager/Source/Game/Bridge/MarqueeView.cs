@@ -69,6 +69,7 @@ namespace Game
 
         private static UIControl _marquee;
         private static bool _warnedAboutControl;
+        private static bool _warnedAboutActor;
 
         /// <summary>Draws the rectangle for the drag from <paramref name="from"/> to
         /// <paramref name="to"/> (screen pixels).</summary>
@@ -76,7 +77,10 @@ namespace Game
         {
             UIControl actor = FindMarquee();
             if (actor == null)
+            {
+                WarnMissingActor();
                 return;
+            }
             MarqueePanel panel = PanelOf(actor);
             if (panel == null)
                 return;
@@ -93,7 +97,13 @@ namespace Game
                 return;
             MarqueePanel panel = actor.Control as MarqueePanel;
             if (panel != null)
+            {
                 panel.Showing = false;
+                // Cleared as well as hidden: a rectangle left here would be drawn again by the
+                // next Show, before that drag's own corners arrive.
+                panel.From = Float2.Zero;
+                panel.To = Float2.Zero;
+            }
             actor.IsActive = false;
         }
 
@@ -180,6 +190,20 @@ namespace Game
                 return _marquee;
             _marquee = Level.FindActor(ActorName) as UIControl;
             return _marquee;
+        }
+
+        /// <summary>
+        /// Says once that the scene has no <c>Marquee</c> actor. The drag keeps selecting — it
+        /// just draws no rectangle — so without this line a play-check sees a silent nothing
+        /// and has to guess why.
+        /// </summary>
+        private static void WarnMissingActor()
+        {
+            if (_warnedAboutActor)
+                return;
+            _warnedAboutActor = true;
+            Debug.LogWarning("Marquee: add a UIControl actor named \"" + ActorName +
+                "\" under a UI Canvas (control type MarqueePanel) to see the drag rectangle.");
         }
 
         private static MarqueePanel PanelOf(UIControl actor)
