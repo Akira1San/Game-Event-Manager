@@ -71,6 +71,11 @@ namespace Game
     {
         public string Target = "";
         public ValueNode Value = new NumberValue();
+        /// <summary>Whether writing the text also un-hides its control. A bind sets this false: it
+        /// writes a value, so a sheet that <c>hide</c>s a label keeps it hidden while the value
+        /// behind it keeps changing. An explicit <c>set text of</c> keeps the reveal, so `hide
+        /// GameText` cannot brick `show text`.</summary>
+        public bool Reveal = true;
     }
 
     /// <summary><c>set button &lt;thing&gt; enabled/disabled</c>.</summary>
@@ -99,6 +104,8 @@ namespace Game
     {
         public string Thing = "";
         public ValueNode Value = new NumberValue();
+        /// <summary>See <see cref="SetTextNode.Reveal"/>: a bound bar fills but stays hidden.</summary>
+        public bool Reveal = true;
     }
 
     /// <summary><c>set slider &lt;thing&gt; to &lt;value&gt;</c> — moves a Slider (0-1 or 0-100).</summary>

@@ -548,6 +548,92 @@ The AI reads it for unit costs and the composition ratio instead of hard-coding 
   attack inside the test window, and a test asserts the style flags (Red Alert builds a power
   plant before its first production building; StarCraft trains a worker before its first barracks)
 
+##### Part E follow-up 2 — the card's buttons need to say whether a click arrives
+- **What the play-check showed.** The hotkeys now work (`W` trains, `L` lifts, `K` lands), so the
+  actions and the selection gate are right, but clicking the card's buttons appears to do nothing.
+  The `Card: train Marine` / `Card: lift off` / `Card: land` lines added last round cannot answer
+  that on their own: they sit *after* three conditions (`selection is all buildings`,
+  `can afford Marine`, `queue has room`), so their silence means either "the click never arrived"
+  or "the click arrived and a gate refused it".
+- **What was added (diagnostic only, no UI rules in C#).** Three `Debug.Log` lines in
+  `Bridge/EventsManager.cs`, all at the input layer where nothing has been interpreted yet:
+  - `Button poll: N button(s) in the scene.` — logged once whenever the count changes. It walks the
+    scene for `UIControl` actors whose `Control` is a Flax `Button`; a `0` here means the card's
+    buttons are not seen by the manager at all (wrong control type, wrong scene, or inactive).
+  - `Button: <name> pressed.` / `Button: <name> released.` — logged on the poll's own press and
+    release edges, *before* `ButtonPressed`/`ButtonReleased` are broadcast. These read Flax's
+    `Button.IsPressed`, so they answer whether the engine itself put the button into its pressed
+    state, independent of any sheet.
+  - `Click: <name> (UI button).` — logged from `HandleMouseClick` when the manager's own
+    screen-space hit test lands on a `Button`. This test is the project's approximation
+    (`MouseOverUIControl`: control position plus a text-sized box with a 120×40 minimum), not
+    Flax's real bounds, so it is a second, independent opinion on the same click.
+- **How to read the log.** No lines at all → the click never reached the manager (canvas input, or
+  the mouse is not over the control). `Click: …` but no `Button: … pressed.` → the manager sees the
+  click while Flax's `Button` never enters the pressed state, so polling `IsPressed` is the wrong
+  mechanism and a press should be raised from the manager's own hit test instead.
+  `Button: … pressed.` followed by silence from the card → the edge is raised but the sheet's
+  `when <name> is pressed` block does not fire, which is a trigger-matching bug rather than an input
+  one. `Button: … pressed.` plus a `Card: …` line → input and dispatch are both fine and the fault
+  is in the action path.
+- **Checks:** no behaviour changed, so the suite is untouched; `Flax.Build -target=GameEditorTarget`
+  re-run to make sure the logging compiles. Nothing has been played yet.
+
+##### Part E follow-up 3 — the press comes from the click that is already on the button
+- **What the log said.** `Button poll: 0 button(s)` then `Button poll: 1 button(s)`, and the click
+  itself produced neither a `Click: …` line nor a `Button: … pressed.` line. So the manager saw one
+  button where the card has seven, and its own hit test never landed on the one that was clicked:
+  two separate faults on the same path, either of which is enough to make a button do nothing.
+- **The hit test was half a button to the left.** `MouseOverUIControl` treated `ui.Position` as the
+  control's *centre* and built a text-sized box (120×40 minimum) around it. A card button is a
+  190×34 rectangle anchored at that corner (`Left -420` / `Right -230`, `Top -260` / `Bottom -226`),
+  so the right half of every button — and the top 20 px — could not be clicked at all. It now asks
+  Flax first (`Control.IsMouseOver`, exact when the canvas is receiving mouse events) and falls
+  back to the rectangle built from the control's real `Width`/`Height`, which needs no mouse
+  delivery from the canvas.
+- **The press no longer waits for `IsPressed`.** Polling `Button.IsPressed` made the card depend on
+  the canvas delivering the mouse-down to that control. The click the manager already knows landed
+  on a `Button` now raises `ButtonPressed` itself, and the left-button release in `OnUpdate` raises
+  `ButtonReleased` for the same actor (even if the cursor has left it). A disabled button answers
+  `Click: <name> (UI button) is disabled.` and stays silent, so the card's own "not available" grey
+  is still the reason a press does nothing.
+- **The layout report names the three failures.** One line, logged on change:
+  `Buttons shown: […]; hidden: […]; no control: […].` A card button can be hidden by a sheet, can
+  have no GUI control at all (the control type failed to instantiate), or can be disabled — the
+  first two are visible there, the third only at click time.
+- **Sheets untouched.** No UI rule moved into C#: the layouts, the gates and the readouts are still
+  `CommandCard.events` and `Barracks.events`; this is the input layer only.
+- **Checks:** `dotnet build Source/Game.csproj -c Editor.Windows.Debug` compiles the bridge (0
+  warnings, 0 errors), `Flax.Build -target=GameEditorTarget` exits 0, and the suite stays at 2070
+  passed because the bridge is not in the test project. Play-check still pending.
+
+##### Part E follow-up 4 — a bind writes a value, it does not put the button back on screen
+- **What the play log said.** The layout was never the fault: with a Barracks selected the card
+  reported `Buttons shown: [TrainMarineButton, CancelMarineButton, LiftButton, LandButton,
+  ResearchButton]` and the unit layout was `[StopButton, HoldButton]`, so `when selection changes`
+  works. What it also showed is `shown: [TrainMarineButton]` while *nothing* was selected — the
+  Train button came back on its own, 133 ms after the deselect that hid it.
+- **The cause is the reveal in the UI write path.** `Barracks.events` binds the card's readout:
+  `bind TrainMarineButton to my queue count and my train left format …`. A bind is a `set text of`
+  statement, and the bridge's `SetControl` did `if (!ui.IsActive) ui.IsActive = true;` so that
+  `hide GameText` could never brick `show text`. The bind therefore un-hid the button the card had
+  just hidden — every time its value changed, which is why the Train button was the only one that
+  reappeared. The card's `set button TrainMarineButton disabled` rules take the same path and would
+  have revived it every 0.5 s anyway.
+- **The fix is one flag, not a new UI.** `SetTextNode` and `SetProgressNode` carry `Reveal` (default
+  true); `Bindings` builds its expansion with `Reveal = false`, and `FlaxActions.SetControl` only
+  activates a control when the write asks to be revealed. So an explicit `set text of` keeps the
+  old `show text` behaviour, while a bind (and the card's own `set button … enabled/disabled`
+  greying) writes the value and leaves the sheet's `hide` alone. The card's layout stays authored
+  where it was: `CommandCard.events` says what is on screen, `Barracks.events` says what the readout
+  reads.
+- **Checks:** `dotnet build Source/Game.csproj -c Editor.Windows.Debug` 0 errors (the 11 warnings
+  reported on a full rebuild are pre-existing XML-comment ones in `EventRuntime.SelectSameKind` and
+  `HealthManager.Add`, not in the files this changed), suite **2072 passed, 0 failed** with two new
+  checks — a bind does not reveal, an explicit `set text of` still does. Play-check pending: with
+  nothing selected the card must stay empty, and a click on `TrainMarineButton` with a Barracks
+  selected must print `Card: train Marine`.
+
 ### Open questions for this task
 - Map bounds for expansion — a global `MapMinX/Z`/`MapMaxX/Z`, or the fog's known extent?
 - Multiple difficulties / personalities in v1, or one balanced profile first?

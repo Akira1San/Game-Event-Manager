@@ -381,7 +381,9 @@ namespace Game
             OnRuntimeWarning(DataLookup.MissingMessage(field, name, Variables.GlobalNames));
         }
         public Action<EventContext, List<Token>> OnRawAction = (context, words) => { };
-        public Action<EventContext, string, ValueBox> OnSetText = (context, thing, value) => { };
+        /// <summary>Write a UI text. <c>reveal</c> is false for a bind, which writes a value but
+        /// must not un-hide a control the sheet hid (see <see cref="SetTextNode.Reveal"/>)</summary>.
+        public Action<EventContext, string, ValueBox, bool> OnSetText = (context, thing, value, reveal) => { };
         /// <summary>Play a step sound: <paramref name="material"/> is the surface name (e.g.
         /// "Grass"), <paramref name="clipName"/> is the resolved clip to play. The bridge
         /// wires this to actual audio playback.</summary>
@@ -393,7 +395,7 @@ namespace Game
         /// <summary>Tint a UI control to the named color ("r g b" or "r g b a").</summary>
         public Action<EventContext, string, string> OnSetControlColor = (context, thing, color) => { };
         /// <summary>Fill a UI ProgressBar: the value is 0-1 or 0-100.</summary>
-        public Action<EventContext, string, ValueBox> OnSetProgress = (context, thing, value) => { };
+        public Action<EventContext, string, ValueBox, bool> OnSetProgress = (context, thing, value, reveal) => { };
         /// <summary>Move a UI Slider: the value is 0-1 or 0-100.</summary>
         public Action<EventContext, string, ValueBox> OnSetSlider = (context, thing, value) => { };
 
@@ -2021,7 +2023,7 @@ namespace Game
                 }
                 else if (statement is SetTextNode setText)
                 {
-                    OnSetText(context, setText.Target, context.Evaluate(setText.Value));
+                    OnSetText(context, setText.Target, context.Evaluate(setText.Value), setText.Reveal);
                 }
                 else if (statement is SetButtonEnabledNode setButton)
                 {
@@ -2037,7 +2039,7 @@ namespace Game
                 }
                 else if (statement is SetProgressNode setProgress)
                 {
-                    OnSetProgress(context, setProgress.Thing, context.Evaluate(setProgress.Value));
+                    OnSetProgress(context, setProgress.Thing, context.Evaluate(setProgress.Value), setProgress.Reveal);
                 }
                 else if (statement is SetSliderNode setSlider)
                 {

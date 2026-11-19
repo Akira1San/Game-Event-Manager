@@ -55,6 +55,7 @@ namespace Game
                         Line = spec.Line,
                         Thing = spec.Thing,
                         Value = CopyOf(variable),
+                        Reveal = false,
                     };
                 }
                 else
@@ -64,6 +65,7 @@ namespace Game
                         Line = spec.Line,
                         Target = spec.Thing,
                         Value = BoundValue(spec),
+                        Reveal = false,
                     };
                 }
 

@@ -66,8 +66,13 @@ namespace Game
             public Color TextBase;
             public Color ImageBase;
         }
-        /// <summary>Last-tick pressed state per UI button, used to raise press/release edge triggers.</summary>
-        private readonly Dictionary<Actor, bool> _buttonPressedLastTick = new Dictionary<Actor, bool>();
+        /// <summary>The card button the left mouse went down on, so its release raises
+        /// <c>ButtonReleased</c> for the same actor even if the cursor moved off it.</summary>
+        private UIControl _pressedButton;
+        /// <summary>The card buttons the last poll saw, so a layout change is logged once. A card
+        /// button that does nothing is hidden by a sheet, has no GUI control at all, or is
+        /// disabled, and that line names which.</summary>
+        private string _buttonPolledSignature;
         /// <summary>Last click time per actor, used to detect double-clicks.</summary>
         private readonly Dictionary<Actor, double> _buttonLastClickTime = new Dictionary<Actor, double>();
         /// <summary>Last-tick TextBox contents, used to raise text-change edges.</summary>
@@ -154,9 +159,9 @@ namespace Game
             Runtime.OnRuntimeWarning = message => Debug.LogWarning("Event sheet: " + message);
             Runtime.OnRawAction = (context, words) =>
                 FlaxActions.Execute(context, ActionWords.Parse(words, CancelOneTime));
-            Runtime.OnSetText = (context, thing, value) =>
+            Runtime.OnSetText = (context, thing, value, reveal) =>
             {
-                FlaxActions.SetText(thing, value.AsText());
+                FlaxActions.SetText(thing, value.AsText(), reveal);
             };
             Runtime.OnSetButtonEnabled = (context, thing, enabled) =>
                 FlaxActions.SetButtonEnabled(thing, enabled);
@@ -164,8 +169,8 @@ namespace Game
                 FlaxActions.SetImageBrush(thing, sprite);
             Runtime.OnSetControlColor = (context, thing, color) =>
                 FlaxActions.SetControlColor(thing, color);
-            Runtime.OnSetProgress = (context, thing, value) =>
-                FlaxActions.SetProgress(thing, value.AsNumber());
+            Runtime.OnSetProgress = (context, thing, value, reveal) =>
+                FlaxActions.SetProgress(thing, value.AsNumber(), reveal);
             Runtime.OnSetSlider = (context, thing, value) =>
                 FlaxActions.SetSlider(thing, value.AsNumber());
             Runtime.OnPlayStepSound = (context, material, clipName) =>
@@ -895,6 +900,17 @@ namespace Game
                         BeginBoxSelect(mousePos);
                 }
             }
+
+            // A card button reports its release even if the cursor left it, so `when <button> is
+            // pressed` always has a matching release.
+            if (_pressedButton != null && !Input.GetMouseButton(MouseButton.Left))
+            {
+                UIControl pressed = _pressedButton;
+                _pressedButton = null;
+                Debug.Log($"Button: {pressed.Name} released.");
+                if (pressed.Scene != null)
+                    Runtime.RaisePushAll(new PushSignal { Kind = TriggerKind.ButtonReleased, Name = pressed.Name, Other = pressed });
+            }
             _leftMouseDownLastFrame = leftMouseDown;
 
             // The marquee follows the mouse while the button is held and lands on release.
@@ -1155,6 +1171,23 @@ namespace Game
                 if (MouseOverUIControl(ui, mousePos))
                 {
                     uiHit = true;
+                    // A card button is pressed from this hit test rather than from Flax's
+                    // IsPressed, because the click is already known to be on it: that keeps a
+                    // button pressable when its control never receives mouse events. A disabled
+                    // button stays silent, which is the card's own "not available" answer.
+                    if (kind == TriggerKind.Clicked && ui.Control is FlaxEngine.GUI.Button button)
+                    {
+                        if (button.Enabled)
+                        {
+                            Debug.Log($"Click: {actor.Name} (UI button) pressed.");
+                            _pressedButton = ui;
+                            Runtime.RaisePushAll(new PushSignal { Kind = TriggerKind.ButtonPressed, Name = actor.Name, Other = actor });
+                        }
+                        else
+                        {
+                            Debug.Log($"Click: {actor.Name} (UI button) is disabled.");
+                        }
+                    }
                     // Clicks are broadcast by name: the clicked actor's own `when me is clicked`
                     // fires, and other sheets can listen with `when Ground is clicked`.
                     HandleClick(actor, kind);
@@ -1304,38 +1337,42 @@ namespace Game
             return doubleClick;
         }
 
-        /// <summary>Polls every UI Button for press/release edges, raising <c>ButtonPressed</c>/
-        /// <c>ButtonReleased</c> triggers, and prunes stale click/press tracking.</summary>
+        /// <summary>
+        /// Reports the card's layout, once per change. A press is not read from Flax's
+        /// <c>Button.IsPressed</c> any more: a click the manager already knows landed on a button
+        /// raises <c>ButtonPressed</c> itself (see <see cref="HandleMouseClick"/>), so an order
+        /// runs even when the button's control never saw the mouse. This method exists to say
+        /// which buttons are in which state, because the three ways a card button does nothing
+        /// all look the same from the log otherwise.
+        /// </summary>
         private void UpdateButtons()
         {
-            var dead = new List<Actor>();
+            var shown = new List<string>();
+            var hidden = new List<string>();
+            var unbuilt = new List<string>();
             foreach (Actor actor in SceneActors())
             {
-                if (actor == null || !actor.IsActive)
-                {
-                    dead.Add(actor);
-                    continue;
-                }
                 var ui = actor as UIControl;
                 if (ui == null)
                     continue;
-                var button = ui.Control as FlaxEngine.GUI.Button;
-                if (button == null)
+                // A card button that lost its control has no type left to recognise it by, so a
+                // name ending in "Button" counts too.
+                bool isButton = ui.Control is FlaxEngine.GUI.Button ||
+                    (ui.Control == null && actor.Name.EndsWith("Button"));
+                if (!isButton)
                     continue;
-                bool pressed = button.IsPressed;
-                _buttonPressedLastTick.TryGetValue(actor, out bool wasPressed);
-                if (pressed && !wasPressed)
-                    Runtime.RaisePushAll(new PushSignal { Kind = TriggerKind.ButtonPressed, Name = actor.Name, Other = actor });
-                else if (!pressed && wasPressed)
-                    Runtime.RaisePushAll(new PushSignal { Kind = TriggerKind.ButtonReleased, Name = actor.Name, Other = actor });
-                _buttonPressedLastTick[actor] = pressed;
+                if (!actor.IsActive)
+                    hidden.Add(actor.Name);
+                else if (ui.Control == null)
+                    unbuilt.Add(actor.Name);
+                else
+                    shown.Add(actor.Name);
             }
-            foreach (Actor actor in dead)
-                _buttonPressedLastTick.Remove(actor);
-            // Prune actors whose scene is gone.
-            foreach (var pair in _buttonPressedLastTick.ToArray())
-                if (pair.Key == null || pair.Key.Scene == null)
-                    _buttonPressedLastTick.Remove(pair.Key);
+            string signature = string.Join("|", shown);
+            if (signature == _buttonPolledSignature)
+                return;
+            _buttonPolledSignature = signature;
+            Debug.Log($"Buttons shown: [{string.Join(", ", shown)}]; hidden: [{string.Join(", ", hidden)}]; no control: [{string.Join(", ", unbuilt)}].");
         }
 
         /// <summary>Polls every UI TextBox for text edits and raises <c>TextChanged</c> /
@@ -1668,40 +1705,25 @@ namespace Game
             return along > 0 ? ray.Position + ray.Direction * along : (Vector3?)null;
         }
 
-        /// <summary>Screen-space center of a UIControl (top-left origin, Y down), matching
-        /// Input.MousePosition. Actor.Position is already world-space (includes the parent
-        /// UICanvas transform); for UI on a screen-space canvas the X component lines up with
-        /// screen space while Y is world up, so we flip Y only. We deliberately do NOT add
-        /// Screen.Size*0.5 (that would double-count) and do NOT re-walk the parent chain
-        /// (Position already includes it — walking would double-count).</summary>
-        private static Float2 MouseControlCenter(UIControl ui)
-        {
-            return new Float2(ui.Position.X, -ui.Position.Y);
-        }
-
-        /// <summary>Approximate screen-space hit test for a UIControl on a screen-space canvas.</summary>
+        /// <summary>Screen-space hit test for a UIControl on a screen-space canvas. Flax's own
+        /// <see cref="FlaxEngine.GUI.Control.IsMouseOver"/> answers it exactly when the canvas is
+        /// receiving mouse events; the rectangle from the control's real size answers it from the
+        /// actor transform when it is not. `ui.Position` is the control's top-left corner (X in
+        /// screen pixels, Y world up), so Y is flipped — the old text-sized box treated that
+        /// corner as a centre, which left the right half of a 190 px wide button unclickable.</summary>
         private static bool MouseOverUIControl(UIControl ui, Float2 mousePos)
         {
-            if (ui.Control == null)
+            var control = ui.Control;
+            if (control == null)
                 return false;
-            var label = ui.Control as FlaxEngine.GUI.Label;
-            if (label == null)
-                return false;
+            if (control.IsMouseOver)
+                return true;
 
-            Float2 center = MouseControlCenter(ui);
-
-            // Estimate hit box from text size (generous minimum so small buttons are easy to hit)
-            string text = label.Text ?? "";
-            float fontSize = label.Font.Size > 0 ? label.Font.Size : 14f;
-            float textWidth = text.Length * fontSize * 0.6f;
-            float textHeight = fontSize * 1.2f;
-            Float2 size = new Float2(Math.Max(textWidth, 120f), Math.Max(textHeight, 40f));
-            Float2 halfSize = size * 0.5f;
-
-            bool xHit = mousePos.X >= center.X - halfSize.X && mousePos.X <= center.X + halfSize.X;
-            bool yHit = mousePos.Y >= center.Y - halfSize.Y && mousePos.Y <= center.Y + halfSize.Y;
-
-            return xHit && yHit;
+            Float2 topLeft = new Float2(ui.Position.X, -ui.Position.Y);
+            float width = control.Width > 0 ? control.Width : 120f;
+            float height = control.Height > 0 ? control.Height : 40f;
+            return mousePos.X >= topLeft.X && mousePos.X <= topLeft.X + width &&
+                   mousePos.Y >= topLeft.Y && mousePos.Y <= topLeft.Y + height;
         }
 
         /// <summary>Collect every EventSheet component currently on scene actors, so manager and

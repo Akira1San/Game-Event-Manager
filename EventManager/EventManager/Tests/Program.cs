@@ -1921,7 +1921,7 @@ when me is released
     hookWorld.AddActor(hookActor);
     var hookEngine = FreshEngine(hookWorld);
     var hookLog = new List<string>();
-    hookEngine.OnSetProgress = (context, thing, value) => hookLog.Add($"{thing}={value.AsNumber()}");
+    hookEngine.OnSetProgress = (context, thing, value, reveal) => hookLog.Add($"{thing}={value.AsNumber()}");
     hookEngine.OnSetSlider = (context, thing, value) => hookLog.Add($"{thing}={value.AsNumber()}");
     hookEngine.AddSheet(hookActor, parser.Parse("when me appears\n  set progress of HealthBar to 0.75\n  set slider HealthBar to 80\n"));
     hookEngine.Tick(0);
@@ -4534,14 +4534,20 @@ var bindStatement = bindProgram.Events[0].Body[0].Statement as SetTextNode;
 Check(bindStatement != null && bindStatement.Target == "ScoreLabel" &&
       bindStatement.Value is VariableValue bindVariable && bindVariable.Name == "Score",
     "the expanded bind body is `set text of ScoreLabel to Score`");
+Check(!bindStatement.Reveal,
+    "a bind writes its value without revealing the control, so `hide` wins over a live bind");
+var shownTextProgram = parser.Parse("when me appears\n  set text of ScoreLabel to Score\n");
+Check(((SetTextNode)shownTextProgram.Events[0].Body[0].Statement!).Reveal,
+    "an explicit `set text of` still reveals, so `hide GameText` cannot brick `show text`");
 
 // `bind progress of <thing> to <variable>` fills a ProgressBar instead.
 var bindProgressProgram = parser.Parse("bind progress of HealthBar to Health\n");
 var bindProgressStatement = bindProgressProgram.Events[0].Body[0].Statement as SetProgressNode;
 Check(bindProgressProgram.Events.Count == 1 && bindProgressStatement != null &&
       bindProgressStatement.Thing == "HealthBar" &&
-      bindProgressStatement.Value is VariableValue bindProgressVariable && bindProgressVariable.Name == "Health",
-    "`bind progress of HealthBar to Health` expands to `when Health changes -> set progress of HealthBar`");
+      bindProgressStatement.Value is VariableValue bindProgressVariable && bindProgressVariable.Name == "Health" &&
+      !bindProgressStatement.Reveal,
+    "`bind progress of HealthBar to Health` expands to `when Health changes -> set progress of HealthBar` without revealing the bar");
 
 // A per-object variable binds through `my`.
 var bindMineProgram = parser.Parse("bind InfoLabel to my health\n");
@@ -4580,8 +4586,8 @@ bindWorld.AddActor(bindActor);
 var bindEngine = FreshEngine(bindWorld);
 var bindTexts = new Dictionary<string, string>();
 var bindProgressValues = new Dictionary<string, double>();
-bindEngine.OnSetText = (context, thing, value) => bindTexts[thing] = value.AsText();
-bindEngine.OnSetProgress = (context, thing, value) => bindProgressValues[thing] = value.AsNumber();
+bindEngine.OnSetText = (context, thing, value, reveal) => bindTexts[thing] = value.AsText();
+bindEngine.OnSetProgress = (context, thing, value, reveal) => bindProgressValues[thing] = value.AsNumber();
 bindEngine.AddSheet(bindActor, parser.Parse(
     "bind ScoreLabel to Score\n" +
     "bind progress of HealthBar to Health\n" +

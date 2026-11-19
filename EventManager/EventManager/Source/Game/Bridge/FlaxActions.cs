@@ -4506,13 +4506,16 @@ namespace Game
             }
         }
 
-        private static bool SetControl<T>(string thing, Action<T> apply) where T : FlaxEngine.GUI.Control
+        private static bool SetControl<T>(string thing, Action<T> apply, bool reveal = true)
+            where T : FlaxEngine.GUI.Control
         {
             var control = FindControl<T>(thing, out UIControl ui);
             if (control == null)
                 return false;
-            // A `hide GameText` earlier in the session must not brick `show text`.
-            if (!ui.IsActive)
+            // A `hide GameText` earlier in the session must not brick `show text`. A bind and the
+            // card's `set button … enabled` rules pass reveal: false — they write state, so a
+            // button the sheet hid must stay hidden until the sheet shows it again.
+            if (reveal && !ui.IsActive)
                 ui.IsActive = true;
             apply(control);
             return true;
@@ -4522,12 +4525,12 @@ namespace Game
         private static FlaxEngine.GUI.Label FindLabel(string thing, out UIControl ui)
             => FindControl<FlaxEngine.GUI.Label>(thing, out ui);
 
-        private static bool SetLabel(string thing, string text)
+        private static bool SetLabel(string thing, string text, bool reveal = true)
             => SetControl<FlaxEngine.GUI.Label>(thing, label =>
             {
                 label.Text = text; // Label.Text is a LocalizedString; string converts implicitly
                 label.Visible = true;
-            });
+            }, reveal);
 
         /// <summary><c>tween &lt;thing&gt; position/scale/alpha/color to ... in ...</c>: starts a
         /// coroutine-style tween updated in <see cref="Step"/>.</summary>
@@ -5237,20 +5240,20 @@ namespace Game
             return string.Join(", ", names);
         }
 
-        public static void SetText(string thing, string text)
+        public static void SetText(string thing, string text, bool reveal = true)
         {
             if (string.IsNullOrEmpty(thing))
             {
                 WarnOnce("\u201Cset text of\u201D needs the name of the thing whose text changes — like \u201Cset text of ScoreLabel to Score\u201D.");
                 return;
             }
-            if (SetLabel(thing, text))
+            if (SetLabel(thing, text, reveal))
                 return;
             // A TextBox (input field) is not a Label; write its Text instead.
             var box = FindControl<FlaxEngine.GUI.TextBox>(thing, out UIControl boxUi);
             if (box != null)
             {
-                if (boxUi != null && !boxUi.IsActive)
+                if (reveal && boxUi != null && !boxUi.IsActive)
                     boxUi.IsActive = true;
                 box.Text = text;
                 return;
@@ -5301,7 +5304,7 @@ namespace Game
                 WarnOnce("\u201Cset button\u201D needs the name of the button — like \u201Cset button RestartButton enabled\u201D.");
                 return;
             }
-            if (!SetControl<FlaxEngine.GUI.Button>(thing, button => button.Enabled = enabled))
+            if (!SetControl<FlaxEngine.GUI.Button>(thing, button => button.Enabled = enabled, reveal: false))
                 WarnOnce($"\u201Cset button {thing} { (enabled ? "enabled" : "disabled") }\u201D needs an actor with a Button on a UIControl (I couldn't find one called \u201C{thing}\u201D). Buttons in this scene: {ControlActorNames<FlaxEngine.GUI.Button>()}.");
         }
 
@@ -5350,7 +5353,7 @@ namespace Game
 
         /// <summary><c>set progress of &lt;thing&gt; to &lt;value&gt;</c>: fills a ProgressBar.
         /// Accepts 0-1 (e.g. 0.5) or 0-100 (e.g. 50) and normalizes to the bar's 0-1 range.</summary>
-        public static void SetProgress(string thing, double value)
+        public static void SetProgress(string thing, double value, bool reveal = true)
         {
             if (string.IsNullOrEmpty(thing))
             {
@@ -5365,7 +5368,7 @@ namespace Game
                 bar.Minimum = 0;
                 bar.Maximum = 1;
                 bar.Value = (float)progress;
-            }))
+            }, reveal))
                 WarnOnce($"\u201Cset progress of {thing}\u201D needs an actor with a ProgressBar on a UIControl (I couldn't find one called \u201C{thing}\u201D). Progress bars in this scene: {ControlActorNames<FlaxEngine.GUI.ProgressBar>()}.");
         }
 
