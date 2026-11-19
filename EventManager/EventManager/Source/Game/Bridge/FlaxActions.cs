@@ -5393,8 +5393,9 @@ namespace Game
                 WarnOnce($"\u201Cset slider {thing}\u201D needs an actor with a Slider on a UIControl (I couldn't find one called \u201C{thing}\u201D). Sliders in this scene: {ControlActorNames<FlaxEngine.GUI.Slider>()}.");
         }
 
-        /// <summary>Loads a texture by name, ignoring folder and extension (mirrors <see cref="LoadAudioClip"/>).</summary>
-        private static FlaxEngine.Texture LoadTexture(string name)
+        /// <summary>Loads a texture by name, ignoring folder and extension (mirrors <see cref="LoadAudioClip"/>).
+        /// Shared with <see cref="CursorView"/>, which swaps its frames through the same index.</summary>
+        internal static FlaxEngine.Texture LoadTexture(string name)
         {
             var index = TextureIndex();
             return index.TryGetValue(AssetNames.Key(name), out Guid id) ? Content.Load<FlaxEngine.Texture>(id) : null;

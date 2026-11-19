@@ -565,6 +565,9 @@ namespace Game
                 Instance = null;
             Level.ActorDeleted -= ActorGoneAway;
             Level.SceneLoaded -= SceneLoadedAim;
+            // The pointer is engine-wide state: stopping play must not leave it hidden on a
+            // cursor the game drew (Task 48 Part B).
+            CursorView.Reset();
             FlaxActions.ClearSession();
             _components.Clear();
             Runtime.Selection.Reset();
