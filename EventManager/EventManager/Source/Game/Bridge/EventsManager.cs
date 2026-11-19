@@ -1719,6 +1719,12 @@ namespace Game
             var control = ui.Control;
             if (control == null)
                 return false;
+            // A draw-only overlay (the selection boxes, the drag rectangle) covers the canvas but
+            // owns none of it. Without this the full-canvas rectangle below answered "over UI"
+            // everywhere once a unit was selected, so every click was swallowed as a UI hit and
+            // clicking bare ground could never clear the selection.
+            if (control is ICosmeticControl)
+                return false;
             if (control.IsMouseOver)
                 return true;
 

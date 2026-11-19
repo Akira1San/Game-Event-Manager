@@ -13,7 +13,7 @@ namespace Game
     ///
     /// Border only, no fill: the unit under the box has to stay readable.
     /// </summary>
-    public class SelectionBoxPanel : Control
+    public class SelectionBoxPanel : Control, ICosmeticControl
     {
         /// <summary>True while at least one box is being drawn.</summary>
         public bool Showing;
@@ -183,6 +183,17 @@ namespace Game
             if (panel != null)
                 panel.Clear();
             actor.IsActive = false;
+        }
+
+        /// <summary>
+        /// True when the scene has a usable <c>SelectionBox</c> panel, i.e. a selection is already
+        /// visible without a ring. Asks without warning, so <see cref="SelectionView"/> can use it
+        /// on every selection to decide whether a ringless unit needs a message.
+        /// </summary>
+        public static bool CanDraw()
+        {
+            UIControl actor = FindBox();
+            return actor != null && actor.Control is SelectionBoxPanel;
         }
 
         private static UIControl FindBox()

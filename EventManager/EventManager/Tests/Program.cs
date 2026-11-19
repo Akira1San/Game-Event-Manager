@@ -12238,6 +12238,53 @@ BoxSelectCandidate BoxCandidate(double x, double y, bool building = false,
         "no candidates, or a viewport with no size, yields no boxes");
 }
 
+// ------------------------------------------------------------------
+// RTS Task 32 Part D: the test scene shows selection with boxes only
+// ------------------------------------------------------------------
+// Part D chose the screen-space boxes over a ground ring: Content has no ring mesh and no
+// unlit/transparent material (every material is a binary asset), so the only ring a hand edit
+// could author is an opaque default-material tile. The scene must therefore author no
+// SelectionRing at all - a selected unit would otherwise get two looks at once - and must still
+// author the SelectionBox panel that is the one look it uses.
+{
+    string sceneFile = FindUpward(Path.Combine("Content", "scenes", "RTS_Test_0.scene"));
+    int rings = 0;
+    string canvasId = null;
+    string boxParent = null;
+    string boxControl = null;
+    bool boxInactive = false;
+    bool parsed = true;
+    try
+    {
+        using var scene = JsonDocument.Parse(File.ReadAllText(sceneFile));
+        foreach (var actor in scene.RootElement.GetProperty("Data").EnumerateArray())
+        {
+            string name = actor.TryGetProperty("Name", out var nameValue) ? nameValue.GetString() : null;
+            if (name == "SelectionRing")
+                rings++;
+            if (name == "ui canvas")
+                canvasId = actor.TryGetProperty("ID", out var idValue) ? idValue.GetString() : null;
+            if (name == "SelectionBox")
+            {
+                boxParent = actor.TryGetProperty("ParentID", out var parentValue) ? parentValue.GetString() : null;
+                boxControl = actor.TryGetProperty("Control", out var controlValue) ? controlValue.GetString() : null;
+                boxInactive = actor.TryGetProperty("IsActive", out var activeValue) && !activeValue.GetBoolean();
+            }
+        }
+    }
+    catch (Exception e) when (e is JsonException or IOException or KeyNotFoundException or InvalidOperationException)
+    {
+        parsed = false;
+        Console.WriteLine($"FAIL  RTS_Test_0.scene did not read as a scene -> {e.Message}");
+    }
+
+    Check(parsed && rings == 0,
+        "the RTS test scene authors no SelectionRing, so a unit is shown by its box alone");
+
+    Check(canvasId != null && boxParent == canvasId && boxControl == "Game.SelectionBoxPanel" && boxInactive,
+        "the SelectionBox panel is still the scene's one selection look, under the ui canvas");
+}
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);

@@ -2118,11 +2118,72 @@ content** (P0 — without this the input feature cannot be evaluated by eye at a
   already drive `SelectionView`; extend that to add/remove a box, and rebuild all boxes on
   `OnSelectionChanged` (control groups recall, marquee release, `select all …`). The boxes follow the
   camera: refresh them in the same per-frame pass that already updates the hover/button state, and
-  refresh radius only for actors still selected — never scan the whole scene every frame.
+  refresh radius only for actors still selected — never scan the whole scene every frame. [x]
+
+#### Part C notes
+- **It needed no code, and that was checked rather than assumed.** Part B's
+  `SelectionBoxesView.Update(Runtime)` already runs on every frame from `EventsManager.OnUpdate`
+  (after `Runtime.Tick`, `UpdateCameraFollow` and `UpdateCameraPan`, beside `MinimapView.Update`) and
+  reads `Runtime.Selection.Selected` directly, so every way the selection can change — `Select`,
+  `Deselect`, `Clear` and `ReplaceSelection` (marquee release, control-group recall, `select all …`)
+  — lands in the boxes on the very next frame with no wiring of its own. An empty selection, a lost
+  camera or nothing projectable calls `Hide()`, which clears the panel and deactivates the actor in
+  that same frame, so no box is left behind on a later selection.
+- **Polling, not the callbacks.** The task suggested extending `OnActorSelected` /
+  `OnActorDeselected` / `OnSelectionChanged`, but those already have a consumer
+  (`SelectionView.SetRing` and `UpdateControlGroupIndicators`) and would give the boxes a second
+  source of truth that still had to be refreshed every frame for camera pan, zoom and unit movement.
+  Reading the selection in the one per-frame pass makes the selection identity, the camera and the
+  units' positions all come from the same frame, which is what stops the boxes shimmering one frame
+  behind a moving unit.
+- **Only the selection is projected.** The per-frame loop walks `Selection.Selected`, never
+  `World.Actors()`, so the cost is the selection's size — the "never scan the whole scene every
+  frame" clause. The whole-scene walk stays where it belongs: `MarqueeView.Candidates`, once per
+  release. Both paths go through `MarqueeView.TryProject`, and an off-screen, unselectable or
+  non-friendly actor still gets no box.
+- **Checks:** no new ones — no runtime or bridge code changed, and the 9 Part B checks still cover
+  the geometry and the three drop rules, so the suite was not re-run. The sync itself is the
+  play-check's question: recall a control group (its boxes appear at once), Shift-drag (old plus
+  new), click empty ground (every box gone in the same frame), pan with the units still selected
+  (boxes stay on them).
+
 - **Part D — Scene content.** A `SelectionRing` child actor under each Marine and the Barracks (a
   thin quad or decal with an unlit material) remains supported for scenes that want the ring look:
   `SelectionView.SetRing` stays as-is, and the same one-time-warning treatment applies when a unit
-  has no ring and no box. Document in the scene notes which of the two looks the test scene uses.
+  has no ring and no box. Document in the scene notes which of the two looks the test scene uses. [x]
+
+#### Part D notes
+- **What Part D ships: the warning, not a ring.** `SelectionView.SetRing` still toggles a
+  `SelectionRing` child when a scene has one; nothing in the test scene does. The deliverable is the
+  other half of the task: when a selected actor has neither a ring nor the screen-space boxes, the
+  log says so once per session — naming the actor, the missing child and the missing panel, and what
+  to author. `SelectionBoxesView.CanDraw()` is the new no-log check it asks (does the scene hold a
+  usable `SelectionBox` panel?), so a scene with the boxes stays silent. One line per session, not
+  one per unit, so a box select of eight Marines does not print eight warnings; deselection never
+  warns.
+- **Why no ring actors in `RTS_Test_0.scene`.** A first pass authored four (one under each Marine,
+  including the off-scene spawn template, and the Barracks) as flattened copies of the scene's Cube
+  sitting on the floor. They were dropped: `Content` has no ring/disc mesh and no unlit or
+  transparent material — every material is a binary Visject `.flax` — so the only hand-authorable
+  "ring" is an opaque default-material tile, which duplicates the boxes and reads worse. A real ring
+  or ground decal needs a material (and ideally a mesh) made in the Flax editor: content work, not a
+  hand edit.
+- **Which look the test scene uses — the screen-space boxes, only.** A selected unit is marked by
+  the border box from Part B/C: countable at any zoom, visible over the model, drawn under the
+  command card. No plate and no ground decal; `SelectionBox` is the scene's single selection look,
+  which the new checks pin down (zero `SelectionRing` actors, one `SelectionBox` panel). A scene
+  that wants the ring look instead still can: put a `SelectionRing` child under a unit and `SetRing`
+  turns it on and off unchanged.
+- **Checks:** 2 scene-JSON checks — the scene authors no `SelectionRing`, so a unit is shown by its
+  box alone; and the `SelectionBox` panel is still authored as an inactive `Game.SelectionBoxPanel`
+  under the `ui canvas` -> **2103 passed, 0 failed** (2101 + 2); `dotnet build
+  Source/Game.csproj -c Editor.Windows.Debug` 0 errors (the same 11 pre-existing XML-comment
+  warnings); `Flax.Build -target=GameEditorTarget` exits 0.
+- **Not verified:** unplayed. The warning is the untested bridge path: with the `SelectionBox` actor
+  missing (or its control type wrong), selecting a unit should print exactly one line naming what to
+  add, and nothing when the boxes are present. The scene's own look is Parts A/B's play-check (one
+  box per selected Marine, drag rectangle, Shift-drag, control-group recall, empty-ground clear).
+
 - **Part E — Tests and acceptance.** Pure tests for `SelectionBoxes`: a box around one candidate has
   the expected corners, a box for a building uses the whole projected bounds while a unit uses the
   centre with the minimum size, a box off-screen is clamped or dropped, the list order follows the

@@ -13,7 +13,7 @@ namespace Game
     /// To use it, add a UIControl actor named <c>Marquee</c> (inside a UICanvas, usually inactive)
     /// and set its control type to <c>MarqueePanel</c> in the editor.
     /// </summary>
-    public class MarqueePanel : ContainerControl
+    public class MarqueePanel : ContainerControl, ICosmeticControl
     {
         /// <summary>True while a drag is in flight; the rectangle is only drawn then.</summary>
         public bool Showing;
