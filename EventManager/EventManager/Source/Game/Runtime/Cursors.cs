@@ -535,4 +535,164 @@ namespace Game
             };
         }
     }
+
+    /// <summary>
+    /// What the pointer is over this tick, as far as the cursor rules care (Task 48 Part D).
+    /// A flags set rather than a single value because an enemy unit is also selectable, and an
+    /// authored hotspot can also be a selectable prop: the rules decide which flag wins, so the
+    /// bridge never has to guess an order.
+    /// </summary>
+    [Flags]
+    public enum CursorHoverKind
+    {
+        /// <summary>Nothing under the pointer (or the pointer is over UI).</summary>
+        None = 0,
+        /// <summary>A pickable actor (`my Selectable`, or a sheet on a normal actor).</summary>
+        Selectable = 1,
+        /// <summary>An enemy (`my Hostile`, or `enemy type`) the player can actually see.</summary>
+        Hostile = 2,
+        /// <summary>A prop with a sheet that cannot be picked — a point-and-click hotspot / bag item.</summary>
+        Interactive = 4,
+    }
+
+    /// <summary>
+    /// The automatic cursor sources (Task 48 Part D): which cursor names the game asks for on its
+    /// own, without a sheet writing anything.
+    ///
+    /// The table exists so no genre's branch is hardcoded: an RTS wants aiming → `Attack` and a
+    /// drag → `Cross`, an adventure wants a hotspot → `Hand`, and both get it without touching C#.
+    /// The defaults follow the task's words (selectable/hotspot → `Hand`, hostile → `Attack`,
+    /// marquee → `Cross`, aiming → `Attack`) and a sheet overrides any of them with one global —
+    /// <c>set Cursor hand to "Point"</c> — or switches the whole thing off with
+    /// <c>set Cursor auto to 0</c>.
+    ///
+    /// A rule asks for a name; it never decides whether that cursor exists. The bridge only asks
+    /// for names the <see cref="CursorLibrary"/> actually has, so a scene that authors no
+    /// <c>Cursor_&lt;Name&gt;</c> actors keeps the plain OS pointer and pays no cost — which is what
+    /// makes this part optional by construction.
+    ///
+    /// Everything here is pure: no Flax types, no raycasts, no clock. The bridge answers
+    /// "what is hovered" and "is a marquee in flight" and calls these.
+    /// </summary>
+    public class CursorRules
+    {
+        /// <summary><c>set Cursor auto to 0</c> turns every automatic source off (default: on).</summary>
+        public const string AutoVariable = "Cursor auto";
+        /// <summary>Global override for <see cref="Aim"/>.</summary>
+        public const string AimVariable = "Cursor aim";
+        /// <summary>Global override for <see cref="Hand"/>.</summary>
+        public const string HandVariable = "Cursor hand";
+        /// <summary>Global override for <see cref="Attack"/>.</summary>
+        public const string AttackVariable = "Cursor attack";
+        /// <summary>Global override for <see cref="Drag"/>.</summary>
+        public const string DragVariable = "Cursor drag";
+
+        /// <summary>What an aiming mode asks for when the scene says nothing.</summary>
+        public const string DefaultAimName = "Attack";
+        /// <summary>What a hovered selectable actor or hotspot asks for by default.</summary>
+        public const string DefaultHandName = "Hand";
+        /// <summary>What a hovered hostile actor asks for by default.</summary>
+        public const string DefaultAttackName = "Attack";
+        /// <summary>What a marquee drag asks for by default.</summary>
+        public const string DefaultDragName = "Cross";
+
+        /// <summary>False when a sheet switched the automatic sources off.</summary>
+        public bool Enabled = true;
+
+        /// <summary>The cursor an armed <c>aim</c> shows.</summary>
+        public string Aim = DefaultAimName;
+
+        /// <summary>The cursor a selectable actor or an interactive hotspot shows.</summary>
+        public string Hand = DefaultHandName;
+
+        /// <summary>The cursor a visible hostile actor shows.</summary>
+        public string Attack = DefaultAttackName;
+
+        /// <summary>The cursor a marquee drag shows.</summary>
+        public string Drag = DefaultDragName;
+
+        /// <summary>The shipped table: every name as the task words it, all sources on.</summary>
+        public static CursorRules Defaults()
+        {
+            return new CursorRules();
+        }
+
+        /// <summary>
+        /// The table a scene asked for: the defaults, with each global that exists replacing one
+        /// name and <see cref="AutoVariable"/> switching the sources off. A blank override is
+        /// ignored, so <c>set Cursor hand to ""</c> cannot silently disable a rule.
+        /// </summary>
+        public static CursorRules Read(EventVariables variables)
+        {
+            var rules = new CursorRules();
+            if (variables == null)
+                return rules;
+
+            if (variables.HasGlobal(AutoVariable))
+                rules.Enabled = variables.GetGlobal(AutoVariable).AsNumber() != 0;
+            rules.Aim = ReadName(variables, AimVariable, rules.Aim);
+            rules.Hand = ReadName(variables, HandVariable, rules.Hand);
+            rules.Attack = ReadName(variables, AttackVariable, rules.Attack);
+            rules.Drag = ReadName(variables, DragVariable, rules.Drag);
+            return rules;
+        }
+
+        /// <summary>
+        /// The cursor for what the pointer is over, or null when this source asks for nothing.
+        /// A marquee in flight beats whatever is under the pointer (the pointer is dragging, not
+        /// inspecting), then a visible enemy, then an interactive hotspot, then a selectable
+        /// actor. Two flags on one actor are normal, so the order matters and lives here.
+        /// </summary>
+        public string Hover(CursorHoverKind kind, bool dragging)
+        {
+            if (!Enabled)
+                return null;
+            if (dragging)
+                return Clean(Drag);
+            if ((kind & CursorHoverKind.Hostile) != 0)
+                return Clean(Attack);
+            if ((kind & CursorHoverKind.Interactive) != 0)
+                return Clean(Hand);
+            if ((kind & CursorHoverKind.Selectable) != 0)
+                return Clean(Hand);
+            return null;
+        }
+
+        /// <summary>The cursor an armed aim asks for, or null when this source asks for nothing.</summary>
+        public string Aiming()
+        {
+            return Enabled ? Clean(Aim) : null;
+        }
+
+        /// <summary>
+        /// Classifies one hovered actor. <paramref name="hostileVisible"/> is the fog rule the
+        /// bridge already applies to picks and marquees: a hostile actor behind the shroud
+        /// contributes no flag, so unexplored ground never advertises an attack.
+        /// </summary>
+        public static CursorHoverKind KindOf(bool selectable, bool interactive, bool hostile,
+            bool hostileVisible)
+        {
+            CursorHoverKind kind = CursorHoverKind.None;
+            if (selectable)
+                kind |= CursorHoverKind.Selectable;
+            if (interactive)
+                kind |= CursorHoverKind.Interactive;
+            if (hostile && hostileVisible)
+                kind |= CursorHoverKind.Hostile;
+            return kind;
+        }
+
+        private static string ReadName(EventVariables variables, string variable, string fallback)
+        {
+            if (!variables.HasGlobal(variable))
+                return fallback;
+            string written = variables.GetGlobal(variable).AsText();
+            return string.IsNullOrWhiteSpace(written) ? fallback : written.Trim();
+        }
+
+        private static string Clean(string name)
+        {
+            return string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+        }
+    }
 }

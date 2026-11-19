@@ -457,22 +457,7 @@ namespace Game
             var target = targetActor as Actor;
             if (target == null || !target.IsActive)
                 return false;
-            if (!TryGetMouseRay(Input.MousePosition, out Ray ray))
-                return false;
-            if (!Physics.LineCastAll(ray.Position, ray.Position + ray.Direction * 10000f, out var hits, ~0u, true))
-                return false;
-
-            // Only the nearest hit counts: a hotspot behind a wall must not read as hovered.
-            PhysicsColliderActor nearest = null;
-            float nearestDistance = float.MaxValue;
-            foreach (var hit in hits)
-            {
-                if (hit.Collider != null && hit.Distance < nearestDistance)
-                {
-                    nearestDistance = hit.Distance;
-                    nearest = hit.Collider;
-                }
-            }
+            PhysicsColliderActor nearest = NearestColliderUnderMouse();
             if (nearest == null)
                 return false;
 
@@ -484,6 +469,59 @@ namespace Game
                 node = node.Parent;
             }
             return false;
+        }
+
+        /// <summary>
+        /// The scene actor directly under the pointer, or null (Task 48 Part D). One raycast for
+        /// the whole frame, unlike <see cref="IsHovered"/> which answers for one named actor: a
+        /// cursor rule has to ask "what is hovered" before it can pick a name.
+        ///
+        /// The answer is the top-level actor - the child of the scene - so a unit whose mesh
+        /// carries the collider still reads as the unit and not as its mesh. A pointer over a
+        /// <see cref="UIControl"/> answers null: the command card is not a world hotspot, and a
+        /// hover cursor over a button would compete with the button's own look. Inactive (fog-
+        /// hidden or deactivated) actors answer null too, the same rule the marquee uses.
+        /// </summary>
+        public object HoveredActor()
+        {
+            PhysicsColliderActor nearest = NearestColliderUnderMouse();
+            if (nearest == null)
+                return null;
+
+            Actor top = null;
+            Actor node = nearest;
+            while (node != null && !(node is Scene))
+            {
+                if (node is UIControl)
+                    return null;
+                top = node;
+                node = node.Parent;
+            }
+            return top != null && top.IsActive ? top : null;
+        }
+
+        /// <summary>
+        /// The nearest collider a ray from the scene camera through the mouse hits, or null.
+        /// Only the nearest hit counts: a hotspot behind a wall must not read as hovered.
+        /// </summary>
+        private static PhysicsColliderActor NearestColliderUnderMouse()
+        {
+            if (!TryGetMouseRay(Input.MousePosition, out Ray ray))
+                return null;
+            if (!Physics.LineCastAll(ray.Position, ray.Position + ray.Direction * 10000f, out var hits, ~0u, true))
+                return null;
+
+            PhysicsColliderActor nearest = null;
+            float nearestDistance = float.MaxValue;
+            foreach (var hit in hits)
+            {
+                if (hit.Collider != null && hit.Distance < nearestDistance)
+                {
+                    nearestDistance = hit.Distance;
+                    nearest = hit.Collider;
+                }
+            }
+            return nearest;
         }
 
         /// <summary>True when <paramref name="child"/> is <paramref name="root"/> or a

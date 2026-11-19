@@ -617,6 +617,67 @@ namespace Game
             // Selection boxes (Task 32 Part B) after the camera too: they are screen-space, so
             // they have to be projected with the camera this frame ends up drawing with.
             SelectionBoxesView.Update(Runtime);
+            // The pointer is screen-space as well: hovering is a raycast through this frame's
+            // camera, and aim, fog visibility and the marquee drag are all settled by now.
+            UpdateCursor();
+        }
+
+        /// <summary>
+        /// Asks the automatic cursor sources and draws the answer (Task 48 Part D). The scene's
+        /// own art decides everything: when it authors no <c>Cursor_&lt;Name&gt;</c> actor the
+        /// library holds only <c>default</c>, and this returns before spending a raycast or
+        /// touching the pointer, so a project that never mentions cursors behaves as it did
+        /// before the feature.
+        /// </summary>
+        private void UpdateCursor()
+        {
+            CursorLibrary library = Cursors.Library;
+            if (Cursors.Count <= 1)
+                return;
+
+            CursorRules rules = CursorRules.Read(Runtime.Variables);
+            string hover = null;
+            string aim = null;
+            if (rules.Enabled && Engine.HasGameViewportFocus)
+            {
+                // Over a UI control the pointer belongs to the button, not to the world under it.
+                if (_hoveredUI == null)
+                    hover = Ask(library, rules.Hover(CurrentHoverKind(), _boxDragging));
+                // An armed aim outranks the pointer's incidental state; `cancel aim`, a timeout
+                // and a landed pick all drop it, so leaving the mode restores the default even if
+                // the sheet that armed it never pops anything.
+                if (Runtime.Targeting.IsAiming)
+                    aim = Ask(library, rules.Aiming());
+            }
+            CursorView.Apply(CursorState.For(library, null, hover, aim), Cursors);
+        }
+
+        /// <summary>Only ask for a cursor the scene actually authored; a name the library does not
+        /// have would resolve to <c>default</c> with nothing to draw, so the rule stays silent.</summary>
+        private static string Ask(CursorLibrary library, string name)
+        {
+            return name != null && library.Has(name) ? name : null;
+        }
+
+        /// <summary>
+        /// What the pointer is over, in the terms the cursor table understands (Task 48 Part D).
+        /// Hostility and visibility use the same flags as right-click orders and the marquee, so a
+        /// fogged enemy is not an attack cursor on unexplored ground, and a prop that cannot be
+        /// picked reads as a hotspot rather than as a unit.
+        /// </summary>
+        private CursorHoverKind CurrentHoverKind()
+        {
+            object actor = _world.HoveredActor();
+            if (actor == null)
+                return CursorHoverKind.None;
+
+            var variables = Runtime.Variables;
+            bool hasSheet = Runtime.FindSheetFor(actor) != null;
+            bool selectable = ClickSelect.IsSelectable(variables, actor, hasSheet);
+            bool hostile = RightClickOrders.IsHostile(variables, actor);
+            bool visible = !Runtime.Fog.Enabled ||
+                           Runtime.Fog.IsVisibleTo(Runtime.Fog.LocalPlayer, actor);
+            return CursorRules.KindOf(selectable, hasSheet && !selectable, hostile, visible);
         }
 
         /// <summary>
