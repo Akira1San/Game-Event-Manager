@@ -127,45 +127,60 @@ namespace Game
             int localPlayer = runtime.Fog.LocalPlayer;
             foreach (object item in runtime.World.Actors())
             {
-                var actor = item as Actor;
-                if (actor == null || !actor || !actor.IsActive || actor is UIControl)
-                    continue;
-                bool hasSheet = runtime.FindSheetFor(actor) != null;
-                var candidate = new BoxSelectCandidate
-                {
-                    Actor = actor,
-                    Selectable = ClickSelect.IsSelectable(runtime.Variables, actor, hasSheet),
-                    Building = runtime.Construction.IsBuilding(actor),
-                    Friendly = !fog || (runtime.Fog.PlayerOf(actor) == localPlayer &&
-                                        runtime.Fog.IsVisibleTo(localPlayer, actor)),
-                };
-
-                if (camera != null)
-                {
-                    camera.ProjectPoint(actor.Position, out Float2 centre);
-                    candidate.X = centre.X;
-                    candidate.Y = centre.Y;
-                    candidate.OnScreen = camera.IsPointOnView(actor.Position);
-                    if (candidate.Building)
-                        ProjectBounds(camera, actor, candidate);
-                }
-                else
-                {
-                    // No camera (a tool scene, a test): fall back to the ground plane, so the
-                    // rectangle still means "these actors" instead of selecting nothing.
-                    candidate.X = actor.Position.X;
-                    candidate.Y = -actor.Position.Z;
-                    candidate.OnScreen = true;
-                    if (candidate.Building)
-                    {
-                        double radius = actor.BoundingSphere.Radius;
-                        candidate.AddCorner(candidate.X - radius, candidate.Y - radius);
-                        candidate.AddCorner(candidate.X + radius, candidate.Y + radius);
-                    }
-                }
-                found.Add(candidate);
+                if (TryProject(runtime, camera, item as Actor, fog, localPlayer, out BoxSelectCandidate candidate))
+                    found.Add(candidate);
             }
             return found;
+        }
+
+        /// <summary>
+        /// One actor as the marquee sees it, or false for an actor that is not a candidate at all
+        /// (null, dead, inactive, or a UIControl). This is the projection in one place so the
+        /// selection boxes (Task 32 Part B) can project just the selected actors each frame
+        /// instead of walking the whole scene, and so both draw the same rectangle for the same
+        /// actor.
+        /// </summary>
+        public static bool TryProject(EventRuntime runtime, FlaxEngine.Camera camera, Actor actor,
+            bool fog, int localPlayer, out BoxSelectCandidate candidate)
+        {
+            candidate = null;
+            if (runtime == null || actor == null || !actor || !actor.IsActive || actor is UIControl)
+                return false;
+
+            bool hasSheet = runtime.FindSheetFor(actor) != null;
+            candidate = new BoxSelectCandidate
+            {
+                Actor = actor,
+                Selectable = ClickSelect.IsSelectable(runtime.Variables, actor, hasSheet),
+                Building = runtime.Construction.IsBuilding(actor),
+                Friendly = !fog || (runtime.Fog.PlayerOf(actor) == localPlayer &&
+                                    runtime.Fog.IsVisibleTo(localPlayer, actor)),
+            };
+
+            if (camera != null)
+            {
+                camera.ProjectPoint(actor.Position, out Float2 centre);
+                candidate.X = centre.X;
+                candidate.Y = centre.Y;
+                candidate.OnScreen = camera.IsPointOnView(actor.Position);
+                if (candidate.Building)
+                    ProjectBounds(camera, actor, candidate);
+            }
+            else
+            {
+                // No camera (a tool scene, a test): fall back to the ground plane, so the
+                // rectangle still means "these actors" instead of selecting nothing.
+                candidate.X = actor.Position.X;
+                candidate.Y = -actor.Position.Z;
+                candidate.OnScreen = true;
+                if (candidate.Building)
+                {
+                    double radius = actor.BoundingSphere.Radius;
+                    candidate.AddCorner(candidate.X - radius, candidate.Y - radius);
+                    candidate.AddCorner(candidate.X + radius, candidate.Y + radius);
+                }
+            }
+            return true;
         }
 
         /// <summary>Projects the eight corners of the actor's bounds into the candidate's screen

@@ -143,6 +143,56 @@
 			"V": {}
 		},
 		{
+			"ID": "c7d24f6b9e8a4b1d95f30a2c6e84d71f",
+			"TypeName": "FlaxEngine.UIControl",
+			"ParentID": "a0e12de6c23d6c0230798297a1b3b7f3",
+			"IsActive": false,
+			"Name": "SelectionBox",
+			"Control": "Game.SelectionBoxPanel",
+			"Data": {
+	"AnchorMin": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"AnchorMax": {
+		"X": 1.0,
+		"Y": 1.0
+	},
+	"Offsets": {
+		"Left": 0.0,
+		"Right": 0.0,
+		"Top": 0.0,
+		"Bottom": 0.0
+	},
+	"Scale": {
+		"X": 1.0,
+		"Y": 1.0
+	},
+	"Pivot": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Shear": {
+		"X": 0.0,
+		"Y": 0.0
+	},
+	"Rotation": 0.0,
+	"ClipChildren": true,
+	"CullChildren": true,
+	"Enabled": true,
+	"Visible": true,
+	"AutoFocus": false,
+	"Showing": false,
+	"Border": {
+		"R": 0.45,
+		"G": 0.85,
+		"B": 1.0,
+		"A": 0.9
+	},
+	"BorderThickness": 1.5
+}
+		},
+		{
 			"ID": "5b1e7c9a4d2f43b8a6c0e9d1f7b24c83",
 			"TypeName": "FlaxEngine.UIControl",
 			"ParentID": "a0e12de6c23d6c0230798297a1b3b7f3",

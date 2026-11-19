@@ -2071,7 +2071,49 @@ content** (P0 — without this the input feature cannot be evaluated by eye at a
   tiny or distant unit still gets a visible box, clamped into the viewport. The bridge draws them
   with one reusable `SelectionPanel` control (thin border, no fill) sized/positioned per selected
   actor, or with a pooled set of four controls when several units are selected — one control per
-  actor, released when the selection changes.
+  actor, released when the selection changes. [x]
+
+#### Part B notes
+- **What shipped.** `Runtime/SelectionBoxes.cs` is the pure half: `TryBox`/`Boxes` take the same
+  `BoxSelectCandidate` list the marquee builds and return a `BoxScreenRect` per selected actor — a
+  **unit** is a square of at least `MinimumSize` (18 px) centred on its projected centre, a
+  **building** is its whole projected bounds grown by `Margin` (6 px), every box is then grown to
+  the minimum around its own centre and clamped into the viewport (a box bigger than the screen
+  clamps to the screen). A candidate that is not selectable, not the local player's, or off screen
+  gets no box, and the list keeps candidate order so two runs match.
+- **One control draws them all, not one control per actor.** `Bridge/SelectionBoxesView.cs` holds a
+  `SelectionBoxPanel` (border only, no fill, four `FillRectangle` edges per box — the one drawing
+  call `MarqueePanel` already proved) plus the per-frame refresh. The task allowed "a pooled set of
+  four controls"; one panel is strictly better here because it cannot leave an orphan control
+  behind on a selection change and it creates no scene actors, which is Part B/C's own done-when.
+  The panel overrides `ContainsPoint` to answer "no": it covers the whole canvas, so it must never
+  take a click or a hover from the world or the card.
+- **Part A's projection is now one function.** `MarqueeView.TryProject(runtime, camera, actor, fog,
+  player, out candidate)` is the extracted body of `Candidates`, used by both the marquee (whole
+  scene, once on release) and the boxes (selected actors only, every frame) — so the two visuals
+  can never disagree about where an actor projects, and the per-frame pass never scans the scene.
+- **Where it ticks.** `EventsManager.OnUpdate` calls `SelectionBoxesView.Update(Runtime)` right
+  after `MinimapView.Update`, i.e. after the tick and the camera, so boxes land on where the units
+  are drawn this frame. Because it reads the live selection each frame, marquee release,
+  control-group recall and `select all …` move the boxes with no wiring of their own, and a
+  deselect clears them in the same frame — which is what Part C asked for, so Part C is only its
+  own notes away from being closed.
+- **Scene content.** `RTS_Test_0.scene` gained a `SelectionBox` `UIControl` under `ui canvas`,
+  authored inactive, `"Control": "Game.SelectionBoxPanel"`, full-canvas anchors, border colour and
+  `BorderThickness` in `Data` — placed **before** `Marquee`, so the draw order is boxes → drag
+  rectangle → command card. A scene without the actor still selects; the log says once what to
+  author, and a wrong control type gets its own message.
+- **Checks:** 9 new pure ones (unit box size and centre, building bounds plus margin, a tiny
+  building grown to the minimum, a measured unit still boxed by its centre, the three drop rules,
+  edge clamping, an oversized box clamped to the viewport, candidate order, and the empty/no-size
+  viewport case) -> **2101 passed, 0 failed**; `dotnet build Source/Game.csproj -c
+  Editor.Windows.Debug` 0 errors (the same 11 pre-existing XML-comment warnings);
+  `Flax.Build -target=GameEditorTarget` exits 0.
+- **Not verified:** unplayed. The play-check is: click one Marine (one box), drag over both (two
+  boxes plus the drag rectangle while held), Shift-drag (old plus new), click empty ground
+  (nothing), recall a control group (boxes move with the units), and drag up-left (rectangle not
+  inverted). If the boxes are offset from the units on a scaled canvas, the same
+  `PointFromParent`-fed-screen-pixels assumption as Part A is the suspect.
 - **Part C — Keep it in sync with the selection.** `Selection.OnActorSelected`/`OnActorDeselected`
   already drive `SelectionView`; extend that to add/remove a box, and rebuild all boxes on
   `OnSelectionChanged` (control groups recall, marquee release, `select all …`). The boxes follow the

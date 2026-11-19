@@ -604,6 +604,9 @@ namespace Game
             // The minimap (Task 24) samples fog, terrain and the selection after the tick, so
             // its dots and fog match what the scene is showing this frame.
             MinimapView.Update(Runtime);
+            // Selection boxes (Task 32 Part B) after the camera too: they are screen-space, so
+            // they have to be projected with the camera this frame ends up drawing with.
+            SelectionBoxesView.Update(Runtime);
         }
 
         /// <summary>

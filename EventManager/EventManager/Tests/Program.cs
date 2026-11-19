@@ -12155,6 +12155,89 @@ finally
         "the Marquee is created before the command card, so the drag rectangle draws under it");
 }
 
+// ------------------------------------------------------------------
+// RTS Task 32 Part B: one box per selected actor
+// ------------------------------------------------------------------
+
+BoxSelectCandidate BoxCandidate(double x, double y, bool building = false,
+    bool hasBounds = false, BoxScreenRect bounds = default, bool selectable = true,
+    bool friendly = true, bool onScreen = true)
+{
+    return new BoxSelectCandidate
+    {
+        Actor = new object(),
+        X = x,
+        Y = y,
+        Building = building,
+        HasBounds = hasBounds,
+        Bounds = bounds,
+        Selectable = selectable,
+        Friendly = friendly,
+        OnScreen = onScreen,
+    };
+}
+
+{
+    var unitBoxes = SelectionBoxes.Boxes(new[] { BoxCandidate(400, 300) }, 1920, 1080);
+    double half = SelectionBoxes.MinimumSize / 2;
+    Check(unitBoxes.Count == 1 && unitBoxes[0].Width == SelectionBoxes.MinimumSize &&
+          unitBoxes[0].MinX == 400 - half && unitBoxes[0].MaxY == 300 + half,
+        "a unit's box is the minimum size, centred on its projected centre");
+
+    var building = BoxCandidate(150, 140, building: true, hasBounds: true,
+        bounds: BoxScreenRect.FromCorners(100, 100, 200, 180));
+    var buildingBoxes = SelectionBoxes.Boxes(new[] { building }, 1920, 1080);
+    Check(buildingBoxes.Count == 1 &&
+          buildingBoxes[0].MinX == 100 - SelectionBoxes.Margin &&
+          buildingBoxes[0].MaxX == 200 + SelectionBoxes.Margin &&
+          buildingBoxes[0].MinY == 100 - SelectionBoxes.Margin &&
+          buildingBoxes[0].MaxY == 180 + SelectionBoxes.Margin,
+        "a building's box is its whole projected bounds plus the margin");
+
+    var smallBuilding = BoxCandidate(101, 101, building: true, hasBounds: true,
+        bounds: BoxScreenRect.FromCorners(100, 100, 102, 102));
+    var smallBoxes = SelectionBoxes.Boxes(new[] { smallBuilding }, 1920, 1080);
+    Check(smallBoxes.Count == 1 && smallBoxes[0].Width == SelectionBoxes.MinimumSize &&
+          smallBoxes[0].MinX == 101 - half,
+        "a tiny building is grown to the minimum around its own centre");
+
+    var measuredUnit = BoxCandidate(400, 300, hasBounds: true,
+        bounds: BoxScreenRect.FromCorners(380, 280, 420, 320));
+    Check(SelectionBoxes.Boxes(new[] { measuredUnit }, 1920, 1080)[0].Width ==
+          SelectionBoxes.MinimumSize,
+        "a unit is boxed by its centre even when bounds were measured");
+
+    Check(SelectionBoxes.Boxes(new[] { BoxCandidate(400, 300, onScreen: false) }, 1920, 1080).Count == 0 &&
+          SelectionBoxes.Boxes(new[] { BoxCandidate(400, 300, selectable: false) }, 1920, 1080).Count == 0 &&
+          SelectionBoxes.Boxes(new[] { BoxCandidate(400, 300, friendly: false) }, 1920, 1080).Count == 0,
+        "an off-screen, unselectable or non-friendly actor gets no box");
+
+    var edgeBoxes = SelectionBoxes.Boxes(new[] { BoxCandidate(5, 5) }, 1920, 1080);
+    Check(edgeBoxes.Count == 1 && edgeBoxes[0].MinX == 0 && edgeBoxes[0].MinY == 0,
+        "a box at the screen edge is clamped into the viewport");
+
+    var hugeBoxes = SelectionBoxes.Boxes(new[]
+    {
+        BoxCandidate(0, 0, building: true, hasBounds: true,
+            bounds: BoxScreenRect.FromCorners(-500, -500, 5000, 5000)),
+    }, 800, 600);
+    Check(hugeBoxes.Count == 1 && hugeBoxes[0].MinX == 0 && hugeBoxes[0].MaxX == 800 &&
+          hugeBoxes[0].MinY == 0 && hugeBoxes[0].MaxY == 600,
+        "a box larger than the viewport clamps to the whole viewport");
+
+    var ordered = SelectionBoxes.Boxes(new[]
+    {
+        BoxCandidate(700, 300), BoxCandidate(100, 300), BoxCandidate(400, 300),
+    }, 1920, 1080);
+    Check(ordered.Count == 3 && ordered[0].MinX == 700 - half && ordered[1].MinX == 100 - half &&
+          ordered[2].MinX == 400 - half,
+        "the boxes follow the candidate order, so two runs match");
+
+    Check(SelectionBoxes.Boxes(Array.Empty<BoxSelectCandidate>(), 1920, 1080).Count == 0 &&
+          SelectionBoxes.Boxes(new[] { BoxCandidate(400, 300) }, 0, 1080).Count == 0,
+        "no candidates, or a viewport with no size, yields no boxes");
+}
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);
