@@ -11937,6 +11937,167 @@ finally
         Directory.Delete(saveProject, true);
 }
 
+// Task 30 Part B - every global, the scene and the level a save restores.
+{
+    var saveSource = new EventRuntime();
+    saveSource.Levels.SetOrder(new[] { "Level1", "Level2", "Level3" });
+    saveSource.SceneStarted("Level2");
+    saveSource.Tick(12.5);
+    saveSource.Variables.SetGlobal("Score", ValueBox.OfNumber(42));
+    saveSource.Variables.SetGlobal("Title", ValueBox.OfText("Run 2"));
+    saveSource.Variables.SetGlobal("HasKey", ValueBox.OfBoolean(true));
+
+    var knownScene = new SaveScene { Name = "Level2" };
+    knownScene.Additive.Add("HUD");
+    knownScene.Additive.Add("hud");     // same overlay, different case
+    knownScene.Additive.Add("Level2");  // the level is not its own overlay
+    knownScene.Additive.Add(" ");       // nothing at all
+
+    SaveData snapshot = SaveSnapshot.Capture(saveSource, knownScene);
+    Check(snapshot.Scene.Name == "Level2" && snapshot.Scene.Additive.Count == 1 &&
+          snapshot.Scene.Additive[0] == "HUD",
+        "an overlay is saved once and the level is never listed as its own overlay");
+    Check(snapshot.Scene.LevelName == "Level2" && snapshot.Scene.LevelNumber == 2,
+        "a snapshot records the run's level name and number");
+    Check(snapshot.Actors.Count == 0 && snapshot.Spawned.Count == 0,
+        "Part B saves no actors or spawned records (those are Parts C and D)");
+
+    SaveVariable FindSaved(string name)
+    {
+        foreach (SaveVariable variable in snapshot.Globals)
+            if (variable.Name == name)
+                return variable;
+        return null;
+    }
+
+    var sourceNames = new List<string>(saveSource.Variables.GlobalNames);
+    SaveVariable savedScore = FindSaved("Score");
+    SaveVariable savedTitle = FindSaved("Title");
+    SaveVariable savedKey = FindSaved("HasKey");
+    SaveVariable savedTime = FindSaved("Time Elapsed");
+    Check(snapshot.Globals.Count == sourceNames.Count &&
+          savedScore != null && savedScore.Kind == "number" && savedScore.ToBox().AsNumber() == 42 &&
+          savedTitle != null && savedTitle.Kind == "text" && savedTitle.ToBox().AsText() == "Run 2" &&
+          savedKey != null && savedKey.Kind == "boolean" && savedKey.ToBox().AsBoolean() &&
+          savedTime != null && Math.Abs(savedTime.ToBox().AsNumber() - 12.5) < 0.000001,
+        "every global is saved with its kind, including the level's clock");
+
+    var firstWriter = new EventRuntime();
+    firstWriter.Variables.SetGlobal("Zebra", ValueBox.OfNumber(1));
+    firstWriter.Variables.SetGlobal("Apple", ValueBox.OfNumber(2));
+    var secondWriter = new EventRuntime();
+    secondWriter.Variables.SetGlobal("Apple", ValueBox.OfNumber(2));
+    secondWriter.Variables.SetGlobal("Zebra", ValueBox.OfNumber(1));
+    List<SaveVariable> partBFirstOrder = SaveSnapshot.CaptureGlobals(firstWriter.Variables);
+    List<SaveVariable> partBSecondOrder = SaveSnapshot.CaptureGlobals(secondWriter.Variables);
+    Check(partBFirstOrder.Count == 2 && partBSecondOrder.Count == 2 &&
+          partBFirstOrder[0].Name == "Apple" && partBFirstOrder[1].Name == "Zebra" &&
+          partBSecondOrder[0].Name == "Apple" && partBSecondOrder[1].Name == "Zebra",
+        "globals are saved in a stable order, not the order they were written");
+
+    saveSource.Variables.WipeGlobals();
+    SaveScene fallbackScene = SaveSnapshot.CaptureScene(saveSource, "Level2", null);
+    Check(fallbackScene.LevelName == "Level2" && fallbackScene.LevelNumber == 2,
+        "the level order still answers when the level globals were wiped");
+
+    var target = new EventRuntime();
+    target.Variables.SetGlobal("Stale", ValueBox.OfNumber(99));
+    var loadedScenes = new List<string>();
+    var addedScenes = new List<string>();
+    var loadWarnings = new List<string>();
+    bool globalsAtSceneLoad = true;
+    bool partBLoaded = SaveSnapshot.Load(target, snapshot,
+        name =>
+        {
+            globalsAtSceneLoad = target.Variables.HasGlobal("Score");
+            loadedScenes.Add(name);
+            return true;
+        },
+        name => addedScenes.Add(name),
+        message => loadWarnings.Add(message));
+    Check(partBLoaded && loadedScenes.Count == 1 && loadedScenes[0] == "Level2" &&
+          addedScenes.Count == 1 && addedScenes[0] == "HUD" && loadWarnings.Count == 0,
+        "a load reloads the saved level and then its overlays");
+    Check(!globalsAtSceneLoad,
+        "the globals are written after the scene reload, not before it");
+    Check(target.Variables.GetGlobal("Score").AsNumber() == 42 &&
+          target.Variables.GetGlobal("Title").AsText() == "Run 2" &&
+          target.Variables.GetGlobal("HasKey").AsBoolean(),
+        "a load puts every saved global back with its kind");
+    Check(!target.Variables.HasGlobal("Stale"),
+        "a load replaces the globals instead of merging them");
+    Check(target.Levels.Current == "Level2" && target.Levels.Number == 2 &&
+          target.Variables.GetGlobal("LevelName").AsText() == "Level2" &&
+          target.Variables.GetGlobal("LevelNumber").AsNumber() == 2,
+        "a load puts the level name and number back");
+    target.Tick(1);
+    Check(Math.Abs(target.Variables.GetGlobal("Time Elapsed").AsNumber() - 13.5) < 0.000001,
+        "time elapsed keeps counting from where the save left it");
+
+    var untouched = new EventRuntime();
+    untouched.Variables.SetGlobal("Score", ValueBox.OfNumber(5));
+    var refusedWarnings = new List<string>();
+    bool refused = SaveSnapshot.Load(untouched, snapshot, name => false, null,
+        message => refusedWarnings.Add(message));
+    Check(!refused && untouched.Variables.GetGlobal("Score").AsNumber() == 5 &&
+          refusedWarnings.Count == 1 &&
+          refusedWarnings[0].Contains("Level2", StringComparison.Ordinal),
+        "a save whose level is missing is refused without touching the running game");
+
+    var overlayOnly = new EventRuntime();
+    var overlayWarnings = new List<string>();
+    bool overlayLoaded = SaveSnapshot.Load(overlayOnly, snapshot, name => true, null,
+        message => overlayWarnings.Add(message));
+    Check(overlayLoaded && overlayWarnings.Count == 1 &&
+          overlayOnly.Variables.GetGlobal("Score").AsNumber() == 42,
+        "a missing overlay path warns but still restores the level and its globals");
+
+    var authoritative = new SaveData();
+    authoritative.Scene.Name = "Level3";
+    authoritative.Scene.LevelName = "Level3";
+    authoritative.Scene.LevelNumber = 3;
+    authoritative.Globals.Add(SaveVariable.FromBox("LevelName", ValueBox.OfText("Level1")));
+    authoritative.Globals.Add(SaveVariable.FromBox("LevelNumber", ValueBox.OfNumber(1)));
+    var authoritativeTarget = new EventRuntime();
+    SaveSnapshot.RestoreGlobals(authoritativeTarget, authoritative);
+    Check(authoritativeTarget.Levels.Current == "Level3" && authoritativeTarget.Levels.Number == 3 &&
+          authoritativeTarget.Variables.GetGlobal("LevelName").AsText() == "Level3" &&
+          authoritativeTarget.Variables.GetGlobal("LevelNumber").AsNumber() == 3,
+        "the scene section is the level's record of truth when a global disagrees");
+
+    bool sceneAsked = false;
+    var headerTarget = new EventRuntime();
+    var headerData = new SaveData();
+    headerData.Globals.Add(SaveVariable.FromBox("Score", ValueBox.OfNumber(7)));
+    bool headerLoaded = SaveSnapshot.Load(headerTarget, headerData, name =>
+    {
+        sceneAsked = true;
+        return true;
+    });
+    Check(headerLoaded && !sceneAsked &&
+          headerTarget.Variables.GetGlobal("Score").AsNumber() == 7,
+        "a save with no scene name still restores its globals in place");
+
+    string partBProject = Path.Combine(Path.GetTempPath(), "event-manager-save-b-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        SaveFile.Write(partBProject, "slot1", snapshot);
+        SaveFileResult readBack = SaveFile.TryRead(partBProject, "slot1");
+        var fileTarget = new EventRuntime();
+        bool fileLoaded = SaveSnapshot.Load(fileTarget, readBack.Data, name => name == "Level2", name => { });
+        Check(readBack.Loaded && fileLoaded &&
+              fileTarget.Variables.GetGlobal("Score").AsNumber() == 42 &&
+              fileTarget.Variables.GetGlobal("Title").AsText() == "Run 2" &&
+              fileTarget.Levels.Current == "Level2" && fileTarget.Levels.Number == 2,
+            "a saved scene and its globals come back from the file after a reload");
+    }
+    finally
+    {
+        if (Directory.Exists(partBProject))
+            Directory.Delete(partBProject, true);
+    }
+}
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);

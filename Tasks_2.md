@@ -366,9 +366,21 @@ when me touches Checkpoint
       (scene + additive list + level, globals, per-actor transform/active/locals/bag/equipment/
       state/spawn marker, spawned prefab/scene/clone records, RNG seed); `SaveVariable` converts
       `ValueBox` values both ways. Nothing is wired to the words yet — that is Part E.
-- [ ] **Part B — Global + scene snapshot.** Persist every global, the current scene and additive
+- [x] **Part B — Global + scene snapshot.** Persist every global, the current scene and additive
       scenes, and the level name/number. Loading reloads the scene then restores variables in the
       right order.
+      *Landed:* `Runtime/SaveSnapshot.cs` owns the non-actor half of a save. `Capture` takes the
+      scene section the bridge knows — `FlaxActions.CaptureSaveScene` lists the loaded scenes in
+      load order, naming each by its asset file name so a copied scene reloads — and adds every
+      global sorted by name with number/text/boolean kinds intact, plus `LevelName`/`LevelNumber`
+      read from the globals (falling back to the level order's own state when a sheet wiped
+      them). `Load` reloads the level, puts its overlays back in order (`FlaxActions.AddSavedScene`
+      mirrors `add scene`, sheets and `when scene starts` included), and only then writes the
+      globals: a reloaded scene's own `when scene starts` and the runtime's scene-start seeding
+      would otherwise overwrite what the save restored. The globals are replaced, not merged, so
+      a variable the save never had is gone; `Levels.Resume` rebases the level clock so
+      `time elapsed` keeps counting from the save instead of restarting with the reload; and a
+      save whose level scene is missing is refused before anything changes. The words stay Part E.
 - [ ] **Part C — Per-actor snapshot.** Walk every `SheetInstance`: source name, actor name, player,
       transform, active state, all per-object variables, bag, equipment, state. Rebuild sheets by
       source name after the scene loads, then apply values.

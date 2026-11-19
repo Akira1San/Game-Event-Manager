@@ -5499,6 +5499,67 @@ namespace Game
         }
 
         /// <summary>
+        /// The scene section of a save (Task 30 Part B): the level that is playing and the scenes
+        /// added on top of it, in load order. Flax knows the loaded set; the runtime fills in the
+        /// level name and number from the globals.
+        /// </summary>
+        public static SaveScene CaptureSaveScene()
+        {
+            var scene = new SaveScene();
+            foreach (Scene loaded in Level.Scenes)
+            {
+                if (loaded == null)
+                    continue;
+                string name = SceneNameForSave(loaded);
+                if (string.IsNullOrEmpty(name))
+                    continue;
+                if (scene.Name.Length == 0)
+                    scene.Name = name;
+                else
+                    scene.Additive.Add(name);
+            }
+            return scene;
+        }
+
+        /// <summary>The name a later `load scene` can resolve: the asset's file name when the
+        /// content database knows the scene, else the scene's own root name (a copied scene keeps
+        /// the old root name).</summary>
+        private static string SceneNameForSave(Scene scene)
+        {
+            if (scene == null)
+                return "";
+            if (Content.GetAssetInfo(scene.ID, out AssetInfo info) && !string.IsNullOrEmpty(info.Path))
+                return System.IO.Path.GetFileNameWithoutExtension(info.Path);
+            return scene.Name ?? "";
+        }
+
+        /// <summary>
+        /// <c>load game</c> (Task 30 Part B): loads one saved overlay on top of the level with its
+        /// sheets attached and `when scene starts` pushed, exactly like `add scene`. Returns false
+        /// only when the scene isn't in the project; an overlay that is already loaded counts as
+        /// restored.
+        /// </summary>
+        public static bool AddSavedScene(string name)
+        {
+            EventRuntime runtime = EventsManager.Instance?.Runtime;
+            if (runtime == null)
+                return false;
+            if (!TryFindSceneId(name, out Guid id))
+            {
+                WarnOnce($"The save expects the scene \u201C{name}\u201D on top of its level, but I couldn't find it. Scenes: {SceneNames()}.");
+                return false;
+            }
+            if (SceneLoadedAs(name, id) != null)
+                return true;
+            Scene loaded = LoadSceneAdditive(id);
+            if (loaded == null)
+                return false;
+            var context = new EventContext { Runtime = runtime };
+            FinishLoadedScene(context, loaded, name, sceneStarts: true);
+            return true;
+        }
+
+        /// <summary>
         /// The scene names that make up the level order `next level` walks. Flax 1.13 has no
         /// runtime access to the editor's build list, so this is every scene the content
         /// database knows (plus raw <c>.scene</c> files), de-duplicated and sorted — a stable

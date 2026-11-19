@@ -97,6 +97,25 @@ namespace Game
         }
 
         /// <summary>
+        /// <c>load game</c> (Task 30 Part B) puts the run back on its level with the clock it was
+        /// saved at. The statistics are ordinary globals and come back beside it; only the clock
+        /// is rebased, so `time elapsed` keeps counting from the save instead of restarting with
+        /// the scene that was just reloaded.
+        /// </summary>
+        public void Resume(string levelName, int levelNumber, double elapsedSeconds, double now,
+            EventVariables variables)
+        {
+            Current = levelName ?? "";
+            Number = levelNumber;
+            double elapsed = elapsedSeconds > 0 ? elapsedSeconds : 0;
+            startedAt = now - elapsed;
+            started = true;
+            variables.SetGlobal(NameVariable, ValueBox.OfText(Current));
+            variables.SetGlobal(NumberVariable, ValueBox.OfNumber(Number));
+            variables.SetGlobal(TimeElapsedVariable, ValueBox.OfNumber(elapsed));
+        }
+
+        /// <summary>
         /// <c>set level to &lt;n&gt;</c>: records the level the run is on without loading
         /// anything. Pair it with `load scene` when the sheet should travel.
         /// </summary>

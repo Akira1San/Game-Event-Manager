@@ -1149,7 +1149,14 @@ window around a broken runtime.
   prefab/scene/clone roots, and the RNG seed. `SaveVariable` converts a `ValueBox` both ways, so
   numbers, text, booleans and never-set values keep their kind. `save stats` / `load stats`
   remain the in-memory checkpoint; `save game` / `load game` are the disk pair and belong to
-  Part E. Not saved in v1, by design: in-flight `wait` continuations, active tweens, particle
+  Part E. Loading (Part B) replaces the loaded scenes with the saved level, re-adds the overlays
+  in saved order, and only then writes the globals: a reloaded scene runs its own
+  `when scene starts` and the runtime seeds `LevelName`, `LevelNumber` and `Time Elapsed`, so
+  restoring first would be overwritten by the level just reloaded. Globals are replaced rather
+  than merged; the level clock is rebased to the saved `Time Elapsed` so it keeps counting; the
+  scene section wins over a disagreeing `LevelName` global; and a save whose level scene is
+  missing is refused before the running game is touched.
+  Not saved in v1, by design: in-flight `wait` continuations, active tweens, particle
   lifetimes, queued pushes and the current path — those restart cleanly rather than resuming
   mid-air.
 - **Project name:** "Event Manager" is a placeholder. Candidates for a real name welcome.
