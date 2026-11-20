@@ -789,10 +789,32 @@ add typing speed, portrait/speaker handling, choice numbering and a backlog.
 
 ### Parts
 
-- [ ] **Part A — Typewriter.** Reveal characters over time, respect `speed`, allow “click to skip”,
+- [x] **Part A — Typewriter.** Reveal characters over time, respect `speed`, allow “click to skip”,
       and fire `when text finishes`.
-- [ ] **Part B — Portraits and speaker.** Find the image/label on the named actor, swap the asset by
+      `Runtime/Typewriter.cs` owns the timing (`TypingSession` / `Typewriter`): a line is
+      `floor(elapsed × speed)` characters, a second `type text` into the same label replaces the
+      line still typing, and each line announces itself exactly once. `type text "<text>" into
+      <thing> speed <n>` parses to a `TypeTextNode` (the words and the speed may both be values)
+      and writes its growing prefix through `OnSetText`, so the label shows exactly what the
+      clock allows. `EventRuntime.SkipTyping()` completes every line still typing, and
+      `EventsManager` asks it first on a left click — the click skips the line instead of
+      pressing the choice underneath. `when text finishes` (plus the named `when text of
+      <thing> finishes`) is a broadcast trigger, so a Game sheet can hear any finished line.
+      23 new checks -> **2184 passed, 0 failed**; GameEditorTarget build 0 errors (pre-existing
+      XML-doc warnings only). Editor play-check pending.
+- [x] **Part B — Portraits and speaker.** Find the image/label on the named actor, swap the asset by
       name (same resolver as `play sound` / `set image`), and keep the speaker label separate.
+      `set portrait of <thing> to "<sprite>"` is a `SetPortraitNode` executed through
+      `EventRuntime.OnSetPortrait`; the bridge's `FlaxActions.SetPortrait` calls the same private
+      `SwapImageBrush` as `set image of`, so both use `LoadTexture` (the folder/extension/case-
+      ignoring index shared with the cursor art) and a miss warns once with the pictures the
+      project has. `set speaker to "<name>"` (`SetSpeakerNode`, any value) records the name in the
+      `Speaker` global and hands it to `OnSetSpeaker`, which writes only the scene's own
+      `SpeakerLabel` actor — the portrait control is never touched, and `set speaker to ""`
+      clears both. Missing actors/labels warn once and name the actor to create.
+      9 new checks -> **2193 passed, 0 failed**; GameEditorTarget build 0 errors. Editor
+      play-check (a portrait actually appearing in a scene) pending, since it needs authored
+      Image/Label actors and imported portrait textures.
 - [ ] **Part C — Choices.** Number visible choice buttons, capture the picked index, clear the
       choices on pick. Buttons remain ordinary actors so they can be styled in the editor.
 - [ ] **Part D — Backlog.** Append lines to a scrollable list (Task 34) for adventure/RPG history.

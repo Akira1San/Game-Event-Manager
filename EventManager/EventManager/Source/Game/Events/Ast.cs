@@ -100,6 +100,17 @@ namespace Game
         public bool Reveal = true;
     }
 
+    /// <summary><c>type text "&lt;text&gt;" into &lt;thing&gt; speed &lt;n&gt;</c> — reveals the
+    /// words a character at a time (Task 35 Part A). The timing lives in the runtime's
+    /// <see cref="Typewriter"/>; only the finished reveal raises `when text finishes`.</summary>
+    public class TypeTextNode : StatementNode
+    {
+        public string Target = "";
+        public ValueNode Value = new TextValue();
+        /// <summary>Characters per second; 0 or less shows the whole line at once.</summary>
+        public ValueNode Speed = new NumberValue();
+    }
+
     /// <summary><c>set button &lt;thing&gt; enabled/disabled</c>.</summary>
     public class SetButtonEnabledNode : StatementNode
     {
@@ -112,6 +123,22 @@ namespace Game
     {
         public string Thing = "";
         public string Sprite = "";
+    }
+
+    /// <summary><c>set portrait of &lt;thing&gt; to &lt;sprite&gt;</c> — swaps the portrait Image's
+    /// brush through the same sprite resolver as <c>set image</c> / <c>play sound</c>
+    /// (Task 35 Part B). The speaker is its own word, so a name never lands in the art.</summary>
+    public class SetPortraitNode : StatementNode
+    {
+        public string Thing = "";
+        public string Sprite = "";
+    }
+
+    /// <summary><c>set speaker to &lt;name&gt;</c> — records the speaker in the <c>Speaker</c>
+    /// global and writes the scene's own <c>SpeakerLabel</c> (Task 35 Part B).</summary>
+    public class SetSpeakerNode : StatementNode
+    {
+        public ValueNode Value = new TextValue();
     }
 
     /// <summary><c>set color of &lt;thing&gt; to &lt;color&gt;</c> — tints a control (e.g. an Image).</summary>

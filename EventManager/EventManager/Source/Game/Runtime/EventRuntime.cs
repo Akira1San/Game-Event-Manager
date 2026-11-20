@@ -343,10 +343,16 @@ namespace Game
         public SpellClock Spells = new SpellClock();
         /// <summary>Target-pick mode behind `aim` (Task 27 Part A).</summary>
         public TargetingManager Targeting = new TargetingManager();
+        /// <summary>Lines revealing a character at a time behind `type text` (Task 35 Part A).</summary>
+        public Typewriter Typing = new Typewriter();
 
         /// <summary>The global `my cursor` reads and `when cursor changes` watches (Task 48
         /// Part E). The bridge writes the resolved name here every frame.</summary>
         public const string CursorGlobal = "Cursor";
+
+        /// <summary>The global `set speaker to` writes (Task 35 Part B), so a backlog line or a
+        /// bind can read the current speaker without the portrait actor being involved.</summary>
+        public const string SpeakerGlobal = "Speaker";
 
         /// <summary>Cursor names a sheet pushed with <c>push cursor</c> (Task 48 Part E).</summary>
         public readonly CursorStack CursorStack = new CursorStack();
@@ -358,6 +364,8 @@ namespace Game
         public bool CursorHidden;
         /// <summary>Last tick time, so the aim timeout advances with real tick delta.</summary>
         private double lastTargetingTick;
+        /// <summary>Last tick time, so a typewriter line reveals at its own speed (Task 35).</summary>
+        private double lastTypingTick;
         /// <summary>Rolled item instances and what they added to their wearer (Task 9 E7).</summary>
         public ItemAffixes Affixes = new ItemAffixes();
         /// <summary>Level order, current level and run statistics (Task 16 Part G).</summary>
@@ -411,6 +419,11 @@ namespace Game
         public Action<EventContext, string, ValueBox, bool> OnSetProgress = (context, thing, value, reveal) => { };
         /// <summary>Move a UI Slider: the value is 0-1 or 0-100.</summary>
         public Action<EventContext, string, ValueBox> OnSetSlider = (context, thing, value) => { };
+        /// <summary>Swap a dialogue portrait's art (Task 35 Part B): the same resolver and Image
+        /// swap as <c>set image of</c>, deliberately separate from the speaker text.</summary>
+        public Action<EventContext, string, string> OnSetPortrait = (context, thing, sprite) => { };
+        /// <summary>Write the speaker's name into the scene's <c>SpeakerLabel</c> (Task 35 Part B).</summary>
+        public Action<EventContext, string> OnSetSpeaker = (context, name) => { };
 
         private readonly List<SheetInstance> sheets = new List<SheetInstance>();
         private readonly HashSet<string> warnedLines = new HashSet<string>();
@@ -525,6 +538,7 @@ namespace Game
         public void RemoveAllSheets()
         {
             sheets.Clear();
+            Typing.Clear();
             spawnSources.Clear();
             spawnKinds.Clear();
             // Cursor modes belong to the scene that set them (Task 48 Part E): a new scene starts
@@ -543,6 +557,7 @@ namespace Game
             }
             if (equipped.TryGetValue(actor, out var _))
                 equipped.Remove(actor);
+            Typing.ClearActor(actor);
             ForgetSpawned(actor);
             Fog.RemoveActor(actor);
         }
@@ -1518,6 +1533,12 @@ namespace Game
             if (cooldownDelta > 0)
                 Cooldowns.Tick(cooldownDelta > 1 ? 1 : cooldownDelta);
             lastCooldownTick = time;
+            // Typewriter lines advance before the push queues are drained, so a line that
+            // finishes this tick answers `when text finishes` in the same tick (Task 35 Part A).
+            double typingDelta = time - lastTypingTick;
+            if (typingDelta > 0)
+                AdvanceTyping(typingDelta > 1 ? 1 : typingDelta);
+            lastTypingTick = time;
             // Sounds are momentary: drop the ones older than the bus's memory before this tick's
             // actions can add new ones, so a shot fired now is heard now and not a minute later.
             Sounds.Expire(Time);
@@ -1922,6 +1943,11 @@ namespace Game
                 return descriptor.RequireName == "me"
                     ? ReferenceEquals(signal.Other, sheet.Actor)
                     : signal.Name == descriptor.RequireName;
+            // `when text finishes`: the line is broadcast, so the bare trigger answers every
+            // finished line and `when text of <thing> finishes` names one label (Task 35 Part A).
+            if (descriptor.Kind == TriggerKind.TextFinishes)
+                return descriptor.RequireName.Length == 0 ||
+                       string.Equals(signal.Name, descriptor.RequireName, StringComparison.Ordinal);
             // Number keys: `when 1 is pressed` must answer the input layer's `D1` signal (and
             // tests/manual pushes of plain `1`). A player's sheet listens only to its own keys:
             // the signal carries the owning player (0 = a key nobody bound, e.g. P or Escape),
@@ -2160,6 +2186,10 @@ namespace Game
                 {
                     OnSetText(context, setText.Target, context.Evaluate(setText.Value), setText.Reveal);
                 }
+                else if (statement is TypeTextNode typeText)
+                {
+                    ExecuteTypeText(context, typeText);
+                }
                 else if (statement is SetButtonEnabledNode setButton)
                 {
                     OnSetButtonEnabled(context, setButton.Thing, setButton.Enabled);
@@ -2167,6 +2197,19 @@ namespace Game
                 else if (statement is SetImageBrushNode setImage)
                 {
                     OnSetImageBrush(context, setImage.Thing, setImage.Sprite);
+                }
+                else if (statement is SetPortraitNode setPortrait)
+                {
+                    OnSetPortrait(context, setPortrait.Thing, setPortrait.Sprite);
+                }
+                else if (statement is SetSpeakerNode setSpeaker)
+                {
+                    // The speaker is state as well as text: the name is recorded first, so a
+                    // backlog line or a bind reading `Speaker` sees it even when the scene has
+                    // no speaker label yet (Task 35 Part B).
+                    ValueBox speaker = context.Evaluate(setSpeaker.Value);
+                    context.WriteGlobal(SpeakerGlobal, speaker);
+                    OnSetSpeaker(context, speaker.AsText());
                 }
                 else if (statement is SetControlColorNode setColor)
                 {
@@ -2372,6 +2415,71 @@ namespace Game
                     CursorHidden = false;
                     break;
             }
+        }
+
+        /// <summary>
+        /// <c>type text "…" into &lt;thing&gt; speed &lt;n&gt;</c> — Task 35 Part A. Clears the label
+        /// and lets <see cref="Typewriter"/> reveal it; a speed of 0 (or an empty line) shows it
+        /// at once and answers `when text finishes` straight away.
+        /// </summary>
+        private void ExecuteTypeText(EventContext context, TypeTextNode node)
+        {
+            string text = context.Evaluate(node.Value).AsText();
+            double speed = context.Evaluate(node.Speed).AsNumber();
+            if (speed < 0)
+                speed = 0;
+            var session = Typing.Start(context.Me, context, node.Target, text, speed);
+            if (session.Done)
+            {
+                AnnounceTyping(session);
+                return;
+            }
+            // Clear the old line before the first character arrives, so the last thing the
+            // speaker said does not sit under the new one while it types.
+            OnSetText(context, node.Target, ValueBox.OfText(""), true);
+        }
+
+        /// <summary>Advances every typing line and writes what is showing; a line that just
+        /// finished gets its full text and one `when text finishes` signal.</summary>
+        private void AdvanceTyping(double deltaSeconds)
+        {
+            foreach (var session in Typing.Tick(deltaSeconds))
+            {
+                if (session.Done && !session.Announced)
+                    AnnounceTyping(session);
+                else
+                    OnSetText(session.Context, session.Thing, ValueBox.OfText(session.Visible), true);
+            }
+        }
+
+        /// <summary>Shows a line in full and broadcasts its completion exactly once.</summary>
+        private void AnnounceTyping(TypingSession session)
+        {
+            if (session.Announced)
+                return;
+            session.Announced = true;
+            OnSetText(session.Context, session.Thing, ValueBox.OfText(session.Text), true);
+            RaisePushAll(new PushSignal
+            {
+                Kind = TriggerKind.TextFinishes,
+                Name = session.Thing,
+                Other = session.Actor,
+            });
+        }
+
+        /// <summary>
+        /// `click to skip` (Task 35 Part A): a click while a line is revealing shows the rest of
+        /// it instead of pressing whatever sits under the pointer. True when something was
+        /// skipped, so the bridge can consume the click.
+        /// </summary>
+        public bool SkipTyping()
+        {
+            var skipped = Typing.Skip();
+            if (skipped.Count == 0)
+                return false;
+            foreach (var session in skipped)
+                AnnounceTyping(session);
+            return true;
         }
 
         private void ExecuteSet(EventContext context, SetNode set)

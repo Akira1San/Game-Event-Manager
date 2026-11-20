@@ -5315,25 +5315,51 @@ namespace Game
 
         /// <summary><c>set image of &lt;thing&gt; to &lt;sprite&gt;</c>: swaps the Image control's brush to the named sprite.</summary>
         public static void SetImageBrush(string thing, string sprite)
+            => SwapImageBrush(thing, sprite, "set image of");
+
+        /// <summary><c>set portrait of &lt;thing&gt; to &lt;sprite&gt;</c> (Task 35 Part B): the same
+        /// Image swap and the same sprite resolver as <c>set image</c>, so one imported portrait
+        /// works for either word. Only the art changes — the speaker label is its own control.</summary>
+        public static void SetPortrait(string thing, string sprite)
+            => SwapImageBrush(thing, sprite, "set portrait of");
+
+        /// <summary>The one Image swap behind both words: the sprite is a loose name resolved by
+        /// <see cref="LoadTexture"/> (the index shared with <see cref="CursorView"/>), and a miss
+        /// warns once with the pictures the project actually has.</summary>
+        private static void SwapImageBrush(string thing, string sprite, string word)
         {
             if (string.IsNullOrEmpty(thing) || string.IsNullOrEmpty(sprite))
             {
-                WarnOnce("\u201Cset image of\u201D needs a thing and a sprite name — like \u201Cset image of HeartIcon to \"heart_full\"\u201D.");
+                WarnOnce($"\u201C{word}\u201D needs a thing and a sprite name — like \u201C{word} HeartIcon to \"heart_full\"\u201D.");
                 return;
             }
             var image = FindControl<FlaxEngine.GUI.Image>(thing, out UIControl ui);
             if (image == null)
             {
-                WarnOnce($"\u201Cset image of {thing} to \"{sprite}\"\u201D needs an actor with an Image on a UIControl (I couldn't find one called \u201C{thing}\u201D). Images in this scene: {ControlActorNames<FlaxEngine.GUI.Image>()}.");
+                WarnOnce($"\u201C{word} {thing} to \"{sprite}\"\u201D needs an actor with an Image on a UIControl (I couldn't find one called \u201C{thing}\u201D). Images in this scene: {ControlActorNames<FlaxEngine.GUI.Image>()}.");
                 return;
             }
             var texture = LoadTexture(sprite);
             if (texture == null)
             {
-                WarnOnce($"I couldn't find a sprite texture named \u201C{sprite}\u201D for \u201Cset image of {thing}\u201D. Imported textures: {AvailableTextureNames()}.");
+                WarnOnce($"I couldn't find a sprite texture named \u201C{sprite}\u201D for \u201C{word} {thing}\u201D. Imported textures: {AvailableTextureNames()}.");
                 return;
             }
             image.Brush = new FlaxEngine.GUI.TextureBrush { Texture = texture };
+        }
+
+        /// <summary>The scene actor <c>set speaker to</c> writes (Task 35 Part B). The portrait is
+        /// a different actor, so the name and the picture never share a control.</summary>
+        public const string SpeakerLabelActor = "SpeakerLabel";
+
+        /// <summary><c>set speaker to &lt;name&gt;</c> (Task 35 Part B): writes the scene's own
+        /// <c>SpeakerLabel</c> and leaves the portrait art alone. The runtime already recorded the
+        /// name in the <c>Speaker</c> global; an empty name clears the label.</summary>
+        public static void SetSpeaker(string name)
+        {
+            if (SetLabel(SpeakerLabelActor, name))
+                return;
+            WarnOnce($"I couldn't find the speaker's label. Create a UIControl actor named \u201C{SpeakerLabelActor}\u201D with a Label (the portrait actor is separate). Labels in this scene: {ControlActorNames<FlaxEngine.GUI.Label>()}.");
         }
 
         /// <summary><c>set color of &lt;thing&gt; to &lt;color&gt;</c>: tints a control ("r g b" or "r g b a", 0-1).</summary>

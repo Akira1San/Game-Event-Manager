@@ -50,6 +50,9 @@ namespace Game
         StateIs,
         ParticleEnd,
         TweenEnd,
+        /// <summary><c>when text finishes</c> — a <c>type text</c> line revealed its last
+        /// character (Task 35 Part A).</summary>
+        TextFinishes,
         // RTS selection (Task 18 Part A)
         Selected,
         Deselected,
@@ -471,6 +474,13 @@ namespace Game
                 return new TriggerDescriptor { Kind = TriggerKind.ParticleEnd, RequireName = trigger[1].Text };
             if (words.Length >= 3 && words[0] == "tween" && words[words.Length - 1] == "ends")
                 return new TriggerDescriptor { Kind = TriggerKind.TweenEnd, RequireName = Join(trigger, 1, words.Length - 1) };
+            // `when text finishes` — a typewriter line completed (Task 35 Part A). The signal is
+            // broadcast, so a generic trigger answers every line and `when text of DialogLabel
+            // finishes` names one label.
+            if (words.Length == 2 && words[0] == "text" && words[1] == "finishes")
+                return new TriggerDescriptor { Kind = TriggerKind.TextFinishes };
+            if (words.Length >= 4 && words[0] == "text" && words[1] == "of" && words[words.Length - 1] == "finishes")
+                return new TriggerDescriptor { Kind = TriggerKind.TextFinishes, RequireName = Join(trigger, 2, words.Length - 1) };
             if (words.Length >= 2 && (words[0] == "me" || words[0] == "other"))
                 return PronounDescriptor(trigger, ev);
             int becomesIndex = IndexOf(words, "becomes");

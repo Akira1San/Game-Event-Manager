@@ -438,6 +438,14 @@ namespace Game
                     return;
                 }
             }
+            // `type text "…" into <thing> speed <n>` — the typewriter (Task 35 Part A). Checked
+            // before the action-word table so its own statement carries the timing.
+            if (first.Text == "type" && line.Words.Count >= 2 &&
+                line.Words[1].Type == TokenType.Word && line.Words[1].Text == "text")
+            {
+                line.Statement = ParseTypeText(line);
+                return;
+            }
             if (Array.IndexOf(WordRegistry.ActionWords, first.Text) >= 0)
             {
             if (first.Text == "set")
@@ -1154,6 +1162,22 @@ namespace Game
                 CheckEndOfLine(words, idx, line.Line, $"set image of {imgNode.Thing} to <sprite>");
                 return imgNode;
             }
+            // `set portrait of <thing> to "<sprite>"` — dialogue portrait (Task 35 Part B). It goes
+            // to its own node so the sprite keeps the `set image` resolver and the speaker label
+            // stays a separate word.
+            if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "portrait")
+                return ParseSetPortrait(line);
+            // `set speaker to "<name>"` — the name goes into its own label (Task 35 Part B).
+            if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "speaker")
+            {
+                var speakerNode = new SetSpeakerNode { Line = line.Line };
+                if (words.Count < 4 || words[2].Type != TokenType.Word || words[2].Text != "to")
+                    throw new ParseException("a `set speaker` line joins the name with `to` — `set speaker to \"Innkeeper\"`", line.Line);
+                int speakerIndex = 3;
+                speakerNode.Value = ReadValue(words, ref speakerIndex, line.Line);
+                CheckEndOfLine(words, speakerIndex, line.Line, "set speaker to \"<name>\"");
+                return speakerNode;
+            }
             // `set color of <thing> to <color>`.
             if (words.Count >= 6 && words[1].Type == TokenType.Word && words[1].Text == "color" &&
                 words[2].Type == TokenType.Word && words[2].Text == "of" &&
@@ -1329,6 +1353,62 @@ namespace Game
             index++;
             node.Value = ReadValue(words, ref index, line.Line);
             CheckEndOfLine(words, index, line.Line, $"set text of {node.Target} to <value>");
+            return node;
+        }
+
+        /// <summary>
+        /// <c>set portrait of &lt;thing&gt; to "&lt;sprite&gt;"</c> — Task 35 Part B. The sprite is the
+        /// same loose name <c>set image of</c> and <c>play sound</c> take (no folder, no
+        /// extension, case ignored), resolved by the bridge's shared texture index.
+        /// </summary>
+        private StatementNode ParseSetPortrait(BodyLineNode line)
+        {
+            var words = line.Words;
+            const string shape = "set portrait of PortraitBox to \"innkeeper\"";
+            if (words.Count < 5 || words[2].Type != TokenType.Word || words[2].Text != "of" ||
+                words[3].Type != TokenType.Word)
+                throw new ParseException($"`set portrait` names the actor and then the sprite — `{shape}`", line.Line);
+            var node = new SetPortraitNode { Line = line.Line, Thing = words[3].Text };
+            int index = 4;
+            if (words[index].Type != TokenType.Word || words[index].Text != "to")
+                throw new ParseException($"a `set portrait` line joins the actor and the sprite with `to` — `{shape}`", line.Line);
+            index++;
+            if (index >= words.Count)
+                throw new ParseException($"`set portrait of {node.Thing}` needs a sprite name — `{shape}`", line.Line);
+            var value = ReadValue(words, ref index, line.Line);
+            node.Sprite = value is TextValue text ? text.Text : Values.Describe(value);
+            CheckEndOfLine(words, index, line.Line, $"set portrait of {node.Thing} to \"<sprite>\"");
+            return node;
+        }
+
+        /// <summary>
+        /// <c>type text "&lt;text&gt;" into &lt;thing&gt; speed &lt;n&gt;</c> — Task 35 Part A. The text and
+        /// the speed both take a value, so a character sheet can type a variable line at
+        /// <c>my TypeSpeed</c> as well as a quoted one.
+        /// </summary>
+        private StatementNode ParseTypeText(BodyLineNode line)
+        {
+            var words = line.Words;
+            const string shape = "type text \"Hello, traveler.\" into DialogLabel speed 30";
+            var node = new TypeTextNode { Line = line.Line };
+            int index = 2;
+            if (index >= words.Count || (words[index].Type != TokenType.Str && words[index].Type != TokenType.Word))
+                throw new ParseException($"`type text` needs the words to type — `{shape}`", line.Line);
+            node.Value = ReadValue(words, ref index, line.Line);
+            if (index >= words.Count || words[index].Type != TokenType.Word || words[index].Text != "into")
+                throw new ParseException($"a `type text` line joins the words and the label with `into` — `{shape}`", line.Line);
+            index++;
+            if (index >= words.Count || words[index].Type != TokenType.Word)
+                throw new ParseException($"after `into` comes the name of the thing to type into — `{shape}`", line.Line);
+            node.Target = words[index].Text;
+            index++;
+            if (index >= words.Count || words[index].Type != TokenType.Word || words[index].Text != "speed")
+                throw new ParseException($"`type text` needs a speed after the label, in characters per second — `{shape}`", line.Line);
+            index++;
+            if (index >= words.Count)
+                throw new ParseException($"after `speed` comes a number, like `{shape}`", line.Line);
+            node.Speed = ReadValue(words, ref index, line.Line);
+            CheckEndOfLine(words, index, line.Line, $"type text \"<text>\" into {node.Target} speed <n>");
             return node;
         }
 

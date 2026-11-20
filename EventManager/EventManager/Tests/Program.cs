@@ -12864,6 +12864,208 @@ Check(cursorChangesTrigger.Kind == TriggerKind.WatchChanges &&
       cursorChangesTrigger.WatchName == EventRuntime.CursorGlobal,
     "`when cursor changes` watches the cursor global the bridge keeps in sync");
 
+// ------------------------------------------------------------------
+// Task 35 Part A: the typewriter
+// ------------------------------------------------------------------
+
+var typeTextSpec = parser.Parse("when NPC is clicked\n  type text \"Hello, traveler.\" into DialogLabel speed 30\n");
+var typeTextParsed = typeTextSpec.Events[0].Body[0].Statement as TypeTextNode;
+Check(typeTextParsed != null && typeTextParsed.Target == "DialogLabel" &&
+      typeTextParsed.Value is TextValue typedWords && typedWords.Text == "Hello, traveler." &&
+      typeTextParsed.Speed is NumberValue typedSpeed && Math.Abs(typedSpeed.Value - 30) < 0.0001,
+    "`type text \"…\" into DialogLabel speed 30` parses to a TypeTextNode");
+
+var typedValueSpec = parser.Parse("when NPC is clicked\n  type text my Line into DialogLabel speed my TypeSpeed\n");
+var typedValueParsed = typedValueSpec.Events[0].Body[0].Statement as TypeTextNode;
+Check(typedValueParsed != null && typedValueParsed.Value is VariableValue typedLine &&
+      typedLine.Name == "Line" && typedValueParsed.Speed is VariableValue typedLineSpeed &&
+      typedLineSpeed.Name == "TypeSpeed",
+    "`type text my Line into DialogLabel speed my TypeSpeed` takes the words and the speed from variables");
+
+ExpectParseError("when NPC is clicked\n  type text \"hi\" DialogLabel speed 30\n",
+    "`into`", "`type text` without `into` is a friendly error");
+ExpectParseError("when NPC is clicked\n  type text \"hi\" into\n",
+    "after `into`", "`type text` without a label is a friendly error");
+ExpectParseError("when NPC is clicked\n  type text \"hi\" into DialogLabel\n",
+    "speed", "`type text` without a speed is a friendly error");
+
+var textFinishDesc = TriggerClassifier.Classify(parser.Parse("when text finishes\n  set Done to 1\n").Events[0]);
+Check(textFinishDesc.Kind == TriggerKind.TextFinishes, "`when text finishes` classifies to TextFinishes");
+var textOfFinishDesc = TriggerClassifier.Classify(parser.Parse("when text of DialogLabel finishes\n  set Done to 1\n").Events[0]);
+Check(textOfFinishDesc.Kind == TriggerKind.TextFinishes && textOfFinishDesc.RequireName == "DialogLabel",
+    "`when text of DialogLabel finishes` names one label");
+
+var typingWorld = new FakeWorld();
+var typingEngine = FreshEngine(typingWorld);
+var typingNpc = new FakeActor("NPC");
+var typedLabels = new Dictionary<string, string>();
+typingEngine.OnSetText = (context, thing, value, reveal) => typedLabels[thing] = value.AsText();
+typingEngine.AddSheet(typingNpc, parser.Parse(@"
+when game starts
+  type text ""Hello!"" into DialogLabel speed 10
+
+when text finishes
+  set Finishes to Finishes + 1
+"));
+typingEngine.SessionStarted();
+typingEngine.Tick(0);
+Check(typedLabels.ContainsKey("DialogLabel") && typedLabels["DialogLabel"] == "",
+    "`type text` clears the label while the first character is still to come");
+typingEngine.Tick(0.2);
+Check(typedLabels["DialogLabel"] == "He",
+    $"the line reveals at its speed (after 0.2 s at 10/s: \"He\", got \"{typedLabels["DialogLabel"]}\")");
+typingEngine.Tick(0.4);
+Check(typedLabels["DialogLabel"] == "Hell",
+    $"the reveal keeps pace with the clock (after 0.4 s: \"Hell\", got \"{typedLabels["DialogLabel"]}\")");
+Check(typingEngine.Variables.GetGlobal("Finishes").Kind == ValueKind.None,
+    "a line that is still typed has not finished yet");
+typingEngine.Tick(0.6);
+Check(typedLabels["DialogLabel"] == "Hello!" && typingEngine.Variables.GetGlobal("Finishes").AsNumber() == 1,
+    "the finished line shows in full and `when text finishes` fires once");
+typingEngine.Tick(1);
+Check(typingEngine.Variables.GetGlobal("Finishes").AsNumber() == 1,
+    "`when text finishes` does not fire again on later ticks");
+
+var skipWorld = new FakeWorld();
+var skipEngine = FreshEngine(skipWorld);
+var skipNpc = new FakeActor("NPC2");
+string skipText = "";
+skipEngine.OnSetText = (context, thing, value, reveal) => skipText = value.AsText();
+skipEngine.AddSheet(skipNpc, parser.Parse(@"
+when game starts
+  type text ""Safe travels."" into DialogLabel speed 5
+
+when text finishes
+  set Finishes to Finishes + 1
+"));
+skipEngine.SessionStarted();
+skipEngine.Tick(0);
+skipEngine.Tick(0.2);
+Check(skipText == "S", $"the line is mid-reveal before the skip (got \"{skipText}\")");
+Check(skipEngine.SkipTyping(), "`click to skip` reports that it had something to skip");
+Check(skipText == "Safe travels.", "`click to skip` shows the rest of the line at once");
+skipEngine.Tick(0.1);
+Check(skipEngine.Variables.GetGlobal("Finishes").AsNumber() == 1,
+    "a skipped line answers `when text finishes` exactly once");
+Check(!skipEngine.SkipTyping(), "a second click is not consumed by the typewriter");
+skipEngine.Tick(2);
+Check(skipEngine.Variables.GetGlobal("Finishes").AsNumber() == 1 && skipText == "Safe travels.",
+    "a skipped line never finishes twice and keeps its full text");
+
+var instantWorld = new FakeWorld();
+var instantEngine = FreshEngine(instantWorld);
+var instantNpc = new FakeActor("NPC3");
+string instantText = "";
+instantEngine.OnSetText = (context, thing, value, reveal) => instantText = value.AsText();
+instantEngine.AddSheet(instantNpc, parser.Parse("when game starts\n  type text \"Hi\" into DialogLabel speed 0\n\nwhen text finishes\n  set Finishes to Finishes + 1\n"));
+instantEngine.SessionStarted();
+instantEngine.Tick(0);
+Check(instantText == "Hi" && instantEngine.Variables.GetGlobal("Finishes").AsNumber() == 1,
+    "speed 0 shows the whole line and finishes in the same tick");
+
+var namedWorld = new FakeWorld();
+var namedEngine = FreshEngine(namedWorld);
+var namedNpc = new FakeActor("NPC4");
+namedEngine.OnSetText = (context, thing, value, reveal) => { };
+namedEngine.AddSheet(namedNpc, parser.Parse(@"
+when game starts
+  type text ""AB"" into DialogLabel speed 10
+  type text ""CD"" into NameLabel speed 10
+
+when text of NameLabel finishes
+  set Named to Named + 1
+"));
+namedEngine.SessionStarted();
+namedEngine.Tick(0);
+namedEngine.Tick(0.5);
+Check(namedEngine.Variables.GetGlobal("Named").AsNumber() == 1,
+    "`when text of NameLabel finishes` answers that label's line once and ignores another label's");
+
+var replaceWorld = new FakeWorld();
+var replaceEngine = FreshEngine(replaceWorld);
+var replaceNpc = new FakeActor("NPC5");
+string replaceText = "";
+replaceEngine.OnSetText = (context, thing, value, reveal) => replaceText = value.AsText();
+replaceEngine.AddSheet(replaceNpc, parser.Parse(@"
+when game starts
+  type text ""First line"" into DialogLabel speed 10
+  type text ""Second"" into DialogLabel speed 10
+
+when text finishes
+  set Finishes to Finishes + 1
+"));
+replaceEngine.SessionStarted();
+replaceEngine.Tick(0);
+replaceEngine.Tick(0.2);
+Check(replaceText == "Se", $"a second `type text` into the same label replaces the line (got \"{replaceText}\")");
+replaceEngine.Tick(0.6);
+Check(replaceText == "Second" && replaceEngine.Variables.GetGlobal("Finishes").AsNumber() == 1,
+    "only the replacing line finishes, and only once");
+
+// ------------------------------------------------------------------
+// Task 35 Part B: portraits and the speaker label
+// ------------------------------------------------------------------
+
+var portraitSpec = parser.Parse("when NPC is clicked\n  set portrait of PortraitBox to \"innkeeper\"\n");
+var portraitNode = portraitSpec.Events[0].Body[0].Statement as SetPortraitNode;
+Check(portraitNode != null && portraitNode.Thing == "PortraitBox" && portraitNode.Sprite == "innkeeper",
+    "`set portrait of PortraitBox to \"innkeeper\"` parses to a SetPortraitNode");
+
+var speakerSpec = parser.Parse("when NPC is clicked\n  set speaker to \"Innkeeper\"\n");
+var speakerNode = speakerSpec.Events[0].Body[0].Statement as SetSpeakerNode;
+Check(speakerNode != null && speakerNode.Value is TextValue speakerWords && speakerWords.Text == "Innkeeper",
+    "`set speaker to \"Innkeeper\"` parses to a SetSpeakerNode");
+
+var speakerVarSpec = parser.Parse("when NPC is clicked\n  set speaker to my SpeakerName\n");
+Check(speakerVarSpec.Events[0].Body[0].Statement is SetSpeakerNode speakerVarNode &&
+      speakerVarNode.Value is VariableValue speakerName && speakerName.Name == "SpeakerName" &&
+      speakerName.Owner == "my",
+    "`set speaker to my SpeakerName` takes the name from a variable");
+
+ExpectParseError("when NPC is clicked\n  set portrait of PortraitBox\n",
+    "sprite", "`set portrait of` without a sprite is a friendly error");
+ExpectParseError("when NPC is clicked\n  set speaker \"Innkeeper\"\n",
+    "`to`", "`set speaker` without `to` is a friendly error");
+
+var dialogueWorld = new FakeWorld();
+var dialogueEngine = FreshEngine(dialogueWorld);
+var dialogueNpc = new FakeActor("NPC");
+string speakerShown = "(none)";
+string portraitThing = "(none)";
+string portraitShown = "(none)";
+int dialogueTextWrites = 0;
+dialogueEngine.OnSetText = (context, thing, value, reveal) => dialogueTextWrites++;
+dialogueEngine.OnSetSpeaker = (context, name) => speakerShown = name;
+dialogueEngine.OnSetPortrait = (context, thing, sprite) =>
+{
+    portraitThing = thing;
+    portraitShown = sprite;
+};
+dialogueEngine.AddSheet(dialogueNpc, parser.Parse(@"
+when game starts
+  set speaker to ""Innkeeper""
+  set portrait of PortraitBox to ""innkeeper""
+"));
+dialogueEngine.SessionStarted();
+dialogueEngine.Tick(0);
+Check(dialogueEngine.Variables.GetGlobal("Speaker").AsText() == "Innkeeper" && speakerShown == "Innkeeper",
+    "`set speaker` records the name in the `Speaker` global and hands it to the speaker label");
+Check(portraitThing == "PortraitBox" && portraitShown == "innkeeper",
+    "`set portrait` swaps the named actor's sprite through the bridge");
+Check(dialogueTextWrites == 0,
+    "neither portrait nor speaker writes the dialogue text, so a typed line keeps its place");
+
+var clearSpeakerWorld = new FakeWorld();
+var clearSpeakerEngine = FreshEngine(clearSpeakerWorld);
+var clearSpeakerNpc = new FakeActor("NPC2");
+string clearedSpeaker = "(untouched)";
+clearSpeakerEngine.OnSetSpeaker = (context, name) => clearedSpeaker = name;
+clearSpeakerEngine.AddSheet(clearSpeakerNpc, parser.Parse("when game starts\n  set speaker to \"\"\n"));
+clearSpeakerEngine.SessionStarted();
+clearSpeakerEngine.Tick(0);
+Check(clearedSpeaker == "" && clearSpeakerEngine.Variables.GetGlobal("Speaker").AsText() == "",
+    "`set speaker to \"\"` clears the label and the global");
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);

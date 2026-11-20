@@ -170,6 +170,12 @@ namespace Game
                 FlaxActions.SetButtonEnabled(thing, enabled);
             Runtime.OnSetImageBrush = (context, thing, sprite) =>
                 FlaxActions.SetImageBrush(thing, sprite);
+            // Dialogue portraits and the speaker name (Task 35 Part B): the same Image swap as
+            // `set image`, written to the scene's SpeakerLabel for the name.
+            Runtime.OnSetPortrait = (context, thing, sprite) =>
+                FlaxActions.SetPortrait(thing, sprite);
+            Runtime.OnSetSpeaker = (context, name) =>
+                FlaxActions.SetSpeaker(name);
             Runtime.OnSetControlColor = (context, thing, color) =>
                 FlaxActions.SetControlColor(thing, color);
             Runtime.OnSetProgress = (context, thing, value, reveal) =>
@@ -990,21 +996,27 @@ namespace Game
             bool leftMouseDown = Input.GetMouseButtonDown(MouseButton.Left);
             if (leftMouseDown && !_leftMouseDownLastFrame)
             {
-                // While aiming, a left click resolves the pick (Task 27 Part A). A landed pick
-                // consumes the click; a UI click or an out-of-range pick is ignored and the
-                // click still runs its ordinary path.
-                if (!TryAimPick(mousePos))
+                // A click while a `type text` line is still revealing shows the rest of it
+                // (Task 35 Part A) instead of pressing the button underneath, so the first
+                // click skips and the second one picks a choice.
+                if (!Runtime.SkipTyping())
                 {
-                    bool tookClick = HandleMouseClick(mousePos, screenCenter, TriggerKind.Clicked,
-                        out _, out _);
-                    var clickWorld = RaycastToWorld(mousePos);
-                    if (clickWorld.HasValue)
-                        FlaxActions.LastClickPosition = clickWorld.Value;
-                    // Box select (Task 29 Part B) only starts on bare ground: a press that landed
-                    // on a unit, a building or a UIControl keeps its Part A behaviour and can
-                    // never turn into a drag.
-                    if (!tookClick)
-                        BeginBoxSelect(mousePos);
+                    // While aiming, a left click resolves the pick (Task 27 Part A). A landed pick
+                    // consumes the click; a UI click or an out-of-range pick is ignored and the
+                    // click still runs its ordinary path.
+                    if (!TryAimPick(mousePos))
+                    {
+                        bool tookClick = HandleMouseClick(mousePos, screenCenter, TriggerKind.Clicked,
+                            out _, out _);
+                        var clickWorld = RaycastToWorld(mousePos);
+                        if (clickWorld.HasValue)
+                            FlaxActions.LastClickPosition = clickWorld.Value;
+                        // Box select (Task 29 Part B) only starts on bare ground: a press that landed
+                        // on a unit, a building or a UIControl keeps its Part A behaviour and can
+                        // never turn into a drag.
+                        if (!tookClick)
+                            BeginBoxSelect(mousePos);
+                    }
                 }
             }
 
