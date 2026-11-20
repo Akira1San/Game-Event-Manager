@@ -404,8 +404,27 @@ when me touches Checkpoint
       body) before writing orientation and scale, and `ApplySaveActive` restores the flag.
       `SaveSnapshot.Load` now restores globals, then actor records, in that order. The words stay
       Part E.
-- [ ] **Part D — Spawned actors.** Recreate prefab/scene/clone instances recorded in the save, using
+- [x] **Part D — Spawned actors.** Recreate prefab/scene/clone instances recorded in the save, using
       the existing spawn naming and `AttachSpawnedTree` path, then restore their sheet state.
+      *Landed:* `Runtime/SaveSpawns.cs` captures one `SaveSpawned` per spawned **root** — never a
+      scene child — sorted by actor name. The kind is recorded when the spawn happens
+      (`EventRuntime.MarkSpawnedRoot`), not guessed at save time: `spawn prefab` marks `prefab`,
+      `spawn <template>` and `place` mark `clone`, while `spawn scene` adds a whole tree the scene
+      section already restores, so this build writes no `scene` records. `MarkSpawned` alone (a
+      source with no root mark, e.g. a prefab child or a scene-instanced tree) never becomes a
+      record, and `RemoveActorSheet` / a scene reload forget the markers. A record keeps the source
+      word exactly as written, the spawned root's actor name (suffix included), its parent actor
+      name, transform and active flag. A load recreates prefabs first, then clones (a clone's
+      template may be a prefab root the same save recreates), applies the saved name **verbatim**
+      (actor records are keyed by it, and the spawn naming already made it unique), attaches the
+      sheet tree through `EventsManager.AttachSpawnedTree` / `AttachSpawnedActor`, and only then
+      parents every root and writes transforms and active flags — after parenting, so a parent
+      cannot move a restored child. `SaveSnapshot.Load` recreates the spawns before the actor
+      records, so `findActor` can see the recreated roots. Bridge helpers: `CaptureSaveParent`
+      (empty for a scene parent), `CreateSavedSpawned`, `FinishSavedSpawned`, `SetSaveParent`. A
+      missing source or parent is warned about and the root is skipped (or left at the scene root),
+      while an unknown kind is skipped; `scene` records are left to Part B's scene section. The
+      words stay Part E.
 - [ ] **Part E — Slots, autosave, deletion, errors.** Default slot, named slots, autosave, delete,
       corrupt-file warning, version-mismatch refusal with a friendly message, and a “save from a
       global sheet” path.

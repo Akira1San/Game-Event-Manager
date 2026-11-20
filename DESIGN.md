@@ -1173,6 +1173,24 @@ window around a broken runtime.
   `CaptureSaveActive` read the world transform and flag, `ApplySaveTransform` warps through
   `TeleportSubject` (cancelling moves and stopping a dynamic body) before writing orientation and
   scale, and `ApplySaveActive` restores the flag.
+  Spawned roots (Part D, decided): only a spawned **root** is recorded — a prefab or clone brings
+  its own children back, and a spawned/added scene is already restored with its whole tree by the
+  scene section. The kind is stamped at spawn time through `EventRuntime.MarkSpawnedRoot`
+  (`prefab` for `spawn prefab`, `clone` for `spawn <template>` and `place`), never inferred at
+  save time; a bare `MarkSpawned` source (a prefab child, a scene-instanced tree) is not a root.
+  A record carries the source word exactly as written, the root's actor name including the spawn
+  suffix, parent actor name (`CaptureSaveParent` reports "" for a scene parent), transform and
+  active flag. The load recreates prefabs first, then clones — a clone's template may be a prefab
+  root the same save recreates — writes the saved name verbatim (the actor records are keyed by it
+  and spawn naming already made it unique, so `UniqueInstanceName` is not re-run), attaches the
+  sheet tree (`AttachSpawnedTree` for a prefab, `AttachSpawnedActor` for a clone), and only then
+  parents every root and writes transforms and active flags, so parenting cannot move a restored
+  child afterwards. `SaveSnapshot.Load` runs this before the actor records, so `findActor` can find
+  the recreated roots. A missing source or parent is a warning (the root is skipped or left at the
+  scene root); a `scene` record is skipped because Part B already re-adds it, and an unknown kind
+  is skipped with a warning. Transient audio/effect actors and placed/scene children are not
+  separate records, and duplicate child names across prefab instances remain the existing runtime
+  ambiguity.
   Not saved in v1, by design: in-flight `wait` continuations, active tweens, particle
   lifetimes, queued pushes and the current path — those restart cleanly rather than resuming
   mid-air.

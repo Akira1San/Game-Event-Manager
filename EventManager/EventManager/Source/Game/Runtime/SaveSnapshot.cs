@@ -4,27 +4,30 @@ using System.Collections.Generic;
 namespace Game
 {
     /// <summary>
-    /// The global, scene and actor half of a save (Task 30 Parts B and C). Part D adds the
-    /// spawned records; this file owns everything a run knows without recreating an object —
-    /// every global, the scene that was playing, its additive overlays, the level's place in
-    /// the run, and the record of every sheet standing in it (see <see cref="SaveActors"/>).
+    /// The global, scene, actor and spawned half of a save (Task 30 Parts B–D). It owns
+    /// everything a run knows without recreating an object — every global, the scene that was
+    /// playing, its additive overlays, the level's place in the run, the record of every sheet
+    /// standing in it (<see cref="SaveActors"/>) and the prefab/clone roots that have to come back
+    /// first (<see cref="SaveSpawns"/>).
     ///
     /// The order is the point. Reloading a scene runs that scene's <c>when scene starts</c> code,
     /// which may write globals and reset sheet state, and the runtime's own scene-start pass
     /// seeds <c>LevelName</c>, <c>LevelNumber</c> and <c>Time Elapsed</c>. A load therefore
-    /// reloads every scene first, writes the saved globals next, and applies the actor records
-    /// last; restored first, they would be overwritten by the level that was just reloaded.
+    /// reloads every scene first, writes the saved globals next, recreates the spawned roots, and
+    /// applies the actor records last; restored first, they would be overwritten by the level
+    /// that was just reloaded.
     /// </summary>
     public static class SaveSnapshot
     {
         /// <summary>
         /// The save for the running game: the scene section the caller filled in (the bridge is
-        /// the one that knows which scenes are loaded), every global, and every real actor sheet.
-        /// Spawned records and the RNG seed stay empty until Part D and Task 39 fill them.
+        /// the one that knows which scenes are loaded), every global, every real actor sheet, and
+        /// every prefab/clone root. The RNG seed stays empty until Task 39 fills it.
         /// </summary>
         public static SaveData Capture(EventRuntime runtime, SaveScene scene,
             Func<object, SaveTransform> readTransform = null,
-            Func<object, bool> readActive = null)
+            Func<object, bool> readActive = null,
+            Func<object, string> readParent = null)
         {
             if (runtime == null)
                 throw new ArgumentNullException(nameof(runtime));
@@ -32,6 +35,7 @@ namespace Game
             data.Scene = CaptureScene(runtime, scene?.Name, scene?.Additive);
             data.Globals.AddRange(CaptureGlobals(runtime.Variables));
             data.Actors.AddRange(SaveActors.Capture(runtime, readTransform, readActive));
+            data.Spawned.AddRange(SaveSpawns.Capture(runtime, readTransform, readActive, readParent));
             return data;
         }
 
@@ -88,7 +92,10 @@ namespace Game
             Func<string, object> findActor = null,
             Func<string, ProgramFile> programForSource = null,
             Action<object, SaveTransform> applyTransform = null,
-            Action<object, bool> applyActive = null)
+            Action<object, bool> applyActive = null,
+            Func<SaveSpawned, object> createSpawn = null,
+            Action<object, SaveSpawned> finishSpawn = null,
+            Action<object, object> setParent = null)
         {
             if (runtime == null)
                 throw new ArgumentNullException(nameof(runtime));
@@ -120,8 +127,33 @@ namespace Game
             }
 
             RestoreGlobals(runtime, data);
+            // Spawned roots have to exist before the actor records look them up by name.
+            RestoreSpawns(runtime, data, createSpawn, finishSpawn, setParent,
+                applyTransform, applyActive, findActor, warn);
             RestoreActors(runtime, data, findActor, programForSource, applyTransform, applyActive, warn);
             return true;
+        }
+
+        /// <summary>
+        /// Recreates the save's prefab and clone roots before the per-actor records are applied
+        /// (Task 30 Part D). The bridge supplies the engine factory and the naming/attachment
+        /// step; scene-kind records are left to the scene section.
+        /// </summary>
+        public static SaveSpawns.Result RestoreSpawns(EventRuntime runtime, SaveData data,
+            Func<SaveSpawned, object> create = null,
+            Action<object, SaveSpawned> finish = null,
+            Action<object, object> setParent = null,
+            Action<object, SaveTransform> applyTransform = null,
+            Action<object, bool> applyActive = null,
+            Func<string, object> findActor = null,
+            Action<string> warn = null)
+        {
+            if (runtime == null)
+                throw new ArgumentNullException(nameof(runtime));
+            if (data == null)
+                throw new ArgumentNullException(nameof(data));
+            return SaveSpawns.Restore(runtime, data, create, finish, setParent,
+                applyTransform, applyActive, findActor, warn);
         }
 
         /// <summary>

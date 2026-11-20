@@ -416,6 +416,12 @@ namespace Game
         private readonly HashSet<string> warnedLines = new HashSet<string>();
         /// <summary>actor -> the prefab / scene / template that spawned it (`my spawnedFrom`).</summary>
         private readonly Dictionary<object, string> spawnSources = new Dictionary<object, string>();
+        /// <summary>
+        /// actor -> <c>prefab</c> / <c>scene</c> / <c>clone</c> for a spawned root (Task 30 Part D).
+        /// Only a root is recorded here: a scene's whole tree is restored through the scene
+        /// section, and a prefab's children come back with the prefab.
+        /// </summary>
+        private readonly Dictionary<object, string> spawnKinds = new Dictionary<object, string>();
         private readonly Dictionary<object, Dictionary<string, int>> bags = new Dictionary<object, Dictionary<string, int>>();
         /// <summary>
         /// owner -> item name -> the actors that were put in the bag, in pickup order (Task 9 E7).
@@ -520,6 +526,7 @@ namespace Game
         {
             sheets.Clear();
             spawnSources.Clear();
+            spawnKinds.Clear();
             // Cursor modes belong to the scene that set them (Task 48 Part E): a new scene starts
             // on the default pointer instead of inheriting a `hide cursor` from the last one.
             CursorStack.Clear();
@@ -536,7 +543,7 @@ namespace Game
             }
             if (equipped.TryGetValue(actor, out var _))
                 equipped.Remove(actor);
-            spawnSources.Remove(actor);
+            ForgetSpawned(actor);
             Fog.RemoveActor(actor);
         }
 
@@ -921,6 +928,50 @@ namespace Game
             if (actor == null || string.IsNullOrEmpty(source))
                 return;
             spawnSources[actor] = source;
+        }
+
+        /// <summary>
+        /// Marks a spawned root and what kind of thing made it (Task 30 Part D). The source is
+        /// still <c>my spawnedFrom</c>; the kind is what a save uses to recreate it — a prefab is
+        /// spawned from its asset, a clone from its template actor, and a scene is already covered
+        /// by the scene section. Children are not roots: a prefab's or scene's tree comes back with
+        /// its root.
+        /// </summary>
+        public void MarkSpawnedRoot(object actor, string source, string kind)
+        {
+            if (actor == null || string.IsNullOrEmpty(source) || string.IsNullOrEmpty(kind))
+                return;
+            MarkSpawned(actor, source);
+            spawnKinds[actor] = kind.Trim().ToLowerInvariant();
+        }
+
+        /// <summary>The spawn kind recorded for a root, or "" for an actor that was not a root.</summary>
+        public string SpawnKindOf(object actor)
+        {
+            if (actor == null)
+                return "";
+            return spawnKinds.TryGetValue(actor, out string kind) ? kind : "";
+        }
+
+        /// <summary>Every actor currently marked as a spawned root, in no particular order.</summary>
+        public IReadOnlyList<object> SpawnedRoots()
+        {
+            var roots = new List<object>();
+            foreach (var pair in spawnKinds)
+            {
+                if (pair.Key != null)
+                    roots.Add(pair.Key);
+            }
+            return roots;
+        }
+
+        /// <summary>Forgets both spawn markers for an actor that left the scene.</summary>
+        public void ForgetSpawned(object actor)
+        {
+            if (actor == null)
+                return;
+            spawnSources.Remove(actor);
+            spawnKinds.Remove(actor);
         }
 
         /// <summary>The prefab / scene / template that spawned this actor, or "" for an

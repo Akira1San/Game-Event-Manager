@@ -3260,8 +3260,9 @@ namespace Game
             }
             Level.SpawnActor(clone);
             // `my spawnedFrom` names the template, and the sheet fallback can use it when a
-            // cloned actor's own name has no matching .events file.
-            context.Runtime.MarkSpawned(clone, templateName);
+            // cloned actor's own name has no matching .events file. The kind lets a save clone
+            // this actor again instead of treating it as authored into the scene (Task 30 D).
+            context.Runtime.MarkSpawnedRoot(clone, templateName, SaveSpawned.KindClone);
             ApplyRally(context, spawnAt, clone);
             return clone;
         }
@@ -3302,6 +3303,7 @@ namespace Game
             }
 
             Level.SpawnActor(clone);
+            context.Runtime.MarkSpawnedRoot(clone, spec.Thing, SaveSpawned.KindClone);
             EventsManager.Instance?.AttachSpawnedActor(clone);
             // Terrain (Task 22 Part B): buildings only stand on ground their own type crosses —
             // checked after the clone's sheet ran, so `set my unit type to "sea"` on that sheet
@@ -4330,7 +4332,7 @@ namespace Game
         /// then give the root a name that does not collide with another spawn.</summary>
         private static void SpawnedInstance(EventContext context, Actor instance, string source)
         {
-            context.Runtime.MarkSpawned(instance, source);
+            context.Runtime.MarkSpawnedRoot(instance, source, SaveSpawned.KindPrefab);
             EventsManager.Instance?.AttachSpawnedTree(instance);
             UniqueInstanceName(context, instance);
         }
@@ -5624,6 +5626,77 @@ namespace Game
         {
             if (actor is Actor subject)
                 subject.IsActive = active;
+        }
+
+        /// <summary>
+        /// The parent actor's name for a spawned root, or "" when it sits at the scene root
+        /// (Task 30 Part D). Flax makes every scene an actor at the top of its tree, so a parent
+        /// that is a scene means "no parent"; only a real actor parent is worth saving.
+        /// </summary>
+        public static string CaptureSaveParent(object actor)
+        {
+            if (actor is not Actor subject)
+                return "";
+            Actor parent = subject.Parent;
+            if (parent == null || parent is Scene)
+                return "";
+            return parent.Name ?? "";
+        }
+
+        /// <summary>
+        /// The engine half of one spawned record (Task 30 Part D): loads the prefab asset or
+        /// clones the template actor and returns the new root, or null when the source is gone.
+        /// The saved transform is not written here — <see cref="SaveSpawns.Restore"/> does that
+        /// after every root exists and has its parent, so parenting cannot move it afterwards.
+        /// </summary>
+        public static object CreateSavedSpawned(SaveSpawned saved)
+        {
+            if (saved == null)
+                return null;
+            string kind = (saved.Kind ?? "").Trim().ToLowerInvariant();
+            if (kind == SaveSpawned.KindPrefab)
+            {
+                Prefab prefab = LoadPrefabAsset(saved.Source);
+                if (prefab == null)
+                    return null;
+                return PrefabManager.SpawnPrefab(prefab, Vector3.Zero, Quaternion.Identity);
+            }
+            if (kind == SaveSpawned.KindClone)
+            {
+                Actor template = Level.FindActor(saved.Source);
+                if (template == null)
+                    return null;
+                var clone = template.Clone();
+                clone.IsActive = true;
+                Level.SpawnActor(clone);
+                return clone;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Finishes a recreated spawned root (Task 30 Part D): keeps the saved name verbatim,
+        /// because that is the key the actor records use, then gives it its sheet tree. The
+        /// spawn naming already made the name unique in the run, so it is not re-run here.
+        /// </summary>
+        public static void FinishSavedSpawned(object actor, SaveSpawned saved)
+        {
+            if (actor is not Actor subject || saved == null)
+                return;
+            if (!string.IsNullOrEmpty(saved.Name))
+                subject.Name = saved.Name;
+            string kind = (saved.Kind ?? "").Trim();
+            if (string.Equals(kind, SaveSpawned.KindPrefab, StringComparison.OrdinalIgnoreCase))
+                EventsManager.Instance?.AttachSpawnedTree(subject);
+            else
+                EventsManager.Instance?.AttachSpawnedActor(subject);
+        }
+
+        /// <summary>Puts a restored spawned root under its saved parent (Task 30 Part D).</summary>
+        public static void SetSaveParent(object actor, object parent)
+        {
+            if (actor is Actor child && parent is Actor parentActor)
+                child.Parent = parentActor;
         }
 
         /// <summary>

@@ -560,9 +560,13 @@ namespace Game
     /// applied (Task 30 Part D).</summary>
     public class SaveSpawned
     {
+        public const string KindPrefab = "prefab";
+        public const string KindScene = "scene";
+        public const string KindClone = "clone";
+
         /// <summary><c>prefab</c>, <c>scene</c> or <c>clone</c>.</summary>
         [JsonPropertyName("kind")]
-        public string Kind { get; set; } = "prefab";
+        public string Kind { get; set; } = KindPrefab;
 
         /// <summary>The source asset or template name, as the spawn word wrote it.</summary>
         [JsonPropertyName("source")]
@@ -584,7 +588,7 @@ namespace Game
 
         public void EnsureSections()
         {
-            Kind ??= "prefab";
+            Kind ??= KindPrefab;
             Source ??= "";
             Name ??= "";
             Parent ??= "";

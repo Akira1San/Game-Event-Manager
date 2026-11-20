@@ -12325,6 +12325,239 @@ finally
         "the reload-then-load path also suppresses `when me appears`");
 }
 
+// Task 30 Part D - spawned roots are recreated before their sheets are restored.
+{
+    var spawnWorld = new FakeWorld();
+    var spawnRuntime = FreshEngine(spawnWorld);
+    var dHero = new FakeActor("Hero");
+    var dHeroWeapon = new FakeActor("Hero Sword");
+    var dTurret = new FakeActor("Turret");
+    var dStaged = new FakeActor("Staged");
+    foreach (FakeActor actor in new[] { dHero, dHeroWeapon, dTurret, dStaged })
+        spawnWorld.AddActor(actor);
+
+    spawnRuntime.MarkSpawnedRoot(dHero, "Hero", SaveSpawned.KindPrefab);
+    spawnRuntime.MarkSpawnedRoot(dTurret, "Turret", SaveSpawned.KindClone);
+    spawnRuntime.MarkSpawned(dHeroWeapon, "Hero"); // a prefab child carries a source but is not a root
+    spawnRuntime.MarkSpawned(dStaged, "Turret");
+
+    Check(spawnRuntime.SpawnKindOf(dHero) == SaveSpawned.KindPrefab &&
+          spawnRuntime.SpawnKindOf(dTurret) == SaveSpawned.KindClone &&
+          spawnRuntime.SpawnKindOf(dHeroWeapon) == "" &&
+          spawnRuntime.SpawnedRoots().Count == 2,
+        "only a spawned root is recorded, with the kind that made it");
+
+    var sourceOnlyRuntime = FreshEngine(new FakeWorld());
+    var sourceOnlyActor = new FakeActor("Staged");
+    sourceOnlyRuntime.MarkSpawned(sourceOnlyActor, "Turret");
+    Check(SaveSpawns.Capture(sourceOnlyRuntime).Count == 0 &&
+          sourceOnlyRuntime.SpawnKindOf(sourceOnlyActor) == "",
+        "an actor with a spawn source but no root mark is not saved as a spawn");
+
+    var spawnTransforms = new Dictionary<object, SaveTransform>
+    {
+        [dHero] = new SaveTransform { Position = new SaveVector { X = 5 } },
+        [dTurret] = new SaveTransform { Position = new SaveVector { X = 9 } },
+    };
+    List<SaveSpawned> capturedSpawns = SaveSpawns.Capture(spawnRuntime,
+        actor => spawnTransforms[actor],
+        actor => actor != dTurret,
+        actor => actor == dHero ? "Base" : "");
+    Check(capturedSpawns.Count == 2 && capturedSpawns[0].Name == "Hero" &&
+          capturedSpawns[0].Kind == SaveSpawned.KindPrefab &&
+          capturedSpawns[0].Source == "Hero" && capturedSpawns[0].Parent == "Base" &&
+          capturedSpawns[1].Name == "Turret" &&
+          capturedSpawns[1].Kind == SaveSpawned.KindClone &&
+          !capturedSpawns[1].Active && capturedSpawns[1].Transform.Position.X == 9,
+        "spawn capture writes roots sorted by name with source, parent, transform and active");
+
+    Check(SaveSpawns.Capture(null).Count == 0, "a missing runtime captures no spawned records");
+
+    var restoreRuntime = FreshEngine(new FakeWorld());
+    var restoreOrder = new List<string>();
+    var restoreParents = new Dictionary<object, object>();
+    var restoreTransforms = new Dictionary<object, SaveTransform>();
+    var restoreActive = new Dictionary<object, bool>();
+    var restoreCreated = new Dictionary<string, FakeActor>();
+
+    var restoreData = new SaveData();
+    // Deliberately clone-first: the clone's template is the prefab root the same save recreates.
+    restoreData.Spawned.Add(new SaveSpawned
+    {
+        Kind = SaveSpawned.KindClone,
+        Source = "Hero",
+        Name = "Hero 2",
+        Parent = "Hero",
+        Transform = new SaveTransform { Position = new SaveVector { X = 3 } },
+        Active = false,
+    });
+    restoreData.Spawned.Add(new SaveSpawned
+    {
+        Kind = SaveSpawned.KindPrefab,
+        Source = "Hero",
+        Name = "Hero",
+        Transform = new SaveTransform { Position = new SaveVector { X = 7 } },
+    });
+
+    SaveSpawns.Result restoreResult = SaveSpawns.Restore(restoreRuntime, restoreData,
+        saved =>
+        {
+            restoreOrder.Add("create " + saved.Name);
+            var actor = new FakeActor(saved.Name);
+            restoreCreated[saved.Name] = actor;
+            return actor;
+        },
+        (actor, saved) => restoreOrder.Add("finish " + saved.Name),
+        (actor, parent) =>
+        {
+            restoreOrder.Add("parent " + ((FakeActor)actor).Name + " -> " + ((FakeActor)parent).Name);
+            restoreParents[actor] = parent;
+        },
+        (actor, transform) => restoreTransforms[actor] = transform,
+        (actor, active) => restoreActive[actor] = active,
+        name => restoreCreated.TryGetValue(name, out FakeActor found) ? found : null);
+    string restoreSteps = string.Join(",", restoreOrder);
+    Check(restoreResult.Recreated == 2 && restoreResult.Failed.Count == 0 &&
+          restoreResult.Skipped.Count == 0 &&
+          restoreRuntime.SpawnKindOf(restoreCreated["Hero"]) == SaveSpawned.KindPrefab &&
+          restoreRuntime.SpawnKindOf(restoreCreated["Hero 2"]) == SaveSpawned.KindClone &&
+          restoreRuntime.SpawnedFrom(restoreCreated["Hero 2"]) == "Hero",
+        "a restore recreates every root and records what kind it is");
+    Check(restoreSteps == "create Hero,finish Hero,create Hero 2,finish Hero 2,parent Hero 2 -> Hero",
+        "prefabs are recreated before clones, and parenting happens after every root exists");
+    Check(restoreParents[restoreCreated["Hero 2"]] == restoreCreated["Hero"] &&
+          restoreTransforms[restoreCreated["Hero"]].Position.X == 7 &&
+          restoreTransforms[restoreCreated["Hero 2"]].Position.X == 3 &&
+          !restoreActive[restoreCreated["Hero 2"]],
+        "a restored root keeps its saved parent, transform and active flag");
+
+    var spawnWarnData = new SaveData();
+    spawnWarnData.Spawned.Add(new SaveSpawned { Kind = SaveSpawned.KindPrefab, Source = "Ghost", Name = "Ghost" });
+    spawnWarnData.Spawned.Add(new SaveSpawned { Kind = SaveSpawned.KindScene, Source = "Arena", Name = "Arena" });
+    spawnWarnData.Spawned.Add(new SaveSpawned { Kind = "portal", Source = "Gate", Name = "Gate" });
+    spawnWarnData.Spawned.Add(new SaveSpawned { Kind = SaveSpawned.KindClone, Source = "", Name = "Blank" });
+    var spawnWarnings = new List<string>();
+    int spawnCreates = 0;
+    SaveSpawns.Result spawnWarnResult = SaveSpawns.Restore(FreshEngine(new FakeWorld()), spawnWarnData,
+        saved =>
+        {
+            spawnCreates++;
+            return null;
+        },
+        null, null, null, null, null,
+        message => spawnWarnings.Add(message));
+    Check(spawnCreates == 1 && spawnWarnResult.Recreated == 0 &&
+          spawnWarnResult.Failed.Count == 2 && spawnWarnResult.Failed.Contains("Ghost") &&
+          spawnWarnResult.Failed.Contains("Blank") &&
+          spawnWarnResult.Skipped.Count == 2 && spawnWarnResult.Skipped.Contains("Arena") &&
+          spawnWarnResult.Skipped.Contains("Gate") && spawnWarnings.Count == 3 &&
+          spawnWarnings.Exists(message => message.Contains("portal", StringComparison.Ordinal)),
+        "a scene record is left to the scene section, an unknown kind is skipped, and a missing source is reported");
+
+    var plainSaveData = new SaveData();
+    plainSaveData.Spawned.Add(new SaveSpawned { Kind = SaveSpawned.KindPrefab, Source = "Hero", Name = "Hero" });
+    var noFactoryWarnings = new List<string>();
+    SaveSpawns.Result noFactoryResult = SaveSpawns.Restore(FreshEngine(new FakeWorld()), plainSaveData,
+        null, null, null, null, null, null,
+        message => noFactoryWarnings.Add(message));
+    Check(noFactoryResult.Recreated == 0 && noFactoryWarnings.Count == 1 &&
+          noFactoryWarnings[0].Contains("spawned", StringComparison.OrdinalIgnoreCase),
+        "a build with no engine factory warns instead of silently dropping spawned actors");
+
+    var parentWarnData = new SaveData();
+    parentWarnData.Spawned.Add(new SaveSpawned
+    {
+        Kind = SaveSpawned.KindClone,
+        Source = "Hero",
+        Name = "Hero 2",
+        Parent = "Gone",
+    });
+    var parentWarnings = new List<string>();
+    SaveSpawns.Restore(FreshEngine(new FakeWorld()), parentWarnData,
+        saved => new FakeActor(saved.Name), null, (actor, parent) => { }, null, null,
+        name => null, message => parentWarnings.Add(message));
+    Check(parentWarnings.Count == 1 && parentWarnings[0].Contains("Gone", StringComparison.Ordinal),
+        "a missing saved parent leaves the recreated root at the scene root with a warning");
+
+    var forgetRuntime = FreshEngine(new FakeWorld());
+    var dForgotten = new FakeActor("Hero");
+    forgetRuntime.MarkSpawnedRoot(dForgotten, "Hero", SaveSpawned.KindPrefab);
+    forgetRuntime.RemoveActorSheet(dForgotten);
+    Check(forgetRuntime.SpawnKindOf(dForgotten) == "" &&
+          forgetRuntime.SpawnedFrom(dForgotten) == "",
+        "an actor that leaves the scene is forgotten as a spawned root");
+    forgetRuntime.MarkSpawnedRoot(dForgotten, "Hero", SaveSpawned.KindPrefab);
+    forgetRuntime.RemoveAllSheets();
+    Check(forgetRuntime.SpawnedRoots().Count == 0,
+        "a scene reload clears every spawned root marker");
+
+    var fullWorld = new FakeWorld();
+    var fullRuntime = FreshEngine(fullWorld);
+    var fullHero = new FakeActor("Hero");
+    var fullSpawns = new Dictionary<string, object>();
+    var fullOrder = new List<string>();
+    var dHeroProgram = parser.Parse(@"when me appears
+  set my Awake to 1");
+    var fullData = new SaveData();
+    fullData.Scene.Name = "Arena";
+    fullData.Spawned.Add(new SaveSpawned
+    {
+        Kind = SaveSpawned.KindPrefab,
+        Source = "Hero",
+        Name = "Hero",
+    });
+    fullData.Actors.Add(new SaveActor { Actor = "Hero", Source = "Hero", State = "idle" });
+    bool fullLoaded = SaveSnapshot.Load(fullRuntime, fullData,
+        name =>
+        {
+            fullOrder.Add("scene");
+            return true;
+        },
+        null, null,
+        name => fullSpawns.TryGetValue(name, out object found) ? found : null,
+        source =>
+        {
+            fullOrder.Add("actor");
+            return source == "Hero" ? dHeroProgram : null;
+        },
+        null, null,
+        saved =>
+        {
+            fullOrder.Add("spawn");
+            fullHero = new FakeActor(saved.Name);
+            fullSpawns[saved.Name] = fullHero;
+            return fullHero;
+        },
+        (actor, saved) => { },
+        (actor, parent) => { });
+    string fullSteps = string.Join(",", fullOrder);
+    SheetInstance fullHeroSheet = fullRuntime.FindSheetFor(fullHero);
+    Check(fullLoaded && fullSteps == "scene,spawn,actor" &&
+          fullRuntime.SpawnKindOf(fullHero) == SaveSpawned.KindPrefab &&
+          fullHeroSheet != null && fullHeroSheet.CurrentState == "idle",
+        "a full load reloads the scene, recreates the spawned roots, then applies the actor records");
+
+    string partDProject = Path.Combine(Path.GetTempPath(), "event-manager-save-d-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        var roundTripData = new SaveData { Scene = new SaveScene { Name = "Level1" } };
+        roundTripData.Spawned.AddRange(capturedSpawns);
+        SaveFile.Write(partDProject, "spawns", roundTripData);
+        SaveFileResult readBackD = SaveFile.TryRead(partDProject, "spawns");
+        Check(readBackD.Loaded && readBackD.Data.Spawned.Count == 2 &&
+              readBackD.Data.Spawned[0].Kind == SaveSpawned.KindPrefab &&
+              readBackD.Data.Spawned[0].Parent == "Base" &&
+              readBackD.Data.Spawned[1].Source == "Turret" &&
+              readBackD.Data.Spawned[1].Transform.Position.X == 9,
+            "spawned records survive a write and read of the save file");
+    }
+    finally
+    {
+        if (Directory.Exists(partDProject))
+            Directory.Delete(partDProject, true);
+    }
+}
+
 // ------------------------------------------------------------------
 // RTS Task 32 Part A: the drag rectangle is authored content
 // ------------------------------------------------------------------
