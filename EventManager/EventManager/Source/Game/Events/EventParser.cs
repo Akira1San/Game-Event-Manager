@@ -492,6 +492,28 @@ namespace Game
                 line.Statement = new PassNode { Line = line.Line };
                 return;
             }
+            // Task 51 Part B: `test "<label>"` names the current self-test case; a no-op at
+            // runtime, the label is captured at load by EventRuntime.ReadyTree.
+            if (first.Text == "test")
+            {
+                if (line.Words.Count != 2 || line.Words[1].Type != TokenType.Str)
+                    throw new ParseException("`test` needs a quoted label — like `test \"player can jump\"`", line.Line);
+                CheckEndOfLine(line.Words, 2, line.Line, "test \"<label>\"");
+                line.Statement = new TestNode { Line = line.Line, Label = line.Words[1].Text };
+                return;
+            }
+            // Task 51 Part B: `self test timeout <n> seconds` sets the self-test deadline.
+            if (first.Text == "self")
+            {
+                if (line.Words.Count < 2 || line.Words[1].Type != TokenType.Word || line.Words[1].Text != "test")
+                    throw UnknownWord(first);
+                if (line.Words.Count != 5 || line.Words[2].Text != "timeout" || line.Words[3].Type != TokenType.Number ||
+                    line.Words[4].Text != "seconds")
+                    throw new ParseException("`self test timeout` reads `self test timeout <n> seconds` — like `self test timeout 2 seconds`", line.Line);
+                CheckEndOfLine(line.Words, 5, line.Line, "self test timeout <n> seconds");
+                line.Statement = new TimeoutNode { Line = line.Line, Seconds = line.Words[3].Number };
+                return;
+            }
             if (Array.IndexOf(WordRegistry.ActionWords, first.Text) >= 0)
             {
             if (first.Text == "set")

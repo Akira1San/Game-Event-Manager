@@ -295,4 +295,19 @@ namespace Game
     public class PassNode : StatementNode
     {
     }
+
+    /// <summary><c>test "&lt;label&gt;"</c> — names the current self-test case (Task 51 Part B).
+    /// It is a no-op at runtime; <see cref="EventRuntime.ReadyTree"/> captures the label onto
+    /// the case record at load time, defaulting to `case 1`, `case 2`, … when absent.</summary>
+    public class TestNode : StatementNode
+    {
+        public string Label = "";
+    }
+
+    /// <summary><c>self test timeout &lt;n&gt; seconds</c> — sets the deadline every self-test
+    /// case must settle within (Task 51 Part B). The last sheet to run it wins.</summary>
+    public class TimeoutNode : StatementNode
+    {
+        public double Seconds = 5.0;
+    }
 }

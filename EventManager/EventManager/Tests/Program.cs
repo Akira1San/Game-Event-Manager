@@ -846,6 +846,142 @@ multi.Tick(0);
 Check(SelfTest.TestPassed == 2 && SelfTest.TestFailed == 3 && SelfTest.Cases.Count == 5,
     "five cases give two passes and three fails");
 
+// ------------------------------------------------------------------
+// Task 51 Part B: `test`, timeouts, warnings and `when self test ends`.
+// ------------------------------------------------------------------
+void ResetSelfTest()
+{
+    SelfTest.Cases.Clear();
+    SelfTest.TestPassed = 0;
+    SelfTest.TestFailed = 0;
+    SelfTest.SelfTestEndsRaises = 0;
+    SelfTest.TimeoutSeconds = 5.0;
+}
+
+// label defaulting
+ResetSelfTest();
+var labelEngine = FreshEngine(new FakeWorld());
+labelEngine.AddSheet(new FakeActor("Greeter"), parser.Parse(@"when game starts
+  expect my Health is 0
+  pass"));
+labelEngine.SessionStarted();
+labelEngine.Tick(0);
+Check(SelfTest.Cases.Count == 1 && SelfTest.Cases[0].Label == "case 1" && SelfTest.Cases[0].State == CaseState.Passed,
+    "a case without `test` defaults to `case 1` and reaches Passed");
+
+// explicit `test "<label>"` label + pass
+ResetSelfTest();
+var passB = FreshEngine(new FakeWorld());
+passB.AddSheet(new FakeActor("Greeter"), parser.Parse(@"when game starts
+  test ""first""
+  set my Health to 0
+  expect my Health is 0
+  pass"));
+passB.SessionStarted();
+passB.Tick(0);
+Check(SelfTest.TestPassed == 1 && SelfTest.TestFailed == 0, "a `test`-labeled case that passes counts one pass");
+Check(SelfTest.Cases.Count == 1 && SelfTest.Cases[0].Label == "first" && SelfTest.Cases[0].State == CaseState.Passed,
+    "the `test` label is captured onto the case");
+
+// SKIP: a case whose gate never opens, plus `when self test ends` raised once
+ResetSelfTest();
+var partBSkipEngine = FreshEngine(new FakeWorld());
+var partBSkipWarnings = new List<string>();
+partBSkipEngine.OnRuntimeWarning = message => partBSkipWarnings.Add(message);
+partBSkipEngine.AddSheet(new FakeActor("Greeter"), parser.Parse(@"when every 60 seconds
+  test ""never""
+  expect my X is 1
+  pass"));
+partBSkipEngine.SessionStarted();
+partBSkipEngine.Tick(0);
+Check(SelfTest.Cases.Count == 1 && SelfTest.Cases[0].Label == "never" && SelfTest.Cases[0].State == CaseState.Skipped,
+    "a case whose gate never opens is Skipped, not Passed");
+Check(SelfTest.Cases[0].GateText.Contains("60 seconds"), "the SKIP gate text names the trigger that never opened");
+Check(SelfTest.SelfTestEndsRaises == 1, "`when self test ends` is raised once when every case has settled");
+
+// timeout quotes the last line reached
+ResetSelfTest();
+var timeoutEngine = FreshEngine(new FakeWorld());
+timeoutEngine.AddSheet(new FakeActor("Greeter"), parser.Parse(@"when game starts
+  self test timeout 1 seconds
+  test ""slow""
+  wait 10 seconds
+  expect my X is 1
+  pass"));
+timeoutEngine.SessionStarted();
+timeoutEngine.Tick(0);
+timeoutEngine.Tick(2);
+Check(SelfTest.TestFailed == 1, "a case past its deadline fails once");
+Check(SelfTest.Cases[0].State == CaseState.Failed && SelfTest.Cases[0].FailureReason.Contains("timed out after 1s"),
+    "the FAIL reason reports the timeout");
+Check(SelfTest.Cases[0].FailureReason.Contains("wait 10 seconds"), "the timeout quotes the last statement line reached");
+Check(SelfTest.SelfTestEndsRaises == 1, "`when self test ends` is raised once after the timeout");
+
+// warning capture on FAIL
+ResetSelfTest();
+var warnEngine = FreshEngine(new FakeWorld());
+var warnMsgs = new List<string>();
+warnEngine.OnRuntimeWarning = message => warnMsgs.Add(message);
+warnEngine.AddSheet(new FakeActor("Greeter"), parser.Parse(@"when game starts
+  test ""warns""
+  set my Damage to field ""MissingField"" of ""Sword"" in ""item""
+  expect my Damage is 5
+  pass"));
+warnEngine.SessionStarted();
+warnEngine.Tick(0);
+Check(warnMsgs.Count > 0, "the missing field raised a warning");
+Check(SelfTest.TestFailed == 1, "the expect failed");
+Check(SelfTest.Cases[0].State == CaseState.Failed && SelfTest.Cases[0].Warnings.Count > 0,
+    "the warning was captured on the failing case");
+Check(SelfTest.Cases[0].FailureReason.Contains("MissingField"), "the FAIL reason carries the captured warning");
+
+// `when self test ends` fires once and its listener runs
+ResetSelfTest();
+var endsEngine = FreshEngine(new FakeWorld());
+endsEngine.AddSheet(new FakeActor("Runner"), parser.Parse(@"when game starts
+  test ""a""
+  expect my Health is 0
+  pass"));
+endsEngine.AddSheet(new FakeActor("Listener"), parser.Parse(@"when self test ends
+  set Ended to 1"));
+endsEngine.SessionStarted();
+endsEngine.Tick(0);
+endsEngine.Tick(1);
+Check(SelfTest.SelfTestEndsRaises == 1, "`when self test ends` is raised exactly once");
+Check(endsEngine.Variables.GetGlobal("Ended").AsNumber() == 1, "the `when self test ends` listener ran");
+
+// `self test timeout <n> seconds` changes the deadline
+ResetSelfTest();
+var deadlineEngine = FreshEngine(new FakeWorld());
+deadlineEngine.AddSheet(new FakeActor("Greeter"), parser.Parse(@"when game starts
+  self test timeout 0.5 seconds
+  test ""quick""
+  wait 2 seconds
+  expect my X is 1
+  pass"));
+deadlineEngine.SessionStarted();
+deadlineEngine.Tick(0);
+deadlineEngine.Tick(1);
+Check(SelfTest.TestFailed == 1 && SelfTest.Cases[0].FailureReason.Contains("timed out after 0.5s"),
+    "the configured timeout overrides the default 5 seconds");
+
+// the TestPassed / TestFailed counters are synced to globals each tick
+ResetSelfTest();
+var counterEngine = FreshEngine(new FakeWorld());
+counterEngine.AddSheet(new FakeActor("Greeter"), parser.Parse(@"when game starts
+  test ""c1""
+  expect my Health is 0
+  pass"));
+counterEngine.AddSheet(new FakeActor("Greeter2"), parser.Parse(@"when game starts
+  test ""c2""
+  expect my Health is 5
+  pass"));
+counterEngine.SessionStarted();
+counterEngine.Tick(0);
+Check(SelfTest.TestPassed == 1 && SelfTest.TestFailed == 1, "one case passes and one fails");
+Check(counterEngine.Variables.GetGlobal("TestPassed").AsNumber() == 1, "`TestPassed` is synced to a global");
+Check(counterEngine.Variables.GetGlobal("TestFailed").AsNumber() == 1, "`TestFailed` is synced to a global");
+
 var sight = parser.Parse("when me appears\n  hide me\n\nwhen me stops seeing Player by 8\n  show me\n");
 Check(sight.Events.Count == 2 && sight.Events[1].Trigger.Count == 6,
       "`when me stops seeing Player by 8` validates through the alt trigger shape");

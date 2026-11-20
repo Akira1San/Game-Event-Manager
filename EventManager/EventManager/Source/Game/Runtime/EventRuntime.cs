@@ -399,7 +399,25 @@ namespace Game
 
         public static Action<object, object> ClearArrivalContact = (subject, target) => { };
 
-        public Action<string> OnRuntimeWarning = message => { };
+        private Action<string> _runtimeWarning = message => { };
+        /// <summary>The case that warnings raised while a body statement runs are attributed to.</summary>
+        private CaseRecord _warningCase;
+        /// <summary>Warnings raised while a body statement runs are attributed to the running
+        /// self-test case (Task 51 Part B) and are not swallowed.</summary>
+        public Action<string> OnRuntimeWarning
+        {
+            get => _runtimeWarning;
+            set
+            {
+                var outer = value;
+                _runtimeWarning = message =>
+                {
+                    if (_warningCase != null)
+                        _warningCase.Warnings.Add(message);
+                    outer(message);
+                };
+            }
+        }
 
         /// <summary>One warning per missing data field, so a per-tick read stays quiet after the first.</summary>
         private readonly HashSet<string> warnedDataFields = new HashSet<string>();
@@ -552,6 +570,7 @@ namespace Game
             // body carries an `expect`. A `pass`-only block is not a case (`pass` closes a case
             // that `expect` opened). A sheet with none behaves exactly as before.
             sheet.CasesByEvent.Clear();
+            int caseOrder = 0;
             for (int i = 0; i < count; i++)
             {
                 CaseRecord caseRecord = null;
@@ -565,6 +584,14 @@ namespace Game
                 }
                 if (caseRecord != null)
                 {
+                    caseOrder++;
+                    caseRecord.Label = $"case {caseOrder}";
+                    // an explicit `test "<label>"` overrides the default label
+                    foreach (var line in program.Events[i].Body)
+                        if (line.Statement is TestNode test && test.Label.Length > 0)
+                        { caseRecord.Label = test.Label; break; }
+                    // the `when` trigger text is the gate that must open for the case to run
+                    caseRecord.GateText = string.Join(" ", program.Events[i].Trigger.Select(t => t.Text));
                     sheet.CasesByEvent[i] = caseRecord;
                     SelfTest.Register(caseRecord);
                 }
@@ -1633,9 +1660,20 @@ namespace Game
                         var prevCase = sheet.CurrentCase;
                         sheet.CurrentCase = pendingCase;
                         if (pendingCase != null)
+                        {
+                            if (pendingCase.State == CaseState.Idle)
+                                pendingCase.StartedAt = Time;
                             pendingCase.State = CaseState.Running;
+                        }
                         bool suspended = RunBody(pending.Sheet, pending.Event, pending.Context, pending.LineIndex, pending.Gate, pending.ConditionGate);
                         sheet.CurrentCase = suspended ? pendingCase : prevCase;
+                        if (!suspended && pendingCase != null && pendingCase.State == CaseState.Running)
+                        {
+                            if (pendingCase.Entered)
+                                SelfTest.Pass(pendingCase);
+                            else
+                                pendingCase.State = CaseState.Skipped;
+                        }
                     }
                     else
                         sheet.Waiting.Add(pending);
@@ -1687,6 +1725,11 @@ namespace Game
                 }
             }
 
+            // Task 51 Part B: once no self-test case is actively running, the round is over —
+            // time out stuck cases, mark idle ones Skipped, sync the counters to globals and
+            // raise `when self test ends` exactly once.
+            TrySettleSelfTest();
+
             foreach (var sheet in snapshot)
                 sheet.LastState = sheet.CurrentState;
 
@@ -1701,9 +1744,62 @@ namespace Game
         }
 
         /// <summary>
+        /// Task 51 Part B: settle the self-test round once no case is actively running. Cases
+        /// past their deadline fail with a timeout; any case still Idle is Skipped. Then
+        /// `when self test ends` is raised exactly once and one PASS/FAIL/SKIP line is printed
+        /// per case.
+        /// </summary>
+        private void TrySettleSelfTest()
+        {
+            if (SelfTest.Cases.Count == 0 || SelfTest.SelfTestEndsRaises > 0)
+                return;
+            // Time out any case that has been running past its deadline.
+            foreach (var c in SelfTest.Cases)
+            {
+                if (c.State == CaseState.Running && Time - c.StartedAt >= SelfTest.TimeoutSeconds)
+                {
+                    string stuck = c.LastStatement.Length > 0 ? c.LastStatement : "<line>";
+                    SelfTest.Fail(c, $"timed out after {SelfTest.TimeoutSeconds}s; stuck on \"{stuck}\"");
+                }
+            }
+            // If a case is still running (suspended on a wait), the round is not over yet.
+            if (SelfTest.Cases.Any(c => c.State == CaseState.Running))
+                return;
+            // Mark idle cases Skipped (their gate never opened).
+            foreach (var c in SelfTest.Cases)
+                if (c.State == CaseState.Idle)
+                    c.State = CaseState.Skipped;
+            // Sync the counters to globals so bare `TestPassed` / `TestFailed` work in conditions.
+            Variables.SetGlobal("TestPassed", ValueBox.OfNumber(SelfTest.TestPassed));
+            Variables.SetGlobal("TestFailed", ValueBox.OfNumber(SelfTest.TestFailed));
+            SelfTest.SelfTestEndsRaises++;
+            RaisePushAll(new PushSignal { Kind = TriggerKind.SelfTestEnds });
+            PrintSelfTestReport();
+        }
+
+        private void PrintSelfTestReport()
+        {
+            foreach (var c in SelfTest.Cases)
+            {
+                switch (c.State)
+                {
+                    case CaseState.Passed:
+                        Console.WriteLine($"PASS {c.Label}");
+                        break;
+                    case CaseState.Failed:
+                        Console.WriteLine($"FAIL {c.Label} {c.FailureReason}");
+                        break;
+                    case CaseState.Skipped:
+                        Console.WriteLine($"SKIP {c.Label} {c.GateText}");
+                        break;
+                }
+            }
+        }
+
+        /// <summary>
         /// Once a tick: refreshes the level clock and accuracy, and raises
         /// <c>when all enemies dead</c> on the edge from "some enemy alive" to "none". An
-        /// enemy is any actor whose sheet carries <c>my Type</c> (what `enemy type` writes).
+        /// enemy is any actor whose sheet carries `my Type` (what `enemy type` writes).
         /// </summary>
         private void TickLevel(double time)
         {
@@ -2173,10 +2269,22 @@ namespace Game
             if (sheet.CasesByEvent != null && sheet.CasesByEvent.TryGetValue(eventIndex, out caseForEvent))
             {
                 sheet.CurrentCase = caseForEvent;
+                if (caseForEvent.State == CaseState.Idle)
+                    caseForEvent.StartedAt = Time;
                 caseForEvent.State = CaseState.Running;
             }
             bool suspended = RunBody(sheet, ev, context, 0, true);
             sheet.CurrentCase = suspended ? caseForEvent : prevCase;
+            if (!suspended && caseForEvent != null && caseForEvent.State == CaseState.Running)
+            {
+                // The body ran to completion without `pass`/failed `expect`. A case whose
+                // `test` ran had its `expect`(s) pass; a case gated out before `test` never
+                // opened, so it is Skipped rather than left stuck in Running.
+                if (caseForEvent.Entered)
+                    SelfTest.Pass(caseForEvent);
+                else
+                    caseForEvent.State = CaseState.Skipped;
+            }
         }
 
         private bool RunBody(SheetInstance sheet, EventNode ev, EventContext context, int startLine, bool startGate, bool startConditionGate = false)
@@ -2215,6 +2323,13 @@ namespace Game
                     continue;
                 }
                 stacking = false;
+                _warningCase = sheet.CurrentCase;
+                var cc = sheet.CurrentCase;
+                if (cc != null)
+                {
+                    cc.StatementIndex = i;
+                    cc.LastStatement = string.Join(" ", line.Words.Select(w => w.Text));
+                }
                 var statement = line.Statement;
                 if (statement is CursorNode cursor)
                 {
@@ -2299,6 +2414,21 @@ namespace Game
                         OnRuntimeWarning("`pass` outside a `test` case — `pass` closes a case that `expect` started.");
                     else
                         SelfTest.Pass(currentCase);
+                }
+                // Task 51 Part B: `test "<label>"` is a no-op at runtime — the label was already
+                // captured onto the case by ReadyTree. Mark the case as entered so a stuck case
+                // can be told apart from one whose gate never opened.
+                else if (statement is TestNode test)
+                {
+                    var currentCase = sheet.CurrentCase;
+                    if (currentCase != null)
+                        currentCase.Entered = true;
+                }
+                // Task 51 Part B: `self test timeout <n> seconds` sets the self-test deadline
+                // for every case (last sheet to run it wins).
+                else if (statement is TimeoutNode timeout)
+                {
+                    SelfTest.TimeoutSeconds = timeout.Seconds;
                 }
                 else if (statement is SetSpeakerNode setSpeaker)
                 {
@@ -2458,6 +2588,7 @@ namespace Game
                                 ConditionGate = conditionGate,
                                 ResumeAt = Time + seconds,
                             });
+                            _warningCase = null;
                             return true;
                         }
                     }
@@ -2486,6 +2617,7 @@ namespace Game
                     OnRawAction(context, raw.Words);
                 }
             }
+            _warningCase = null;
             return false;
         }
 

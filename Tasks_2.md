@@ -31,6 +31,8 @@ primitives that every genre otherwise re-implements as copied blocks or new C#:
 4. **Presentation** — music, camera feedback, animation depth, dynamic UI, dialogue.
 5. **Genre kits** — platformer, RPG depth, racing, cards, roguelike.
 6. **Shipping** — settings, localization, accessibility, replay, packaging, tooling.
+7. **Verification** — a self-test sheet that *runs* the editor play-checks instead of leaning on
+   eyeballs and memory.
 
 ## Priority at a glance
 
@@ -59,6 +61,7 @@ primitives that every genre otherwise re-implements as copied blocks or new C#:
 | 48 | Animated game cursors | P1 | Flax bridge + table | Tasks 3, 15 |
 | 49 | Mouse button action mapping | P1 | bridge + table | Tasks 3, 16, 29 |
 | 50 | Dialogue files & conversation trees | P1 | file format + runtime | Tasks 34, 35 |
+| 51 | Self-test sheet: automated play-checks | P0 | runtime + events | Tasks 1–3 |
 
 **Do not treat this list as a mandate to grow the vocabulary.** The project rule stays:
 if two genres need it, it is a primitive and belongs in C#; if one genre needs it, ship it as a
@@ -1029,10 +1032,58 @@ when my Health becomes 0
       which is why a respawn also restores Task 21's jump count. It does not touch health, state
       or animation: a sheet that dies at `my Health` 0 sets its own health back first. Not
       shipped (still optional): a bare `respawn` returning to the stored pose.
-- [ ] **Part G — Tests and example scene.** Jump height/timing, no double jump (already covered by
-      G4's 13 checks and Task 21 A's four), ground edge, ladder exit, one-way platform up/down,
-      gravity scale at 0 / 0.5 / 1, respawn clears momentum, checkpoint survives death but not a
-      new game.
+- [x] **Part G — Tests and the example sheet.** Shipped 2026-11-20.
+      `Source/Game/GameFiles/Platformer.events` is the whole kit in one sheet: W walks and grabs a
+      ladder, Space jumps at 420, S lets go, `me is on ground` / `is airborne` / `is climbing` /
+      `me is moving` pick the Idle / Run / Fall / Climb poses, `when me touches Checkpoint` runs
+      `save checkpoint` behind a `my CheckpointSaved` gate (one saved point never re-saves, because a
+      body can leave a marker and step back in, and a respawn lands right on top of one), K is a
+      debug death, and `when my Health is lower than 1` respawns at
+      `Checkpoint` behind a `my Dead` guard (so a death is a moment, not a re-entering state). Its
+      header is the scene setup, so the file carries its own instructions. The suite parses the
+      shipped file and proves every one of its 19 action lines is a shipped word, that the sheet
+      really exercises `jump`, `climb`, `stop climbing`, `save checkpoint` and `respawn at`, and
+      that the checkpoint block still opens on its gate and closes it after the save (with
+      `when me appears` starting the flag at 0, so a new game saves again) — an example that drifted
+      into an unknown word, or lost a guard, now fails a check instead of the editor. Jump
+      height, the double-jump refusal and the ground states are already unit-covered by G4's own
+      checks and Task 21 A; the bridge and the editor are not, so **the play-check below is still
+      yours.**
+
+      **Editor play-check — `PlatformerTest` scene.** Setup is in the sheet's header (Player with a
+      CharacterController + EventSheet `Platformer`, a thin `Ladder` BoxCollider against the
+      platform, a `Checkpoint` actor, a `CheckpointLabel` in a UICanvas, optional Idle / Run /
+      Jump / Fall / Climb / Death clips). Run it in this order:
+
+      1. **Jump height.** Stand still, press Space, mark the peak. `jump strength 420` at the
+         default gravity (981 cm/s²) should reach ≈90 cm — `420² / (2 × 981)` — a little over one
+         60 cm crate. Note the measured height and whether the Jump pose plays at take-off.
+      2. **Ground edge.** Walk off a ledge without jumping: Fall should take over the tick the
+         ground probe misses and Idle should be back on landing, with no stuck pose in between.
+         Repeat stepping off a platform onto a *lower* one and note the pose — that is the case the
+         old ground check got wrong.
+      3. **Ladder exit.** Hold W into the ladder: it climbs at 150 cm/s to the top of the collider
+         and then W walks the character onto the landing, because the span ends the climb by
+         itself. Press S mid-ladder to let go and keep your height. If holding W at the top
+         re-grabs the ladder, note it — that is the 40 cm gate in the sheet, and the fix is moving
+         the ladder out or lowering the distance.
+      4. **Respawn clears momentum.** Touch `Checkpoint`, then hold W and press K while moving. The
+         character should come back at rest on the marker — no slide, no leftover push, no fall
+         speed carried through the warp — and a Space press before landing should refuse, because
+         the warp clears the jump flag too.
+      5. **Checkpoint survives death, not a new game.** Read `CheckpointLabel` before the first
+         touch (0: `my CheckpointX` is unset, so it warns once and reads 0), after touching the
+         marker (its X), and after a death and respawn (unchanged — nothing clears a per-actor
+         variable). Then stop and restart the scene: the fresh actor has no `CheckpointX`, so the
+         label reads 0 again and the marker is the only respawn point left. While touching the
+         marker, also watch the console: "checkpoint saved" prints **once**, and walking out of the
+         marker and back in prints nothing, because `my CheckpointSaved` stays set until the scene
+         restarts.
+
+      One limit this list cannot cover: the stored pose is read by the save file (Task 30), not by
+      a word — a bare `respawn` is still optional and unshipped — so with one marker the saved
+      pose and the marker agree, while a second checkpoint needs its own `respawn at Checkpoint2`
+      line, because `respawn at` resolves an actor name rather than the stored pose.
 
 ### Done-when
 
@@ -2137,6 +2188,164 @@ when message "close dialogue" arrives
 
 ---
 
+## Task 51 — Self-Test Sheet: Automated Play-Checks `[ ]`
+
+Goal: stop asking a human to open the editor, hold W, and *look* at a cube. Right now every shipped
+mechanic ends with a `[ ] Verify (user, editor)` line — jump height, checkpoint respawn, steering,
+the hurt cycle, the platformer gate — and those lines never close, so the task list can no longer
+tell a proven part from an unproven one. This task gives the project a **self-test sheet**: an
+ordinary `.events` file that drives the game and *asserts* what happened, so the play-check becomes
+one editor run that prints `PASS`/`FAIL` per case, and the same sheet also runs headless inside the
+unit suite.
+
+The sheet is the point, not the words: it proves the language can express its own verification.
+A feature with no case is a feature nobody has run.
+
+Depends on Tasks 1–3 (nothing else). **Runtime + events** (P0). No Flax API changes.
+
+### The shape
+
+A **case is a block.** No new control flow, no sequencer: each case is one `when` block that sets a
+situation up, waits, and asserts. The runner watches every block that contains an `expect` or a
+`pass`, times it, and reports one line per case. This keeps the file readable as an example and
+keeps the language flat, which is the same rule every other task follows.
+
+```text
+# ---------------- SelfTest.events ----------------
+when me appears
+  set my Passed to 0
+  set my Failed to 0
+
+# ---- case: a jump clears the 40 cm ladder gate ----
+test "jump clears 40 cm"
+when me appears
+  teleport me to JumpPad
+  wait 0.1 seconds
+  press jump                                    # whatever the shipped jump word is called
+  wait 1 second
+  expect my Height is higher than 40
+  pass
+
+# ---- case: the checkpoint remembers the pose ----
+test "checkpoint respawn returns to the marker"
+when me appears
+  teleport me to CheckpointA
+  wait 0.1 seconds
+  save
+  teleport me to FarAway
+  wait 0.5 seconds
+  respawn at CheckpointA
+  wait 0.2 seconds
+  expect me is near CheckpointA by 5
+  pass
+```
+
+### Proposed words
+
+| Kind | Word | Example | Why |
+|---|---|---|---|
+| action | `test "<label>"` | `test "jump clears 40 cm"` | names the case; defaults to the block's order when omitted |
+| action | `expect <condition>` | `expect my Health is 0` | reuses the existing condition grammar — no second comparison language |
+| action | `pass` | `pass` | closes the case as passed (the label comes from `test`) |
+| trigger | `when self test ends` | `when self test ends` | one summary hook: `set text of ResultLabel to my TestFailures` |
+
+`expect` takes **any condition the language already accepts** — `is` / `is not` / `higher` /
+`lower` / `near` / `exists` / `has tag` / `count of … is …` once Task 28 ships — because it is
+parsed by `Conditions.Parse`, not by a new grammar. A shape that fails to parse fails like any other
+condition (friendly error, at load).
+
+### How a case is judged
+
+- **Passed** = `pass` was reached before the timeout (default 5 s, `self test timeout 12 seconds` to
+  change it).
+- **Failed** = an `expect` was false (the report prints the expectation's own text and both values),
+  or the case timed out with its last reached line quoted.
+- **Skipped, not passed** = a case that never entered its body (its gate never opened) is reported as
+  `SKIP` with the gate's text — a silently-not-run case is exactly the bug this task exists to kill.
+- A case that errors or warns during the run (`unknown anim`, missing actor) is reported as `FAIL`
+  with the warning attached, not swallowed.
+
+### The runner
+
+- `Runtime/SelfTest.cs` (engine-free): case discovery from a compiled `EventSheet` (blocks carrying
+  `expect`/`pass`), per-case state machine (idle → running → passed/failed/skipped), timeout,
+  ordered report lines, and the final counts as globals `TestPassed` / `TestFailed` so a label can
+  show them.
+- `EventRuntime` gains the hook: when a sheet is marked as a self-test sheet, its tick pushes case
+  transitions into the runner and raises `self test ends` once every case has settled.
+- The **marking is per file**, not per actor: an `EventSheet` component flag `Self Test` (default
+  off), plus the convention that a sheet named `SelfTest.events` is one. A project with no such
+  file and no `expect` line behaves exactly as today.
+
+### Two tiers of the same sheet
+
+1. **In the editor (the play-check).** `SelfTest.scene` holds the props the cases need (a jump pad,
+   two checkpoints, a far-away marker, one dummy with a collider). Play once; the console prints
+   `PASS 12 / FAIL 1` with the failing case named, and a `ResultLabel` shows the same counts. This is
+   the run that replaces "hold W and look".
+2. **In the suite (the build gate).** The `Tests` project already compiles `Runtime/*` and builds fake
+   worlds by hand; it runs the **same** `SelfTest.events` file through the pure runner and fails the
+   build on any `FAIL`. Bridge-only cases are tagged `test "… (editor only)"` and are excluded from the
+   headless tier explicitly rather than silently passing it.
+
+### What the first sheet covers
+
+One case per shipped mechanic, chosen from the open `Verify (user, editor)` lines in this file and
+`TASKS.md` — movement, jump and the 40 cm ladder gate, `goto` arrival, `sees`/`stops seeing` edges,
+contact enter-edge vs. per-tick, `send message` routing, `save`/`respawn at` and the `CheckpointSaved`
+gate, spawn/destroy and clone sheets, timers and `wait`, variables and edges, `expect count of …`
+once Task 28 lands. Task 36 Part G's five-step platformer check becomes five cases in one block set.
+
+### Parts
+
+- [X] **Part A — `expect` and `pass`.** Parser + `ActionWords` + `WordRegistry` rows, `expect`
+      re-parsing its tail through `Conditions.Parse`, `EventRuntime` evaluation with the case state
+      in `Runtime/SelfTest.cs`. Friendly error for `expect` with no condition (`expect is 0`),
+      and for `pass` outside a case. No new comparison semantics anywhere.
+- [x] **Part B — The runner and its report.** Case discovery, timeout (default 5 s, per-sheet
+      `self test timeout <n> seconds`), SKIP detection for gates that never open, warning capture,
+      `TestPassed`/`TestFailed` globals, `when self test ends`, and one console line per case in
+      sheet order. Deterministic: no `random` in a case unless the seed is fixed by `Rng.Seed`.
+- [ ] **Part C — `SelfTest.scene` + `SelfTest.events`.** The props, the actor, the `Self Test` flag,
+      the `ResultLabel`, and the first case set (the coverage list above). Written so a reader can
+      learn the language from it — it is a documentation artefact as much as a test.
+- [ ] **Part D — The headless tier.** `Tests/Program.cs` runs the shipped file through the pure
+      runner against a fake world, asserts the exact case count and the PASS/FAIL split, and fails
+      the suite on any `FAIL`. A `(editor only)` tag marks the cases the fake world cannot reach; a
+      suite check asserts those are exactly the documented list, so a case cannot be quietly
+      demoted to editor-only when a fake-world fix would do.
+- [ ] **Part E — Status reconciliation and docs.** Every `[ ] Verify (user, editor)` bullet in
+      `TASKS.md` and `Tasks_2.md` either names its case or carries one line saying why it cannot be
+      automated (feel, audio, visual); the stale claims get fixed at the same time (e.g. the note at
+      `Tasks_2.md:1102` that says no `when me lands` trigger exists). `keywords.html` rows,
+      `DESIGN.md` §9 entry (why a case is a block, and why `expect` reuses the condition grammar),
+      and a `Task 51` line in the execution order.
+
+### Done-when
+
+- One editor run of `SelfTest.scene` prints a full `PASS`/`FAIL`/`SKIP` report and a count, with no
+  human judgement required for anything but the cases explicitly marked visual or feel.
+- The unit suite runs the same `.events` file and fails the build when a case fails — so a mechanic
+  that regresses breaks CI, not just a play session.
+- `expect` accepts every condition the language accepts (including the Task 28 forms when they land)
+  and a malformed one gets the ordinary friendly condition error at load.
+- A case whose gate never opens reports `SKIP`, never `PASS`, and a case that times out quotes the
+  line it was stuck on.
+- A project with no `SelfTest.events` and no `expect` line parses and plays exactly as before; the
+  words are opt-in and the only shipped user is the self-test sheet itself.
+- Every open editor play-check in this file and `TASKS.md` is either covered by a case or has a
+  written reason it is not — the `[ ]` verify lines become a short, honest list instead of a debt
+  nobody tracks.
+
+### Parked for later
+
+- Input record/replay and frame-accurate determinism (Task 44), screenshot comparison, running the
+  editor from CI, and agent-driven play — all of them need this sheet's assertions first.
+- Property-based cases (`test random 100 runs`) and a coverage figure per word: both are cheap once
+  the runner exists, and both are noise until the first case set is stable.
+
+---
+
 ## Suggested execution order
 
 Do not run these by number. The dependency-friendly order is:
@@ -2155,6 +2364,10 @@ Do not run these by number. The dependency-friendly order is:
     because a remapped button is much easier to try with a cursor that says which mode is armed.
 12. **Task 50** (dialogue files) — right after Task 35 ships and only when a real conversation
     outgrows one sheet; it adds no presentation, only a place for prose to live.
+13. **Task 51** (self-test sheet) — do it early despite being last in the list. Every item above ends
+    with an editor play-check, so each one done before this task adds another line a human has to
+    hold in their head; after it, a part is finished when a case says so. If only two things ship
+    this quarter, pick this and Task 28.
 
 ## Explicitly not in this file
 

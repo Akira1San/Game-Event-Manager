@@ -103,6 +103,9 @@ namespace Game
         // Level progression (Task 16 Part G)
         LevelComplete,
         AllEnemiesDead,
+        /// <summary><c>when self test ends</c> — raised once when every self-test case on every
+        /// sheet has passed, failed or been skipped (Task 51 Part B).</summary>
+        SelfTestEnds,
     }
 
     public class TriggerDescriptor
@@ -393,6 +396,10 @@ namespace Game
             // `when all enemies dead` — polled once a tick (every enemy type is `my Type`-tagged).
             if (words.Length == 3 && words[0] == "all" && words[1] == "enemies" && words[2] == "dead")
                 return new TriggerDescriptor { Kind = TriggerKind.AllEnemiesDead };
+            // Task 51 Part B: `when self test ends` — raised once by the runtime when every
+            // self-test case on every sheet has settled.
+            if (words.Length == 3 && words[0] == "self" && words[1] == "test" && words[2] == "ends")
+                return new TriggerDescriptor { Kind = TriggerKind.SelfTestEnds };
             if (words.Length >= 2 && words[0] == "game" && words[words.Length - 1] == "starts")
                 return new TriggerDescriptor { Kind = TriggerKind.GameStart };
             if (words.Length >= 2 && words[0] == "scene" && words[words.Length - 1] == "starts")
