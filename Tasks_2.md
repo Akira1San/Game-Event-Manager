@@ -815,9 +815,41 @@ add typing speed, portrait/speaker handling, choice numbering and a backlog.
       9 new checks -> **2193 passed, 0 failed**; GameEditorTarget build 0 errors. Editor
       play-check (a portrait actually appearing in a scene) pending, since it needs authored
       Image/Label actors and imported portrait textures.
-- [ ] **Part C — Choices.** Number visible choice buttons, capture the picked index, clear the
+- [x] **Part C — Choices.** Number visible choice buttons, capture the picked index, clear the
       choices on pick. Buttons remain ordinary actors so they can be styled in the editor.
-- [ ] **Part D — Backlog.** Append lines to a scrollable list (Task 34) for adventure/RPG history.
+      `show choice "<text>"` is a `ShowChoiceNode`; `Runtime/Choices.cs` (`ChoiceManager`,
+      `ChoiceSet`, `ChoiceOption`) finds the next authored button slot — `Choice1`, else
+      `ChoiceA` — numbers it (`1. I'll take a room.`), writes the label through `OnSetText` and
+      shows the actor through the new `OnSetChoiceVisible` → `FlaxActions.SetChoiceVisible`.
+      Two lines are two choices (up to 9); a pick removes the set, so the next line starts at 1
+      again. `EventRuntime.RaiseClick` intercepts a click on a registered button: it writes
+      `my picked choice` on the sheet that showed the choices, hides every button of the set, and
+      pushes the message `"choice picked"` to that sheet — which is why `when choice picked` is
+      classified as that message, so a hand-wired `ChoiceA` that sets its own index and runs
+      `send message "choice picked"` reaches the same trigger. A button no set is using keeps
+      its ordinary click; a missing slot warns once and names the actor to create.
+      17 new checks -> **2210 passed, 0 failed**; GameEditorTarget build 0 errors. Editor
+      play-check (a real clicked button in a scene) pending.
+- [x] **Part D — Backlog.** Append lines to a scrollable list (Task 34) for adventure/RPG history.
+      Task 34's list words do not exist yet, so the backlog uses Task 34's own first-version
+      convention: the runtime keeps the history and the scene's authored row labels show it.
+      `add to backlog "<text>"` is an `AddBacklogNode`; `Runtime/Backlog.cs` (`BacklogManager`,
+      `BacklogLine`) keeps the lines oldest-first, ignores a blank line, and caps them at the
+      `BacklogLimit` global (100 by default). The history is game state, so it survives a scene
+      change and a hot reload — a conversation can be replayed from it. `EventRuntime.OnBacklogChanged`
+      hands the lines to `FlaxActions.SetBacklog`, which fills `BacklogRow1`, `BacklogRow2`, … (up
+      to the first gap) with the newest lines, newest in the last row, hides the rows the history
+      does not fill, and warns once naming the actors to create; the rows are ordinary UIControl
+      actors, so font, width and a scroll panel around them are editor content. Rows repaint on
+      scene start too, so a new scene shows the history it already has.
+      `clear dialogue` is a `ClearDialogueNode`: one word dismisses this sheet's dialogue — the
+      line still typing is dropped without answering `when text finishes` (it was closed, not
+      read; new `Typewriter.TakeActor`), every label that sheet's `type text` wrote empties
+      (remembered by the new `Runtime/Dialogue.cs` `DialogueState`), its numbered choices hide
+      (`ChoiceManager.Take`), and the speaker it wrote clears (`Speaker` global + `SpeakerLabel`)
+      while a speaker another sheet wrote survives. The backlog is history, so it is left alone.
+      17 new checks -> **2227 passed, 0 failed**; GameEditorTarget build 0 errors. Editor
+      play-check (authored `BacklogRow` actors actually filling) pending.
 - [ ] **Part E — Tests and example.** Typing completion exactly once, skip, choice 1 vs choice 2,
       portrait miss warns once, and a three-node conversation with a story flag.
 

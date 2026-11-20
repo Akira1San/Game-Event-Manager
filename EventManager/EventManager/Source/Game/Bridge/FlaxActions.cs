@@ -5348,6 +5348,53 @@ namespace Game
             image.Brush = new FlaxEngine.GUI.TextureBrush { Texture = texture };
         }
 
+        /// <summary>The actor a scene authors as `BacklogList`, with row labels beneath it.</summary>
+        public const string BacklogListActor = "BacklogList";
+
+        /// <summary>The row actors <c>add to backlog</c> fills: `BacklogRow1`, `BacklogRow2`, …</summary>
+        public const string BacklogRowPrefix = "BacklogRow";
+
+        /// <summary>
+        /// <c>add to backlog</c> (Task 35 Part D): shows the newest lines in the scene's authored
+        /// row labels — `BacklogRow1`, `BacklogRow2`, … up to the first gap — with the newest line
+        /// in the last row, and hides the rows the history does not fill. The rows are ordinary
+        /// UIControl actors, so their font, width and scroll container are editor content; Task
+        /// 34's list words can replace this renderer once they exist.
+        /// </summary>
+        public static void SetBacklog(IReadOnlyList<BacklogLine> lines)
+        {
+            var rows = new List<FlaxEngine.GUI.Label>();
+            var rowActors = new List<Actor>();
+            for (int index = 1; ; index++)
+            {
+                string name = BacklogRowPrefix + index;
+                var label = FindLabel(name, out _);
+                if (label == null)
+                    break;
+                rows.Add(label);
+                rowActors.Add(Level.FindActor(name));
+            }
+            if (rows.Count == 0)
+            {
+                WarnOnce($"I couldn't find the backlog. Create one UIControl actor per visible line, named \u201C{BacklogRowPrefix}1\u201D, \u201C{BacklogRowPrefix}2\u201D, … (under a \u201C{BacklogListActor}\u201D panel or a scroll panel if the list is long).");
+                return;
+            }
+            for (int i = 0; i < rows.Count; i++)
+            {
+                int lineIndex = lines.Count - rows.Count + i;
+                bool has = lineIndex >= 0;
+                rows[i].Text = has ? lines[lineIndex].Text : "";
+                rows[i].Visible = has;
+                if (rowActors[i] != null)
+                    rowActors[i].IsActive = has;
+            }
+        }
+
+        /// <summary>Show or hide a numbered choice button (Task 35 Part C). The button is an
+        /// ordinary scene actor, so this is the same show/hide every sheet can write itself.</summary>
+        public static void SetChoiceVisible(EventContext context, string thing, bool visible)
+            => SetActive(context, thing, visible);
+
         /// <summary>The scene actor <c>set speaker to</c> writes (Task 35 Part B). The portrait is
         /// a different actor, so the name and the picture never share a control.</summary>
         public const string SpeakerLabelActor = "SpeakerLabel";

@@ -345,6 +345,12 @@ namespace Game
         public TargetingManager Targeting = new TargetingManager();
         /// <summary>Lines revealing a character at a time behind `type text` (Task 35 Part A).</summary>
         public Typewriter Typing = new Typewriter();
+        /// <summary>The numbered choices behind `show choice` (Task 35 Part C).</summary>
+        public ChoiceManager Choices = new ChoiceManager();
+        /// <summary>What each sheet's dialogue put on screen, for `clear dialogue` (Task 35 Part D).</summary>
+        public DialogueState Dialogue = new DialogueState();
+        /// <summary>The game's dialogue history behind `add to backlog` (Task 35 Part D).</summary>
+        public BacklogManager Backlog = new BacklogManager();
 
         /// <summary>The global `my cursor` reads and `when cursor changes` watches (Task 48
         /// Part E). The bridge writes the resolved name here every frame.</summary>
@@ -424,6 +430,11 @@ namespace Game
         public Action<EventContext, string, string> OnSetPortrait = (context, thing, sprite) => { };
         /// <summary>Write the speaker's name into the scene's <c>SpeakerLabel</c> (Task 35 Part B).</summary>
         public Action<EventContext, string> OnSetSpeaker = (context, name) => { };
+        /// <summary>Show or hide one of the numbered choice buttons (Task 35 Part C).</summary>
+        public Action<EventContext, string, bool> OnSetChoiceVisible = (context, thing, visible) => { };
+        /// <summary>Repaint the dialogue history after `add to backlog`, and when a scene loads
+        /// (Task 35 Part D). The lines are the argument so the bridge needs no sheet context.</summary>
+        public Action<IReadOnlyList<BacklogLine>> OnBacklogChanged = lines => { };
 
         private readonly List<SheetInstance> sheets = new List<SheetInstance>();
         private readonly HashSet<string> warnedLines = new HashSet<string>();
@@ -539,6 +550,8 @@ namespace Game
         {
             sheets.Clear();
             Typing.Clear();
+            Choices.Clear();
+            Dialogue.Clear();
             spawnSources.Clear();
             spawnKinds.Clear();
             // Cursor modes belong to the scene that set them (Task 48 Part E): a new scene starts
@@ -558,6 +571,8 @@ namespace Game
             if (equipped.TryGetValue(actor, out var _))
                 equipped.Remove(actor);
             Typing.ClearActor(actor);
+            Choices.ClearActor(actor);
+            Dialogue.Forget(actor);
             ForgetSpawned(actor);
             Fog.RemoveActor(actor);
         }
@@ -589,6 +604,8 @@ namespace Game
             LiftOff.Reset();
             foreach (var sheet in sheets)
                 sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.SceneStart });
+            // A scene that authors backlog rows shows the history it already has (Task 35 Part D).
+            OnBacklogChanged(Backlog.Lines);
         }
 
         /// <summary>Pushes <c>when scene starts</c> to the sheets of the actors that just arrived
@@ -626,6 +643,11 @@ namespace Game
         public void RaiseClick(object actor, TriggerKind kind)
         {
             if (actor == null)
+                return;
+            // A numbered choice button is a dialogue pick, not an ordinary click (Task 35
+            // Part C): it records the index, clears the choices and answers `when choice
+            // picked`. A button no choice set is using keeps its old click behaviour.
+            if (kind == TriggerKind.Clicked && PickChoice(NameOf(actor)))
                 return;
             var signal = new PushSignal { Kind = kind, Name = NameOf(actor), Other = actor };
             foreach (var sheet in sheets)
@@ -2202,6 +2224,18 @@ namespace Game
                 {
                     OnSetPortrait(context, setPortrait.Thing, setPortrait.Sprite);
                 }
+                else if (statement is ShowChoiceNode showChoice)
+                {
+                    ExecuteShowChoice(context, showChoice);
+                }
+                else if (statement is AddBacklogNode addBacklog)
+                {
+                    ExecuteAddBacklog(context, addBacklog);
+                }
+                else if (statement is ClearDialogueNode)
+                {
+                    ExecuteClearDialogue(context);
+                }
                 else if (statement is SetSpeakerNode setSpeaker)
                 {
                     // The speaker is state as well as text: the name is recorded first, so a
@@ -2210,6 +2244,7 @@ namespace Game
                     ValueBox speaker = context.Evaluate(setSpeaker.Value);
                     context.WriteGlobal(SpeakerGlobal, speaker);
                     OnSetSpeaker(context, speaker.AsText());
+                    Dialogue.MarkSpeaker(context.Me);
                 }
                 else if (statement is SetControlColorNode setColor)
                 {
@@ -2418,6 +2453,94 @@ namespace Game
         }
 
         /// <summary>
+        /// <c>add to backlog "…"</c> — Task 35 Part D. The line joins the game's history (nothing
+        /// is written when it is blank), and the bridge repaints the scene's row labels.
+        /// </summary>
+        private void ExecuteAddBacklog(EventContext context, AddBacklogNode node)
+        {
+            string text = context.Evaluate(node.Value).AsText();
+            if (string.IsNullOrWhiteSpace(text))
+                return;
+            Backlog.Add(Variables, context.Me, text);
+            OnBacklogChanged(Backlog.Lines);
+        }
+
+        /// <summary>
+        /// <c>clear dialogue</c> — Task 35 Part D. Dismisses this sheet's dialogue: the line being
+        /// typed goes without answering `when text finishes` (it did not finish, it was closed),
+        /// its labels empty, its numbered choices hide, and the speaker it wrote clears. The
+        /// backlog is history, so it survives.
+        /// </summary>
+        private void ExecuteClearDialogue(EventContext context)
+        {
+            object owner = context.Me;
+            Typing.TakeActor(owner);
+            foreach (string label in Dialogue.LabelsFor(owner))
+                OnSetText(context, label, ValueBox.OfText(""), false);
+            var set = Choices.Take(owner);
+            if (set != null)
+            {
+                foreach (var option in set.Options)
+                    OnSetChoiceVisible(set.Context, option.Button, false);
+            }
+            // Only a sheet that wrote the speaker clears it, so another NPC's line survives.
+            if (Dialogue.Spoke(owner))
+            {
+                context.WriteGlobal(SpeakerGlobal, ValueBox.OfText(""));
+                OnSetSpeaker(context, "");
+            }
+            Dialogue.Forget(owner);
+        }
+
+        /// <summary>
+        /// <c>show choice "…"</c> — Task 35 Part C. Numbers the next authored button slot
+        /// (`Choice1`, or `ChoiceA`), writes the number and the words on it, and shows it. A set
+        /// that is still on screen grows, so two lines are two choices; a pick empties it, so
+        /// the next line starts again at 1.
+        /// </summary>
+        private void ExecuteShowChoice(EventContext context, ShowChoiceNode node)
+        {
+            string text = context.Evaluate(node.Value).AsText();
+            var set = Choices.For(context.Me);
+            int next = set == null ? 1 : set.Options.Count + 1;
+            var option = Choices.Add(context.Me, context, World, text);
+            if (option == null)
+            {
+                if (next > ChoiceManager.MaxChoices)
+                    OnRuntimeWarning($"`show choice` already shows {ChoiceManager.MaxChoices} choices — that is the limit; pick one before showing another.");
+                else
+                    OnRuntimeWarning($"`show choice` needs a scene button for choice {next}. Create a UIControl actor named \u201C{ChoiceManager.SlotName(next)}\u201D (or \u201CChoice{(char)('A' + Math.Min(next - 1, 25))}\u201D) with a Button on it.");
+                return;
+            }
+            // The number is part of the label, so the picker can see which key answers which
+            // choice; the button's art and layout stay the scene's.
+            OnSetText(context, option.Button, ValueBox.OfText(option.Label), true);
+            OnSetChoiceVisible(context, option.Button, true);
+        }
+
+        /// <summary>
+        /// A click on a button a choice set is using: records the index in `my picked choice`,
+        /// hides every button of that set and answers `when choice picked` with the same
+        /// message a hand-wired button would send (Task 35 Part C).
+        /// </summary>
+        private bool PickChoice(string button)
+        {
+            if (!Choices.TryFind(button, out ChoiceOption option, out ChoiceSet set))
+                return false;
+            Choices.Remove(set);
+            foreach (var each in set.Options)
+                OnSetChoiceVisible(set.Context, each.Button, false);
+            Variables.SetLocal(set.Owner, ChoiceManager.PickedVariable, ValueBox.OfNumber(option.Index));
+            RaisePush(set.Owner, new PushSignal
+            {
+                Kind = TriggerKind.Message,
+                Name = ChoiceManager.PickedMessage,
+                Other = set.Owner,
+            });
+            return true;
+        }
+
+        /// <summary>
         /// <c>type text "…" into &lt;thing&gt; speed &lt;n&gt;</c> — Task 35 Part A. Clears the label
         /// and lets <see cref="Typewriter"/> reveal it; a speed of 0 (or an empty line) shows it
         /// at once and answers `when text finishes` straight away.
@@ -2429,6 +2552,8 @@ namespace Game
             if (speed < 0)
                 speed = 0;
             var session = Typing.Start(context.Me, context, node.Target, text, speed);
+            // Remembered so `clear dialogue` can empty every label this sheet's dialogue wrote.
+            Dialogue.RememberLabel(context.Me, node.Target);
             if (session.Done)
             {
                 AnnounceTyping(session);

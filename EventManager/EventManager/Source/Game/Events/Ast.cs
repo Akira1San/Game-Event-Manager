@@ -141,6 +141,27 @@ namespace Game
         public ValueNode Value = new TextValue();
     }
 
+    /// <summary><c>show choice "&lt;text&gt;"</c> — numbers the next authored choice button and
+    /// shows it (Task 35 Part C). The buttons themselves are scene actors.</summary>
+    public class ShowChoiceNode : StatementNode
+    {
+        public ValueNode Value = new TextValue();
+    }
+
+    /// <summary><c>add to backlog "&lt;text&gt;"</c> — appends one line to the game's dialogue
+    /// history (Task 35 Part D). The runtime keeps the history; the scene's row labels show it.</summary>
+    public class AddBacklogNode : StatementNode
+    {
+        public ValueNode Value = new TextValue();
+    }
+
+    /// <summary><c>clear dialogue</c> — dismisses what this sheet's dialogue is showing: the line
+    /// being typed (without answering `when text finishes`), its choices and its speaker
+    /// (Task 35 Part D). The backlog is history, so it is left alone.</summary>
+    public class ClearDialogueNode : StatementNode
+    {
+    }
+
     /// <summary><c>set color of &lt;thing&gt; to &lt;color&gt;</c> — tints a control (e.g. an Image).</summary>
     public class SetControlColorNode : StatementNode
     {

@@ -612,6 +612,20 @@ namespace Game
                 return node;
             }
 
+            // ---- picked choice (Task 35 Part C) ----
+            // `my picked choice is 1` — the branch the dialogue is on. The name is two words,
+            // so it is joined like `my attack range` instead of leaving `choice` behind.
+            if (texts.Length >= 5 && texts[0] == "my" && texts[1] == "picked" &&
+                texts[2] == "choice" && texts[3] == "is")
+            {
+                bool pickedNot = texts.Length >= 6 && texts[4] == "not";
+                node.Kind = pickedNot ? ConditionKind.NotEqual : ConditionKind.Equal;
+                node.Owner = "my";
+                node.Name = ChoiceManager.PickedVariable;
+                node.Right = ValueFrom(tokens, texts, pickedNot ? 5 : 4);
+                return node;
+            }
+
             // ---- attack range (Task 21 Part A) ----
             // `my attack range is 120` — the same multiword stat `set` joins, so a sheet can
             // read back the range it declared.

@@ -13066,6 +13066,243 @@ clearSpeakerEngine.Tick(0);
 Check(clearedSpeaker == "" && clearSpeakerEngine.Variables.GetGlobal("Speaker").AsText() == "",
     "`set speaker to \"\"` clears the label and the global");
 
+// ------------------------------------------------------------------
+// Task 35 Part C: numbered choices
+// ------------------------------------------------------------------
+
+var showChoiceSpec = parser.Parse("when NPC is clicked\n  show choice \"I'll take a room.\"\n");
+var showChoiceNode = showChoiceSpec.Events[0].Body[0].Statement as ShowChoiceNode;
+Check(showChoiceNode != null && showChoiceNode.Value is TextValue choiceWords &&
+      choiceWords.Text == "I'll take a room.",
+    "`show choice \"…\"` parses to a ShowChoiceNode");
+ExpectParseError("when NPC is clicked\n  show choice\n",
+    "quotes", "`show choice` without text is a friendly error");
+ExpectParseError("when NPC is clicked\n  show choice I need a room\n",
+    "quotes", "`show choice` without quotes is a friendly error");
+
+var choicePickedDesc = TriggerClassifier.Classify(parser.Parse("when choice picked\n  set X to 1\n").Events[0]);
+Check(choicePickedDesc.Kind == TriggerKind.Message && choicePickedDesc.RequireName == "choice picked",
+    "`when choice picked` classifies as the \"choice picked\" message");
+
+var pickedSetSpec = parser.Parse("when game starts\n  set my picked choice to 1\n");
+var pickedSetNode = pickedSetSpec.Events[0].Body[0].Statement as SetNode;
+Check(pickedSetNode != null && pickedSetNode.Target.Owner == "my" &&
+      pickedSetNode.Target.Name == "picked choice",
+    "`set my picked choice to 1` writes the two-word dialogue index");
+
+var letterWorld = new FakeWorld();
+letterWorld.AddActor(new FakeActor("ChoiceA"));
+Check(ChoiceManager.FindButton(letterWorld, 1) == "ChoiceA" && ChoiceManager.FindButton(letterWorld, 2) == "",
+    "the choice slot prefers `Choice1` and falls back to `ChoiceA`");
+
+var choiceWorld = new FakeWorld();
+var choiceEngine = FreshEngine(choiceWorld);
+var choiceNpc = new FakeActor("Innkeeper");
+var choiceButton1 = new FakeActor("Choice1");
+var choiceButton2 = new FakeActor("Choice2");
+choiceWorld.AddActor(choiceNpc);
+choiceWorld.AddActor(choiceButton1);
+choiceWorld.AddActor(choiceButton2);
+var choiceLabels = new Dictionary<string, string>();
+var choiceVisible = new Dictionary<string, bool>();
+choiceEngine.OnSetText = (context, thing, value, reveal) => choiceLabels[thing] = value.AsText();
+choiceEngine.OnSetChoiceVisible = (context, thing, visible) => choiceVisible[thing] = visible;
+choiceEngine.AddSheet(choiceNpc, parser.Parse(@"
+when me is clicked
+  show choice ""I'll take a room.""
+  show choice ""Just passing through.""
+
+when choice picked
+  set Picks to Picks + 1
+  if my picked choice is 2
+  set Branch to 2
+  otherwise
+  set Branch to 1
+"));
+choiceEngine.Tick(0);
+choiceEngine.RaiseClick(choiceNpc, TriggerKind.Clicked);
+choiceEngine.Tick(0.1);
+Check(choiceLabels.ContainsKey("Choice1") && choiceLabels["Choice1"] == "1. I'll take a room.",
+    $"`show choice` numbers and writes the first button (got \"{(choiceLabels.ContainsKey("Choice1") ? choiceLabels["Choice1"] : "nothing")}\")");
+Check(choiceLabels.ContainsKey("Choice2") && choiceLabels["Choice2"] == "2. Just passing through.",
+    "a second `show choice` numbers the next button 2");
+Check(choiceVisible.ContainsKey("Choice1") && choiceVisible["Choice1"] &&
+      choiceVisible.ContainsKey("Choice2") && choiceVisible["Choice2"],
+    "both choice buttons are shown");
+Check(choiceEngine.Variables.GetLocal(choiceNpc, "picked choice").Kind == ValueKind.None,
+    "showing choices has not picked one yet");
+
+choiceEngine.RaiseClick(choiceButton2, TriggerKind.Clicked);
+choiceEngine.Tick(0.2);
+Check(choiceEngine.Variables.GetLocal(choiceNpc, "picked choice").AsNumber() == 2,
+    "clicking the second choice records index 2 in `my picked choice`");
+Check(choiceEngine.Variables.GetGlobal("Branch").AsNumber() == 2,
+    "`when choice picked` branches on `my picked choice`");
+Check(choiceEngine.Variables.GetGlobal("Picks").AsNumber() == 1,
+    "a pick fires `when choice picked` exactly once");
+Check(choiceVisible["Choice1"] == false && choiceVisible["Choice2"] == false,
+    "picking a choice hides every choice button");
+choiceEngine.RaiseClick(choiceButton2, TriggerKind.Clicked);
+choiceEngine.Tick(0.3);
+Check(choiceEngine.Variables.GetGlobal("Picks").AsNumber() == 1 &&
+      choiceEngine.Variables.GetLocal(choiceNpc, "picked choice").AsNumber() == 2,
+    "a picked choice cannot be picked again");
+
+var manualWorld = new FakeWorld();
+var manualEngine = FreshEngine(manualWorld);
+var manualNpc = new FakeActor("Innkeeper2");
+var manualButton = new FakeActor("ChoiceA");
+manualWorld.AddActor(manualNpc);
+manualWorld.AddActor(manualButton);
+manualEngine.AddSheet(manualNpc, parser.Parse(@"
+when ChoiceA is clicked
+  set my picked choice to 1
+  send message ""choice picked""
+
+when choice picked
+  if my picked choice is 1
+  set ManualBranch to 1
+"));
+manualEngine.Tick(0);
+manualEngine.RaiseClick(manualButton, TriggerKind.Clicked);
+manualEngine.Tick(0.1);
+Check(manualEngine.Variables.GetGlobal("ManualBranch").AsNumber() == 1,
+    "a hand-wired ChoiceA sets its own index and reaches `when choice picked` through the message");
+
+var missingChoiceWorld = new FakeWorld();
+var missingChoiceEngine = FreshEngine(missingChoiceWorld);
+var missingChoiceNpc = new FakeActor("Innkeeper3");
+missingChoiceWorld.AddActor(missingChoiceNpc);
+var choiceWarnings = new List<string>();
+missingChoiceEngine.OnRuntimeWarning = message => choiceWarnings.Add(message);
+missingChoiceEngine.AddSheet(missingChoiceNpc, parser.Parse("when game starts\n  show choice \"Hello?\"\n"));
+missingChoiceEngine.SessionStarted();
+missingChoiceEngine.Tick(0);
+Check(choiceWarnings.Count == 1 && choiceWarnings[0].Contains("Choice1"),
+    "`show choice` with no button actor warns once and names the button to create");
+
+// ------------------------------------------------------------------
+// Task 35 Part D: the backlog and `clear dialogue`
+// ------------------------------------------------------------------
+
+var backlogSpec = parser.Parse("when NPC is clicked\n  add to backlog \"Innkeeper: Hello.\"\n");
+var backlogNode = backlogSpec.Events[0].Body[0].Statement as AddBacklogNode;
+Check(backlogNode != null && backlogNode.Value is TextValue backlogWords &&
+      backlogWords.Text == "Innkeeper: Hello.",
+    "`add to backlog \"…\"` parses to an AddBacklogNode");
+ExpectParseError("when NPC is clicked\n  add to backlog\n",
+    "quotes", "`add to backlog` without a line is a friendly error");
+ExpectParseError("when NPC is clicked\n  add to backlog Hello\n",
+    "quotes", "`add to backlog` without quotes is a friendly error");
+ExpectParseError("when NPC is clicked\n  add to backlog \"hi\" now\n",
+    "add to backlog", "`add to backlog` with trailing words is a friendly error");
+
+var clearDialogueSpec = parser.Parse("when NPC is clicked\n  clear dialogue\n");
+Check(clearDialogueSpec.Events[0].Body[0].Statement is ClearDialogueNode,
+    "`clear dialogue` parses to a ClearDialogueNode");
+ExpectParseError("when NPC is clicked\n  clear dialogue now\n",
+    "clear dialogue", "`clear dialogue` takes nothing after it");
+
+// The history itself: order, blank lines and the cap.
+var backlogWorld = new FakeWorld();
+var backlogEngine = FreshEngine(backlogWorld);
+var backlogNpc = new FakeActor("Chronicler");
+backlogWorld.AddActor(backlogNpc);
+int backlogRepaints = 0;
+backlogEngine.OnBacklogChanged = lines => backlogRepaints++;
+backlogEngine.AddSheet(backlogNpc, parser.Parse(@"
+when game starts
+  add to backlog ""Innkeeper: Welcome.""
+  add to backlog ""Hero: A room, please.""
+"));
+backlogEngine.SessionStarted();
+backlogEngine.Tick(0);
+Check(backlogEngine.Backlog.Count == 2 &&
+      backlogEngine.Backlog.Lines[0].Text == "Innkeeper: Welcome." &&
+      backlogEngine.Backlog.Lines[1].Text == "Hero: A room, please.",
+    "`add to backlog` keeps the lines in the order they were written");
+Check(backlogRepaints == 2, $"each backlog line repaints the list (got {backlogRepaints} repaints)");
+
+var backlogCapWorld = new FakeWorld();
+var backlogCapEngine = FreshEngine(backlogCapWorld);
+var backlogCapNpc = new FakeActor("Chronicler2");
+backlogCapWorld.AddActor(backlogCapNpc);
+backlogCapEngine.AddSheet(backlogCapNpc, parser.Parse(@"
+when game starts
+  set BacklogLimit to 2
+  add to backlog ""one""
+  add to backlog ""two""
+  add to backlog ""three""
+  add to backlog """"
+"));
+backlogCapEngine.SessionStarted();
+backlogCapEngine.Tick(0);
+Check(backlogCapEngine.Backlog.Count == 2 &&
+      backlogCapEngine.Backlog.Lines[0].Text == "two" &&
+      backlogCapEngine.Backlog.Lines[1].Text == "three",
+    "`BacklogLimit` keeps the newest lines, and a blank line is not added");
+
+// `clear dialogue`: the reveal stops without a finish, the labels empty, choices hide.
+var dismissWorld = new FakeWorld();
+var dismissEngine = FreshEngine(dismissWorld);
+var dismissNpc = new FakeActor("Innkeeper3");
+var dismissChoice = new FakeActor("Choice1");
+dismissWorld.AddActor(dismissNpc);
+dismissWorld.AddActor(dismissChoice);
+var dismissLabels = new Dictionary<string, string>();
+var dismissChoiceVisible = new Dictionary<string, bool>();
+string dismissSpeaker = "(untouched)";
+dismissEngine.OnSetText = (context, thing, value, reveal) => dismissLabels[thing] = value.AsText();
+dismissEngine.OnSetChoiceVisible = (context, thing, visible) => dismissChoiceVisible[thing] = visible;
+dismissEngine.OnSetSpeaker = (context, name) => dismissSpeaker = name;
+dismissEngine.AddSheet(dismissNpc, parser.Parse(@"
+when game starts
+  set speaker to ""Innkeeper""
+  show choice ""I'll take a room.""
+  type text ""Welcome, traveler."" into DialogLabel speed 5
+  add to backlog ""Innkeeper: Welcome, traveler.""
+
+when me is clicked
+  clear dialogue
+
+when text finishes
+  set Finished to Finished + 1
+"));
+dismissEngine.SessionStarted();
+dismissEngine.Tick(0);
+dismissEngine.Tick(0.2);
+Check(dismissLabels["DialogLabel"] == "W", "the line is mid-reveal before `clear dialogue`");
+dismissEngine.RaiseClick(dismissNpc, TriggerKind.Clicked);
+dismissEngine.Tick(0.3);
+Check(dismissLabels["DialogLabel"] == "", "`clear dialogue` empties the line it was typing");
+Check(dismissEngine.Variables.GetGlobal("Finished").Kind == ValueKind.None,
+    "a dismissed line does not answer `when text finishes`");
+Check(dismissChoiceVisible["Choice1"] == false, "`clear dialogue` hides the numbered choices");
+Check(dismissSpeaker == "" && dismissEngine.Variables.GetGlobal("Speaker").AsText() == "",
+    "`clear dialogue` clears the speaker it wrote");
+Check(dismissEngine.Backlog.Count == 1,
+    "`clear dialogue` leaves the backlog alone, because it is history");
+dismissEngine.Tick(1);
+Check(dismissLabels["DialogLabel"] == "" &&
+      dismissEngine.Variables.GetGlobal("Finished").Kind == ValueKind.None,
+    "the dismissed line never comes back or finishes later");
+
+// A sheet that never spoke does not wipe another sheet's speaker.
+var otherWorld = new FakeWorld();
+var otherEngine = FreshEngine(otherWorld);
+var speakerNpc = new FakeActor("Speaker");
+var quietNpc = new FakeActor("Quiet");
+otherWorld.AddActor(speakerNpc);
+otherWorld.AddActor(quietNpc);
+string sharedSpeaker = "(untouched)";
+otherEngine.OnSetSpeaker = (context, name) => sharedSpeaker = name;
+otherEngine.AddSheet(speakerNpc, parser.Parse("when game starts\n  set speaker to \"Innkeeper\"\n"));
+otherEngine.AddSheet(quietNpc, parser.Parse("when game starts\n  clear dialogue\n"));
+otherEngine.SessionStarted();
+otherEngine.Tick(0);
+Check(otherEngine.Variables.GetGlobal("Speaker").AsText() == "Innkeeper" && sharedSpeaker == "Innkeeper",
+    "`clear dialogue` on a silent sheet leaves the speaker alone");
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);

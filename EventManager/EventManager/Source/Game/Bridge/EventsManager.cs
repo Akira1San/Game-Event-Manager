@@ -176,6 +176,11 @@ namespace Game
                 FlaxActions.SetPortrait(thing, sprite);
             Runtime.OnSetSpeaker = (context, name) =>
                 FlaxActions.SetSpeaker(name);
+            // A numbered choice is a scene button the runtime shows and hides (Task 35 Part C).
+            Runtime.OnSetChoiceVisible = (context, thing, visible) =>
+                FlaxActions.SetChoiceVisible(context, thing, visible);
+            // The dialogue history is painted into the scene's authored row labels (Task 35 Part D).
+            Runtime.OnBacklogChanged = lines => FlaxActions.SetBacklog(lines);
             Runtime.OnSetControlColor = (context, thing, color) =>
                 FlaxActions.SetControlColor(thing, color);
             Runtime.OnSetProgress = (context, thing, value, reveal) =>

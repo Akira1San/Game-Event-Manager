@@ -474,6 +474,12 @@ namespace Game
                 return new TriggerDescriptor { Kind = TriggerKind.ParticleEnd, RequireName = trigger[1].Text };
             if (words.Length >= 3 && words[0] == "tween" && words[words.Length - 1] == "ends")
                 return new TriggerDescriptor { Kind = TriggerKind.TweenEnd, RequireName = Join(trigger, 1, words.Length - 1) };
+            // `when choice picked` — sugar for the message a numbered choice sends (Task 35
+            // Part C), so a hand-wired `ChoiceA` that sets `my picked choice` and sends
+            // `"choice picked"` answers the very same trigger.
+            if (words.Length == 2 && words[0] == "choice" && words[1] == "picked")
+                return new TriggerDescriptor { Kind = TriggerKind.Message, RequireName = ChoiceManager.PickedMessage };
+
             // `when text finishes` — a typewriter line completed (Task 35 Part A). The signal is
             // broadcast, so a generic trigger answers every line and `when text of DialogLabel
             // finishes` names one label.

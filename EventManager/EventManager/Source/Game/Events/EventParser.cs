@@ -438,6 +438,23 @@ namespace Game
                     return;
                 }
             }
+            // `clear dialogue` — dismiss the whole open dialogue in one word (Task 35 Part D).
+            // Checked before the action-word table so `dialogue` is never read as a thing.
+            if (first.Text == "clear" && line.Words.Count >= 2 &&
+                line.Words[1].Type == TokenType.Word && line.Words[1].Text == "dialogue")
+            {
+                CheckEndOfLine(line.Words, 2, line.Line, "clear dialogue");
+                line.Statement = new ClearDialogueNode { Line = line.Line };
+                return;
+            }
+            // `show choice "…"` — numbered dialogue choices (Task 35 Part C). Checked before the
+            // action-word table so `choice` is never read as an actor to show.
+            if (first.Text == "show" && line.Words.Count >= 2 &&
+                line.Words[1].Type == TokenType.Word && line.Words[1].Text == "choice")
+            {
+                line.Statement = ParseShowChoice(line);
+                return;
+            }
             // `type text "…" into <thing> speed <n>` — the typewriter (Task 35 Part A). Checked
             // before the action-word table so its own statement carries the timing.
             if (first.Text == "type" && line.Words.Count >= 2 &&
@@ -914,6 +931,15 @@ namespace Game
                     index += 3;
                     return new VariableValue { Line = t.Line, Owner = "my", Name = UnitTypes.Variable };
                 }
+                // `my picked choice` — the dialogue branch index (Task 35 Part C). One variable
+                // with a space, so a sheet may write it by hand as well as read it.
+                if (index + 2 < words.Count && words[index + 1].Type == TokenType.Word &&
+                    words[index + 2].Type == TokenType.Word &&
+                    words[index + 1].Text == "picked" && words[index + 2].Text == "choice")
+                {
+                    index += 3;
+                    return new VariableValue { Line = t.Line, Owner = "my", Name = ChoiceManager.PickedVariable };
+                }
                 // `my attack range` — the distance an attack stops at (Task 21 Part A).
                 if (index + 2 < words.Count && words[index + 1].Type == TokenType.Word &&
                     words[index + 2].Type == TokenType.Word &&
@@ -1357,6 +1383,40 @@ namespace Game
         }
 
         /// <summary>
+        /// <c>add to backlog "&lt;text&gt;"</c> — Task 35 Part D. The line is kept as written; the
+        /// bridge fills the scene's newest row labels with the history.
+        /// </summary>
+        private StatementNode ParseAddBacklog(BodyLineNode line)
+        {
+            var words = line.Words;
+            const string shape = "add to backlog \"Innkeeper: Hello.\"";
+            if (words.Count < 4 || words[3].Type != TokenType.Str)
+                throw new ParseException($"`add to backlog` needs the line in quotes — `{shape}`", line.Line);
+            var node = new AddBacklogNode { Line = line.Line };
+            int index = 3;
+            node.Value = ReadValue(words, ref index, line.Line);
+            CheckEndOfLine(words, index, line.Line, "add to backlog \"<text>\"");
+            return node;
+        }
+
+        /// <summary>
+        /// <c>show choice "&lt;text&gt;"</c> — Task 35 Part C. The button is scene content, so the
+        /// line only carries the words; the runtime finds the next slot and numbers it.
+        /// </summary>
+        private StatementNode ParseShowChoice(BodyLineNode line)
+        {
+            var words = line.Words;
+            const string shape = "show choice \"I need a room.\"";
+            if (words.Count < 3 || words[2].Type != TokenType.Str)
+                throw new ParseException($"`show choice` needs the words on the button in quotes — `{shape}`", line.Line);
+            var node = new ShowChoiceNode { Line = line.Line };
+            int index = 2;
+            node.Value = ReadValue(words, ref index, line.Line);
+            CheckEndOfLine(words, index, line.Line, "show choice \"<text>\"");
+            return node;
+        }
+
+        /// <summary>
         /// <c>set portrait of &lt;thing&gt; to "&lt;sprite&gt;"</c> — Task 35 Part B. The sprite is the
         /// same loose name <c>set image of</c> and <c>play sound</c> take (no folder, no
         /// extension, case ignored), resolved by the bridge's shared texture index.
@@ -1426,6 +1486,11 @@ namespace Game
         private StatementNode ParseAdd(BodyLineNode line)
         {
             var words = line.Words;
+            // `add to backlog "…"` — dialogue history (Task 35 Part D), not the
+            // `add <value> to <variable>` statement (`backlog` is not a variable).
+            if (words.Count >= 3 && words[1].Type == TokenType.Word && words[1].Text == "to" &&
+                words[2].Type == TokenType.Word && words[2].Text == "backlog")
+                return ParseAddBacklog(line);
             // `add buff "stim" to me for 8 seconds` is a buff word (Task 27 Part C), not the
             // `add <value> to <variable>` statement.
             if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "buff")

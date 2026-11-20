@@ -137,6 +137,23 @@ namespace Game
             return skipped;
         }
 
+        /// <summary>Removes the lines an actor's sheet started and hands them back without
+        /// announcing them — `clear dialogue` dismissed them, they did not finish.</summary>
+        public List<TypingSession> TakeActor(object actor)
+        {
+            var taken = new List<TypingSession>();
+            for (int i = sessions.Count - 1; i >= 0; i--)
+            {
+                if (ReferenceEquals(sessions[i].Actor, actor))
+                {
+                    taken.Add(sessions[i]);
+                    sessions.RemoveAt(i);
+                }
+            }
+            taken.Reverse();
+            return taken;
+        }
+
         /// <summary>Drops every line (a new scene, a hot reload).</summary>
         public void Clear()
         {
