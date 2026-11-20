@@ -648,7 +648,7 @@ when every 0.2 seconds
 
 ### Parts
 
-- [ ] **Part A — Anim speed.** Per-sheet playback speed, passed as the `speed` argument of
+- [x] **Part A — Anim speed.** Per-sheet playback speed, passed as the `speed` argument of
       `AnimatedModel.PlaySlotAnimation` so a change takes effect on the running clip with no restart.
       The value persists across clip changes and a new clip inherits it. Clips played on the
       full-body `InitAsAnimation` path have speed baked in at graph build, so a live change there

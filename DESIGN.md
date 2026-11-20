@@ -532,9 +532,14 @@ each clip simply plays. The event words do the rest:
 - Assigning a virtual graph overrides any graph authored on the model. That is intentional:
   the event words own the animation.
 
-**Known limitation:** v1 swaps graphs instead of blending, so switching clips can pop. If
-cross-blending becomes necessary, ship one graph with an Animation Slot node and use
-`PlaySlotAnimation(...)` with blend-in/blend-out times.
+**Cross-blending and upper-body layering (Task 33, decided):** v1 swapped graphs instead of
+blending, so switching clips could pop. That is now a designed path rather than an open question:
+cross-blends and layering go through an authored Anim Graph whose `Animation Slot` node is played
+with `PlaySlotAnimation(...)` and its blend-in/blend-out times (0.2 s by default, tuned by feel).
+The virtual `InitAsAnimation` graph stays as the zero-setup fallback — nothing has to be authored
+for plain clip playback -- and that fallback is the one remaining hard-swap path, because it
+replaces the whole pose, legs included. Layering is the case that does require a graph asset; see
+*Animation depth and layering* in section 9.
 
 **Friendly errors in BGE spirit:** playing an unknown name lists the project's clips --
 `I don't know the anim "walked". This project has: bge dragon 2.07 animation idle pose, bge dragon 2.07 animation run, bge dragon 2.07 animation walk.`
@@ -1300,6 +1305,36 @@ window around a broken runtime.
   instead of `Cursor hand` / `Cursor attack` / `Cursor drag` globals.
 
 ---
+
+- **Animation depth and layering (Task 33, decided):** four decisions, because the virtual
+  `InitAsAnimation` graph can only sample one clip straight to the output — it has no nodes to mask,
+  blend or inject into, so speed, layers and root motion all need somewhere else to live.
+  *Upper-body layering is authored content.* A character that must shoot while walking ships a base
+  Anim Graph: a `Blend With Mask` node whose **Pose A is the locomotion pose** and whose **Pose B is
+  an `Animation Slot` node** feeding the final output, plus a `SkeletonMask` asset (here
+  `UpperBody`). The mask rule is **spine and up, hips and legs excluded** — spine, chest, neck,
+  head, shoulders, arms and hands enabled; **hips, root, legs and feet disabled**. Excluding the hips
+  is load-bearing, not cosmetic: the shoot clip animates the legs too, and the mask is the only thing
+  that stops those channels reaching the output, so the walk keeps owning the pelvis and feet. A mask
+  that includes the hips overrides the walk's pelvis motion and visibly detaches the legs.
+  *Slot words.* `play anim "<name>" upper body` is
+  `PlaySlotAnimation("UpperBody", clip, speed, blendIn, blendOut, loopCount)` and
+  `stop anim upper body` is `StopSlotAnimation` — the legs keep walking through both. Slot playback
+  must never go through `InitAsAnimation`, which replaces the whole pose; that substitution is exactly
+  the bug the layer exists to fix.
+  *Speed is live, not baked.* `set anim speed to <n>` is passed as the slot's `speed` argument, so it
+  changes the running clip with no restart, and the per-sheet value persists across clip changes with
+  each new clip inheriting it. A full-body clip on the virtual graph bakes speed at graph build, so a
+  live change there rebuilds the graph (a restart) — a documented limit that disappears once a
+  character's playback is routed through slots.
+  *Root motion belongs to the locomotion clip only.* `AnimatedModel.RootMotionTarget` is assigned once
+  on the base graph and drives nothing else; slot clips never write the actor transform, so an
+  upper-body clip cannot double-apply displacement or slide the feet. The single-clip fallback graphs
+  keep `rootMotion: false`.
+  **Content dependency:** the bridge cannot synthesize any of this, so Task 33 C is not startable
+  until a character's base graph and mask exist as project assets. Bone names in the mask must be
+  matched against the real skeleton — other skeletons (the BGE dragon, for instance) need their own
+  mask, and a mask built for the wrong skeleton silently blends nothing.
 
 ## 10. The one-paragraph pitch
 

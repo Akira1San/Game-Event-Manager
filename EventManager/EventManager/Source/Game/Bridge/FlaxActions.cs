@@ -78,6 +78,10 @@ namespace Game
         public static Action<string> Warn = FlaxActions.WarnOnce;
         /// <summary>Animation state per actor (current/previous clip + the virtual graphs that play them).</summary>
         private static readonly Dictionary<object, AnimState> AnimStates = new Dictionary<object, AnimState>();
+        /// <summary>Playback speed per actor (Task 33 Part A). It belongs to the actor, not the
+        /// clip, so it survives clip changes; the bridge writes it to
+        /// <see cref="AnimatedModel.UpdateSpeed"/>, which Flax applies to the running graph live.</summary>
+        private static readonly Dictionary<Actor, float> AnimSpeeds = new Dictionary<Actor, float>();
         /// <summary>Vertical speed per character actor. <c>CharacterController.Move</c> carries no
         /// velocity state, so the event runtime keeps the falling speed between ticks.</summary>
         private static readonly Dictionary<Actor, float> CharacterFallSpeeds = new Dictionary<Actor, float>();
@@ -169,6 +173,8 @@ namespace Game
             public string PreviousClip;
             public string PreviousName;
             public bool PreviousLoop;
+            public double StartTime;     // when the current clip started, for re-timing at a new speed
+            public double Length;        // clip length in seconds (0 for a loop, which has no end)
         }
 
         public static void WarnOnce(string message)
@@ -289,6 +295,7 @@ namespace Game
                     FlaxEngine.Object.Destroy(state.PreviousGraph);
             }
             AnimStates.Clear();
+            AnimSpeeds.Clear();
         }
 
         /// <summary>True when <paramref name="actor"/> is actively moving this tick: an ongoing
@@ -1337,6 +1344,9 @@ namespace Game
                     break;
                 case ActionVerb.StopAnim:
                     StopAnim(context, spec);
+                    break;
+                case ActionVerb.SetAnimSpeed:
+                    SetAnimSpeed(context, spec);
                     break;
                 case ActionVerb.CameraFollow:
                     StartCameraFollow(context, spec);
@@ -6047,6 +6057,10 @@ namespace Game
                 return;
             }
 
+            // Task 33 Part A: the speed is the actor's, not the clip's, and Flax applies
+            // UpdateSpeed to the running graph live — no rebuild, no restart, no pop.
+            float speed = AnimSpeedOf(me);
+            model.UpdateSpeed = speed;
             model.AnimationGraph = graph;
             if (state?.PreviousGraph != null)
                 FlaxEngine.Object.Destroy(state.PreviousGraph); // keep only two graphs alive
@@ -6057,7 +6071,9 @@ namespace Game
                 Name = spec.Thing.Trim(),
                 Loop = loop,
                 OneShot = !loop,
-                EndTime = loop ? double.MaxValue : Time.GameTime + anim.Length,
+                EndTime = loop ? double.MaxValue : AnimPlayback.EndTime(Time.GameTime, anim.Length, speed),
+                StartTime = Time.GameTime,
+                Length = anim.Length,
                 Graph = graph,
                 PreviousGraph = state?.Graph,
                 PreviousClip = state?.Clip,
@@ -6065,6 +6081,45 @@ namespace Game
                 PreviousLoop = state?.Loop ?? true,
             };
         }
+
+        /// <summary>
+        /// <c>set anim speed to &lt;n&gt;</c> (Task 33 Part A): the acting actor's playback speed. It lives for
+        /// the actor, not the clip, so a new clip inherits it, and it is written to Flax's
+        /// <see cref="AnimatedModel.UpdateSpeed"/> — a live delta-time scale, so the running clip
+        /// changes speed instead of restarting.
+        /// </summary>
+        private static void SetAnimSpeed(EventContext context, ActionSpec spec)
+        {
+            var me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Cset anim speed\u201D needs to run on an actor's sheet — the global Game sheet has no model to animate.");
+                return;
+            }
+
+            double asked = ResolveNumber(context, spec);
+            float speed = AnimPlayback.ClampSpeed(asked);
+            if (Math.Abs(asked - speed) > 1e-6)
+                WarnOnce($"\u201Cset anim speed to {asked}\u201D is outside {AnimPlayback.MinSpeed}\u2013{AnimPlayback.MaxSpeed} — using {speed}.");
+
+            float previous = AnimSpeedOf(me);
+            AnimSpeeds[me] = speed;
+
+            var model = ModelOf(me);
+            if (model != null)
+                model.UpdateSpeed = speed;
+
+            // A running one-shot counted its end at the old speed, so `when anim ... ends` would
+            // fire early or late: re-time what is left of the clip.
+            if (AnimStates.TryGetValue(me, out AnimState state) && state.OneShot && state.Length > 0)
+                state.EndTime = AnimPlayback.RetimedEnd(Time.GameTime, state.StartTime, state.Length, previous, speed);
+        }
+
+        /// <summary>The actor's animation speed, or <see cref="AnimPlayback.DefaultSpeed"/>.</summary>
+        private static float AnimSpeedOf(Actor actor)
+            => actor != null && AnimSpeeds.TryGetValue(actor, out float speed)
+                ? speed
+                : AnimPlayback.DefaultSpeed;
 
         /// <summary>Stop the current animation and restore the previous one.</summary>
         private static void StopAnim(EventContext context, ActionSpec spec)
@@ -6098,6 +6153,8 @@ namespace Game
                     Loop = state.PreviousLoop,
                     OneShot = false,
                     EndTime = double.MaxValue,
+                    StartTime = Time.GameTime,
+                    Length = 0,
                     Graph = state.PreviousGraph,
                 };
                 return;
@@ -6491,6 +6548,7 @@ namespace Game
                 JumpingCharacters.Remove(body);
                 ScriptedJumps.Remove(body);
                 Climbs.Remove(body);
+                AnimSpeeds.Remove(body);
             }
             if (AnimStates.TryGetValue(actor, out AnimState state))
             {

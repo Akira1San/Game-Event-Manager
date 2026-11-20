@@ -2711,6 +2711,31 @@ var loopAnim = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   loop anim ""Walk"""), null);
 Check(loopAnim.Verb == ActionVerb.LoopAnim && loopAnim.Thing == "Walk", "`loop anim \"Walk\"` parses");
 
+var animSpeedSpec = ActionWords.Parse(RawWords(actionParser, "when W is held\n  set anim speed to 1.5"), null);
+Check(animSpeedSpec.Verb == ActionVerb.SetAnimSpeed && Math.Abs(animSpeedSpec.Number - 1.5) < 1e-9,
+    "`set anim speed to 1.5` parses to SetAnimSpeed, not a global called \"anim speed\"");
+
+var animSpeedVariableSpec = ActionWords.Parse(RawWords(actionParser, "when W is held\n  set anim speed to my Speed / 60"), null);
+Check(animSpeedVariableSpec.Verb == ActionVerb.SetAnimSpeed && !animSpeedVariableSpec.HasNumber &&
+      animSpeedVariableSpec.AmountNode != null,
+    "`set anim speed` takes any value: `set anim speed to my Speed / 60`");
+
+string animSpeedHint = "";
+var badAnimSpeed = ActionWords.Parse(RawWords(actionParser, "when W is held\n  set anim speed 1.5"), message => animSpeedHint = message);
+Check(badAnimSpeed.Verb == ActionVerb.Unknown && animSpeedHint.Contains("set anim speed to 1.5"),
+    "a broken `set anim speed` line explains the shape it wants");
+
+Check(Math.Abs(AnimPlayback.ClampSpeed(0) - AnimPlayback.MinSpeed) < 1e-6 &&
+      Math.Abs(AnimPlayback.ClampSpeed(99) - AnimPlayback.MaxSpeed) < 1e-6 &&
+      Math.Abs(AnimPlayback.ClampSpeed(1.5) - 1.5) < 1e-6,
+    "anim speed clamps into the range Flax can play");
+Check(Math.Abs(AnimPlayback.EndTime(10, 2, 2) - 11) < 1e-9 &&
+      Math.Abs(AnimPlayback.EndTime(10, 2, 0.5) - 14) < 1e-9,
+    "a one-shot ends after its length divided by the speed");
+Check(Math.Abs(AnimPlayback.RetimedEnd(11, 10, 2, 1, 2) - 11.5) < 1e-9 &&
+      Math.Abs(AnimPlayback.RetimedEnd(12, 10, 2, 1, 2) - 12) < 1e-9,
+    "changing speed mid-clip keeps the time already played");
+
 var hideSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   hide me"), null);
 Check(hideSpec.Verb == ActionVerb.Hide && hideSpec.Thing == "me", "`hide me` parses (hiding)");

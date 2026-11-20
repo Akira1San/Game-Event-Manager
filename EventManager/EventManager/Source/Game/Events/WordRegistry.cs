@@ -296,6 +296,7 @@ namespace Game
             new WordEntry { Kind = "action", Word = "set master volume to <n>", Example = "set master volume to 0.8", AltShape = "multiplies music and sound · writes `MasterVolume`" },
             new WordEntry { Kind = "action", Word = "loop", Example = "loop anim \"animation walk\"" },
             new WordEntry { Kind = "action", Word = "stop", Example = "stop anim" },
+            new WordEntry { Kind = "action", Word = "set", Example = "set anim speed to 1.5", AltShape = "the speed is the actor's, survives clip changes, and applies live through AnimatedModel.UpdateSpeed" },
             new WordEntry { Kind = "action", Word = "stop", Example = "stop particle \"smoke\"" },
             new WordEntry { Kind = "action", Word = "stop", Example = "stop this event" },
             new WordEntry { Kind = "action", Word = "send", Example = "send message \"die\"" },

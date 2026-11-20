@@ -51,6 +51,8 @@ namespace Game
         PlayAnim,
         LoopAnim,
         StopAnim,
+        /// <summary><c>set anim speed to &lt;n&gt;</c> — per-sheet playback speed (Task 33 Part A).</summary>
+        SetAnimSpeed,
         PlayParticle,
         StopParticle,
         SetLightIntensity,
@@ -1319,6 +1321,18 @@ namespace Game
                 }
                 case "set":
                 {
+                    // `set anim speed to <n>` — the acting actor's playback speed (Task 33 Part A).
+                    // Its own action word, not a global variable called "anim speed".
+                    if (words.Count >= 5 && words[1].Text == "anim" && words[2].Text == "speed" && words[3].Text == "to")
+                    {
+                        spec.AmountNode = ValueNodeAt(words, 4, out int animSpeedUsed);
+                        spec.HasNumber = words[4].Type == TokenType.Number;
+                        if (spec.HasNumber)
+                            spec.Number = words[4].Number;
+                        return Finish(spec, ActionVerb.SetAnimSpeed, words, 4 + animSpeedUsed);
+                    }
+                    if (words.Count >= 3 && words[1].Text == "anim" && words[2].Text == "speed")
+                        return Unknown(spec, words, "\u201Cset anim speed\u201D looks like this: \u201Cset anim speed to 1.5\u201D", warn);
                     // Volume groups (Task 31): `set music volume to 0.4`, `set sound volume to
                     // 0.7`, `set master volume to 0.8`. They write the globals a settings UI
                     // binds, and the bridge applies them to every source it owns.

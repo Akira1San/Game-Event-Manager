@@ -1031,6 +1031,15 @@ namespace Game
         private StatementNode ParseSet(BodyLineNode line)
         {
             var words = line.Words;
+            // `set anim speed to <n>` — animation playback speed (Task 33 Part A). An action word,
+            // not a global variable called "anim speed", so it goes to the action parser.
+            if (words.Count >= 3 && words[1].Type == TokenType.Word && words[1].Text == "anim" &&
+                words[2].Type == TokenType.Word && words[2].Text == "speed")
+            {
+                var animSpeedRaw = new RawActionNode { Line = line.Line };
+                animSpeedRaw.Words.AddRange(words);
+                return animSpeedRaw;
+            }
             // `set music volume to 0.4`, `set sound volume to 0.7`, `set master volume to 0.8`
             // — the audio volume groups (Task 31). They are action words, not a global called
             // "music volume", so they go to the raw action parser.
