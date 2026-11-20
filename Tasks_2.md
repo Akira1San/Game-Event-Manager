@@ -381,9 +381,29 @@ when me touches Checkpoint
       a variable the save never had is gone; `Levels.Resume` rebases the level clock so
       `time elapsed` keeps counting from the save instead of restarting with the reload; and a
       save whose level scene is missing is refused before anything changes. The words stay Part E.
-- [ ] **Part C — Per-actor snapshot.** Walk every `SheetInstance`: source name, actor name, player,
+- [x] **Part C — Per-actor snapshot.** Walk every `SheetInstance`: source name, actor name, player,
       transform, active state, all per-object variables, bag, equipment, state. Rebuild sheets by
       source name after the scene loads, then apply values.
+      *Landed:* `Runtime/SaveActors.cs` captures one `SaveActor` per real sheet (the global
+      `GlobalHost` is skipped) sorted by actor name, with `Source`, actor name, player,
+      `UsePhysicsMovement`, active flag, world transform, every per-object variable (sorted, kinds
+      intact), bag stacks, equipped names, `CurrentState` and `spawnedFrom`. The engine-free
+      runtime has no transform or active flag, so `SaveSnapshot.Capture` takes optional readers and
+      the bridge supplies `FlaxActions.CaptureSaveTransform` / `CaptureSaveActive`; without them a
+      record gets the identity transform and counts as active. A restore runs after the scene has
+      reloaded and applies over the fresh sheet: per-object variables are **merged** (a saved value
+      wins, an authored default the save never wrote survives), while the bag and equipment are
+      **replaced** (clear, then set) because what the actor carried at save time is not something
+      to merge. A live actor whose sheet is missing is rebuilt from the saved `Source` through
+      `EventsManager.ProgramForSource` + `runtime.AddSheet`, then gets its state. A restored sheet
+      clears `PushQueue` and `Waiting` and writes `CurrentState` and `LastState` together, so the
+      `when me appears` a rebuilt sheet queues does not run and `when state is` sees no false entry
+      edge — a load is a moment in the run, not an arrival. A saved actor this scene cannot provide
+      is warned about and reported in `SaveActors.Result.Missing`, not fatal. The bridge's
+      `ApplySaveTransform` warps through `TeleportSubject` (cancelling moves and stopping a dynamic
+      body) before writing orientation and scale, and `ApplySaveActive` restores the flag.
+      `SaveSnapshot.Load` now restores globals, then actor records, in that order. The words stay
+      Part E.
 - [ ] **Part D — Spawned actors.** Recreate prefab/scene/clone instances recorded in the save, using
       the existing spawn naming and `AttachSpawnedTree` path, then restore their sheet state.
 - [ ] **Part E — Slots, autosave, deletion, errors.** Default slot, named slots, autosave, delete,

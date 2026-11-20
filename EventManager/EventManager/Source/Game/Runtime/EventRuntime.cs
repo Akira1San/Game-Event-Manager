@@ -1686,6 +1686,68 @@ namespace Game
             return bag;
         }
 
+        /// <summary>
+        /// The item names in this owner's bag with a positive count, sorted so a save is stable
+        /// (Task 30 Part C). The counts themselves come from <see cref="BagCount"/>.
+        /// </summary>
+        public IEnumerable<string> BagNames(object owner)
+        {
+            Dictionary<string, int> bag;
+            if (!bags.TryGetValue(owner, out bag) || bag.Count == 0)
+                return Array.Empty<string>();
+            var names = new List<string>();
+            foreach (var pair in bag)
+            {
+                if (pair.Value > 0)
+                    names.Add(pair.Key);
+            }
+            names.Sort(StringComparer.Ordinal);
+            return names;
+        }
+
+        /// <summary>
+        /// Empties a bag for a save restore (Task 30 Part C). The bag is replaced rather than
+        /// merged: an item picked up after the save must not survive the load.
+        /// </summary>
+        public void ClearBag(object owner)
+        {
+            bags.Remove(owner);
+            bagItems.Remove(owner);
+        }
+
+        /// <summary>Writes one bag stack during a save restore; a count of 0 removes the name.</summary>
+        public void SetBagCount(object owner, string thing, int count)
+        {
+            if (string.IsNullOrEmpty(thing))
+                return;
+            var bag = BagOf(owner);
+            if (count > 0)
+                bag[thing] = count;
+            else
+                bag.Remove(thing);
+        }
+
+        /// <summary>The item names this wearer has equipped, sorted for a stable save (Task 30 Part C).</summary>
+        public IEnumerable<string> EquippedNames(object wearer)
+        {
+            HashSet<string> set;
+            if (!equipped.TryGetValue(wearer, out set) || set.Count == 0)
+                return Array.Empty<string>();
+            var names = new List<string>(set);
+            names.Sort(StringComparer.Ordinal);
+            return names;
+        }
+
+        /// <summary>
+        /// Clears a wearer's equipment for a save restore (Task 30 Part C). Like the bag, the set
+        /// is replaced: equipment put on after the save must not survive the load. The stats the
+        /// items pushed live in the actor's locals and are restored with them.
+        /// </summary>
+        public void ClearEquipment(object wearer)
+        {
+            equipped.Remove(wearer);
+        }
+
         public bool Matches(SheetInstance sheet, TriggerDescriptor descriptor, PushSignal signal)
         {
             if (descriptor.Kind != signal.Kind)

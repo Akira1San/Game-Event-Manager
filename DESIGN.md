@@ -1156,6 +1156,23 @@ window around a broken runtime.
   than merged; the level clock is rebased to the saved `Time Elapsed` so it keeps counting; the
   scene section wins over a disagreeing `LevelName` global; and a save whose level scene is
   missing is refused before the running game is touched.
+  Actor records (Part C, decided): one record per real sheet (`GlobalHost` is not an actor), sorted
+  by actor name, carrying source, actor name, player, physics flag, active flag, world transform,
+  every per-object variable, bag stacks, equipped names, `CurrentState` and `spawnedFrom`. A load
+  applies them after the scene has reloaded and after the globals: per-object variables are
+  **merged** over the fresh sheet (the save's value wins, an authored default it never wrote stays),
+  while the bag and equipment are **replaced**, because what the actor carried at save time must not
+  merge with what the reload handed it. Equipment is re-recorded by name only, never re-applied as
+  affixes, since the stats it pushed are already among the restored per-object variables. A live
+  actor whose sheet is missing is rebuilt from the saved `Source` (`EventsManager.ProgramForSource`
+  + `runtime.AddSheet`) before its state is applied. A restored sheet clears `PushQueue` and
+  `Waiting` and writes `CurrentState` and `LastState` together: the `when me appears` that a rebuilt
+  sheet queues must not run, and `when state is` must not see a false entry edge, because a load is
+  a moment in the run rather than a new actor arriving. A saved actor the scene cannot provide is
+  warned about and skipped. The bridge supplies the engine half: `CaptureSaveTransform` /
+  `CaptureSaveActive` read the world transform and flag, `ApplySaveTransform` warps through
+  `TeleportSubject` (cancelling moves and stopping a dynamic body) before writing orientation and
+  scale, and `ApplySaveActive` restores the flag.
   Not saved in v1, by design: in-flight `wait` continuations, active tweens, particle
   lifetimes, queued pushes and the current path — those restart cleanly rather than resuming
   mid-air.

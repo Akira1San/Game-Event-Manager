@@ -4,31 +4,34 @@ using System.Collections.Generic;
 namespace Game
 {
     /// <summary>
-    /// The global and scene half of a save (Task 30 Part B). Parts C and D fill the actor and
-    /// spawned records; this file owns everything a run knows without looking at a single actor —
-    /// every global, the scene that was playing, its additive overlays and the level's place in
-    /// the run — and the order a load puts them back in.
+    /// The global, scene and actor half of a save (Task 30 Parts B and C). Part D adds the
+    /// spawned records; this file owns everything a run knows without recreating an object —
+    /// every global, the scene that was playing, its additive overlays, the level's place in
+    /// the run, and the record of every sheet standing in it (see <see cref="SaveActors"/>).
     ///
     /// The order is the point. Reloading a scene runs that scene's <c>when scene starts</c> code,
-    /// which may write globals, and the runtime's own scene-start pass seeds <c>LevelName</c>,
-    /// <c>LevelNumber</c> and <c>Time Elapsed</c>. A load therefore reloads every scene first and
-    /// writes the saved globals last; restored first, they would be overwritten by the level
-    /// that was just reloaded.
+    /// which may write globals and reset sheet state, and the runtime's own scene-start pass
+    /// seeds <c>LevelName</c>, <c>LevelNumber</c> and <c>Time Elapsed</c>. A load therefore
+    /// reloads every scene first, writes the saved globals next, and applies the actor records
+    /// last; restored first, they would be overwritten by the level that was just reloaded.
     /// </summary>
     public static class SaveSnapshot
     {
         /// <summary>
         /// The save for the running game: the scene section the caller filled in (the bridge is
-        /// the one that knows which scenes are loaded) plus every global. Actors, spawned records
-        /// and the RNG seed stay empty until Parts C, D and Task 39 fill them.
+        /// the one that knows which scenes are loaded), every global, and every real actor sheet.
+        /// Spawned records and the RNG seed stay empty until Part D and Task 39 fill them.
         /// </summary>
-        public static SaveData Capture(EventRuntime runtime, SaveScene scene)
+        public static SaveData Capture(EventRuntime runtime, SaveScene scene,
+            Func<object, SaveTransform> readTransform = null,
+            Func<object, bool> readActive = null)
         {
             if (runtime == null)
                 throw new ArgumentNullException(nameof(runtime));
             var data = new SaveData();
             data.Scene = CaptureScene(runtime, scene?.Name, scene?.Additive);
             data.Globals.AddRange(CaptureGlobals(runtime.Variables));
+            data.Actors.AddRange(SaveActors.Capture(runtime, readTransform, readActive));
             return data;
         }
 
@@ -70,14 +73,22 @@ namespace Game
         }
 
         /// <summary>
-        /// Reloads the saved scene, then its overlays, and only then writes the globals back.
-        /// <paramref name="loadScene"/> replaces the loaded scenes with the level and returns false
-        /// when that scene cannot be found; <paramref name="addScene"/> puts one overlay back on
-        /// top. A save whose level is gone is refused before anything is changed — a half-loaded
-        /// save is worse than no load.
+        /// Reloads the saved scene, then its overlays, then writes the globals back, and only
+        /// then applies the actor records. <paramref name="loadScene"/> replaces the loaded scenes
+        /// with the level and returns false when that scene cannot be found;
+        /// <paramref name="addScene"/> puts one overlay back on top. A save whose level is gone is
+        /// refused before anything is changed — a half-loaded save is worse than no load.
+        ///
+        /// The actor parameters are passed through to <see cref="RestoreActors"/>: the bridge
+        /// supplies the live-actor lookup and the engine transform/active calls, while an
+        /// engine-free caller can leave them null and still restore the sheet half.
         /// </summary>
         public static bool Load(EventRuntime runtime, SaveData data, Func<string, bool> loadScene,
-            Action<string> addScene = null, Action<string> warn = null)
+            Action<string> addScene = null, Action<string> warn = null,
+            Func<string, object> findActor = null,
+            Func<string, ProgramFile> programForSource = null,
+            Action<object, SaveTransform> applyTransform = null,
+            Action<object, bool> applyActive = null)
         {
             if (runtime == null)
                 throw new ArgumentNullException(nameof(runtime));
@@ -109,7 +120,28 @@ namespace Game
             }
 
             RestoreGlobals(runtime, data);
+            RestoreActors(runtime, data, findActor, programForSource, applyTransform, applyActive, warn);
             return true;
+        }
+
+        /// <summary>
+        /// Puts every saved sheet back onto the reloaded scene: transform and active flag through
+        /// the bridge, then the per-object variables, bag, equipment and state (Task 30 Part C).
+        /// A saved actor this scene cannot provide is warned about and skipped.
+        /// </summary>
+        public static SaveActors.Result RestoreActors(EventRuntime runtime, SaveData data,
+            Func<string, object> findActor = null,
+            Func<string, ProgramFile> programForSource = null,
+            Action<object, SaveTransform> applyTransform = null,
+            Action<object, bool> applyActive = null,
+            Action<string> warn = null)
+        {
+            if (runtime == null)
+                throw new ArgumentNullException(nameof(runtime));
+            if (data == null)
+                throw new ArgumentNullException(nameof(data));
+            return SaveActors.Restore(runtime, data, findActor, programForSource,
+                applyTransform, applyActive, warn);
         }
 
         /// <summary>

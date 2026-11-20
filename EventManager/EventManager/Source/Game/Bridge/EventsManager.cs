@@ -514,6 +514,21 @@ namespace Game
             return null;
         }
 
+        /// <summary>
+        /// The parsed sheet a save's <c>source</c> names, or null when this project has no such
+        /// file (or it failed to parse). A load uses it to rebuild a sheet whose actor came back
+        /// from the scene without one (Task 30 Part C).
+        /// </summary>
+        public ProgramFile ProgramForSource(string sourceName)
+        {
+            if (string.IsNullOrEmpty(sourceName))
+                return null;
+            EventFileResult program = ProgramNamed(sourceName);
+            if (program == null || !string.IsNullOrEmpty(program.Error))
+                return null;
+            return program.File;
+        }
+
         private void WarnMissingFile(string source, string actorName)
         {
             if (_missingShown.Contains(source))

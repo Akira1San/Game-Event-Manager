@@ -111,6 +111,21 @@ namespace Game
             FindLocals(host)[name] = ValueBox.Copy(value);
         }
 
+        /// <summary>
+        /// Every per-object variable written for this host, sorted by name (Task 30 Part C).
+        /// A save copies these so a reloaded scene keeps its counters and health; the sorted
+        /// order keeps two runs with the same values writing the same file.
+        /// </summary>
+        public IEnumerable<string> LocalNames(object host)
+        {
+            Dictionary<string, ValueBox> bucket;
+            if (!locals.TryGetValue(host, out bucket) || bucket.Count == 0)
+                return Array.Empty<string>();
+            var names = new List<string>(bucket.Keys);
+            names.Sort(StringComparer.Ordinal);
+            return names;
+        }
+
         /// <summary>Removes one per-object variable (used when construction state ends).</summary>
         public void RemoveLocal(object host, string name)
         {

@@ -12099,6 +12099,232 @@ finally
     }
 }
 
+// Task 30 Part C - one record per sheet: source, place, variables, bag, gear and state.
+{
+    var actorWorld = new FakeWorld();
+    var saveRuntime = FreshEngine(actorWorld);
+    var cMarine = new FakeActor("Marine");
+    var cZombie = new FakeActor("Zombie");
+    var gameHost = new GlobalHost();
+    actorWorld.AddActor(cMarine);
+    actorWorld.AddActor(cZombie);
+
+    var marineProgram = parser.Parse(@"when me appears
+  add 1 to Appears
+  set my Arrived to 1");
+    var zombieProgram = parser.Parse(@"when me appears
+  set my Awake to 1");
+    SheetInstance marineSheet = saveRuntime.AddSheet(cMarine, marineProgram, "Marine");
+    saveRuntime.AddSheet(cZombie, zombieProgram, "Zombie");
+    saveRuntime.AddSheet(gameHost, marineProgram, "Game");
+    marineSheet.Player = 2;
+    marineSheet.UsePhysicsMovement = true;
+    marineSheet.CurrentState = "attack";
+    saveRuntime.Variables.SetLocal(cMarine, "Health", ValueBox.OfNumber(80));
+    saveRuntime.Variables.SetLocal(cMarine, "Mood", ValueBox.OfText("angry"));
+    saveRuntime.Variables.SetLocal(cZombie, "Health", ValueBox.OfNumber(30));
+    saveRuntime.BagAdd(cMarine, "Potion");
+    saveRuntime.BagAdd(cMarine, "Potion");
+    saveRuntime.BagAdd(cMarine, "Sword");
+    saveRuntime.EquipItem(cMarine, "Sword");
+    saveRuntime.MarkSpawned(cZombie, "EnemyPrefab");
+
+    SaveTransform marinePlace = new SaveTransform
+    {
+        Position = new SaveVector { X = 1, Y = 2, Z = 3 },
+        Orientation = new SaveQuaternion { X = 0.1, Y = 0.2, Z = 0.3, W = 0.9 },
+        Scale = new SaveVector { X = 2, Y = 2, Z = 2 },
+    };
+    SaveData partCSnapshot = SaveSnapshot.Capture(saveRuntime, new SaveScene { Name = "Level1" },
+        actor => actor == cMarine ? marinePlace : new SaveTransform(),
+        actor => actor != cZombie);
+
+    SaveActor SavedActor(SaveData data, string name)
+    {
+        foreach (SaveActor entry in data.Actors)
+            if (entry.Actor == name)
+                return entry;
+        return null;
+    }
+
+    SaveActor savedMarine = SavedActor(partCSnapshot, "Marine");
+    SaveActor savedZombie = SavedActor(partCSnapshot, "Zombie");
+    Check(partCSnapshot.Actors.Count == 2 && partCSnapshot.Actors[0].Actor == "Marine" &&
+          partCSnapshot.Actors[1].Actor == "Zombie",
+        "every real sheet is saved once, sorted by actor name; the Game host is skipped");
+    Check(savedMarine != null && savedMarine.Source == "Marine" && savedMarine.Player == 2 &&
+          savedMarine.Physics && savedMarine.Active && savedMarine.State == "attack",
+        "an actor record keeps its source, player, physics flag, active flag and state");
+    Check(savedMarine.Transform.Position.X == 1 && savedMarine.Transform.Position.Y == 2 &&
+          savedMarine.Transform.Position.Z == 3 && savedMarine.Transform.Scale.Y == 2 &&
+          savedMarine.Transform.Orientation.W == 0.9,
+        "an actor record keeps its world transform");
+    Check(savedMarine.Variables.Count == 2 && savedMarine.Variables[0].Name == "Health" &&
+          savedMarine.Variables[1].Name == "Mood" &&
+          savedMarine.Variables[0].ToBox().AsNumber() == 80 &&
+          savedMarine.Variables[1].ToBox().AsText() == "angry",
+        "an actor's per-object variables are saved sorted with their kinds");
+    Check(savedMarine.Bag.Count == 2 && savedMarine.Bag[0].Thing == "Potion" &&
+          savedMarine.Bag[0].Count == 2 && savedMarine.Bag[1].Thing == "Sword" &&
+          savedMarine.Bag[1].Count == 1,
+        "a bag is saved as sorted stacks with their counts");
+    Check(savedMarine.Equipped.Count == 1 && savedMarine.Equipped[0] == "Sword",
+        "equipment is saved by name");
+    Check(savedZombie != null && !savedZombie.Active && savedZombie.SpawnedFrom == "EnemyPrefab",
+        "a record keeps the active flag and what spawned the actor");
+
+    SaveData bareSnapshot = SaveSnapshot.Capture(saveRuntime, null);
+    Check(bareSnapshot.Actors.Count == 2 && bareSnapshot.Actors[0].Active &&
+          bareSnapshot.Actors[0].Transform.Scale.X == 1 &&
+          bareSnapshot.Actors[0].Transform.Orientation.W == 1,
+        "without engine readers an actor still saves with an identity transform and active");
+
+    var targetWorld = new FakeWorld();
+    var targetRuntime = FreshEngine(targetWorld);
+    var targetMarine = new FakeActor("Marine");
+    var targetZombie = new FakeActor("Zombie");
+    var cNewcomer = new FakeActor("Newcomer");
+    targetWorld.AddActor(targetMarine);
+    targetWorld.AddActor(targetZombie);
+    targetWorld.AddActor(cNewcomer);
+    SheetInstance targetMarineSheet = targetRuntime.AddSheet(targetMarine, marineProgram, "Marine");
+    targetRuntime.AddSheet(targetZombie, zombieProgram, "Zombie");
+    targetRuntime.AddSheet(cNewcomer, zombieProgram, "Newcomer");
+    targetRuntime.Variables.SetLocal(targetMarine, "Health", ValueBox.OfNumber(100));
+    targetRuntime.Variables.SetLocal(targetMarine, "Armor", ValueBox.OfNumber(5));
+    targetRuntime.Variables.SetLocal(cNewcomer, "Health", ValueBox.OfNumber(77));
+    targetRuntime.BagAdd(targetMarine, "Arrow");
+    targetRuntime.BagAdd(targetMarine, "Arrow");
+    targetRuntime.BagAdd(targetMarine, "Arrow");
+    targetRuntime.BagAdd(cNewcomer, "Rations");
+    targetRuntime.EquipItem(targetMarine, "Bow");
+
+    var actorLookup = new Dictionary<string, object>
+    {
+        ["Marine"] = targetMarine,
+        ["Zombie"] = targetZombie,
+    };
+    var appliedTransforms = new Dictionary<object, SaveTransform>();
+    var appliedActive = new Dictionary<object, bool>();
+    var partCWarnings = new List<string>();
+    SaveActors.Result partCRestore = SaveSnapshot.RestoreActors(targetRuntime, partCSnapshot,
+        name => actorLookup.TryGetValue(name, out object found) ? found : null,
+        null,
+        (actor, transform) => appliedTransforms[actor] = transform,
+        (actor, active) => appliedActive[actor] = active,
+        message => partCWarnings.Add(message));
+    Check(partCRestore.Restored == 2 && partCRestore.Rebuilt == 0 &&
+          partCRestore.Missing.Count == 0 && partCWarnings.Count == 0,
+        "a restore puts every saved actor back without warnings");
+    Check(targetRuntime.Variables.GetLocal(targetMarine, "Health").AsNumber() == 80 &&
+          targetRuntime.Variables.GetLocal(targetMarine, "Mood").AsText() == "angry" &&
+          targetRuntime.Variables.GetLocal(targetMarine, "Armor").AsNumber() == 5,
+        "saved variables are merged over the sheet, so an authored default survives");
+    Check(targetRuntime.BagCount(targetMarine, "Potion") == 2 &&
+          targetRuntime.BagCount(targetMarine, "Sword") == 1 &&
+          targetRuntime.BagCount(targetMarine, "Arrow") == 0,
+        "a restored bag replaces what the reload handed the actor");
+    Check(targetRuntime.IsEquipped(targetMarine, "Sword") &&
+          !targetRuntime.IsEquipped(targetMarine, "Bow"),
+        "restored equipment replaces what the reload equipped");
+    Check(targetMarineSheet.CurrentState == "attack" && targetMarineSheet.LastState == "attack" &&
+          targetMarineSheet.Player == 2 && targetMarineSheet.UsePhysicsMovement &&
+          appliedTransforms[targetMarine].Position.Z == 3 && !appliedActive[targetZombie],
+        "a restore writes the state, player, physics flag, transform and active flag");
+    Check(targetMarineSheet.PushQueue.Count == 0 && targetMarineSheet.Waiting.Count == 0,
+        "a restored sheet drops the queued Appears and any waits");
+    targetRuntime.Tick(1);
+    Check(targetRuntime.Variables.GetGlobal("Appears").AsNumber() == 0,
+        "a restored sheet does not re-run `when me appears` on the next tick");
+    Check(targetRuntime.Variables.GetLocal(cNewcomer, "Health").AsNumber() == 77 &&
+          targetRuntime.BagCount(cNewcomer, "Rations") == 1,
+        "an actor the save never knew is left exactly as the scene authored it");
+
+    var missingWarnings = new List<string>();
+    var missingData = new SaveData();
+    var missingRecord = new SaveActor { Actor = "Ghost", Source = "Ghost" };
+    missingData.Actors.Add(missingRecord);
+    SaveActors.Result missingResult = SaveSnapshot.RestoreActors(FreshEngine(new FakeWorld()), missingData,
+        name => null, null, null, null, message => missingWarnings.Add(message));
+    Check(missingResult.Restored == 0 && missingResult.Missing.Count == 1 &&
+          missingResult.Missing[0] == "Ghost" && missingWarnings.Count == 1 &&
+          missingWarnings[0].Contains("Ghost", StringComparison.Ordinal),
+        "a saved actor missing from the scene is warned about and reported, not fatal");
+
+    var rebuildWorld = new FakeWorld();
+    var rebuildRuntime = FreshEngine(rebuildWorld);
+    var rebuiltMarine = new FakeActor("Marine");
+    rebuildWorld.AddActor(rebuiltMarine);
+    var knownSources = new Dictionary<string, ProgramFile> { ["Marine"] = marineProgram };
+    SaveActors.Result rebuildResult = SaveSnapshot.RestoreActors(rebuildRuntime, partCSnapshot,
+        name => name == "Marine" ? rebuiltMarine : null,
+        source => knownSources.TryGetValue(source, out ProgramFile program) ? program : null);
+    SheetInstance rebuiltSheet = rebuildRuntime.FindSheetFor(rebuiltMarine);
+    Check(rebuildResult.Restored == 1 && rebuildResult.Rebuilt == 1 && rebuiltSheet != null &&
+          rebuiltSheet.SourceName == "Marine" && rebuiltSheet.CurrentState == "attack" &&
+          rebuiltSheet.UsePhysicsMovement && rebuiltSheet.PushQueue.Count == 0,
+        "a live actor with no sheet is rebuilt from the save's source and then restored");
+
+    var noProgramWarnings = new List<string>();
+    var noProgramRuntime = FreshEngine(new FakeWorld());
+    var noProgramActor = new FakeActor("Marine");
+    var noProgramData = new SaveData();
+    noProgramData.Actors.Add(savedMarine);
+    SaveActors.Result noProgramResult = SaveSnapshot.RestoreActors(noProgramRuntime, noProgramData,
+        name => name == "Marine" ? noProgramActor : null, null, null, null,
+        message => noProgramWarnings.Add(message));
+    Check(noProgramResult.Restored == 1 && noProgramResult.Rebuilt == 0 &&
+          noProgramWarnings.Count == 1 &&
+          noProgramWarnings[0].Contains("Marine", StringComparison.Ordinal),
+        "without a source program the actor keeps its variables and the missing sheet is warned about");
+
+    string partCProject = Path.Combine(Path.GetTempPath(), "event-manager-save-c-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        SaveFile.Write(partCProject, "actors", partCSnapshot);
+        SaveFileResult readBackC = SaveFile.TryRead(partCProject, "actors");
+        SaveActor fileMarine = SavedActor(readBackC.Data, "Marine");
+        Check(readBackC.Loaded && fileMarine != null && fileMarine.State == "attack" &&
+              fileMarine.Bag.Count == 2 && fileMarine.Equipped.Count == 1 &&
+              fileMarine.Transform.Position.Y == 2 &&
+              fileMarine.Variables[0].ToBox().AsNumber() == 80,
+            "an actor record survives a write and read of the save file");
+    }
+    finally
+    {
+        if (Directory.Exists(partCProject))
+            Directory.Delete(partCProject, true);
+    }
+
+    var loadWorld = new FakeWorld();
+    var loadRuntime = FreshEngine(loadWorld);
+    var loadMarine = new FakeActor("Marine");
+    var loadZombie = new FakeActor("Zombie");
+    loadWorld.AddActor(loadMarine);
+    loadWorld.AddActor(loadZombie);
+    bool actorRestoredBeforeScene = false;
+    bool partCLoaded = SaveSnapshot.Load(loadRuntime, partCSnapshot,
+        name =>
+        {
+            actorRestoredBeforeScene = loadRuntime.Variables.GetLocal(loadMarine, "Health").AsNumber() == 80;
+            loadRuntime.AddSheet(loadMarine, marineProgram, "Marine");
+            loadRuntime.AddSheet(loadZombie, zombieProgram, "Zombie");
+            return true;
+        },
+        null, null,
+        name => name == "Marine" ? loadMarine : name == "Zombie" ? loadZombie : null,
+        null, null, null);
+    SheetInstance loadMarineSheet = loadRuntime.FindSheetFor(loadMarine);
+    Check(partCLoaded && !actorRestoredBeforeScene && loadMarineSheet != null &&
+          loadMarineSheet.CurrentState == "attack" &&
+          loadRuntime.Variables.GetLocal(loadMarine, "Health").AsNumber() == 80 &&
+          loadRuntime.BagCount(loadMarine, "Potion") == 2,
+        "a full load applies the actor records after the scene has reloaded");
+    loadRuntime.Tick(1);
+    Check(loadRuntime.Variables.GetGlobal("Appears").AsNumber() == 0,
+        "the reload-then-load path also suppresses `when me appears`");
+}
+
 // ------------------------------------------------------------------
 // RTS Task 32 Part A: the drag rectangle is authored content
 // ------------------------------------------------------------------

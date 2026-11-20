@@ -5561,6 +5561,72 @@ namespace Game
         }
 
         /// <summary>
+        /// The engine half of one actor record (Task 30 Part C): world position, orientation and
+        /// scale exactly as the transform serializes them. The runtime cannot read these, so the
+        /// bridge passes this method to <see cref="SaveSnapshot.Capture"/>.
+        /// </summary>
+        public static SaveTransform CaptureSaveTransform(object actor)
+        {
+            var saved = new SaveTransform();
+            if (actor is not Actor subject)
+                return saved;
+            Vector3 position = subject.Position;
+            Quaternion orientation = subject.Orientation;
+            Vector3 scale = subject.Scale;
+            saved.Position = new SaveVector { X = position.X, Y = position.Y, Z = position.Z };
+            saved.Orientation = new SaveQuaternion
+            {
+                X = orientation.X,
+                Y = orientation.Y,
+                Z = orientation.Z,
+                W = orientation.W,
+            };
+            saved.Scale = new SaveVector { X = scale.X, Y = scale.Y, Z = scale.Z };
+            return saved;
+        }
+
+        /// <summary>Whether the actor is active in the scene, for the save's `active` flag.</summary>
+        public static bool CaptureSaveActive(object actor)
+        {
+            return actor is Actor subject ? subject.IsActive : true;
+        }
+
+        /// <summary>The live actor a saved name refers to, or null. Flax's lookup is case-sensitive,
+        /// and a save writes the exact runtime name, so no normalizing is wanted here.</summary>
+        public static object FindSaveActor(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return null;
+            return Level.FindActor(name);
+        }
+
+        /// <summary>
+        /// Puts a saved actor back (Task 30 Part C) through the same warp `teleport` uses: any
+        /// move or push that could drag it away is cancelled and a dynamic body is stopped before
+        /// the world transform is written, so a restored actor stays where the save put it.
+        /// </summary>
+        public static void ApplySaveTransform(object actor, SaveTransform saved)
+        {
+            if (actor is not Actor subject || saved == null)
+                return;
+            SaveVector position = saved.Position ?? new SaveVector();
+            TeleportSubject(subject, new Vector3((float)position.X, (float)position.Y, (float)position.Z));
+            SaveQuaternion orientation = saved.Orientation ?? new SaveQuaternion();
+            subject.Orientation = new Quaternion(
+                (float)orientation.X, (float)orientation.Y,
+                (float)orientation.Z, (float)orientation.W);
+            SaveVector scale = saved.Scale ?? SaveVector.One;
+            subject.Scale = new Vector3((float)scale.X, (float)scale.Y, (float)scale.Z);
+        }
+
+        /// <summary>Restores a saved actor's active flag; a hidden actor stays hidden after a load.</summary>
+        public static void ApplySaveActive(object actor, bool active)
+        {
+            if (actor is Actor subject)
+                subject.IsActive = active;
+        }
+
+        /// <summary>
         /// The scene names that make up the level order `next level` walks. Flax 1.13 has no
         /// runtime access to the editor's build list, so this is every scene the content
         /// database knows (plus raw <c>.scene</c> files), de-duplicated and sorted — a stable
