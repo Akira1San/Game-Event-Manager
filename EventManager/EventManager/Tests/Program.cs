@@ -13303,6 +13303,154 @@ otherEngine.Tick(0);
 Check(otherEngine.Variables.GetGlobal("Speaker").AsText() == "Innkeeper" && sharedSpeaker == "Innkeeper",
     "`clear dialogue` on a silent sheet leaves the speaker alone");
 
+// ------------------------------------------------------------------
+// Task 35 Part E: the shipped three-node conversation
+// ------------------------------------------------------------------
+
+// `Innkeeper.events` is the example the task asks for: a greeting node, a choice node and a
+// close node, wired only from these words. The suite already parses every shipped file; here the
+// conversation is actually played.
+static void TickSeconds(EventRuntime engine, int seconds)
+{
+    for (int i = 0; i < seconds; i++)
+        engine.Tick(engine.Time + 1);
+}
+
+var innkeeperProgram = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Innkeeper.events"));
+Check(innkeeperProgram.Events.Count == 3,
+    $"the Innkeeper example is three nodes (got {innkeeperProgram.Events.Count})");
+
+var innWorld = new FakeWorld();
+var innEngine = FreshEngine(innWorld);
+var innkeeper = new FakeActor("Innkeeper");
+var innPortrait = new FakeActor("InnkeeperPortrait");
+var innPanel = new FakeActor("DialogPanel");
+var innChoice1 = new FakeActor("Choice1");
+var innChoice2 = new FakeActor("Choice2");
+foreach (var actor in new[] { innkeeper, innPortrait, innPanel, innChoice1, innChoice2 })
+    innWorld.AddActor(actor);
+var innLabels = new Dictionary<string, string>();
+var innChoiceVisible = new Dictionary<string, bool>();
+var innTextWrites = 0;
+string innSpeaker = "(none)";
+string innPortraitThing = "(none)";
+string innPortraitSprite = "(none)";
+innEngine.OnSetText = (context, thing, value, reveal) =>
+{
+    innLabels[thing] = value.AsText();
+    innTextWrites++;
+};
+innEngine.OnSetChoiceVisible = (context, thing, visible) => innChoiceVisible[thing] = visible;
+innEngine.OnSetSpeaker = (context, name) => innSpeaker = name;
+innEngine.OnSetPortrait = (context, thing, sprite) =>
+{
+    innPortraitThing = thing;
+    innPortraitSprite = sprite;
+};
+innEngine.AddSheet(innkeeper, innkeeperProgram);
+innEngine.Tick(0);
+
+const string greeting = "A warm room, three coins a night. Interested?";
+innEngine.RaiseClick(innkeeper, TriggerKind.Clicked);
+innEngine.Tick(0.1);
+TickSeconds(innEngine, 1);
+Check(innSpeaker == "Innkeeper" && innEngine.Variables.GetGlobal("Speaker").AsText() == "Innkeeper",
+    "the conversation's first node names the speaker, and the `Speaker` global agrees");
+Check(innPortraitThing == "InnkeeperPortrait" && innPortraitSprite == "innkeeper",
+    "the first node gives the innkeeper a portrait through the same sprite resolver as `set image`");
+Check(innLabels.ContainsKey("DialogLabel") && innLabels["DialogLabel"].Length > 0 &&
+      greeting.StartsWith(innLabels["DialogLabel"]) && innLabels["DialogLabel"].Length < greeting.Length,
+    $"the greeting types out instead of appearing at once (\"{(innLabels.ContainsKey("DialogLabel") ? innLabels["DialogLabel"] : "")}\")");
+Check(innLabels["Choice1"] == "1. I'll take it." && innLabels["Choice2"] == "2. Just looking.",
+    "the greeting node numbers its two choices");
+Check(innChoiceVisible["Choice1"] && innChoiceVisible["Choice2"],
+    "both choices are shown while the greeting is still typing");
+Check(innEngine.Backlog.Count == 1 && innEngine.Backlog.Lines[0].Text == "Innkeeper: " + greeting,
+    "the greeting also joins the backlog, so it can be read again later");
+
+TickSeconds(innEngine, 3);
+Check(innLabels["DialogLabel"] == greeting,
+    $"the greeting finishes in full at its written speed (got \"{innLabels["DialogLabel"]}\")");
+var writesAfterGreeting = innTextWrites;
+TickSeconds(innEngine, 1);
+Check(innLabels["DialogLabel"] == greeting && innTextWrites == writesAfterGreeting,
+    "a finished line is not written again on later ticks");
+
+innEngine.RaiseClick(innChoice1, TriggerKind.Clicked);
+innEngine.Tick(0.1);
+Check(innEngine.Variables.GetLocal(innkeeper, "picked choice").AsNumber() == 1,
+    "clicking the first choice records index 1");
+Check(innEngine.Variables.GetLocal(innkeeper, "MetInnkeeper").Kind == ValueKind.Boolean &&
+      innEngine.Variables.GetLocal(innkeeper, "RentedRoom").Kind == ValueKind.Boolean,
+    "the first branch sets both story flags — MetInnkeeper and RentedRoom");
+TickSeconds(innEngine, 1);
+Check(innLabels["DialogLabel"].Length > 0 &&
+      "Third door on the left. Sleep well.".StartsWith(innLabels["DialogLabel"]),
+    $"choice 1 branches to the rented line (got \"{innLabels["DialogLabel"]}\")");
+Check(innEngine.Backlog.Count == 2 && innEngine.Backlog.Lines[1].Text == "Hero: I'll take it.",
+    "the picked branch adds its own backlog line after the greeting");
+TickSeconds(innEngine, 2);
+Check(innLabels["DialogLabel"] == "Third door on the left. Sleep well.",
+    "the branch line types out in full too");
+
+innEngine.RaiseClick(innkeeper, TriggerKind.Clicked);
+innEngine.Tick(0.1);
+TickSeconds(innEngine, 1);
+Check(innLabels["DialogLabel"].Length > 0 &&
+      "Back again? The room is still three coins.".StartsWith(innLabels["DialogLabel"]),
+    $"the second visit takes the story-flag branch instead of the first greeting (got \"{innLabels["DialogLabel"]}\")");
+Check(!innChoiceVisible.ContainsKey("Choice1") || !innChoiceVisible["Choice1"],
+    "a returning guest is not offered the choices again");
+
+// The close node: one word puts away the line, the choices and the speaker.
+innEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.Message, Name = "close dialogue" });
+innEngine.Tick(0.2);
+Check(innLabels["DialogLabel"] == "", "the close node empties the dialogue line with `clear dialogue`");
+Check(innEngine.Variables.GetGlobal("Speaker").AsText() == "",
+    "the close node clears the speaker as well");
+Check(innEngine.Backlog.Count == 3 && innEngine.Backlog.Lines[2].Text.StartsWith("Innkeeper: Back again?"),
+    "the second visit adds its own backlog line, and the close node leaves all three, because the backlog is history");
+
+// The other branch: "Just looking" types a different line and rents nothing.
+var browseWorld = new FakeWorld();
+var browseEngine = FreshEngine(browseWorld);
+var browseNpc = new FakeActor("Innkeeper");
+var browseChoice2 = new FakeActor("Choice2");
+var browseChoice1 = new FakeActor("Choice1");
+browseWorld.AddActor(browseNpc);
+browseWorld.AddActor(browseChoice1);
+browseWorld.AddActor(browseChoice2);
+browseEngine.OnSetText = (context, thing, value, reveal) => { };
+browseEngine.AddSheet(browseNpc, parser.Parse(File.ReadAllText("Source/Game/GameFiles/Innkeeper.events")));
+browseEngine.Tick(0);
+browseEngine.RaiseClick(browseNpc, TriggerKind.Clicked);
+browseEngine.Tick(0.1);
+browseEngine.RaiseClick(browseChoice2, TriggerKind.Clicked);
+browseEngine.Tick(0.1);
+TickSeconds(browseEngine, 4);
+Check(browseEngine.Variables.GetLocal(browseNpc, "MetInnkeeper").Kind == ValueKind.Boolean &&
+      browseEngine.Variables.GetLocal(browseNpc, "picked choice").AsNumber() == 2,
+    "choosing the second option records index 2 and still sets MetInnkeeper");
+Check(browseEngine.Variables.GetLocal(browseNpc, "RentedRoom").Kind == ValueKind.None,
+    "the second branch does not set the rented-room flag");
+Check(browseEngine.Backlog.Lines[browseEngine.Backlog.Count - 1].Text == "Hero: Just looking.",
+    "the second branch's backlog line differs from the first branch's");
+
+// A click while the greeting is still typing skips it instead of picking a choice.
+var skipConvWorld = new FakeWorld();
+var skipConvEngine = FreshEngine(skipConvWorld);
+var skipConvNpc = new FakeActor("Innkeeper");
+skipConvWorld.AddActor(skipConvNpc);
+string skipConvText = "";
+skipConvEngine.OnSetText = (context, thing, value, reveal) => skipConvText = value.AsText();
+skipConvEngine.AddSheet(skipConvNpc, parser.Parse(File.ReadAllText("Source/Game/GameFiles/Innkeeper.events")));
+skipConvEngine.Tick(0);
+skipConvEngine.RaiseClick(skipConvNpc, TriggerKind.Clicked);
+skipConvEngine.Tick(0.1);
+Check(skipConvEngine.SkipTyping() && skipConvText == greeting,
+    "a click during the greeting shows the whole line at once");
+Check(!skipConvEngine.SkipTyping(), "the next click is not eaten by the typewriter");
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);

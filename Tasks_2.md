@@ -850,8 +850,20 @@ add typing speed, portrait/speaker handling, choice numbering and a backlog.
       while a speaker another sheet wrote survives. The backlog is history, so it is left alone.
       17 new checks -> **2227 passed, 0 failed**; GameEditorTarget build 0 errors. Editor
       play-check (authored `BacklogRow` actors actually filling) pending.
-- [ ] **Part E — Tests and example.** Typing completion exactly once, skip, choice 1 vs choice 2,
+- [x] **Part E — Tests and example.** Typing completion exactly once, skip, choice 1 vs choice 2,
       portrait miss warns once, and a three-node conversation with a story flag.
+      `Source/Game/GameFiles/Innkeeper.events` is the shipped conversation, wired only from these
+      words: a greeting node (speaker, portrait, typed line at 40 cps, two numbered choices and a
+      backlog line), a choice node (branches on `my picked choice`, sets the `MetInnkeeper` and
+      `RentedRoom` story flags, adds the reply to the backlog) and a close node (`clear dialogue` +
+      `hide DialogPanel`, reached by the message `"close dialogue"`). The suite plays that file
+      from disk through both branches, the returning-guest branch, the close node and a
+      click-to-skip, and the existing shipped-file parse audit covers it. Completion exactly once,
+      skip, choice 1 vs choice 2 and the missing-choice warning stay covered by their parts'
+      checks; a missing portrait's warn-once lives in the bridge, so it remains unverified until an
+      editor play-check. 24 new checks -> **2251 passed, 0 failed**. Only editor play-checks
+      remain for Task 35 (authored `DialogLabel`, `SpeakerLabel`, portrait, `Choice1`/`Choice2` and
+      `BacklogRow*` actors in a scene).
 
 ### Done-when
 

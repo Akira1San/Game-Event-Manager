@@ -1,0 +1,35 @@
+# --- Innkeeper.events ---
+# Task 35's dialogue in one three-node conversation: the greeting types out with a speaker and a
+# portrait, two numbered choices branch to a different line each, and the branch leaves a story
+# flag plus a backlog line, so the next visit and a backlog panel both know what happened.
+#
+# Scene actors it expects: Innkeeper (this sheet, clickable), DialogPanel with DialogLabel and
+# SpeakerLabel, InnkeeperPortrait, the buttons Choice1 and Choice2, and BacklogRow1..3 labels.
+
+when me is clicked
+  if my MetInnkeeper is true
+  set speaker to "Innkeeper"
+  type text "Back again? The room is still three coins." into DialogLabel speed 40
+  add to backlog "Innkeeper: Back again? The room is still three coins."
+  otherwise
+  set speaker to "Innkeeper"
+  set portrait of InnkeeperPortrait to "innkeeper"
+  type text "A warm room, three coins a night. Interested?" into DialogLabel speed 40
+  add to backlog "Innkeeper: A warm room, three coins a night. Interested?"
+  show choice "I'll take it."
+  show choice "Just looking."
+
+when choice picked
+  set my MetInnkeeper to true
+  if my picked choice is 1
+  type text "Third door on the left. Sleep well." into DialogLabel speed 40
+  add to backlog "Hero: I'll take it."
+  set my RentedRoom to true
+  otherwise
+  type text "Suit yourself. The door is always open." into DialogLabel speed 40
+  add to backlog "Hero: Just looking."
+
+# The panel's close button sends this; one word puts the whole dialogue away.
+when message "close dialogue" arrives
+  clear dialogue
+  hide DialogPanel
