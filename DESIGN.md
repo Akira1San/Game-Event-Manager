@@ -334,6 +334,8 @@ when Escape is pressed
 | `look at <thing>` | `look at Player` | one-shot snap: turn toward the target, once |
 | `face <thing>` | `face Player` | continuous: keeps turning toward the target while it moves (BGE Track To) â€” the turret/chaser word |
 | `teleport me/other to <thing>` | `teleport me to SpawnPoint` | |
+| `save checkpoint` | `save checkpoint` | Task 36 Part F: the acting actor's own transform, written as the per-actor variables `CheckpointX` / `CheckpointY` / `CheckpointZ` / `CheckpointYaw`, so the save file carries it and `my CheckpointX` reads it |
+| `respawn at <thing>` | `respawn at Checkpoint2` | the same warp as `teleport` (moves and pushes cancelled, fall speed, jump flags and climbs cleared, a dynamic body stopped); health, state and animation are the sheet's business |
 | `push <target> direction <dir> strength <n>` | `push other up strength 10` | follows the target's move mode: impulse (dynamic), swept (kinematic), collide-and-slide (character), else a transform nudge. Add `for <n> seconds` (e.g. `push other back strength 100 for 0.2 seconds`) to keep shoving every tick — that is how TK4 knockback reads; without it the push is one tick |
 | `make <target> unmovable` | `make me solid` | physics toggle |
 | `destroy <me/other/thing>` | `destroy me` | |
@@ -483,6 +485,9 @@ moving` brakes the horizontal velocity; `goto` brakes on arrival.
 - `push <target>` follows the **target's own** opt-in and body, not the pusher's: dynamic body =
   `AddForce(..., ForceMode.Impulse)`, `CharacterController` = collide-and-slide `Move`, kinematic
   body = swept `AddMovement`, and no body / flag off = the old one-tick transform nudge.
+- `respawn at <thing>` (Task 36 Part F) is that same warp reached by name, so a death block does
+  not need a second teleport spelling; the checkpoint itself is four ordinary per-actor variables
+  (`CheckpointX` / `Y` / `Z` / `Yaw`), which is why a save file restores the last one for free.
 - `teleport me to <thing>` is an explicit warp for spawns and checkpoints: it cancels the
   subject's ongoing moves (so a path or face tracker cannot drag it back), clears the stored
   character fall speed, zeros a dynamic body's linear/angular velocity, then writes `Position`.

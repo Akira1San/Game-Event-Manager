@@ -2554,6 +2554,53 @@ var teleportSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
 Check(teleportSpec.Verb == ActionVerb.Teleport && teleportSpec.Thing == "me" && teleportSpec.To == "SpawnPoint",
     "`teleport me to SpawnPoint` reads both things");
 
+// Task 36 Part F: `save checkpoint` and `respawn at <thing>`.
+var saveCheckpointSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  save checkpoint"), null);
+Check(saveCheckpointSpec.Verb == ActionVerb.SaveCheckpoint && saveCheckpointSpec.Leftover.Count == 0,
+    "`save checkpoint` parses as its own action | V=" + saveCheckpointSpec.Verb + " LO=" + saveCheckpointSpec.Leftover.Count);
+
+var respawnSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  respawn at Checkpoint2"), null);
+Check(respawnSpec.Verb == ActionVerb.Respawn && respawnSpec.To == "Checkpoint2",
+    "`respawn at Checkpoint2` names the actor to come back at | V=" + respawnSpec.Verb + " TO=" + respawnSpec.To);
+
+var respawnNumbered = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  respawn at Checkpoint 2"), null);
+Check(respawnNumbered.Verb == ActionVerb.Respawn && respawnNumbered.To == "Checkpoint 2",
+    "`respawn at Checkpoint 2` keeps Flax's duplicate number in the name");
+
+string bareRespawnWarning = null;
+var bareRespawn = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
+  respawn"), message => bareRespawnWarning = message);
+Check(bareRespawn.Verb == ActionVerb.Unknown && bareRespawnWarning != null &&
+      bareRespawnWarning.Contains("respawn at Checkpoint2"),
+    "a bare `respawn` is refused with the shape to write | W=" + bareRespawnWarning);
+
+// The checkpoint is four ordinary per-actor numbers, so Task 30's save carries it.
+var checkpointVariables = new EventVariables();
+var checkpointHost = new FakeActor("Player");
+var checkpointWarnings = new List<string>();
+checkpointVariables.OnWarning = message => checkpointWarnings.Add(message);
+CheckpointPose missingPose;
+Check(!Checkpoints.TryRead(checkpointVariables, checkpointHost, out missingPose) && checkpointWarnings.Count == 0,
+    "a sheet that never saved a checkpoint reads none and warns nothing");
+
+Checkpoints.Save(checkpointVariables, checkpointHost,
+    new CheckpointPose { X = 120.5, Y = 30, Z = -4, Yaw = 90 });
+CheckpointPose savedPose;
+Check(Checkpoints.TryRead(checkpointVariables, checkpointHost, out savedPose) &&
+      savedPose.X == 120.5 && savedPose.Y == 30 && savedPose.Z == -4 && savedPose.Yaw == 90,
+    "`save checkpoint` round-trips X / Y / Z / yaw | read " + savedPose.X + ", " + savedPose.Y + ", " + savedPose.Z + ", " + savedPose.Yaw);
+Check(checkpointVariables.LocalNames(checkpointHost).Contains(Checkpoints.XVariable) &&
+      checkpointVariables.GetLocal(checkpointHost, Checkpoints.YVariable).AsNumber() == 30 &&
+      checkpointVariables.GetLocal(checkpointHost, Checkpoints.ZVariable).AsNumber() == -4,
+    "the checkpoint is per-actor variables a save file copies (and `my CheckpointX` can read)");
+Check(Math.Abs(Checkpoints.YawOf(0, 0, 0, 1)) < 1e-9 &&
+      Math.Abs(Checkpoints.YawOf(0, 0.7071067811865476, 0, 0.7071067811865476) - 90) < 1e-6 &&
+      Math.Abs(Math.Abs(Checkpoints.YawOf(0, 1, 0, 0)) - 180) < 1e-6,
+    "yaw reads out of the actor's orientation quaternion");
+
 var pushSpec = ActionWords.Parse(RawWords(actionParser, @"when W is pressed
   push other up strength 10"), null);
 Check(pushSpec.Verb == ActionVerb.Push && pushSpec.Thing == "other" && pushSpec.Dir == "up" && pushSpec.Number == 10,

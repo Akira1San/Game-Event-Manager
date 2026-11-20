@@ -903,6 +903,47 @@ namespace Game
                     TeleportSubject(me, to.Position);
                     break;
                 }
+                case ActionVerb.SaveCheckpoint:
+                {
+                    var me = context.Me as Actor;
+                    if (me == null)
+                    {
+                        WarnOnce("\u201Csave checkpoint\u201D needs to run on an actor's sheet — the global Game sheet has no body to remember.");
+                        break;
+                    }
+                    // The runtime cannot read a transform, so the pose is taken here and written
+                    // as four per-actor variables that a save file already carries (Task 36 F).
+                    Quaternion orientation = me.Orientation;
+                    var pose = new CheckpointPose
+                    {
+                        X = me.Position.X,
+                        Y = me.Position.Y,
+                        Z = me.Position.Z,
+                        Yaw = Checkpoints.YawOf(orientation.X, orientation.Y, orientation.Z, orientation.W),
+                    };
+                    Checkpoints.Save(context.Variables, me, pose);
+                    break;
+                }
+                case ActionVerb.Respawn:
+                {
+                    var me = context.Me as Actor;
+                    if (me == null)
+                    {
+                        WarnOnce("\u201Crespawn\u201D needs to run on an actor's sheet — the global Game sheet has no body to move.");
+                        break;
+                    }
+                    var at = ResolveThing(context, spec.To) as Actor;
+                    if (at == null)
+                    {
+                        WarnOnce($"I couldn't find \u201C{spec.To}\u201D to respawn at.");
+                        break;
+                    }
+                    // Same warp as `teleport me to`: moves, pushes, fall speed, the jump flags and
+                    // any climb are cleared and a dynamic body is stopped. Health, state and
+                    // animation stay the sheet's business.
+                    TeleportSubject(me, at.Position);
+                    break;
+                }
                 case ActionVerb.Push:
                 {
                     var target = ResolveThing(context, spec.Thing) as Actor;

@@ -1020,7 +1020,8 @@ Two routes; pick one per project:
       spawns on top of the player.
 
 **Out of scope:** wall jumps, double jumps, multi-exit ladders, boss patterns, screen shake, and
-camera-edge despawning.
+camera-edge despawning. **Promoted to Task 21** below (kept out of G4 so the movement core stayed
+small).
 
 ---
 
@@ -1782,6 +1783,153 @@ Editor verify (Escape toggling an overlay) still awaits your run.
 **Verified in the editor 2026-11-12:** one Escape now opens and closes
 `escape_scene_overlay` from a single `if OverlayOpen is 1` / `otherwise` event in
 `HeroSelect.events` — no second key, no second trigger. Task 20 complete.
+
+## Task 21 — Boss & Movement Extras `[ ]`
+
+The five things G4 deliberately left out. They are one task because they all sit on top of the
+movement core (jump flag, ladder state, camera), but the parts are independent: take any one in any
+order. Each part says up front whether it needs new C# or is **events-only** — a part that is
+events-only ships an example sheet and no engine change.
+
+| Part | Feature | Needs |
+|------|---------|-------|
+| A | Double jumps | C# (new words) |
+| B | Wall jumps | C# (new word + airborne horizontal motion) |
+| C | Multi-exit ladders | **events-only** (optional C# polish) |
+| D | Boss patterns | **events-only** core (optional C# spawn shapes) |
+| E | Screen shake | C# (new word) |
+
+### Part A — Double jumps (C#)
+**Single owner:** this part is the only specification of double jump. `Tasks_2.md` Task 36 Part B
+defers to it and adds no clause of its own. The take-off gate it builds on shipped with Task 7 G4
+phase 3 (2026-11-16): `FlaxActions.Jump` refuses whenever `IsGrounded` is false, which is exactly
+what makes a held key safe. A double jump is a counted exception, not a removed gate.
+- [ ] Keep a per-actor remaining-jumps count: `my Jumps` (default 1) read at take-off, decremented
+      on each take-off, reset when the actor is grounded again (the same place `JumpingCharacters`
+      / `ScriptedJumps` are cleared on landing).
+- [ ] Word: `jump again` (and `jump again strength <n>`), sharing the `ActionVerb.Jump` path with a
+      flag so the airborne gate is bypassed only while the count is above zero.
+- [ ] A scripted-arc actor (no body) gets the same count, so `jump again` works in transform mode.
+- [ ] Tests: second take-off in the air succeeds and the third fails; landing restores the count;
+      `jump` on the ground still costs one when `my Jumps` is set higher.
+- Done-when: the player hops twice in the air and cannot hop a third time; landing on a crate
+  restores a double jump; an enemy sheet with `my Jumps` 0 never double-jumps.
+
+### Part B — Wall jumps (C#)
+A wall jump needs two things the engine does not have: a sideways wall probe, and **horizontal
+motion while airborne** — `CharacterStep` currently moves straight down when not grounded, so a
+character has no air velocity to push away from the wall.
+- [ ] Store an airborne horizontal velocity per character (extend the `CharacterFallSpeeds` idea to
+      a small `AirVelocity` record: X/Z plus fall speed), applied by `CharacterStep` only while
+      airborne and cleared on landing. Dynamic bodies already keep `LinearVelocity`, so that path
+      is free.
+- [ ] `PhysicsMovement` helper for the wall probe result: given the actor's four side probes, the
+      away-from-wall heading and whether a wall is in reach (pure, unit-testable).
+- [ ] Word: `wall jump` (optional `strength <n>`): refused when grounded or with no wall in reach;
+      sets upward strength plus a horizontal impulse along the away heading.
+- [ ] Condition: `me is touching wall` — same probe, so a sheet can gate the take-off or a wall
+      slide without duplicating it.
+- [ ] Tests: probe heading points away from the blocked side; a grounded actor refuses; a caller
+      with no wall refuses; the air velocity is cleared on landing.
+- Done-when: the player jumps at a crate wall and pushes off it back toward the lane; standing on
+      the ground next to the same wall does nothing.
+
+### Part C — Multi-exit ladders (events-only)
+`stop climbing` already keeps the climber's Y where it let go, so an exit at an intermediate height
+is a sheet pattern, not an engine feature: stop at the right height, then walk off toward the exit
+marker. Only snapping X/Z onto a named ledge would need C#, and that is optional polish.
+- [ ] Example sheet `LadderTall.events` (or a section in `Player.events`): a ladder with an exit at
+      the bottom, one mid-height, and the top — `when me is climbing and me is near Ledge2 by 40`
+      → `stop climbing` + `move toward Ledge2 speed 60`, the same block per ledge.
+- [ ] Make the example robust: no `wait` in the exit block, and a `when me is climbing and me is on
+      ground` fallback so a missed exit drops the climber back to the bottom cleanly.
+- [ ] Note in `keywords.html` / `DESIGN.md §9`: the mid-ladder exit is authoring, not a new word.
+- Done-when: one ladder serves three exits with no C#, and a player who keeps climbing past the
+      mid exit still reaches the top.
+- Optional C# polish (skip unless authoring proves painful): `exit ladder at <thing>` snapping the
+      climber's X/Z onto the ledge before letting go.
+
+### Part D — Boss patterns (events-only core, optional C# shapes)
+Everything a boss needs to *sequence* exists: phase gates (`when my Health is lower than 60`),
+`when every <n> seconds` cadence, telegraph anims (`play anim` + `wait`), spawns (`spawn` at
+`player` / `me offset <n>`), knockdown/combo reuse, and per-actor variables.
+- [ ] Ship `Boss.events`: three phases by health, a telegraphed attack per phase, a summoned add
+      via `spawn`, and an enrage gate at the last phase. Reuse the arcade lane's knockdown/combo
+      chain rather than inventing a second hit system.
+- [ ] Ship the scene hooks: a `Boss` template named like the lane templates so `kills Boss` counts
+      separately.
+- [ ] Document the pattern (phase gate + telegraph + cooldown) in `DESIGN.md §9` and `keywords.html`.
+- Done-when: the boss visibly changes attack when its health crosses a threshold, and nothing in
+      the sheet needs code.
+- Optional C# (only if the event version is unreadable): `spawn <thing> in a ring of <n> around me`
+      / `... in a fan of <n> toward player` for bullet patterns whose angles cannot be authored as
+      static offsets.
+
+### Part E — Screen shake (C#)
+No shake exists anywhere in the bridge, and a per-tick camera offset must not fight `camera follow`.
+- [ ] Pure decay math (unit-testable): given amplitude and time left, the next offset and amplitude
+      — e.g. `PhysicsMovement.ShakeStep(...)` returning a decaying amplitude and a pseudo-random
+      offset (deterministic from a seed so tests are stable).
+- [ ] Word: `shake camera strength <n> for <s>` — adds (or refreshes to the stronger of two) a shake
+      on the active camera; the bridge applies the offset after `camera follow` / `camera at` write
+      the transform each tick, and removes it when the time runs out.
+- [ ] Offset is applied to the camera's local position only (never the camera actor's saved
+      Position), so stopping shake leaves the framing exactly where it was.
+- [ ] Tests: amplitude decays to zero in the authored time; a second call refreshes rather than
+      stacking forever; offset is zero once the shake ends.
+- Done-when: a boss slam / explosion shakes the view and the camera returns to its exact framing;
+      two overlapping `shake camera` calls do not make the view drift.
+
+---
+
+## Task 22 — Tag / group-shaped contacts `[ ]`
+
+Goal: a hitbox or a hazard should react to *any* enemy, not to an actor whose name happens to be
+`Enemy`. Today `when me touches <thing>` matches a **name** (plus a physical material), so a lane
+full of clones needs one block per type (`when me touches Arcade_Enemy`, `when me touches Knife`, …)
+or one shared name. Flax actor **Tags** already exist and already answer `other has tag Enemy`
+(`Conditions.HasTag` → `FlaxWorld.HasTag` → `Actor.HasTag`); what is missing is the forward contact
+shape that reads a tag instead of a name. Needs **C#** — a parser + matching change, no new physics.
+
+### Part A — `when me touches something with tag <tag>` `[ ]`
+- [ ] Parser (`Triggers.PronounDescriptor`): teach the `touches` branch a `something with tag <tag>`
+      tail next to the existing `<thing>` and `<thing> and <condition>` forms, storing the tag on the
+      descriptor (`RequireTag`) instead of `RequireName`.
+- [ ] Runtime matching (`EventRuntime.NameMatches` / `PollContact` / pushed collider contacts): a
+      descriptor with a tag matches `other` when `World.HasTag(other, tag)`; keep name matching for
+      the existing shapes, and keep material matching (`when me touches Grass`) working as-is.
+- [ ] Same tail on `overlaps`: `when me overlaps something with tag Enemy` (distance-based, so a
+      hazard volume needs no collider).
+- [ ] `and <condition>` must still work after the tag: `when me touches something with tag Enemy and
+      other is not a Player`, so one block can exclude allies.
+- [ ] Registry (`WordRegistry`), `keywords.html`, `DESIGN.md §5` (triggers table) + `§9` note: tags
+      come from the Flax actor's **Tags** list, and the tag is matched by the engine's `HasTag`.
+- [ ] Tests: a punch box with one block hurts a tagged `Zombie`, a tagged `Knife` and a tagged
+      `Brute`; an untagged prop of the same name is ignored; `and other has tag X` gates still
+      apply; `when me touches Enemy` keeps matching by name (no regression); `when me overlaps
+      something with tag X` fires by distance.
+
+### Part B — Confirm the receiving side `[ ]`
+- [ ] Regression test the shape that already parses: `when other touches me and other has tag Enemy`
+      (`PronounDescriptor` gives it wildcard `me` + an extra condition). If it misbehaves, fix the
+      wildcard branch rather than adding a second spelling.
+- [ ] Document it beside Part A so both directions are discoverable: the touched actor reacts with
+      `when other touches me and other has tag <tag>`, the attacker reacts with `when me touches
+      something with tag <tag>`.
+
+### Done-when
+The arcade punch box carries **one** block — `when me touches something with tag Enemy` — and
+hurts a Zombie, a Knife and a Brute alike, while an untagged crate with a `BoxCollider` is ignored.
+The existing per-name blocks (`when me touches Bullet`, `when me touches Arcade_Enemy`) still work
+unchanged.
+
+### Optional (park only if asked)
+`nearest thing with tag <tag>` as a thing reference, so `move toward nearest thing with tag Enemy` and
+`spawn Bullet at nearest thing with tag Enemy` stop needing an actor named `Enemy`. Same tag lookup,
+but it touches `FindThing` / `ResolveThing` rather than the contact path — worth its own part if the
+contact change proves useful.
+
+---
 
 ## Session Log (append one line after each session)
 see - Session Log.md

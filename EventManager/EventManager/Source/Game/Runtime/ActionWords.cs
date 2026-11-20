@@ -18,6 +18,12 @@ namespace Game
         LookAt,
         Face,
         Teleport,
+        /// <summary><c>save checkpoint</c> — remembers the acting actor's own transform in four
+        /// per-actor variables (Task 36 Part F).</summary>
+        SaveCheckpoint,
+        /// <summary><c>respawn at &lt;thing&gt;</c> — warps to a checkpoint actor through the same
+        /// reset <c>teleport</c> uses (Task 36 Part F).</summary>
+        Respawn,
         Push,
         Goto,
         Parent,
@@ -899,6 +905,14 @@ namespace Game
                     return Unknown(spec, words, "\u201Cface\u201D needs a thing, like \u201Cface Player\u201D", warn);
                 }
 
+                case "save":
+                    // `save checkpoint` remembers this actor's own transform (Task 36 Part F).
+                    // `save stats` / `save bindings` never reach here: the parser makes them
+                    // statement lines and the runtime consumes them first.
+                    if (words.Count >= 2 && words[1].Text == "checkpoint")
+                        return Finish(spec, ActionVerb.SaveCheckpoint, words, 2);
+                    return Unknown(spec, words, "\u201Csave\u201D on its own is either \u201Csave checkpoint\u201D, \u201Csave stats\u201D or \u201Csave bindings\u201D", warn);
+
                 case "teleport":
                     if (words.Count >= 4 && IsThing(words[1]) && words[2].Text == "to" && IsThing(words[3]))
                     {
@@ -907,6 +921,23 @@ namespace Game
                         return Finish(spec, ActionVerb.Teleport, words, 4);
                     }
                     return Unknown(spec, words, "\u201Cteleport\u201D looks like this: \u201Cteleport me to SpawnPoint\u201D", warn);
+
+                case "respawn":
+                {
+                    // `respawn at Checkpoint2`: come back at a checkpoint actor, through the
+                    // same reset `teleport` uses (Task 36 Part F). The target may carry a
+                    // qualifier or Flax's duplicate number, so it reads like every other target.
+                    if (words.Count >= 3 && words[1].Text == "at")
+                    {
+                        string respawnTarget = TargetAt(words, 2, out int respawnUsed);
+                        if (respawnTarget != null)
+                        {
+                            spec.To = respawnTarget;
+                            return Finish(spec, ActionVerb.Respawn, words, 2 + respawnUsed);
+                        }
+                    }
+                    return Unknown(spec, words, "\u201Crespawn\u201D looks like this: \u201Crespawn at Checkpoint2\u201D", warn);
+                }
 
                 case "push":
                     if (words.Count >= 3 && IsThing(words[1]) && IsDirection(words[2].Text))

@@ -229,6 +229,8 @@ namespace Game
             new WordEntry { Kind = "action", Word = "look", Example = "look at Player" },
             new WordEntry { Kind = "action", Word = "face", Example = "face Player" },
             new WordEntry { Kind = "action", Word = "teleport", Example = "teleport me to SpawnPoint" },
+            new WordEntry { Kind = "action", Word = "save", Example = "save checkpoint", AltShape = "writes this actor's own `CheckpointX` / `CheckpointY` / `CheckpointZ` / `CheckpointYaw` per-actor variables, so a Task 30 save file carries the checkpoint and a new game simply has none · `save stats` still checkpoints every global" },
+            new WordEntry { Kind = "action", Word = "respawn", Example = "respawn at Checkpoint2", AltShape = "the same warp as `teleport` — cancels moves and pushes, clears fall speed, the jump flags and any climb, stops a dynamic body — and leaves health, state and animation to the sheet" },
             new WordEntry { Kind = "action", Word = "push", Example = "push other up strength 10" },
             new WordEntry { Kind = "action", Word = "push", Example = "push other back strength 100 for 0.2 seconds" },
             // Cursors (Task 48 Part E). The art is scene content: an actor called `Cursor_<Name>`

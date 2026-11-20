@@ -56,6 +56,9 @@ primitives that every genre otherwise re-implements as copied blocks or new C#:
 | 45 | Online multiplayer & split screen | P3 | decision | Tasks 16, 30 |
 | 46 | Packaging, templates & modding | P2/P3 | pipeline | Tasks 19, 30 |
 | 47 | Live debugger & event trace | P1 | editor plugin | `task_plugin_edtor.md` |
+| 48 | Animated game cursors | P1 | Flax bridge + table | Tasks 3, 15 |
+| 49 | Mouse button action mapping | P1 | bridge + table | Tasks 3, 16, 29 |
+| 50 | Dialogue files & conversation trees | P1 | file format + runtime | Tasks 34, 35 |
 
 **Do not treat this list as a mandate to grow the vocabulary.** The project rule stays:
 if two genres need it, it is a primitive and belongs in C#; if one genre needs it, ship it as a
@@ -600,7 +603,11 @@ Goal: `play anim` / `loop anim` / `stop anim` cover the BGE basics, but action g
 control, hit windows and layering. Without this, fighting/action RPG/platformer timing lives in
 `wait` guesses.
 
-Depends on Tasks 5 and 12. **Presentation primitive** (P1).
+Depends on Tasks 5 and 12. **Presentation primitive** (P1). Part C additionally depends on **content
+authoring**: a base Anim Graph asset with a `Blend With Mask` node and an `Animation Slot`, plus a
+`SkeletonMask` asset, created in the Flax editor and shipped with the project. The bridge cannot
+synthesize them — `InitAsAnimation` builds a single-clip graph with no nodes to blend or inject into,
+so Part C is not startable until those assets exist.
 
 ### Proposed words
 
@@ -641,15 +648,30 @@ when every 0.2 seconds
 
 ### Parts
 
-- [ ] **Part A — Anim speed.** Per-sheet playback speed; persists across clip changes; a new clip
-      inherits the current speed.
+- [ ] **Part A — Anim speed.** Per-sheet playback speed, passed as the `speed` argument of
+      `AnimatedModel.PlaySlotAnimation` so a change takes effect on the running clip with no restart.
+      The value persists across clip changes and a new clip inherits it. Clips played on the
+      full-body `InitAsAnimation` path have speed baked in at graph build, so a live change there
+      rebuilds the graph; document that as a restart, or route all playback through slots to remove
+      the limit.
 - [ ] **Part B — Time/percent and marker triggers.** Poll the active clip’s time; edge-trigger once
       per play. Markers read Flax animation event tracks if available; if not, fall back to a
       percentage declared in the word and document the limit.
-- [ ] **Part C — Upper-body layer.** Use an animation slot / layered graph. If Flax 1.13’s current
-      bridge cannot layer, implement the word as “replace” with a warning and park true layering.
-- [ ] **Part D — Root motion.** Toggle whether the clip’s root motion moves the actor or is ignored.
-      Document interaction with `move` and `goto`.
+- [ ] **Part C — Upper-body layer.** Authored content, not a runtime graph trick. Add the
+      character’s base Anim Graph asset: a `Blend With Mask` node whose Pose A is the locomotion pose
+      and Pose B is an `Animation Slot` node feeding the final output. Add a `SkeletonMask` asset for
+      it with spine, chest, neck, head, shoulders, arms and hands enabled and **hips, root, legs and
+      feet disabled** — the shoot clip animates those bones too, and the mask is what keeps the walk
+      owning them. `play anim "<name>" upper body` resolves to
+      `model.PlaySlotAnimation("UpperBody", clip, speed, blendIn, blendOut, loopCount)`; `stop anim
+      upper body` calls `StopSlotAnimation`, restoring the locomotion pose with the legs still
+      walking. Slot playback must never go through `InitAsAnimation`, which replaces the whole pose
+      including the legs — the bug this part exists to fix.
+- [ ] **Part D — Root motion.** Toggle whether the clip’s root motion moves the actor or is ignored,
+      and document interaction with `move` and `goto`. Ownership rule: **root motion belongs to the
+      locomotion clip only** — slot clips never write the actor transform, so an upper-body clip
+      cannot double-apply displacement or slide the feet. Assign `AnimatedModel.RootMotionTarget` once
+      on the base graph; do not enable `rootMotion` on any single-clip fallback graph.
 - [ ] **Part E — Tests and docs.** Speed arithmetic, 0%/100% edges, marker once, start/end edges,
       upper body stop restores base, root motion toggle does not double-move the actor.
 
@@ -873,30 +895,42 @@ add typing speed, portrait/speaker handling, choice numbering and a backlog.
 
 ---
 
-## Task 36 — Platformer / Arcade Movement Kit `[ ]`
+## Task 36 — Platformer / Arcade Movement Kit `[~]`
 
 Goal: the missing verbs for jumping, ground state, ladders, one-way platforms and checkpoints.
-Task 7 G4 phases 3–4 propose `jump` and `climb`; this task is the full kit plus the respawn words
-that make a platformer a game. The character controller already computes grounded/slope/gravity
-internally in `PhysicsMovement.cs`; this task exposes it to events.
+Task 7 G4 phases 3–4 shipped `jump` and `climb`; this task is the rest of the kit — the respawn
+words and the platform options that make a platformer a game. The character controller already
+computes grounded/slope/gravity internally in `PhysicsMovement.cs`; Part A exposed it to events.
 
 Depends on Tasks 4 and 12. **Mixed** (P1).
 
+**As shipped (2026-11-16, Task 7 G4 phases 3–4 — commits `7b19336` and `6469e44`):**
+`jump` / `jump strength <n>` (default 350 cm/s, floored at 20; CharacterController, dynamic body
+or scripted arc; optional `Jump` clip), `me is on ground` / `me is airborne`
+(`ConditionKind.OnGround` / `Airborne` over `IEventWorld.IsOnGround`), `climb <thing>` /
+`climb down` / `stop climbing` and `me is climbing`. Parts A and C below are therefore done. The
+airborne gate on `jump` is still unconditional, which is what makes a double jump a **counted
+exception** rather than a removed gate: that count is **Task 21 Part A** in `TASKS.md`, the one
+owner of double jump (`my Jumps` + `jump again`), and it is not re-specified here.
+
 ### Proposed words
 
-| Kind | Word | Example |
-|---|---|---|
-| action | `jump` | `jump` |
-| action | `jump strength <n>` | `jump strength 420` |
-| condition | `me is on ground` | `me is on ground` |
-| condition | `me is airborne` | `me is airborne` |
-| action | `climb <thing>` | `climb Ladder` |
-| action | `stop climbing` | `stop climbing` |
-| condition | `me is climbing` | `me is climbing` |
-| action | `set gravity scale to <n>` | `set gravity scale to 0.5` |
-| action | `respawn at <thing>` | `respawn at Checkpoint2` |
-| action | `save checkpoint` | `save checkpoint` |
-| trigger | `when me touches Checkpoint` | existing contact trigger |
+| Kind | Word | Example | State |
+|---|---|---|---|
+| action | `jump` | `jump` | shipped (G4 p3) |
+| action | `jump strength <n>` | `jump strength 420` | shipped (G4 p3) |
+| condition | `me is on ground` | `me is on ground` | shipped (G4 p3) |
+| condition | `me is airborne` | `me is airborne` | shipped (G4 p3) |
+| action | `climb <thing>` | `climb Ladder` | shipped (G4 p4) |
+| action | `stop climbing` | `stop climbing` | shipped (G4 p4) |
+| condition | `me is climbing` | `me is climbing` | shipped (G4 p4) |
+| action | `set gravity scale to <n>` | `set gravity scale to 0.5` | Part D, new |
+| action | `save checkpoint` | `save checkpoint` | shipped (Part F) |
+| action | `respawn at <thing>` | `respawn at Checkpoint2` | shipped (Part F) |
+| trigger | `when me touches Checkpoint` | existing contact trigger | already shipped |
+
+`set gravity scale to <n>` scales the gravity of the sheet's own actor (the `me` of the sheet, the
+same way `jump` applies to `me`); a per-target form is a later suffix, not part of this task.
 
 ### Examples
 
@@ -907,13 +941,16 @@ when Space is pressed
   jump strength 420
   play anim "Jump" once
 
-when me is on ground
+# `me is on ground` is a condition, not a trigger: poll it and gate the line.
+when every 0.1 seconds
+  me is on ground
   unless W is held
   loop anim "Idle"
 
 # ---- a ladder ----
+# distances are engine units (cm), the same as G4's `when me is near Ladder by 100`.
 when W is held
-  if me is near Ladder by 1.5
+  if me is near Ladder by 100
   climb Ladder
   otherwise
   move forward speed 180
@@ -925,7 +962,6 @@ when S is pressed
 # ---- checkpoints and death ----
 when me touches Checkpoint
   save checkpoint
-  set my SpawnPoint to "Checkpoint2"
   play particle "checkpoint"
 
 when my Health becomes 0
@@ -935,37 +971,88 @@ when my Health becomes 0
   fade screen to "1 1 1" in 0.5
 ```
 
-One-way platforms can be a collider filter/tag plus `jump` landing rules; the first version can
-use a `Platform` tag and a downward-only collision rule in the controller bridge.
-
 ### Parts
 
-- [ ] **Part A — Ground query exposure.** `me is on ground` / `me is airborne` from the existing
-      character ground probe (and the dynamic-body touch check), with a documented transform-mode
-      fallback.
-- [ ] **Part B — Jump.** Vertical impulse on a CharacterController/dynamic body; refused while
-      airborne unless the sheet allows double jump; jump anim optional; transform-mode scripted arc.
-- [ ] **Part C — Ladders.** Lock X/Z to the ladder actor, drive Y at climb speed, exit at top/bottom,
-      and ignore gravity while climbing.
-- [ ] **Part D — One-way platforms.** Downward pass-through from below, solid from above; opt-in via
-      tag or body setting; documented PhysX limitation.
-- [ ] **Part E — Checkpoints and respawn.** `save checkpoint` stores the last safe transform; `respawn`
-      is a teleport that clears velocity, moves and waits. Optional lives/`respawn at start` word.
-- [ ] **Part F — Tests and example scene.** Jump height/timing, no double jump, ground edge, ladder
-      exit, one-way platform up/down, respawn clears momentum, checkpoint survives death but not
-      a new game.
+- [x] **Part A — Ground query exposure.** Shipped 2026-11-16: `me is on ground` / `me is airborne`
+      read the existing character ground probe (`FlaxActions.IsGrounded` — the controller's own ray
+      plus its slope limit, a short downward ray from the pivot for every other actor, trigger
+      volumes ignored), the jump's own airborne flag, and Task 28's altitude, so a lifted unit
+      still reads airborne. Transform mode is covered by the same pivot ray; a sheet whose
+      `GroundCheckDistance` is 0 always reads airborne.
+- [~] **Part B — Jump.** Shipped except the counted second take-off. `jump` / `jump strength <n>`
+      routes by body (CharacterController fall speed, dynamic `LinearVelocity.Y`, scripted
+      `PhysicsMovement.JumpStep` arc for kinematic and bodyless actors), plays a `Jump` clip only
+      when the actor has a skinned model and the project has the clip, and refuses while airborne.
+      The second and later take-offs are **Task 21 Part A** (`my Jumps` + `jump again`), which
+      reuses this same `ActionVerb.Jump` path; this task keeps the gate as the default so a held
+      `jump` can never burn an extra jump.
+- [x] **Part C — Ladders.** Shipped 2026-11-16: `climb <thing>` / `climb down` with an optional
+      `speed <n>`, `stop climbing`, `me is climbing`. X/Z lock to the ladder actor's axis, Y is
+      driven at the climb speed (default 150 cm/s), the span is the ladder's collider height or
+      `my LadderHeight` or 400 cm, reaching the end of the climb ends it so `move forward` steps
+      off the top, gravity is not applied while climbing, and starting a climb cancels the
+      actor's pending moves.
+- [ ] **Part D — Gravity scale.** A per-actor multiplier on the gravity the bridge already
+      applies: `1` normal, `0.5` half, `0` none. Flax `AutoGravity` stays off, so the scale is
+      written in the three places gravity already exists — the character path
+      (`CharacterFallSpeeds` decayed by `PhysicsMovement.FallSpeed`), the scripted arc
+      (`PhysicsMovement.JumpStep`), and a dynamic body's `GravityScale` — and nowhere else.
+      Document the interaction: a `0`-scale actor never lands, so `me is airborne` stays true and
+      `jump` refuses (the gate reads the same probe); a moon-jump sheet lowers the jump strength
+      instead. Tests: `0.5` roughly halves the scripted peak, `0` never lands, and resetting to `1`
+      restores the normal arc.
+- [ ] **Part E — One-way platforms.** **The heaviest part of the kit — do it last, or park it
+      until a project asks.** PhysX has no one-way collision, so the bridge has to fake it:
+      - Character and kinematic actors: toggle the collider pair (`Physics.IgnoreCollision` /
+        `CanCollide`) against each opted-in platform while the actor's feet are below the
+        platform's top and rising, and restore it once they clear the top.
+      - The ground probe must learn the same rule, or an actor rising through a platform "lands"
+        on the underside it just passed: `IsGrounded` / `IsCharacterGrounded` skip a platform the
+        actor is still below.
+      - Dynamic bodies: the same toggle, plus zeroing `LinearVelocity.Y` on landing so the body
+        does not bounce through the restored collider.
+      - Opt-in: a `Platform` physics material (the contact triggers already match on material
+        names) or a per-actor flag; anything not opted in stays solid.
+      - Documented PhysX limitation: the toggle is frame-order sensitive, so a fast fall can
+        tunnel past the restore frame — note a fall-speed cap and a thin platform collider.
+- [x] **Part F — Checkpoints and respawn.** Shipped 2026-11-20. `save checkpoint` takes the
+      acting actor's own pose in the bridge and writes it through `Runtime/Checkpoints.cs` as four
+      per-actor variables — `CheckpointX` / `CheckpointY` / `CheckpointZ` / `CheckpointYaw`
+      (degrees, decomposed from Flax's `Orientation` quaternion by `Checkpoints.YawOf`, because
+      nothing else in the bridge reads Euler angles off it). One word each on purpose, so a sheet
+      reads `my CheckpointX` like any other variable; the variables are ordinary locals, so Task
+      30's save file carries the checkpoint for free and a new game simply never writes one.
+      `TryRead` asks `HasLocal` first, so looking for a checkpoint that was never saved warns
+      nothing. `respawn at <thing>` resolves the checkpoint actor (qualifier or duplicate number
+      included) and warps through the existing `TeleportSubject` — cancelling the actor's moves
+      and pushes, clearing fall speed, the jump flags and climbs, and stopping a dynamic body —
+      which is why a respawn also restores Task 21's jump count. It does not touch health, state
+      or animation: a sheet that dies at `my Health` 0 sets its own health back first. Not
+      shipped (still optional): a bare `respawn` returning to the stored pose.
+- [ ] **Part G — Tests and example scene.** Jump height/timing, no double jump (already covered by
+      G4's 13 checks and Task 21 A's four), ground edge, ladder exit, one-way platform up/down,
+      gravity scale at 0 / 0.5 / 1, respawn clears momentum, checkpoint survives death but not a
+      new game.
 
 ### Done-when
 
-- A cube jumps onto a crate, lands, cannot re-jump mid-air, and dies/respawns at the last checkpoint.
-- A character climbs a ladder to a platform and steps off at the top.
+- A cube jumps onto a crate, lands, cannot re-jump mid-air (proven by the shipped G4 checks), and
+  dies/respawns at the last checkpoint.
+- A character climbs a ladder to a platform and steps off at the top (G4's editor play-check is
+  still open).
 - A one-way platform is passable from below and solid from above in the character mode.
+- A sheet with `set gravity scale to 0` floats, and `0.5` visibly halves the jump peak.
 
 ### Edge cases / parks
 
-- Wall jumps, double jumps, multi-exit ladders and moving-platform passengers are out of scope,
-  same as Task 7 G4.
+- Wall jumps, multi-exit ladders and moving-platform passengers are out of scope, same as Task 7
+  G4. **Double jumps are Task 21 Part A** — this task only relies on the shipped airborne gate,
+  and a project that never asks for `jump again` keeps single jumps.
 - `coyote time` / jump buffering are tuning values, not words; park unless a game needs them.
+- `me is on ground` is a condition, not a trigger (triggers starting with `me` only know `touches`,
+  `overlaps`, `arrives`, `hears`, `sees`, `is near`, `is hovered`, `appears`, `gets …`). A landing
+  state is a poll (`when every …` plus the gate) until someone adds a `when me lands` trigger,
+  which is new work and not part of this task.
 
 ---
 
@@ -1040,9 +1127,22 @@ when message "fire" arrives
       on death, and no polling trigger per unit.
 - [ ] **Part C — Damage types and resistances.** A damage message/action carries a type; the victim
       subtracts the matching resistance; immunity is a large resistance, not a new word.
-- [ ] **Part D — Area damage and target-pick.** `damage area around ...` sends real damage through
+- [x] **Part D — Area damage and target-pick.** `damage area around ...` sends real damage through
       the existing armor/shield/health path and the matchup gate; `aim` enters a pick mode with
       range/validity/timeout, a marker and a cancel.
+      *Landed as Task 27 Part A:* `aim "<ability>" [at a point|a unit|me] [for <n> seconds]` (default
+      8 s, one aim at a time, a second `aim` replaces the first), `cancel aim`, the trigger
+      `when my aim picks a target` pushed to the caster's sheet with the ability in `Name` and the
+      unit in `Other`, the values `my aim x` / `my aim z` / `my aim target` and the condition
+      `my aim is a unit`. Reach is `my attack range`, unit picks also pass fog visibility and the
+      matchup gate, and the caster is always a legal self pick. `damage area around <spot> by <n>
+      [for radius <r>]` (radius 150 default) sends real `"damage"` from the caster through
+      armor → shield → health and the matchup gate — no caster destruction, no effect of its own,
+      and bullets are skipped so splash never chains. Clicks/Escape/right-click and the optional
+      `AimMarker` scene actor are the bridge half. 34 unit checks in `Tests/Program.cs`; the editor
+      play-check is pending. The three table rows above (`damage area`, `aim`/`cancel aim`,
+      `when aim picks a target`) all ship — except that a spot written as `Mouse` in the example
+      resolves only if a scene actor is named `Mouse`; a cursor-position value is Task 39 Part B.
 - [ ] **Part E — Loot tables and affixes.** Weighted table data in `.events`; `spawn item from` and
       `roll` read it; the affix generator (Task 9 E7) composes item stats from base + N affixes.
 - [ ] **Part F — Tests and example.** Stack/refresh/ignore, expiry restores base, cooldown readiness,
@@ -1669,6 +1769,374 @@ Depends on the editor plugin (`task_plugin_edtor.md`) and Tasks 1–3. **Tooling
 
 ---
 
+## Task 48 — Animated Game Cursors `[x]`
+
+Goal: a game cannot choose its cursor today. Nothing in the project touches the pointer, so every
+scene shows the platform arrow, and neither an RTS's animated `Attack`/`Move` cursor nor a
+point-and-click title's `Hand`/`Examine` cursor is possible from `.events`. A cursor is also the one
+piece of feedback a player sees every frame, so it belongs to the vocabulary, not to a per-game C#
+script.
+
+Depends on Tasks 3 and 15 (UI). **Flax bridge + runtime table** (P1).
+
+### What Flax gives us (verified against the 1.13 docs)
+
+- `Screen.CursorVisible` hides/shows the pointer and `Screen.CursorLock` takes `None`, `Locked` or
+  `Clipped` — `Clipped` is the right mode for an RTS or any mouse-heavy game.
+- `CursorType` carries `Default`, `Hand`, `Cross`, `No`, `IBeam`, `SizeNS`, `SizeAll`, `Hidden` and
+  `Image`; `CursorType.Image` is loaded through `Window.LoadCursorImage`.
+- There is **no animated OS cursor**: one static image at a time, no frame stepping, no hotspot math
+  beyond the image's own offset. Animated cursors therefore have to be drawn by the game — hide the
+  OS pointer and move a UI `Image` under the mouse, which is what RTS games do anyway and what makes
+  tinting, scaling and hotspot changes free.
+
+### Proposed words
+
+| Kind | Word | Example |
+|---|---|---|
+| action | `set cursor "<name>"` | `set cursor "Attack"` |
+| action | `set cursor to default` | `set cursor to default` |
+| action | `hide cursor` / `show cursor` | `hide cursor` |
+| action | `push cursor "<name>"` / `pop cursor` | a mode that must not leak |
+| value | `my cursor` | `when my cursor is "Attack"` |
+| trigger | `when cursor changes` | one block per state change |
+
+### Examples
+
+```text
+# ---- an RTS targeting mode owns the pointer, and gives it back ----
+when Q is pressed
+  push cursor "Attack"
+  aim attack
+
+when aim is done
+  pop cursor
+
+# ---- point and click: hover a hotspot, change the pointer ----
+when me is hovered
+  set cursor "Hand"
+
+when me loses hover
+  set cursor to default
+```
+
+### Parts
+
+- [x] **Part A — The pure cursor model.** `Runtime/Cursors.cs`: `CursorDef` (`Name`, `Frames[]`,
+      `Fps`, `HotspotX/Y`, `OsFallback`), `CursorLibrary` (name → def, case-insensitive, `"default"`
+      always present), `CursorStack` (`Push`/`Pop`/`Peek`, popping past the bottom keeps the
+      default), and `CursorState.For(library, stack, hover, aiming)` as one resolved answer per tick
+      — so a scene cannot leave the pointer on the combat cursor.
+- [x] **Part B — The bridge.** `Bridge/CursorView.cs`: when the resolved cursor has frames, hide the
+      OS pointer (`Screen.CursorVisible = false`) and move a scene-authored `UIControl` whose
+      control is an `Image` to `Input.MousePosition`, minus the declared hotspot; step frames by
+      `Time.GameTime * Fps` so animation needs no coroutine and no tick loop of its own. When it has
+      no art, restore the OS pointer and set `CursorType.Default/Hand/Cross/No/Hidden` (through
+      `Window.LoadCursorImage` for `CursorType.Image`). Nothing in the bridge decides *when* a cursor
+      is right; it only draws what the runtime resolved.
+- [x] **Part C — Cursor art stays content.** A cursor is a scene actor named `Cursor_<Name>` with an
+      `Image` control (one frame) or `Cursor_<Name>` plus child frames the view toggles. Frames,
+      fps, hotspot and OS fallback come from the actor's own variables (`set my Cursor fps to 12`,
+      `set my Cursor hotspot to 4, 4`), the same way `LiftHeight` already carries a per-actor number.
+      No art pipeline, no asset importer, no new content format.
+- [x] **Part D — Automatic sources, all optional.** `aim` pushes the targeting cursor and pops on
+      end; hovering a `selectable` actor answers `Hand`; hovering a hostile actor under the fog rules
+      answers `Attack`; hovering a `BagItem`/hotspot answers `Hand`; dragging a marquee answers
+      `Cross`. The mapping is a table in `Runtime/Cursors.cs` (`CursorRules`), edited there or
+      overridden by a sheet, never a hardcoded branch per game.
+- [x] **Part E — Tests and docs.** Pure checks: push/pop order and the never-empty bottom, name
+      resolution and case, `Fps` frame selection including `0` (static), hotspot subtraction,
+      `CursorRules` for hover/hostile/aiming/dragging, and that a resolved cursor with no art always
+      answers an OS fallback instead of hiding the pointer with nothing to replace it. `keywords.html`
+      rows, `WordRegistry` rows, `DESIGN.md` §9 note on the cursor stack.
+
+### Done-when
+
+- A sheet can set, push, pop and hide the cursor with no C# in the game project.
+- An animated cursor runs at its declared fps while the game holds 60 fps, and the OS pointer is
+  hidden only while drawn art is active.
+- Leaving an aiming mode restores the default cursor even if the mode's own sheet forgot to pop.
+- A point-and-click scene that never mentions an RTS word gets hover cursors; an RTS scene shows
+  the targeting cursor while aiming without a single new block in its own sheet.
+
+---
+
+## Task 49 — Mouse Button Action Mapping `[ ]`
+
+Goal: yes, it is hardcoded. `EventsManager.InputEdges` answers the buttons by name:
+`MouseButton.Left` is click + selection + the marquee drag, `MouseButton.Right` is `RightClicked` plus
+`IssueDefaultOrder`, `MouseButton.Middle` only broadcasts `MiddleClicked` and does nothing itself, and
+Shift is read directly (`Input.GetKey(KeyboardKeys.Shift)`) as "append to selection / queue the
+order". The drag threshold, the double-click window and the decision that only the left button starts
+a marquee are literals in the same file. A game that wants middle-mouse select and left-mouse move
+cannot ask for it; the RTS layout is the only layout.
+
+Depends on Tasks 3, 16 and 29. **Runtime table + bridge** (P1).
+
+### Proposed words
+
+| Kind | Word | Example |
+|---|---|---|
+| action | `bind left mouse to <action>` | `bind left mouse to move` |
+| action | `bind middle mouse to <action>` | `bind middle mouse to select` |
+| action | `bind right mouse to <action>` | `bind right mouse to select` |
+| action | `unbind middle mouse` | back to no action |
+| action | `set mouse append key to <key>` | `set mouse append key to Ctrl` |
+| value | `my mouse action` | which action a button holds |
+
+Actions: `select` (click-select, with the existing marquee drag), `move` (the Part C default order),
+`attack-move`, `pan` (drag the camera, middle-drag in most editors), `menu`, `none`. A button has one
+action; assigning a second replaces the first with a warning, so a scene never silently gets two.
+
+### Examples
+
+```text
+# ---- the RTS default, written out (this is what every existing scene gets anyway) ----
+bind left mouse to select
+bind right mouse to move
+bind middle mouse to none
+
+# ---- a point-and-click adventure: left is the only verb ----
+bind left mouse to move
+bind right mouse to none
+
+# ---- the user's ask: middle selects, left moves ----
+bind middle mouse to select
+bind left mouse to move
+```
+
+### Parts
+
+- [ ] **Part A — The pure table.** `Runtime/MouseMap.cs`: `MouseAction` (`Select`, `Move`,
+      `AttackMove`, `Pan`, `Menu`, `None`) and `MouseMap` (`ActionFor(MouseButton)`, `Bind`,
+      `Unbind`, `Defaults()`). `Defaults()` reproduces the current behaviour exactly — left select,
+      right move, middle none, Shift append, 4 px drag, the existing double-click window — so a scene
+      that never binds anything is unchanged, which is this task's first acceptance test.
+- [ ] **Part B — The bridge reads the table, not literals.** `EventsManager.InputEdges` asks
+      `MouseMap.ActionFor(button)` and dispatches; the marquee starts only for the button whose
+      action is `Select`, the order only for `Move`/`AttackMove`, `Pan` drives `UpdateCameraPan`'s
+      drag path, and `Menu` opens whatever the sheet listens for. `HandleMouseClick` keeps its
+      `TriggerKind` vocabulary, so `when <actor> is clicked` and the UI button path do not change
+      underneath the feature.
+- [ ] **Part C — Modifiers and timing are data.** `set mouse append key to Shift` (the selection-add
+      and order-queue modifier), a readable double-click window and drag threshold, and a
+      `when <button> is double-clicked` that comes from the same table instead of a constant. Two
+      buttons may share one action (middle + left select) without fighting over the drag.
+- [ ] **Part D — Raw button triggers.** `when left mouse is pressed` / `is released` (and middle /
+      right), which today only exist for actors and UI controls; guards against the `Left`/`Right`
+      key names that already occupy those words, and `my mouse action` as the read-only companion so
+      a HUD or tutorial can name the button the player is expected to press.
+- [ ] **Part E — Tests and docs.** Pure checks: `Defaults()` matching today's behaviour, bind and
+      rebind, `Unbind` to `None`, two buttons on one action, `ActionFor` for an unbound button,
+      the modifier read and the timing values being read rather than constant. A parsed-sheets check
+      that the RTS test scene and the shipped examples still parse with no `bind … mouse` line, and
+      `keywords.html` / `WordRegistry` rows plus a `DESIGN.md` §9 decision entry.
+
+### Done-when
+
+- A game can move selection to the middle button and the order to the left one with two lines, with
+  no C# in the game project and no change to any `.events` word's shape.
+- A scene that binds nothing behaves exactly as it does today.
+- The marquee, the ordering and the UI button path keep working when the buttons move.
+- `world.IsMouseButtonDown`-style values and the actor/UI click triggers stay in one vocabulary, so a
+  tutorial can say "left mouse" and mean the button the player actually has bound.
+
+---
+
+## Task 50 — Dialogue Files & Conversation Trees `[ ]`
+
+Goal: Task 35 gave dialogue its presentation; it still has to be *written as event code*. A
+conversation is prose and a graph, not a sequence of clicks: a writer adding a node should not
+scroll past `when` blocks, a translator should be able to swap a file, and a ten-node conversation
+should not become ten events whose shape only the programmer remembers. This task gives dialogue a
+file of its own (`.dialog`), compiled into exactly the nodes Task 35 already runs, and two words —
+`talk to "<name>"` and `when dialogue ends`. The words stay in `.events`; the dialogue file holds
+no event words at all, only a closed set of presentation tags, so the parser, the runtime and the
+keyword audit keep one vocabulary.
+
+Depends on Tasks 35 (dialogue nodes) and 34 (backlog rows). **File format + runtime** (P1).
+
+### What lives where
+
+- `.events` — the words: who talks, when, what the game does about it.
+- `.dialog` — the words *spoken*: nodes, lines, choices, jumps and presentation tags.
+- Event words never appear in `.dialog`, and dialogue tags never appear in `.events`. Recorded here
+  so it is not re-litigated later: a file that can contain arbitrary words is a second language, and
+  the whole vocabulary's audit (`WordRegistry`, `keywords.html`, the parse-the-examples test) stops
+  covering it.
+
+### The file
+
+`Source/Game/GameFiles/*.dialog` — a `Dialogue/` subfolder is fine, the loader searches recursively
+exactly like `.events`. One conversation per file; the file's name is the name `talk to` takes.
+Hot reload works the same way as `.events`: saving mid-play swaps the tree when it is valid, and a
+broken file keeps the old tree with one friendly error per problem.
+
+### Grammar
+
+| Syntax | Meaning |
+|---|---|
+| `# comment` | ignored to the end of the line |
+| `== <node> ==` | starts a node; `[A-Za-z0-9 _-]`, unique ignoring case; **the first node in the file is the entry node** |
+| text on its own line | one spoken line: types into the label at the node's speed, then joins the backlog |
+| `@label <thing>` | the label this node types into (default `DialogLabel`), reset per node |
+| `@speed <n>` | characters per second for this node (default 40, `0` = instant), reset per node |
+| `@speaker <name>` | the speaker from here on (`set speaker to`); `@speaker` alone clears it |
+| `@portrait <thing> <sprite>` | the portrait from here on (`set portrait of`); `@portrait` alone clears it |
+| `@flag <name>` | sets `my <name>` true when the node is entered |
+| `> <text> -> <target>` | a choice: a numbered button; picking it jumps to `<target>` |
+| `-> <target>` | jump once the node's last line has finished; `end` closes the dialogue |
+
+`@speaker` and `@portrait` carry across nodes until changed or cleared (a conversation usually has
+one narrator), while `@label` and `@speed` are per node — scene wiring and pacing belong to the node,
+not to the rest of the file. Tags apply to the lines below them; there is no inline form.
+
+Every spoken line joins the backlog as `"<speaker>: <text>"`, or the bare text when the node has no
+speaker — so a conversation written in a file is replayable for free, the same way the Part D shipper
+is.
+
+### Proposed words
+
+| Kind | Word | Example |
+|---|---|---|
+| action | `talk to "<name>"` | `talk to "Innkeeper"` |
+| trigger | `when dialogue ends` | `when dialogue ends` |
+
+`talk to "<name>"` resolves the file the way `.events` and asset names resolve (folder, extension and
+case ignored, near-miss suggestion when nothing matches `Innkeeper.dialog`). The conversation runs on
+the sheet that wrote the line; a second `talk to` from the same sheet replaces the running one, the
+same way a second `type text` replaces a line. On a missing file it warns once, naming the near-miss
+and the folder to put the file in, and does nothing else.
+
+`when dialogue ends` is broadcast to the sheet that ran `talk to`, exactly once, when the tree closes
+(`-> end`) or a node runs out of lines, choices and jumps. A sheet that was removed mid-conversation
+simply hears nothing.
+
+### How a node compiles
+
+A `.dialog` file never reaches the runtime as text: the loader compiles each node into a short list of
+the Task 35 nodes, so the presentation words keep running the conversation they already run.
+
+| `.dialog` | Compiled node |
+|---|---|
+| `@flag <name>` (node entry) | `SetNode` — `my <name>` to true |
+| `@speaker <name>` (when it changed) | `SetSpeakerNode` |
+| `@portrait <thing> <sprite>` (when it changed) | `SetPortraitNode` |
+| a spoken line | `AddBacklogNode` for the history line, then `TypeTextNode` into the label at the speed |
+| `> <text> -> <target>` | one `ShowChoiceNode` per choice, shown **after** the last line finishes |
+| `-> <target>` | a runner jump |
+| `-> end` | `ClearDialogueNode`, then `when dialogue ends` |
+
+The runner (`Runtime/DialogueRunner.cs`) is a cursor over the compiled nodes, pushed forward by Task
+35's finish path — never by `wait` — so a speed change and click-to-skip keep behaving exactly as they
+do in a hand-written sheet. `my picked choice` and `when choice picked` keep working unchanged: the
+same pick both jumps the tree and answers a hand-written reaction, so a sheet can listen in.
+
+### Validation and audit
+
+Loader errors name the file, line and node:
+
+- no node at all, a duplicate node name, an unknown tag, or a tag with the wrong number of parts;
+- `@speed` that is not a number or is negative, and `@flag` with no name;
+- a choice or jump whose target is neither a node nor `end`, and a choice with no text;
+- a node that has both choices and a jump (the jump could never run).
+
+Warnings instead of errors:
+
+- an unreachable node (no path from the entry node) — a dead node is a writer's leftover, not a crash;
+- a jump-only cycle (`a -> b`, `b -> a`) is warned about at load, and the runner caps consecutive
+  jumps (16) before closing with one warning, so a data bug can never hang a frame.
+
+Audit, enforced by the suite:
+
+- every shipped `.dialog` parses, compiles and validates — the same shape as “every shipped `.events`
+  file parses”, so a broken conversation fails the build instead of the game;
+- every tag in the closed set above has a row in the dialogue-file section of `keywords.html`, and each
+  documented tag example is parsed by the suite (tags get the word audit's treatment without becoming
+  words);
+- `talk to` and `when dialogue ends` get ordinary `WordRegistry` rows and keyword rows, both directions
+  enforced as usual;
+- an equivalence check: `Innkeeper.dialog` + `talk to "Innkeeper"` compiles to the same nodes the
+  hand-written `Innkeeper.events` executes, and the Part E conversation checks run against both.
+
+### Examples
+
+```text
+# --- Innkeeper.dialog ---
+== greet ==
+@speaker Innkeeper
+@portrait InnkeeperPortrait innkeeper
+A warm room, three coins a night. Interested?
+> I'll take it. -> rent
+> Just looking. -> browse
+
+== rent ==
+@flag RentedRoom
+Third door on the left. Sleep well.
+-> end
+
+== browse ==
+Suit yourself. The door is always open.
+-> end
+```
+
+```text
+# --- Innkeeper.events: the whole sheet that runs it ---
+when me is clicked
+  talk to "Innkeeper"
+
+when dialogue ends
+  hide DialogPanel
+
+when message "close dialogue" arrives
+  clear dialogue
+  hide DialogPanel
+```
+
+### Parts
+
+- [ ] **Part A — The format.** `Events/DialogueFileParser.cs` (grammar above, friendly errors with
+      file/line/node) and `Runtime/DialogueProgram.cs` (`DialogueNodeDef`, `DialogueLine`,
+      `DialogueChoice`, `DialogueTag`; each node compiled to `List<StatementNode>` of the Task 35
+      nodes). Pure: no Flax types, tested from strings.
+- [ ] **Part B — `talk to` and the runner.** `Runtime/DialogueRunner.cs` (cursor, jump, `-> end`),
+      `EventRuntime.TalkTo` / `EnsureDialogue`, the `.dialog` file index and its near-miss warning,
+      hot reload of a changed file, the second-`talk to`-replaces rule, and `when dialogue ends`
+      classification plus broadcast.
+- [ ] **Part C — Choices, backlog and closing.** Choices shown only once the last line finishes,
+      numbering through `ChoiceManager` so `my picked choice` / `when choice picked` are unchanged,
+      each line added to the backlog (`speaker: text`), `clear dialogue` on `-> end`, and the
+      jump-hop guard.
+- [ ] **Part D — Validation, audit and docs.** Reachability and cycle warnings, the suite audit over
+      `GameFiles/**/*.dialog`, the tag rows in `keywords.html`, `WordRegistry` rows for the two words,
+      and a `DESIGN.md` §9 entry recording that dialogue files carry no event words.
+- [ ] **Part E — Tests and the shipped example.** `Innkeeper.dialog` beside `Innkeeper.events`, both
+      played by the same conversation checks (greeting, both branches, the flag, the backlog, the
+      close, click-to-skip), the shipped-file audit, and the editor play-check note.
+
+### Done-when
+
+- A writer can add a node and a choice with no `.events` edit at all, and the conversation still types
+  out, numbers its buttons, branches and fills the backlog.
+- `Innkeeper.dialog` + `talk to "Innkeeper"` plays the same conversation as `Innkeeper.events`,
+  node for node — including the story flag and the backlog lines.
+- A typo'd target, an unknown tag or a duplicate node fails the suite naming the file, line and node;
+  an unreachable node and a jump-only cycle warn without hanging.
+- A project with no `.dialog` files and no `talk to` behaves exactly as it does today, and every
+  hand-written Task 35 sheet keeps working unchanged.
+- Both words and all six tags are audited in both directions, and dialogue text can be translated by
+  swapping files without touching a single word of logic.
+
+### Parked for later
+
+- Conditions in the file (`@if my RentedRoom is true`, `> choice if …`) and `talk to "<name>" at
+  "<node>"` — until they exist, a returning-guest branch is either a second file or a choice inside
+  the tree, not an entry-point decision.
+- Voice lines per line, per-language variants (`Innkeeper.de.dialog`), importing Twine/Ink/Yarn
+  exports, and a node-graph view in the editor plugin.
+
+---
+
 ## Suggested execution order
 
 Do not run these by number. The dependency-friendly order is:
@@ -1683,6 +2151,10 @@ Do not run these by number. The dependency-friendly order is:
 8. **Task 33 + 43 + 44** (animation depth, settings/localization, replay/perf) — shipping quality.
 9. **Tasks 40–42** (roguelike, racing, cards) — only when a project asks.
 10. **Tasks 45–47** (multiplayer decision, packaging, debugger) — scope and workflow.
+11. **Tasks 48–49** (cursors, mouse mapping) — cheap input polish that any genre feels; Task 48 first
+    because a remapped button is much easier to try with a cursor that says which mode is armed.
+12. **Task 50** (dialogue files) — right after Task 35 ships and only when a real conversation
+    outgrows one sheet; it adds no presentation, only a place for prose to live.
 
 ## Explicitly not in this file
 
