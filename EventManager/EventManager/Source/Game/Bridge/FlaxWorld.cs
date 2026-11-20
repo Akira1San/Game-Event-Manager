@@ -186,6 +186,11 @@ namespace Game
             return FlaxActions.IsClimbing(actor as Actor);
         }
 
+        public bool TryGetAnimProgress(object actor, string clip, out double progress, out int play)
+        {
+            return FlaxActions.TryGetAnimProgress(actor, clip, out progress, out play);
+        }
+
         public bool IsParticlePlaying(object actor, string name)
         {
             if (string.IsNullOrEmpty(name))

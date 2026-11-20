@@ -86,6 +86,17 @@ namespace Game
             return parts.ToArray();
         }
 
+        /// <summary>True for a percentage operand like <c>60%</c> — the lexer keeps it one word token,
+        /// the same shape the numeric helpers read.</summary>
+        private static bool IsPercentToken(string text)
+        {
+            return text.Length > 1 && text.EndsWith("%", StringComparison.Ordinal) &&
+                   double.TryParse(text.Substring(0, text.Length - 1),
+                                   System.Globalization.NumberStyles.Float,
+                                   System.Globalization.CultureInfo.InvariantCulture,
+                                   out _);
+        }
+
         private static bool TryMatchShape(string[] shape, int si, List<Token> trigger, int ti)
         {
             if (si >= shape.Length)
@@ -93,17 +104,27 @@ namespace Game
             string part = shape[si];
             if (part.Contains("<"))
             {
+                // `<n>%` — a percentage written as one token, like `60%` (Task 33 Part B).
+                bool percent = part.EndsWith("%", StringComparison.Ordinal);
                 string name = part.Replace("\"", "").Replace("<", "").Replace(">", "");
+                if (percent)
+                    name = name.Substring(0, name.Length - 1);
                 if (name == "value")
                 {
                     return ti < trigger.Count && si == shape.Length - 1;
                 }
+                if (percent)
+                    return ti < trigger.Count && trigger[ti].Type == TokenType.Word &&
+                           IsPercentToken(trigger[ti].Text) &&
+                           TryMatchShape(shape, si + 1, trigger, ti + 1);
                 if (name == "n" || name == "dist")
                 {
                     return ti < trigger.Count && trigger[ti].Type == TokenType.Number &&
                            TryMatchShape(shape, si + 1, trigger, ti + 1);
                 }
-                if (name == "name")
+                // `<name>` is a quoted string; `<marker>` is one too (a clip's authored marker,
+                // Task 33 Part B), so both match a Str token.
+                if (name == "name" || name == "marker")
                 {
                     return ti < trigger.Count && trigger[ti].Type == TokenType.Str &&
                            TryMatchShape(shape, si + 1, trigger, ti + 1);

@@ -45,6 +45,10 @@ namespace Game
         WatchChanges,
         Message,
         AnimEnd,
+        /// <summary><c>when anim "&lt;name&gt;" reaches &lt;n&gt;%</c> and
+        /// <c>when anim "&lt;name&gt;" hits "&lt;marker&gt;"</c> (Task 33 Part B).</summary>
+        AnimReaches,
+        AnimMarker,
         /// <summary><c>when music ends</c> / <c>when music "&lt;name&gt;" ends</c> (Task 31).</summary>
         MusicEnd,
         StateIs,
@@ -119,6 +123,12 @@ namespace Game
         /// <summary>For <c>when me touches &lt;material&gt;</c>: the physics-material name the
         /// touched actor's collider must carry (matched in addition to, or instead of, a name).</summary>
         public string RequireMaterial = "";
+        /// <summary>For <c>when anim "&lt;name&gt;" hits "&lt;marker&gt;"</c>: the authored marker
+        /// the clip's animation event reports.</summary>
+        public string RequireMarker = "";
+        /// <summary>For <c>when anim "&lt;name&gt;" reaches &lt;n&gt;%</c>: how far through the
+        /// clip playback must get before the trigger fires, 0–100.</summary>
+        public double Percent;
         /// <summary>For <c>when message "damage &lt;amount&gt;" arrives</c>: the quoted text is a
         /// template whose <c>&lt;slot&gt;</c> parts capture a number from the message
         /// (see <see cref="MessagePattern"/>).</summary>
@@ -467,6 +477,22 @@ namespace Game
                     MessagePattern = MessagePattern.IsPattern(messageName),
                 };
             }
+            // `when anim "<name>" reaches <n>%` (Task 33 Part B): the impact moment comes from the
+            // clip's own progress instead of a hand-tuned `wait`. The runtime polls it — the bridge
+            // owns the clip's clock — and fires once per play.
+            if (words.Length == 4 && words[0] == "anim" && words[2] == "reaches")
+                return ReachesDescriptor(trigger);
+            // `when anim "<name>" hits "<marker>"` (Task 33 Part B): a marker authored on the clip
+            // with a Marker Anim Event. Flax hands markers to gameplay only through that callback —
+            // an Animation asset exposes no event list to C# — so a clip without markers falls back
+            // to `reaches <n>%`.
+            if (words.Length == 4 && words[0] == "anim" && words[2] == "hits")
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.AnimMarker,
+                    RequireName = trigger[1].Text,
+                    RequireMarker = trigger[3].Text,
+                };
             if (words.Length >= 3 && words[0] == "anim")
                 return new TriggerDescriptor { Kind = TriggerKind.AnimEnd, RequireName = trigger[1].Text };
             // `when music ends` — the one music player stopped. The optional quoted name only
@@ -522,6 +548,32 @@ namespace Game
                 return changes;
             }
             return new TriggerDescriptor { Kind = TriggerKind.Unknown };
+        }
+
+        /// <summary>
+        /// <c>when anim "&lt;name&gt;" reaches &lt;n&gt;%</c>. The percent is clamped to 0–100, so a
+        /// mistyped 150% fires at the clip's end instead of never, and 0% fires on the play's first
+        /// poll.
+        /// </summary>
+        private static TriggerDescriptor ReachesDescriptor(List<Token> trigger)
+        {
+            string word = trigger[3].Text;
+            string number = word.EndsWith("%", StringComparison.Ordinal)
+                ? word.Substring(0, word.Length - 1)
+                : word;
+            if (!double.TryParse(number, System.Globalization.NumberStyles.Float,
+                                 System.Globalization.CultureInfo.InvariantCulture, out double percent))
+                percent = 100;
+            if (percent < 0)
+                percent = 0;
+            if (percent > 100)
+                percent = 100;
+            return new TriggerDescriptor
+            {
+                Kind = TriggerKind.AnimReaches,
+                RequireName = trigger[1].Text,
+                Percent = percent,
+            };
         }
 
         private static TriggerDescriptor CursorChanges()
@@ -809,5 +861,7 @@ namespace Game
         public string Name = "";
         /// <summary>Physics-material name of the touched/colliding actor (contact triggers only).</summary>
         public string Material = "";
+        /// <summary>The authored marker a clip's animation event reported (Task 33 Part B).</summary>
+        public string Marker = "";
     }
 }

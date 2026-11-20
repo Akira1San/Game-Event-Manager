@@ -47,5 +47,28 @@ namespace Game
             double remaining = Math.Max(0, length - played);
             return now + remaining / ClampSpeed(newSpeed);
         }
+
+        /// <summary>
+        /// How far through a clip that started at <paramref name="startTime"/> playback has got,
+        /// where 1 is the clip's own length (and 2 means two passes). A one-shot stops at 1 — it
+        /// holds its last frame — so `reaches 100%` fires at the end; a loop keeps counting, which
+        /// lets a 100% trigger mean "the first pass is over". Speed scales the clock, so the
+        /// percent follows what is on screen, not wall time.
+        /// </summary>
+        public static double Progress(double now, double startTime, double length, double speed, bool loop)
+        {
+            if (length <= 0)
+                return loop ? 0 : 1;
+            double played = Math.Max(0, now - startTime) * ClampSpeed(speed);
+            double progress = played / length;
+            return !loop && progress > 1 ? 1 : progress;
+        }
+
+        /// <summary>
+        /// True once playback has reached <paramref name="percent"/> (0–100). The small epsilon
+        /// keeps a 0% trigger from being skipped by floating-point noise on the first poll.
+        /// </summary>
+        public static bool Crossed(double progress, double percent)
+            => progress * 100.0 >= percent - 1e-9;
     }
 }

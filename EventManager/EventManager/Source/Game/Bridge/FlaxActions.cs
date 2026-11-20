@@ -82,6 +82,10 @@ namespace Game
         /// clip, so it survives clip changes; the bridge writes it to
         /// <see cref="AnimatedModel.UpdateSpeed"/>, which Flax applies to the running graph live.</summary>
         private static readonly Dictionary<Actor, float> AnimSpeeds = new Dictionary<Actor, float>();
+        /// <summary>Monotonic play token per clip start (Task 33 Part B). `when anim ... reaches ...%`
+        /// fires once per token, so every `play anim` / `loop anim` re-arms it — restarting the same
+        /// clip, changing speed or letting it loop again does not.</summary>
+        private static int AnimPlayCounter;
         /// <summary>Vertical speed per character actor. <c>CharacterController.Move</c> carries no
         /// velocity state, so the event runtime keeps the falling speed between ticks.</summary>
         private static readonly Dictionary<Actor, float> CharacterFallSpeeds = new Dictionary<Actor, float>();
@@ -175,6 +179,7 @@ namespace Game
             public bool PreviousLoop;
             public double StartTime;     // when the current clip started, for re-timing at a new speed
             public double Length;        // clip length in seconds (0 for a loop, which has no end)
+            public int Play;             // play token, used to fire a percent trigger once per play
         }
 
         public static void WarnOnce(string message)
@@ -6074,6 +6079,7 @@ namespace Game
                 EndTime = loop ? double.MaxValue : AnimPlayback.EndTime(Time.GameTime, anim.Length, speed),
                 StartTime = Time.GameTime,
                 Length = anim.Length,
+                Play = ++AnimPlayCounter,
                 Graph = graph,
                 PreviousGraph = state?.Graph,
                 PreviousClip = state?.Clip,
@@ -6113,6 +6119,48 @@ namespace Game
             // fire early or late: re-time what is left of the clip.
             if (AnimStates.TryGetValue(me, out AnimState state) && state.OneShot && state.Length > 0)
                 state.EndTime = AnimPlayback.RetimedEnd(Time.GameTime, state.StartTime, state.Length, previous, speed);
+        }
+
+        /// <summary>
+        /// The clip an actor is playing right now, how far through it playback has got (0–1, or past
+        /// 1 after a loop's first pass) and this play's token (Task 33 Part B). False when the actor
+        /// is not playing that clip, so `when anim "Walk" reaches 50%` never fires from a stale clip.
+        /// </summary>
+        public static bool TryGetAnimProgress(object key, string clip, out double progress, out int play)
+        {
+            progress = 0;
+            play = 0;
+            if (!(key is Actor actor) || !AnimStates.TryGetValue(actor, out AnimState state))
+                return false;
+            if (state.Length <= 0 || state.Clip != AssetNames.Key(clip))
+                return false;
+            progress = AnimPlayback.Progress(Time.GameTime, state.StartTime, state.Length,
+                AnimSpeedOf(actor), state.Loop);
+            play = state.Play;
+            return true;
+        }
+
+        /// <summary>The clip name an actor is playing, as it was written in the event (empty when none).</summary>
+        public static string AnimNameOf(object key)
+        {
+            return key is Actor actor && AnimStates.TryGetValue(actor, out AnimState state)
+                ? state.Name
+                : "";
+        }
+
+        /// <summary>
+        /// The sheet actor a model belongs to: an animation event hands us the
+        /// <see cref="FlaxEngine.AnimatedModel"/>, which is often a child of the actor the sheet runs
+        /// on. The tracked play's actor wins; otherwise the model itself.
+        /// </summary>
+        public static Actor OwnerActorOf(FlaxEngine.AnimatedModel model)
+        {
+            if (model == null)
+                return null;
+            for (Actor node = model; node != null && !(node is Scene); node = node.Parent)
+                if (AnimStates.ContainsKey(node))
+                    return node;
+            return model;
         }
 
         /// <summary>The actor's animation speed, or <see cref="AnimPlayback.DefaultSpeed"/>.</summary>
@@ -6155,6 +6203,7 @@ namespace Game
                     EndTime = double.MaxValue,
                     StartTime = Time.GameTime,
                     Length = 0,
+                    Play = ++AnimPlayCounter,
                     Graph = state.PreviousGraph,
                 };
                 return;

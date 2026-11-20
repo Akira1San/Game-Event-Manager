@@ -51,6 +51,8 @@ namespace Game
             new WordEntry { Kind = "trigger", Word = "when my Health becomes 0", Example = "when my Health becomes 0", AltShape = "health clamps at 0, so this fires once per unit" },
             new WordEntry { Kind = "trigger", Word = "when message \"<name>\" arrives", Example = "when message \"die\" arrives", AltShape = "`when message \"damage <amount>\" arrives` captures the number in `my amount` / `my DamageTaken`" },
             new WordEntry { Kind = "trigger", Word = "when anim \"<name>\" ends", Example = "when anim \"dragon_fire\" ends" },
+            new WordEntry { Kind = "trigger", Word = "when anim \"<name>\" reaches <n>%", Example = "when anim \"Attack\" reaches 60%", AltShape = "the impact moment comes from the clip, not a guessed `wait`: polled once per play, 0% on the first tick and 100% on the last frame" },
+            new WordEntry { Kind = "trigger", Word = "when anim \"<name>\" hits \"<marker>\"", Example = "when anim \"Attack\" hits \"impact\"", AltShape = "a Marker Anim Event on the clip's Animation Event track; Flax exposes no event list to C#, so a clip without markers falls back to `reaches <n>%`" },
             new WordEntry { Kind = "trigger", Word = "when particle \"<name>\" ends", Example = "when particle \"explosion\" ends" },
             new WordEntry { Kind = "trigger", Word = "when music ends", Example = "when music ends", AltShape = "when music \"<name>\" ends" },
             new WordEntry { Kind = "trigger", Word = "when reload completes", Example = "when reload completes" },

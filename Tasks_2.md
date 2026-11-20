@@ -657,9 +657,12 @@ when every 0.2 seconds
       full-body `InitAsAnimation` path have speed baked in at graph build, so a live change there
       rebuilds the graph; document that as a restart, or route all playback through slots to remove
       the limit.
-- [ ] **Part B — Time/percent and marker triggers.** Poll the active clip’s time; edge-trigger once
-      per play. Markers read Flax animation event tracks if available; if not, fall back to a
-      percentage declared in the word and document the limit.
+- [x] **Part B — Time/percent and marker triggers.** `when anim "<name>" reaches <n>%` polls the
+      active clip’s progress (`AnimPlayback.Progress`, speed-scaled) and edge-triggers once per play,
+      re-armed by the bridge’s per-play token. `when anim "<name>" hits "<marker>"` reads Flax
+      animation event tracks through the project’s own `MarkerAnimEvent` (an authored `AnimEvent`):
+      Flax exposes an Animation’s event list to the editor only, so a marker has to be placed on the
+      clip. A clip with no markers falls back to `reaches <n>%`, as the registry documents.
 - [ ] **Part C — Upper-body layer.** Authored content, not a runtime graph trick. Add the
       character’s base Anim Graph asset: a `Blend With Mask` node whose Pose A is the locomotion pose
       and Pose B is an `Animation Slot` node feeding the final output. Add a `SkeletonMask` asset for

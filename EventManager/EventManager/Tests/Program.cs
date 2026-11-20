@@ -1000,6 +1000,66 @@ animEndEngine.Tick(0);
 Check(animEndEngine.Variables.GetGlobal("AnimEnded").AsNumber() == 1,
     "`when anim \"shoot\" ends` matches the clip name case-insensitively");
 
+// ---- Task 33 Part B: time/percent and marker triggers ----
+
+var animReaches = parser.Parse("when anim \"Attack\" reaches 60%\n  set Impact to 1\n");
+var reachesDesc = TriggerClassifier.Classify(animReaches.Events[0]);
+Check(reachesDesc.Kind == TriggerKind.AnimReaches && reachesDesc.RequireName == "Attack" &&
+      Math.Abs(reachesDesc.Percent - 60) < 1e-9,
+    "`when anim \"Attack\" reaches 60%` classifies to AnimReaches at 60%");
+
+var animStarts = parser.Parse("when anim \"Attack\" reaches 0%\n  set Impact to 1\n");
+Check(TriggerClassifier.Classify(animStarts.Events[0]).Percent == 0,
+    "`reaches 0%` is a legal edge");
+
+var animMarker = parser.Parse("when anim \"Attack\" hits \"impact\"\n  set Impact to 1\n");
+var markerDesc = TriggerClassifier.Classify(animMarker.Events[0]);
+Check(markerDesc.Kind == TriggerKind.AnimMarker && markerDesc.RequireName == "Attack" &&
+      markerDesc.RequireMarker == "impact",
+    "`when anim \"Attack\" hits \"impact\"` classifies to AnimMarker");
+
+var markerEngine = FreshEngine(new FakeWorld());
+markerEngine.AddSheet(new FakeActor("Swordsman"),
+    parser.Parse("when anim \"attack\" hits \"IMPACT\"\n  add 1 to Hits\n"));
+markerEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.AnimMarker, Name = "Attack", Marker = "impact" });
+markerEngine.Tick(0);
+markerEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.AnimMarker, Name = "Attack", Marker = "whoosh" });
+markerEngine.Tick(0.1);
+Check(markerEngine.Variables.GetGlobal("Hits").AsNumber() == 1,
+    "`when anim ... hits` matches clip and marker loosely; a different marker does not fire it");
+
+var reachWorld = new FakeWorld();
+var reachEngine = FreshEngine(reachWorld);
+var hero = new FakeActor("Hero");
+reachEngine.AddSheet(hero, parser.Parse("when anim \"Attack\" reaches 50%\n  add 1 to Ticks\n"));
+reachWorld.SetAnimProgress(hero, "Attack", 0.2, 1);
+reachEngine.Tick(0);
+Check(reachEngine.Variables.GetGlobal("Ticks").AsNumber() == 0,
+    "a percent trigger waits until playback reaches it");
+reachWorld.SetAnimProgress(hero, "Attack", 0.5, 1);
+reachEngine.Tick(0.1);
+Check(reachEngine.Variables.GetGlobal("Ticks").AsNumber() == 1,
+    "`when anim ... reaches 50%` fires on the crossing edge");
+reachWorld.SetAnimProgress(hero, "Attack", 0.9, 1);
+reachEngine.Tick(0.2);
+Check(reachEngine.Variables.GetGlobal("Ticks").AsNumber() == 1,
+    "the same play fires the percent trigger only once");
+reachWorld.SetAnimProgress(hero, "Attack", 0.2, 2);
+reachEngine.Tick(0.3);
+reachWorld.SetAnimProgress(hero, "Attack", 0.7, 2);
+reachEngine.Tick(0.4);
+Check(reachEngine.Variables.GetGlobal("Ticks").AsNumber() == 2,
+    "playing the clip again re-arms the percent trigger");
+
+Check(Math.Abs(AnimPlayback.Progress(12, 10, 2, 1, false) - 1) < 1e-9 &&
+      Math.Abs(AnimPlayback.Progress(11, 10, 2, 2, false) - 1) < 1e-9 &&
+      Math.Abs(AnimPlayback.Progress(10, 10, 2, 1, false)) < 1e-9 &&
+      Math.Abs(AnimPlayback.Progress(12, 10, 2, 1, true) - 1) < 1e-9 &&
+      Math.Abs(AnimPlayback.Progress(14, 10, 2, 1, true) - 2) < 1e-9,
+    "clip progress follows the speed, clamps a one-shot at 100% and keeps counting a loop");
+Check(AnimPlayback.Crossed(0, 0) && AnimPlayback.Crossed(0.6, 60) && !AnimPlayback.Crossed(0.59, 60),
+    "the percent edge covers 0% and the exact crossing");
+
 // ------------------------------------------------------------------
 // Task 14 Part A: Particle System words
 // ------------------------------------------------------------------
@@ -14174,6 +14234,28 @@ class FakeWorld : IEventWorld
     public bool IsDescendantOf(object child, object root)
     {
         return ReferenceEquals(child, root);
+    }
+
+    private readonly Dictionary<(object, string), (double Progress, int Play)> animProgress =
+        new Dictionary<(object, string), (double Progress, int Play)>();
+
+    /// <summary>Sets the answer behind `when anim "<clip>" reaches <n>%` (Task 33 Part B).</summary>
+    public void SetAnimProgress(object actor, string clip, double progress, int play)
+    {
+        animProgress[(actor, clip.ToLowerInvariant())] = (progress, play);
+    }
+
+    public bool TryGetAnimProgress(object actor, string clip, out double progress, out int play)
+    {
+        if (animProgress.TryGetValue((actor, clip.ToLowerInvariant()), out var state))
+        {
+            progress = state.Progress;
+            play = state.Play;
+            return true;
+        }
+        progress = 0;
+        play = 0;
+        return false;
     }
 
     // Task 18 Part H: the RTS queries are answered by the runtime in these tests, not by the

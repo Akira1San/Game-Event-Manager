@@ -72,6 +72,14 @@ namespace Game
         /// descendant in the scene hierarchy — so a contact poll skips the actor's own child
         /// colliders instead of testing them as foreign contact targets.</summary>
         bool IsDescendantOf(object child, object root);
+        /// <summary>
+        /// Progress (0–1, and past 1 after a loop's first pass) through a clip
+        /// <paramref name="actor"/> is playing right now, with a token that changes every time that
+        /// clip starts, or false when the actor is not playing that clip. Backs
+        /// <c>when anim "&lt;name&gt;" reaches &lt;n&gt;%</c> (Task 33 Part B), which fires once per
+        /// play: a new token re-arms it.
+        /// </summary>
+        bool TryGetAnimProgress(object actor, string clip, out double progress, out int play);
 
         // ---- RTS state (Task 18 Part H) ----
         // The same live state the event language reads, exposed as one query surface: a HUD,
@@ -240,6 +248,13 @@ namespace Game
         // A bare world has no economy, selection or vision of its own: every query answers
         // empty. Tests and tools that need real state implement IEventWorld (or drive an
         // EventRuntime, which owns it).
+
+        public bool TryGetAnimProgress(object actor, string clip, out double progress, out int play)
+        {
+            progress = 0;
+            play = 0;
+            return false;
+        }
 
         public IReadOnlyList<object> GetSelection()
         {

@@ -1327,6 +1327,15 @@ window around a broken runtime.
   each new clip inheriting it. A full-body clip on the virtual graph bakes speed at graph build, so a
   live change there rebuilds the graph (a restart) — a documented limit that disappears once a
   character's playback is routed through slots.
+  *Clip timing comes from the clip, not a guessed `wait`.* `when anim "<name>" reaches <n>%` polls the
+  playing clip's progress — the time since `StartTime`, scaled by the actor's speed, clamped at 100%
+  for a one-shot and left to keep counting for a loop — and fires on the crossing edge, once per play;
+  the bridge stamps every `play anim` / `loop anim` with a play token, so a restart re-arms it and a
+  speed change moves the percent with the picture. Markers are content, not an API:
+  `when anim "<name>" hits "<marker>"` is fed by `MarkerAnimEvent`, a project `AnimEvent` the author
+  drops on the clip's Animation Event track with the marker's name typed in. Flax keeps an Animation
+  asset's event list editor-side, so there is nothing to read from C# — a clip without that event has
+  no markers, and `reaches <n>%` is the declared fallback.
   *Root motion belongs to the locomotion clip only.* `AnimatedModel.RootMotionTarget` is assigned once
   on the base graph and drives nothing else; slot clips never write the actor transform, so an
   upper-body clip cannot double-apply displacement or slide the feet. The single-clip fallback graphs

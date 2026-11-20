@@ -286,6 +286,11 @@ namespace Game
         /// <summary>Reloads finished so far, per `when reload completes` event, so a sheet that
         /// polls sees each completion exactly once.</summary>
         public int[] ReloadSeen = new int[0];
+        /// <summary>The play token each <c>when anim ... reaches ...%</c> last saw, so a new play of
+        /// the clip re-arms it and the same play only fires once (Task 33 Part B).</summary>
+        public int[] AnimPlays = new int[0];
+        /// <summary>Whether each percent trigger already fired during the current play.</summary>
+        public bool[] AnimReached = new bool[0];
         /// <summary>Last distance at which <c>sees name</c> established sight; reused by a
         /// distance-less <c>stops seeing name</c>.</summary>
         public Dictionary<string, double> LastSeenRange = new Dictionary<string, double>();
@@ -554,6 +559,8 @@ namespace Game
             sheet.InSight = new HashSet<object>[count];
             sheet.Heard = new HashSet<int>[count];
             sheet.ReloadSeen = new int[count];
+            sheet.AnimPlays = new int[count];
+            sheet.AnimReached = new bool[count];
             sheet.Triggers.Clear();
             sheet.CurrentState = "default";
             sheet.LastState = "default";
@@ -2085,6 +2092,11 @@ namespace Game
                 return ReferenceEquals(signal.Other, sheet.Actor);
             // Clip names are matched loosely: `play anim "Walk"` answers `when anim "walk" ends`.
             // Particle names match the same way: `play particle "Smoke"` answers `when particle "smoke" ends`.
+            // `when anim "<name>" hits "<marker>"` (Task 33 Part B): the clip's name as written in
+            // the event plus the authored marker, both matched loosely.
+            if (descriptor.Kind == TriggerKind.AnimMarker)
+                return string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase) &&
+                       string.Equals(signal.Marker, descriptor.RequireMarker, StringComparison.OrdinalIgnoreCase);
             if (descriptor.Kind == TriggerKind.AnimEnd || descriptor.Kind == TriggerKind.ParticleEnd)
                 return string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase);
             // `when music ends`: any track, or the one the trigger names. Music is global, so the
@@ -3287,11 +3299,35 @@ namespace Game
                 case TriggerKind.Hovered:
                     PollHover(sheet, eventIndex, descriptor);
                     break;
+                case TriggerKind.AnimReaches:
+                    PollAnimReaches(sheet, eventIndex, descriptor);
+                    break;
                 case TriggerKind.StateIs:
                     if (sheet.CurrentState == descriptor.RequireName && sheet.LastState != descriptor.RequireName)
                         RunEvent(sheet, eventIndex, null);
                     break;
             }
+        }
+
+        /// <summary>
+        /// <c>when anim "&lt;name&gt;" reaches &lt;n&gt;%</c> (Task 33 Part B): poll the clip's own
+        /// progress and fire on the crossing edge, once per play. The play token changes whenever
+        /// the clip starts, so a second <c>play anim</c> re-arms the trigger; a clip that stopped
+        /// playing is simply not reported, so nothing fires at a stale percent.
+        /// </summary>
+        private void PollAnimReaches(SheetInstance sheet, int eventIndex, TriggerDescriptor descriptor)
+        {
+            if (!World.TryGetAnimProgress(sheet.Actor, descriptor.RequireName, out double progress, out int play))
+                return;
+            if (sheet.AnimPlays[eventIndex] != play)
+            {
+                sheet.AnimPlays[eventIndex] = play;
+                sheet.AnimReached[eventIndex] = false;
+            }
+            if (sheet.AnimReached[eventIndex] || !AnimPlayback.Crossed(progress, descriptor.Percent))
+                return;
+            sheet.AnimReached[eventIndex] = true;
+            RunEvent(sheet, eventIndex, null);
         }
 
         /// <summary>Sight triggers: distance check + line of sight, both edge triggers.

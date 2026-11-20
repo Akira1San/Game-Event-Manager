@@ -116,6 +116,27 @@ namespace Game
             Runtime.RaisePush(actor, new PushSignal { Kind = TriggerKind.AnimEnd, Name = animName });
         }
 
+        /// <summary>
+        /// A clip's marker was crossed on this actor — push
+        /// `when anim "&lt;clip&gt;" hits "&lt;marker&gt;"`
+        /// (Task 33 Part B). Flax calls the marker's <see cref="MarkerAnimEvent"/> once per pass, so
+        /// the trigger is an edge without any polling.
+        /// </summary>
+        public void HandleAnimMarker(Actor actor, string marker)
+        {
+            if (actor == null || string.IsNullOrEmpty(marker))
+                return;
+            string clip = FlaxActions.AnimNameOf(actor);
+            if (clip.Length == 0)
+                return;
+            Runtime.RaisePush(actor, new PushSignal
+            {
+                Kind = TriggerKind.AnimMarker,
+                Name = clip,
+                Marker = marker,
+            });
+        }
+
         /// <summary>A particle one-shot finished on this actor — push a ParticleEnd trigger to its sheet.</summary>
         public void HandleParticleEnd(Actor actor, string particleName)
         {
