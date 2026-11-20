@@ -346,6 +346,8 @@ namespace Game
             new WordEntry { Kind = "action", Word = "increase", Example = "increase Supply Max by 8" },
             new WordEntry { Kind = "action", Word = "set", Example = "set Minerals to 500" },
             new WordEntry { Kind = "action", Word = "wait", Example = "wait 0.5 seconds" },
+            new WordEntry { Kind = "action", Word = "expect <condition>", Example = "expect my Health is 0", AltShape = "reuses the existing condition grammar — any `is`/`is not`/`higher`/`lower`/`near`/`exists`/`has tag` condition — parsed by `Conditions.Parse` at load (Task 51 Part A)" },
+            new WordEntry { Kind = "action", Word = "pass", Example = "pass", AltShape = "closes the currently running self-test case as passed; `pass` outside a case is a friendly runtime error (Task 51 Part A)" },
             new WordEntry { Kind = "action", Word = "show", Example = "show PausePanel" },
             new WordEntry { Kind = "action", Word = "show", Example = "show text \"Game Over\"" },
             new WordEntry { Kind = "action", Word = "add to backlog \"<text>\"", Example = "add to backlog \"Innkeeper: Hello.\"", AltShape = "appends one line to the game's dialogue history, which survives a scene change · the newest lines fill the scene's `BacklogRow1`, `BacklogRow2`, … labels · `BacklogLimit` caps it (100 by default)" },

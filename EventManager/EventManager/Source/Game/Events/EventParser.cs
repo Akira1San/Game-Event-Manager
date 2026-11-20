@@ -463,6 +463,35 @@ namespace Game
                 line.Statement = ParseTypeText(line);
                 return;
             }
+            // `expect <condition>` — Task 51 Part A. The tail is re-parsed through
+            // Conditions.Parse, so it reuses the existing condition grammar and a shape that
+            // does not parse gets a friendly load-time error.
+            if (first.Text == "expect")
+            {
+                var tail = line.Words.GetRange(1, line.Words.Count - 1);
+                if (tail.Count == 0)
+                    throw new ParseException("`expect` needs a condition — like `expect my Health is 0`", line.Line);
+                var condition = Conditions.Parse(tail);
+                if (condition.Kind == ConditionKind.Unknown)
+                    throw new ParseException("`expect` needs a condition — like `expect my Health is 0`", line.Line);
+                var conditionText = new System.Text.StringBuilder();
+                foreach (var t in tail)
+                {
+                    if (conditionText.Length > 0)
+                        conditionText.Append(' ');
+                    conditionText.Append(t.Text);
+                }
+                line.Statement = new ExpectNode { Line = line.Line, Condition = condition, ConditionText = conditionText.ToString() };
+                return;
+            }
+            // `pass` — Task 51 Part A. Closes the currently running self-test case as passed;
+            // `pass` outside a case is a friendly runtime error, not a parse error.
+            if (first.Text == "pass")
+            {
+                CheckEndOfLine(line.Words, 1, line.Line, "pass");
+                line.Statement = new PassNode { Line = line.Line };
+                return;
+            }
             if (Array.IndexOf(WordRegistry.ActionWords, first.Text) >= 0)
             {
             if (first.Text == "set")

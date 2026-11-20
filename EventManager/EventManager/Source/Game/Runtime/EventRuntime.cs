@@ -269,6 +269,10 @@ namespace Game
         public List<TriggerDescriptor> Triggers = new List<TriggerDescriptor>();
         public Queue<PushSignal> PushQueue = new Queue<PushSignal>();
         public List<PendingRun> Waiting = new List<PendingRun>();
+        /// <summary>One case record per event index that carries an `expect`/`pass` (Task 51).</summary>
+        public Dictionary<int, CaseRecord> CasesByEvent = new Dictionary<int, CaseRecord>();
+        /// <summary>The case this sheet is currently executing, or null when not in a case.</summary>
+        public CaseRecord CurrentCase;
         /// <summary>One enter-edge set per trigger: pairs already touching, so a poll fires once.</summary>
         public HashSet<object>[] Contacts = new HashSet<object>[0];
         /// <summary>Pairs the distance poll fired for; lets Both mode ignore a later collider push for the same pair.</summary>
@@ -543,6 +547,27 @@ namespace Game
                 sheet.InSight[i] = new HashSet<object>();
                 sheet.Heard[i] = new HashSet<int>();
                 sheet.Triggers.Add(TriggerClassifier.Classify(program.Events[i]));
+            }
+            // Task 51: discover the self-test cases on this sheet — every `when` block whose
+            // body carries an `expect`. A `pass`-only block is not a case (`pass` closes a case
+            // that `expect` opened). A sheet with none behaves exactly as before.
+            sheet.CasesByEvent.Clear();
+            for (int i = 0; i < count; i++)
+            {
+                CaseRecord caseRecord = null;
+                foreach (var line in program.Events[i].Body)
+                {
+                    if (line.Statement is ExpectNode)
+                    {
+                        caseRecord = new CaseRecord { Label = "", Line = program.Events[i].Line };
+                        break;
+                    }
+                }
+                if (caseRecord != null)
+                {
+                    sheet.CasesByEvent[i] = caseRecord;
+                    SelfTest.Register(caseRecord);
+                }
             }
         }
 
@@ -1600,7 +1625,18 @@ namespace Game
                 foreach (var pending in pendingSnapshot)
                 {
                     if (pending.ResumeAt <= Time)
-                        RunBody(pending.Sheet, pending.Event, pending.Context, pending.LineIndex, pending.Gate, pending.ConditionGate);
+                    {
+                        int pendingEventIndex = sheet.Program.Events.IndexOf(pending.Event);
+                        CaseRecord pendingCase = null;
+                        if (sheet.CasesByEvent != null)
+                            sheet.CasesByEvent.TryGetValue(pendingEventIndex, out pendingCase);
+                        var prevCase = sheet.CurrentCase;
+                        sheet.CurrentCase = pendingCase;
+                        if (pendingCase != null)
+                            pendingCase.State = CaseState.Running;
+                        bool suspended = RunBody(pending.Sheet, pending.Event, pending.Context, pending.LineIndex, pending.Gate, pending.ConditionGate);
+                        sheet.CurrentCase = suspended ? pendingCase : prevCase;
+                    }
                     else
                         sheet.Waiting.Add(pending);
                 }
@@ -2132,10 +2168,18 @@ namespace Game
                 Sheet = sheet,
             };
             sheet.FiredThisTick[eventIndex] = true;
-            RunBody(sheet, ev, context, 0, true);
+            var prevCase = sheet.CurrentCase;
+            CaseRecord caseForEvent = null;
+            if (sheet.CasesByEvent != null && sheet.CasesByEvent.TryGetValue(eventIndex, out caseForEvent))
+            {
+                sheet.CurrentCase = caseForEvent;
+                caseForEvent.State = CaseState.Running;
+            }
+            bool suspended = RunBody(sheet, ev, context, 0, true);
+            sheet.CurrentCase = suspended ? caseForEvent : prevCase;
         }
 
-        private void RunBody(SheetInstance sheet, EventNode ev, EventContext context, int startLine, bool startGate, bool startConditionGate = false)
+        private bool RunBody(SheetInstance sheet, EventNode ev, EventContext context, int startLine, bool startGate, bool startConditionGate = false)
         {
             bool gate = startGate;
             // Gate of the nearest condition line, so `otherwise` can invert exactly that block.
@@ -2235,6 +2279,26 @@ namespace Game
                 else if (statement is ClearDialogueNode)
                 {
                     ExecuteClearDialogue(context);
+                }
+                // Task 51 Part A: `expect` evaluates its parsed condition against the running
+                // case; `pass` closes the current case as passed. Both are no-ops (with a
+                // friendly warning) when no case is currently running.
+                else if (statement is ExpectNode expect)
+                {
+                    bool ok = Conditions.Evaluate(expect.Condition, context);
+                    var currentCase = sheet.CurrentCase;
+                    if (currentCase == null)
+                        OnRuntimeWarning("`expect` outside a `test` case — there is no case to assert against.");
+                    else if (!ok)
+                        SelfTest.Fail(currentCase, $"expect failed: {expect.ConditionText}");
+                }
+                else if (statement is PassNode)
+                {
+                    var currentCase = sheet.CurrentCase;
+                    if (currentCase == null)
+                        OnRuntimeWarning("`pass` outside a `test` case — `pass` closes a case that `expect` started.");
+                    else
+                        SelfTest.Pass(currentCase);
                 }
                 else if (statement is SetSpeakerNode setSpeaker)
                 {
@@ -2378,7 +2442,7 @@ namespace Game
                     if (IsStopThisEvent(raw))
                     {
                         context.Stopped = true;
-                        return;
+                        return false;
                     }
                     if (raw.Words.Count >= 2 && raw.Words[0].Text == "wait")
                     {
@@ -2394,7 +2458,7 @@ namespace Game
                                 ConditionGate = conditionGate,
                                 ResumeAt = Time + seconds,
                             });
-                            return;
+                            return true;
                         }
                     }
                     if (IsSend(raw))
@@ -2422,6 +2486,7 @@ namespace Game
                     OnRawAction(context, raw.Words);
                 }
             }
+            return false;
         }
 
         /// <summary>

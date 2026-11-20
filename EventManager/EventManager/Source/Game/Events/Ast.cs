@@ -279,4 +279,20 @@ namespace Game
         public string EnemyType = "";
         public string TypeVariable = "";
     }
+
+    /// <summary><c>expect &lt;condition&gt;</c> — a self-test assertion (Task 51 Part A). The
+    /// condition is parsed at load time through <see cref="Conditions.Parse"/> and evaluated at
+    /// runtime against the running case.</summary>
+    public class ExpectNode : StatementNode
+    {
+        public ConditionNode Condition = new ConditionNode();
+        /// <summary>The original condition text, for friendly failure reports.</summary>
+        public string ConditionText = "";
+    }
+
+    /// <summary><c>pass</c> — closes the currently running self-test case as passed (Task 51
+    /// Part A). Only meaningful inside a case that contains an `expect`.</summary>
+    public class PassNode : StatementNode
+    {
+    }
 }

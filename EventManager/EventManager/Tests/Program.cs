@@ -597,6 +597,91 @@ if (setLineFailures.Count > 0)
 Check(setLineCount > 400 && setLineFailures.Count == 0,
       $"every `set` line the shipped sheets use still parses ({setLineCount} lines across GameFiles)");
 
+// Task 36 Part G — the example platformer sheet is the acceptance sheet for the editor
+// play-checks, so the suite loads it and proves every action line in it is a shipped word: an
+// example that drifted into a word the engine does not know would otherwise only surface in the
+// editor. `wait` is excluded on purpose — it is a runtime statement, not an action word.
+string platformerPath = "Source/Game/GameFiles/Platformer.events";
+var platformerProgram = parser.Parse(File.ReadAllText(platformerPath));
+var platformerUnknown = new List<string>();
+int platformerActions = 0;
+var platformerWords = new HashSet<string>();
+foreach (var platformerEvent in platformerProgram.Events)
+{
+    foreach (var platformerLine in platformerEvent.Body)
+    {
+        if (platformerLine.IsCondition)
+            continue;
+        RawActionNode platformerRaw = platformerLine.Statement as RawActionNode;
+        if (platformerRaw == null)
+            continue;
+        platformerActions++;
+        platformerWords.Add(platformerRaw.Words[0].Text);
+        ActionSpec platformerSpec = ActionWords.Parse(platformerRaw.Words, null);
+        if (platformerSpec.Verb == ActionVerb.Unknown && platformerRaw.Words[0].Text != "wait")
+            platformerUnknown.Add(string.Join(" ", platformerRaw.Words.ConvertAll(word => word.Text)));
+    }
+}
+if (platformerUnknown.Count > 0)
+    Console.WriteLine("  first example line that is not a shipped word: " + platformerUnknown[0]);
+Check(platformerProgram.Events.Count >= 10 && platformerActions > 15 && platformerUnknown.Count == 0,
+    $"every action line in the platformer example is a shipped word ({platformerActions} lines)");
+Check(platformerWords.Contains("save") && platformerWords.Contains("respawn") &&
+      platformerWords.Contains("jump") && platformerWords.Contains("climb") &&
+      platformerWords.Contains("stop"),
+    "the platformer example exercises jump, climb, save checkpoint and respawn at");
+
+// The checkpoint block gates itself. `when me touches <actor>` is enter-edge, but a body that steps
+// out of the marker and back in — or respawns right onto it — would save the same pose and print
+// again, so the example keeps `my CheckpointSaved` beside the pose. These checks read the shipped
+// file, so the guard cannot quietly drop out of the sheet the play-check list runs against.
+EventNode platformerCheckpoint = null;
+EventNode platformerAppear = null;
+foreach (var platformerEvent in platformerProgram.Events)
+{
+    if (platformerEvent.Trigger.Count >= 3 && platformerEvent.Trigger[1].Text == "touches" &&
+        platformerEvent.Trigger[2].Text == "Checkpoint")
+        platformerCheckpoint = platformerEvent;
+    if (platformerEvent.Trigger.Count >= 2 && platformerEvent.Trigger[0].Text == "me" &&
+        platformerEvent.Trigger[1].Text == "appears")
+        platformerAppear = platformerEvent;
+}
+Check(platformerCheckpoint != null && platformerAppear != null,
+    "the platformer example still has its checkpoint block and its `me appears` block");
+string checkpointGate = platformerCheckpoint != null && platformerCheckpoint.Body.Count > 0
+    ? string.Join(" ", platformerCheckpoint.Body[0].Words.ConvertAll(word => word.Text))
+    : "";
+Check(platformerCheckpoint != null && platformerCheckpoint.Body.Count > 0 &&
+      platformerCheckpoint.Body[0].IsCondition && checkpointGate == "my CheckpointSaved is 0",
+    "the checkpoint block opens with a `my CheckpointSaved is 0` gate so one saved point saves once");
+bool checkpointGateCloses = false;
+if (platformerCheckpoint != null)
+{
+    foreach (var checkpointLine in platformerCheckpoint.Body)
+    {
+        if (checkpointLine.IsCondition || !(checkpointLine.Statement is SetNode checkpointSet))
+            continue;
+        if (checkpointSet.Target.Name == "CheckpointSaved" && checkpointSet.Value is NumberValue gateValue &&
+            gateValue.Value == 1)
+            checkpointGateCloses = true;
+    }
+}
+Check(checkpointGateCloses,
+    "the checkpoint block closes its gate with `set my CheckpointSaved to 1` after the save");
+bool checkpointStartsClear = false;
+if (platformerAppear != null)
+{
+    foreach (var appearLine in platformerAppear.Body)
+    {
+        if (!(appearLine.Statement is SetNode appearSet) || appearSet.Target.Name != "CheckpointSaved")
+            continue;
+        if (appearSet.Value is NumberValue appearValue && appearValue.Value == 0)
+            checkpointStartsClear = true;
+    }
+}
+Check(checkpointStartsClear,
+    "`when me appears` starts `my CheckpointSaved` at 0, so a new game can save a checkpoint again");
+
 var hurt = parser.Parse("when me appears\n  add -1 to Lives\n  add Potion to my bag\n");
 var negative = (AddNode)hurt.Events[0].Body[0].Statement!;
 Check(negative.Amount is NumberValue av && av.Value == -1 && negative.Target.Name == "Lives",
@@ -658,6 +743,108 @@ foreach (var entry in WordRegistry.All)
 }
 Check(examplesChecked > 0 && exampleFailures == 0,
       $"every registered word's example parses ({examplesChecked} examples checked)");
+
+// ------------------------------------------------------------------
+// Task 51 Part A: `expect` / `pass` self-test assertions.
+// ------------------------------------------------------------------
+
+var expectParse = parser.Parse("when me appears\n  expect my Health is 0\n");
+var expectNode = expectParse.Events[0].Body[0].Statement as ExpectNode;
+Check(expectNode != null, "`expect my Health is 0` parses to an ExpectNode");
+Check(expectNode != null && expectNode.Condition.Kind == ConditionKind.Equal &&
+      expectNode.Condition.Owner == "my" && expectNode.Condition.Name == "Health" &&
+      expectNode.Condition.Right is NumberValue expectNum && expectNum.Value == 0,
+    "`expect my Health is 0` re-parses its tail through Conditions.Parse (my Health Equal 0)");
+
+Check(parser.Parse("when me appears\n  pass\n").Events[0].Body[0].Statement is PassNode,
+    "`pass` parses to a PassNode");
+
+string expectBare = null;
+try
+{
+    parser.Parse("when me appears\n  expect is 0\n");
+}
+catch (ParseException error)
+{
+    expectBare = error.Message;
+}
+Check(expectBare != null && expectBare.Contains("expect") && expectBare.Contains("condition"),
+    "`expect` with no condition is a friendly parse error");
+
+string expectEmpty = null;
+try
+{
+    parser.Parse("when me appears\n  expect\n");
+}
+catch (ParseException error)
+{
+    expectEmpty = error.Message;
+}
+Check(expectEmpty != null && expectEmpty.Contains("expect"),
+    "`expect` with no tail is a friendly parse error");
+
+// Runtime: a true expectation followed by `pass` marks the case passed.
+var passEngine = FreshEngine(new FakeWorld());
+var passSheet = new FakeActor("Greeter");
+var passWarnings = new List<string>();
+passEngine.OnRuntimeWarning = message => passWarnings.Add(message);
+passEngine.AddSheet(passSheet, parser.Parse(@"when game starts
+  set my Health to 0
+  expect my Health is 0
+  pass"));
+passEngine.SessionStarted();
+passEngine.Tick(0);
+Check(passWarnings.Count == 0 && SelfTest.TestPassed == 1 && SelfTest.TestFailed == 0,
+    "a true `expect` followed by `pass` marks the case passed");
+Check(SelfTest.Cases.Count == 1 && SelfTest.Cases[0].State == CaseState.Passed,
+    "the case record reaches Passed");
+
+// Runtime: a false expectation fails the case and `pass` is not counted again.
+var failEngine = FreshEngine(new FakeWorld());
+failEngine.AddSheet(new FakeActor("Greeter"), parser.Parse(@"when game starts
+  set my Health to 10
+  expect my Health is 0
+  pass"));
+failEngine.SessionStarted();
+failEngine.Tick(0);
+Check(SelfTest.TestFailed == 1 && SelfTest.TestPassed == 1,
+    "a false `expect` marks the case failed (pass is guarded, not double-counted)");
+
+// `pass` outside a case (no `expect` in the block) warns instead of passing anything.
+var passOutside = FreshEngine(new FakeWorld());
+var passOutsideWarnings = new List<string>();
+passOutside.OnRuntimeWarning = message => passOutsideWarnings.Add(message);
+passOutside.AddSheet(new FakeActor("Greeter"), parser.Parse("when game starts\n  pass\n"));
+passOutside.SessionStarted();
+passOutside.Tick(0);
+Check(passOutsideWarnings.Count > 0 && passOutsideWarnings[0].Contains("outside a `test` case") &&
+      SelfTest.TestPassed == 1 && SelfTest.TestFailed == 1,
+    "`pass` outside a case is a friendly runtime warning and counts nothing");
+
+// A false `expect` with no `pass` still fails the case.
+var expectFalse = FreshEngine(new FakeWorld());
+var expectFalseWarnings = new List<string>();
+expectFalse.OnRuntimeWarning = message => expectFalseWarnings.Add(message);
+expectFalse.AddSheet(new FakeActor("Greeter"), parser.Parse("when game starts\n  expect my Health is 5\n"));
+expectFalse.SessionStarted();
+expectFalse.Tick(0);
+Check(SelfTest.TestFailed == 2 && SelfTest.TestPassed == 1,
+    "a false `expect` fails the case even without `pass`");
+
+// Counters accumulate across sheets: sheet A passes, sheet B fails.
+var multi = FreshEngine(new FakeWorld());
+multi.AddSheet(new FakeActor("A"), parser.Parse(@"when game starts
+  set my X to 1
+  expect my X is 1
+  pass"));
+multi.AddSheet(new FakeActor("B"), parser.Parse(@"when game starts
+  set my Y to 2
+  expect my Y is 3
+  pass"));
+multi.SessionStarted();
+multi.Tick(0);
+Check(SelfTest.TestPassed == 2 && SelfTest.TestFailed == 3 && SelfTest.Cases.Count == 5,
+    "five cases give two passes and three fails");
 
 var sight = parser.Parse("when me appears\n  hide me\n\nwhen me stops seeing Player by 8\n  show me\n");
 Check(sight.Events.Count == 2 && sight.Events[1].Trigger.Count == 6,
