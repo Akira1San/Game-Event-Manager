@@ -6117,8 +6117,16 @@ namespace Game
 
             // A running one-shot counted its end at the old speed, so `when anim ... ends` would
             // fire early or late: re-time what is left of the clip.
-            if (AnimStates.TryGetValue(me, out AnimState state) && state.OneShot && state.Length > 0)
-                state.EndTime = AnimPlayback.RetimedEnd(Time.GameTime, state.StartTime, state.Length, previous, speed);
+            if (AnimStates.TryGetValue(me, out AnimState state) && state.Length > 0)
+            {
+                if (state.OneShot)
+                    state.EndTime = AnimPlayback.RetimedEnd(Time.GameTime, state.StartTime, state.Length, previous, speed);
+                // `when anim ... reaches <n>%` reads progress from the same anchor, so move the
+                // anchor too: the time already played at the old speed still counts and the percent
+                // continues instead of jumping (or rewinding) at the speed change.
+                state.StartTime = AnimPlayback.ReanchoredStart(Time.GameTime, state.StartTime, state.Length,
+                    previous, speed);
+            }
         }
 
         /// <summary>

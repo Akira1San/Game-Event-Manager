@@ -1060,6 +1060,20 @@ Check(Math.Abs(AnimPlayback.Progress(12, 10, 2, 1, false) - 1) < 1e-9 &&
 Check(AnimPlayback.Crossed(0, 0) && AnimPlayback.Crossed(0.6, 60) && !AnimPlayback.Crossed(0.59, 60),
     "the percent edge covers 0% and the exact crossing");
 
+// A speed change mid-clip must not make the percent jump: half a clip played at 1x, then
+// switched to 2x, still reads 50% at that instant and continues to the end at the new pace.
+double halfAtOne = AnimPlayback.Progress(11, 10, 2, 1, false);
+double fasterAnchor = AnimPlayback.ReanchoredStart(11, 10, 2, 1, 2);
+Check(Math.Abs(halfAtOne - 0.5) < 1e-9 &&
+      Math.Abs(AnimPlayback.Progress(11, fasterAnchor, 2, 2, false) - 0.5) < 1e-9 &&
+      Math.Abs(AnimPlayback.Progress(11.5, fasterAnchor, 2, 2, false) - 1) < 1e-9,
+    "doubling the speed mid-clip continues the percent instead of jumping to the end");
+double slowerAnchor = AnimPlayback.ReanchoredStart(11, 10, 2, 1, 0.5);
+Check(Math.Abs(AnimPlayback.Progress(11, slowerAnchor, 2, 0.5, false) - 0.5) < 1e-9 &&
+      Math.Abs(AnimPlayback.Progress(13, slowerAnchor, 2, 0.5, false) - 1) < 1e-9 &&
+      Math.Abs(AnimPlayback.ReanchoredStart(11, 10, 2, 1, 1) - 10) < 1e-9,
+    "halving the speed keeps the played half, walks the rest at the new pace, and an unchanged speed is a no-op");
+
 // ------------------------------------------------------------------
 // Task 14 Part A: Particle System words
 // ------------------------------------------------------------------

@@ -59,7 +59,7 @@ namespace Game
         {
             if (length <= 0)
                 return loop ? 0 : 1;
-            double played = Math.Max(0, now - startTime) * ClampSpeed(speed);
+            double played = PlayedTime(now, startTime, speed);
             double progress = played / length;
             return !loop && progress > 1 ? 1 : progress;
         }
@@ -70,5 +70,25 @@ namespace Game
         /// </summary>
         public static bool Crossed(double progress, double percent)
             => progress * 100.0 >= percent - 1e-9;
+
+        /// <summary>Clip seconds played by <paramref name="now"/> since the clip's anchor started.</summary>
+        public static double PlayedTime(double now, double startTime, double speed)
+            => Math.Max(0, now - startTime) * ClampSpeed(speed);
+
+        /// <summary>
+        /// The start time a running clip must be treated as having after its speed changes, so the
+        /// time already played at <paramref name="oldSpeed"/> still counts. Progress is measured from
+        /// that anchor, so without this a percent trigger would jump: half a clip played at 1×, then
+        /// switched to 2×, would read 100% instead of continuing from 50%. Mirrors
+        /// <see cref="RetimedEnd"/>, which keeps the one-shot end clock on the same footing.
+        /// </summary>
+        public static double ReanchoredStart(double now, double startTime, double length,
+            double oldSpeed, double newSpeed)
+        {
+            double played = PlayedTime(now, startTime, oldSpeed);
+            if (length > 0 && played > length)
+                played = length;
+            return now - played / ClampSpeed(newSpeed);
+        }
     }
 }
