@@ -811,8 +811,26 @@ fill them; a later version can create controls. Either way, the event text stays
 
 ### Parts
 
-- [ ] **Part A — List words.** Clear/add/set; rows are labels in a vertical container; overflow
+- [x] **Part A — List words.** Clear/add/set; rows are labels in a vertical container; overflow
       scrolls or clips; empty rows hide.
+      New engine-free `Runtime/Lists.cs` (`ListManager` / `ListModel`) holds the rows per list, so
+      they are runtime state and survive a hot reload and a scene change; `SceneStarted` repaints
+      them, like the backlog. The four statements are their own nodes, parsed before the generic
+      `clear` / `add` / `set` shapes: `clear list <thing>`, `add row to list <thing> with <value>`,
+      `set row <n> of list <thing> to <value>` and the agreed fill word `fill list <thing> from my
+      bag`. Rows are numbered from 1 (a literal 0 is a friendly load-time error); `set row` past
+      the end pads blank rows, so a scoreboard can fill row 2 before row 1 and row 3 stays row 3;
+      a blank value holds its index but shows nothing; `fill list` **replaces** the list with one
+      row per bag stack in the bag's stable order (`Sword x2`), so `when my bag changes` keeps a
+      bag window exactly in sync instead of growing duplicate rows. Every word raises
+      `OnListChanged(name, rows)`; the bridge's `FlaxActions.SetList` paints `QuestListRow1`,
+      `QuestListRow2`, … or `Row1`, `Row2`, … children of an actor named `QuestList`, hides blank
+      rows, and warns once naming the row to create (and the overflow row count) — the authored
+      rows can sit in a scroll panel, so a 20-line log scrolls instead of overflowing. Registry +
+      `keywords.html` rows. 18 new checks -> **2396 passed, 0 failed**;
+      `dotnet build Source/Game.csproj -c Editor.Windows.Debug` 0 errors (13 pre-existing doc
+      warnings). Editor play-check pending (authored row labels, the scroll panel and a real
+      repaint after a hot reload).
 - [ ] **Part B — Grid words.** Clear/set/empty; slot = an image + label; selection highlight via
       `tween`/`set color`.
 - [ ] **Part C — Click routing.** Row/slot index → the matching trigger; clicks on empty slots do

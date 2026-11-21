@@ -155,6 +155,37 @@ namespace Game
         public ValueNode Value = new TextValue();
     }
 
+    /// <summary><c>clear list &lt;thing&gt;</c> — empties a runtime list, hiding its authored rows
+    /// (Task 34 Part A).</summary>
+    public class ClearListNode : StatementNode
+    {
+        public string Thing = "";
+    }
+
+    /// <summary><c>add row to list &lt;thing&gt; with &lt;value&gt;</c> — appends one row (Task 34
+    /// Part A).</summary>
+    public class AddListRowNode : StatementNode
+    {
+        public string Thing = "";
+        public ValueNode Value = new TextValue();
+    }
+
+    /// <summary><c>set row &lt;n&gt; of list &lt;thing&gt; to &lt;value&gt;</c> — writes one row
+    /// without disturbing the others (Task 34 Part A).</summary>
+    public class SetListRowNode : StatementNode
+    {
+        public string Thing = "";
+        public int Index;
+        public ValueNode Value = new TextValue();
+    }
+
+    /// <summary><c>fill list &lt;thing&gt; from my bag</c> — replaces the list with one row per
+    /// carried item, a count when there is more than one (Task 34 Part A).</summary>
+    public class FillListNode : StatementNode
+    {
+        public string Thing = "";
+    }
+
     /// <summary><c>clear dialogue</c> — dismisses what this sheet's dialogue is showing: the line
     /// being typed (without answering `when text finishes`), its choices and its speaker
     /// (Task 35 Part D). The backlog is history, so it is left alone.</summary>

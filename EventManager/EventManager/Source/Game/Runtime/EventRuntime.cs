@@ -365,6 +365,9 @@ namespace Game
         public DialogueState Dialogue = new DialogueState();
         /// <summary>The game's dialogue history behind `add to backlog` (Task 35 Part D).</summary>
         public BacklogManager Backlog = new BacklogManager();
+        /// <summary>The runtime lists behind `clear list` / `add row` / `set row` / `fill list`
+        /// (Task 34 Part A). The rows survive a hot reload and a scene change.</summary>
+        public ListManager Lists = new ListManager();
 
         /// <summary>The global `my cursor` reads and `when cursor changes` watches (Task 48
         /// Part E). The bridge writes the resolved name here every frame.</summary>
@@ -467,6 +470,10 @@ namespace Game
         /// <summary>Repaint the dialogue history after `add to backlog`, and when a scene loads
         /// (Task 35 Part D). The lines are the argument so the bridge needs no sheet context.</summary>
         public Action<IReadOnlyList<BacklogLine>> OnBacklogChanged = lines => { };
+        /// <summary>Paint one runtime list into the scene's authored rows after a list word, and
+        /// when a scene loads (Task 34 Part A). The rows are the argument, so the bridge needs no
+        /// sheet context and a scene that authors no rows simply warns once.</summary>
+        public Action<string, IReadOnlyList<string>> OnListChanged = (name, rows) => { };
 
         private readonly List<SheetInstance> sheets = new List<SheetInstance>();
         private readonly HashSet<string> warnedLines = new HashSet<string>();
@@ -671,6 +678,10 @@ namespace Game
                 sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.SceneStart });
             // A scene that authors backlog rows shows the history it already has (Task 35 Part D).
             OnBacklogChanged(Backlog.Lines);
+            // Lists are runtime state too, so a scene that authors rows shows what was filled
+            // before it loaded (Task 34 Part A).
+            foreach (string listName in Lists.Names())
+                OnListChanged(listName, Lists.RowsFor(listName));
         }
 
         /// <summary>Pushes <c>when scene starts</c> to the sheets of the actors that just arrived
@@ -2424,6 +2435,22 @@ namespace Game
                 {
                     ExecuteClearDialogue(context);
                 }
+                else if (statement is ClearListNode clearList)
+                {
+                    ExecuteClearList(clearList);
+                }
+                else if (statement is AddListRowNode addListRow)
+                {
+                    ExecuteAddListRow(context, addListRow);
+                }
+                else if (statement is SetListRowNode setListRow)
+                {
+                    ExecuteSetListRow(context, setListRow);
+                }
+                else if (statement is FillListNode fillList)
+                {
+                    ExecuteFillList(context, fillList);
+                }
                 // Task 51 Part A: `expect` evaluates its parsed condition against the running
                 // case; `pass` closes the current case as passed. Both are no-ops (with a
                 // friendly warning) when no case is currently running.
@@ -2676,6 +2703,52 @@ namespace Game
                     CursorHidden = false;
                     break;
             }
+        }
+
+        /// <summary><c>clear list &lt;thing&gt;</c> — Task 34 Part A. Forgets the rows; the bridge
+        /// hides the list's authored row actors.</summary>
+        private void ExecuteClearList(ClearListNode node)
+        {
+            Lists.Clear(node.Thing);
+            OnListChanged(node.Thing, Lists.RowsFor(node.Thing));
+        }
+
+        /// <summary><c>add row to list &lt;thing&gt; with &lt;value&gt;</c> — Task 34 Part A.</summary>
+        private void ExecuteAddListRow(EventContext context, AddListRowNode node)
+        {
+            Lists.Add(node.Thing, context.Evaluate(node.Value).AsText());
+            OnListChanged(node.Thing, Lists.RowsFor(node.Thing));
+        }
+
+        /// <summary><c>set row &lt;n&gt; of list &lt;thing&gt; to &lt;value&gt;</c> — Task 34 Part A.
+        /// Writing past the end pads blank rows, so the row keeps the index the sheet wrote.</summary>
+        private void ExecuteSetListRow(EventContext context, SetListRowNode node)
+        {
+            if (!Lists.Set(node.Thing, node.Index, context.Evaluate(node.Value).AsText()))
+            {
+                OnRuntimeWarning($"rows are numbered from 1 — `set row {node.Index} of list {node.Thing}` was ignored.");
+                return;
+            }
+            OnListChanged(node.Thing, Lists.RowsFor(node.Thing));
+        }
+
+        /// <summary>
+        /// <c>fill list &lt;thing&gt; from my bag</c> — Task 34 Part A's one fill word. Replaces the
+        /// list with one row per carried name, a count when there is more than one, so a bag
+        /// window mirrors the bag on every refill instead of growing duplicate rows. The order is
+        /// the bag's own stable order (`Sword` before `Potion` by name), the same one `my bag` and
+        /// the save file use.
+        /// </summary>
+        private void ExecuteFillList(EventContext context, FillListNode node)
+        {
+            var values = new List<string>();
+            foreach (string name in BagNames(context.Me))
+            {
+                int count = BagCount(context.Me, name);
+                values.Add(count > 1 ? name + " x" + count : name);
+            }
+            Lists.Fill(node.Thing, values);
+            OnListChanged(node.Thing, Lists.RowsFor(node.Thing));
         }
 
         /// <summary>

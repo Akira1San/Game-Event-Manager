@@ -14242,6 +14242,170 @@ Check(skipConvEngine.SkipTyping() && skipConvText == greeting,
     "a click during the greeting shows the whole line at once");
 Check(!skipConvEngine.SkipTyping(), "the next click is not eaten by the typewriter");
 
+// ------------------------------------------------------------------
+// Task 34 Part A: the list words
+// ------------------------------------------------------------------
+
+// The four shapes each parse into their own statement, not into a variable called "list".
+var listShapeProg = parser.Parse(@"
+when game starts
+  clear list QuestList
+  add row to list QuestList with ""Find the key""
+  set row 1 of list QuestList to my Quest
+  fill list BagList from my bag
+");
+Check(listShapeProg.Events[0].Body[0].Statement is ClearListNode listClearNode &&
+      listClearNode.Thing == "QuestList",
+    "`clear list QuestList` parses to a ClearListNode");
+Check(listShapeProg.Events[0].Body[1].Statement is AddListRowNode listAddNode &&
+      listAddNode.Thing == "QuestList" && listAddNode.Value is TextValue listAddText &&
+      listAddText.Text == "Find the key",
+    "`add row to list QuestList with \"…\"` parses to an AddListRowNode with its value");
+Check(listShapeProg.Events[0].Body[2].Statement is SetListRowNode listSetNode &&
+      listSetNode.Thing == "QuestList" && listSetNode.Index == 1 &&
+      listSetNode.Value is VariableValue listSetValue && listSetValue.Owner == "my" &&
+      listSetValue.Name == "Quest",
+    "`set row 1 of list QuestList to my Quest` parses to a SetListRowNode with index 1");
+Check(listShapeProg.Events[0].Body[3].Statement is FillListNode listFillNode &&
+      listFillNode.Thing == "BagList",
+    "`fill list BagList from my bag` parses to a FillListNode");
+
+// A row is numbered from 1; 0 is a friendly load-time error rather than a silent no-op.
+string rowZeroError = null;
+try
+{
+    parser.Parse("when game starts\n  set row 0 of list QuestList to \"x\"\n");
+}
+catch (ParseException error)
+{
+    rowZeroError = error.Message;
+}
+Check(rowZeroError != null && rowZeroError.Contains("from 1"),
+    "`set row 0` explains that rows are numbered from 1");
+
+// `fill list` is the one fill word: it reads the bag, not a hand-written line per item.
+string fillShapeError = null;
+try
+{
+    parser.Parse("when game starts\n  fill list BagList from my bag now\n");
+}
+catch (ParseException error)
+{
+    fillShapeError = error.Message;
+}
+Check(fillShapeError != null && fillShapeError.Contains("fill list BagList from my bag"),
+    "a bent `fill list` explains its shape");
+
+// The runtime: add/set, padding, case-insensitive names and the bag fill.
+var listWorld = new FakeWorld();
+var listEngine = FreshEngine(listWorld);
+var listActor = new FakeActor("Player");
+listWorld.AddActor(listActor);
+var listPaints = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
+var listWarnings = new List<string>();
+listEngine.OnRuntimeWarning = message => listWarnings.Add(message);
+listEngine.OnListChanged = (name, rows) => listPaints[name] = System.Linq.Enumerable.ToArray(rows);
+listEngine.AddSheet(listActor, parser.Parse(@"
+when game starts
+  add Sword to my bag
+  add Sword to my bag
+  add Potion to my bag
+  clear list QuestList
+  add row to list QuestList with ""Find the key""
+  add row to list QuestList with ""Reward: 100 gold""
+  add row to list QuestList with ""Third""
+  set row 2 of list QuestList to ""Reward: 250 gold""
+  set row 5 of list QuestList to ""Last""
+  fill list BagList from my bag
+"));
+listEngine.SessionStarted();
+listEngine.Tick(0);
+var questRows = listEngine.Lists.RowsFor("QuestList");
+Check(questRows.Count == 5 && questRows[0] == "Find the key" &&
+      questRows[1] == "Reward: 250 gold" && questRows[2] == "Third" &&
+      questRows[3] == "" && questRows[4] == "Last",
+    "add/set fills the rows in place and pads the gap with a blank row");
+Check(listEngine.Lists.RowsFor("questlist").Count == 5,
+    "list names are matched case-insensitively, like actor names");
+var bagRows = listEngine.Lists.RowsFor("BagList");
+Check(bagRows.Count == 2 && bagRows[0] == "Potion" && bagRows[1] == "Sword x2",
+    "`fill list BagList from my bag` makes one row per stack with a count (`Sword x2`)");
+Check(listPaints.TryGetValue("QuestList", out string[] paintedQuest) &&
+      paintedQuest.Length == 5 && paintedQuest[4] == "Last",
+    "every list word repaints the whole list, so the bridge always has the current rows");
+Check(listPaints.TryGetValue("BagList", out string[] paintedBag) && paintedBag.Length == 2,
+    "a filled list repaints too, so a bag window can update from `when my bag changes`");
+Check(listWarnings.Count == 0, "well-formed list words warn nothing");
+
+// `clear list` empties, and `set row` still fills after a clear.
+var listClearEngine = FreshEngine(new FakeWorld());
+var listClearActor = new FakeActor("Player");
+listClearEngine.AddSheet(listClearActor, parser.Parse(@"
+when game starts
+  add row to list L with ""A""
+  add row to list L with ""B""
+  clear list L
+  add row to list L with ""C""
+"));
+listClearEngine.SessionStarted();
+listClearEngine.Tick(0);
+Check(listClearEngine.Lists.CountOf("L") == 1 && listClearEngine.Lists.RowsFor("L")[0] == "C",
+    "`clear list` forgets the rows, and the next `add row` starts again at 1");
+
+// A blank value is a row that exists but shows nothing; the indices after it stay put.
+var listBlankEngine = FreshEngine(new FakeWorld());
+listBlankEngine.AddSheet(new FakeActor("Player"), parser.Parse(@"
+when game starts
+  add row to list L with ""A""
+  add row to list L with """"
+  add row to list L with ""C""
+"));
+listBlankEngine.SessionStarted();
+listBlankEngine.Tick(0);
+Check(listBlankEngine.Lists.CountOf("L") == 3 &&
+      listBlankEngine.Lists.RowsFor("L")[1] == "" &&
+      listBlankEngine.Lists.RowsFor("L")[2] == "C",
+    "a blank `add row` keeps its index (row 3 is still row 3)");
+
+// An empty bag replaces the list with nothing, so a stale row never survives a refill.
+var listRefillEngine = FreshEngine(new FakeWorld());
+var listRefillActor = new FakeActor("Player");
+listRefillEngine.AddSheet(listRefillActor, parser.Parse(@"
+when game starts
+  add row to list L with ""Stale""
+  fill list L from my bag
+"));
+listRefillEngine.SessionStarted();
+listRefillEngine.Tick(0);
+Check(listRefillEngine.Lists.CountOf("L") == 0,
+    "`fill list … from my bag` replaces the list, so an empty bag leaves no stale rows");
+
+// A hot reload keeps the last filled rows, and a new scene repaints them.
+var listReloadEngine = FreshEngine(new FakeWorld());
+var listReloadActor = new FakeActor("Player");
+listReloadEngine.AddSheet(listReloadActor, parser.Parse("when game starts\n  add row to list L with \"A\"\n"));
+listReloadEngine.SessionStarted();
+listReloadEngine.Tick(0);
+var listReloadSheet = listReloadEngine.FindSheetFor(listReloadActor);
+listReloadEngine.SwapSheetProgram(listReloadSheet, parser.Parse("when game starts\n  add row to list L with \"B\"\n"));
+Check(listReloadEngine.Lists.CountOf("L") == 1 && listReloadEngine.Lists.RowsFor("L")[0] == "A",
+    "a hot reload keeps the last filled rows (the new `when game starts` never ran)");
+string[] listRepaint = null;
+listReloadEngine.OnListChanged = (name, rows) =>
+{
+    if (string.Equals(name, "L", StringComparison.OrdinalIgnoreCase))
+        listRepaint = System.Linq.Enumerable.ToArray(rows);
+};
+listReloadEngine.SceneStarted("");
+Check(listRepaint != null && listRepaint.Length == 1 && listRepaint[0] == "A",
+    "a scene that authors the rows repaints the list the runtime already has");
+
+Check(WordRegistry.All.Any(e => e.Word == "clear list <thing>") &&
+      WordRegistry.All.Any(e => e.Word == "add row to list <thing> with <value>") &&
+      WordRegistry.All.Any(e => e.Word == "set row <n> of list <thing> to <value>") &&
+      WordRegistry.All.Any(e => e.Word == "fill list <thing> from my bag"),
+    "the word book lists all four list words");
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);

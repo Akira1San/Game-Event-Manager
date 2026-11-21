@@ -5491,6 +5491,100 @@ namespace Game
             }
         }
 
+        /// <summary>The labels a list fills, in order: `&lt;List&gt;Row1`, `&lt;List&gt;Row2`, … or
+        /// `Row1`, `Row2`, … children of an actor named after the list (Task 34 Part A).</summary>
+        private static void FindListRows(string thing, List<FlaxEngine.GUI.Label> labels, List<Actor> actors)
+        {
+            Actor container = Level.FindActor(thing);
+            if (container != null)
+            {
+                for (int index = 1; ; index++)
+                {
+                    Actor row = FindChildNamed(container, "Row" + index);
+                    var label = LabelOn(row);
+                    if (label == null)
+                        break;
+                    labels.Add(label);
+                    actors.Add(row);
+                }
+            }
+            if (labels.Count > 0)
+                return;
+            for (int index = 1; ; index++)
+            {
+                string name = thing + "Row" + index;
+                Actor row = Level.FindActor(name);
+                var label = LabelOn(row);
+                if (label == null)
+                    break;
+                labels.Add(label);
+                actors.Add(row);
+            }
+        }
+
+        /// <summary>The label a row/slot actor shows: its own Label/Button control, or the one
+        /// Label a child control actor owns.</summary>
+        private static FlaxEngine.GUI.Label LabelOn(Actor actor)
+        {
+            if (actor == null)
+                return null;
+            if (actor is UIControl ui && ui.Control is FlaxEngine.GUI.Label label)
+                return label;
+            var found = new List<UIControl>();
+            CollectControls<FlaxEngine.GUI.Label>(actor, found);
+            return found.Count == 1 ? found[0].Control as FlaxEngine.GUI.Label : null;
+        }
+
+        /// <summary>A child by name, searched depth-first so a row inside a layout actor is found.
+        /// Names are compared case-insensitively, like every other actor lookup.</summary>
+        private static Actor FindChildNamed(Actor parent, string name)
+        {
+            foreach (Actor child in parent.Children)
+            {
+                if (child == null)
+                    continue;
+                if (string.Equals(child.Name, name, StringComparison.OrdinalIgnoreCase))
+                    return child;
+                Actor nested = FindChildNamed(child, name);
+                if (nested != null)
+                    return nested;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// <c>clear list</c> / <c>add row</c> / <c>set row</c> / <c>fill list</c> (Task 34 Part A):
+        /// paints a runtime list into its authored rows — `QuestListRow1`, `QuestListRow2`, … or
+        /// `Row1`, `Row2`, … children of an actor called `QuestList`. A row with text shows; a blank
+        /// row hides, so a gap in the data is a gap on screen rather than an empty box. The rows
+        /// are ordinary UIControl actors, so their font, width and scroll container are editor
+        /// content.
+        /// </summary>
+        public static void SetList(string thing, IReadOnlyList<string> rows)
+        {
+            var labels = new List<FlaxEngine.GUI.Label>();
+            var actors = new List<Actor>();
+            FindListRows(thing, labels, actors);
+            if (labels.Count == 0)
+            {
+                WarnOnce($"I couldn't find the rows for list \u201C{thing}\u201D. Create UIControl actors named \u201C{thing}Row1\u201D, \u201C{thing}Row2\u201D, … with a Label (or \u201CRow1\u201D, \u201CRow2\u201D, … children of an actor named \u201C{thing}\u201D; put them in a scroll panel if the list is long).");
+                return;
+            }
+            for (int i = 0; i < labels.Count; i++)
+            {
+                string text = i < rows.Count ? rows[i] ?? "" : "";
+                bool has = text.Length > 0;
+                labels[i].Text = text;
+                labels[i].Visible = has;
+                if (actors[i] != null)
+                    actors[i].IsActive = has;
+            }
+            if (rows.Count > labels.Count)
+            {
+                WarnOnce($"The list \u201C{thing}\u201D has only {labels.Count} row{(labels.Count == 1 ? "" : "s")}, so the rest of its data is not shown. Add \u201C{thing}Row{labels.Count + 1}\u201D and so on (inside a scroll panel if the list is long).");
+            }
+        }
+
         /// <summary>Show or hide a numbered choice button (Task 35 Part C). The button is an
         /// ordinary scene actor, so this is the same show/hide every sheet can write itself.</summary>
         public static void SetChoiceVisible(EventContext context, string thing, bool visible)

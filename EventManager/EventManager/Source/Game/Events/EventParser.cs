@@ -468,6 +468,25 @@ namespace Game
                 line.Statement = new ClearDialogueNode { Line = line.Line };
                 return;
             }
+            // `clear list <thing>` — empty a runtime list (Task 34 Part A). Checked before the
+            // action-word table so `list` is never read as a thing.
+            if (first.Text == "clear" && line.Words.Count >= 2 &&
+                line.Words[1].Type == TokenType.Word && line.Words[1].Text == "list")
+            {
+                if (line.Words.Count != 3 || line.Words[2].Type != TokenType.Word)
+                    throw new ParseException("`clear list` names the list — `clear list QuestList`", line.Line);
+                CheckEndOfLine(line.Words, 3, line.Line, "clear list QuestList");
+                line.Statement = new ClearListNode { Line = line.Line, Thing = line.Words[2].Text };
+                return;
+            }
+            // `fill list <thing> from my bag` — the one fill word (Task 34 Part A): the runtime
+            // turns the bag's stacks into rows, so a bag window needs no line per item.
+            if (first.Text == "fill" && line.Words.Count >= 2 &&
+                line.Words[1].Type == TokenType.Word && line.Words[1].Text == "list")
+            {
+                line.Statement = ParseFillList(line);
+                return;
+            }
             // `show choice "…"` — numbered dialogue choices (Task 35 Part C). Checked before the
             // action-word table so `choice` is never read as an actor to show.
             if (first.Text == "show" && line.Words.Count >= 2 &&
@@ -1103,6 +1122,10 @@ namespace Game
         private StatementNode ParseSet(BodyLineNode line)
         {
             var words = line.Words;
+            // `set row <n> of list <thing> to <value>` — a runtime list row (Task 34 Part A),
+            // not a global variable called "row".
+            if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "row")
+                return ParseSetListRow(line);
             // `set root motion on` / `off` — the actor's root-motion switch (Task 33 Part D). Another
             // action word, not a global called "root motion", so it goes to the action parser (which
             // also owns the friendly warning for a bare `set root motion`).
@@ -1477,6 +1500,57 @@ namespace Game
         /// <c>add to backlog "&lt;text&gt;"</c> — Task 35 Part D. The line is kept as written; the
         /// bridge fills the scene's newest row labels with the history.
         /// </summary>
+        private StatementNode ParseAddListRow(BodyLineNode line)
+        {
+            var words = line.Words;
+            const string shape = "add row to list QuestList with \"Find the key\"";
+            if (words.Count < 6 || words[2].Type != TokenType.Word || words[2].Text != "to" ||
+                words[3].Type != TokenType.Word || words[3].Text != "list" ||
+                words[4].Type != TokenType.Word || words[5].Type != TokenType.Word || words[5].Text != "with")
+                throw new ParseException($"`add row` looks like this: `{shape}`", line.Line);
+            var node = new AddListRowNode { Line = line.Line, Thing = words[4].Text };
+            int index = 6;
+            if (index >= words.Count)
+                throw new ParseException($"`add row to list {node.Thing}` needs the value after `with` — `{shape}`", line.Line);
+            node.Value = ReadValue(words, ref index, line.Line);
+            CheckEndOfLine(words, index, line.Line, $"add row to list {node.Thing} with <value>");
+            return node;
+        }
+
+        private StatementNode ParseSetListRow(BodyLineNode line)
+        {
+            var words = line.Words;
+            const string shape = "set row 1 of list QuestList to my Quest";
+            if (words.Count < 7 || words[2].Type != TokenType.Number ||
+                words[3].Type != TokenType.Word || words[3].Text != "of" ||
+                words[4].Type != TokenType.Word || words[4].Text != "list" ||
+                words[5].Type != TokenType.Word || words[6].Type != TokenType.Word || words[6].Text != "to")
+                throw new ParseException($"`set row` looks like this: `{shape}`", line.Line);
+            int number = (int)words[2].Number;
+            if (number < 1 || words[2].Number != number)
+                throw new ParseException($"rows are numbered from 1 — `set row 1 of list {words[5].Text} to my Quest`", line.Line);
+            var node = new SetListRowNode { Line = line.Line, Thing = words[5].Text, Index = number };
+            int index = 7;
+            if (index >= words.Count)
+                throw new ParseException($"`set row {number} of list {node.Thing}` needs the value after `to`", line.Line);
+            node.Value = ReadValue(words, ref index, line.Line);
+            CheckEndOfLine(words, index, line.Line, $"set row {number} of list {node.Thing} to <value>");
+            return node;
+        }
+
+        private StatementNode ParseFillList(BodyLineNode line)
+        {
+            var words = line.Words;
+            const string shape = "fill list BagList from my bag";
+            if (words.Count != 6 || words[2].Type != TokenType.Word ||
+                words[3].Type != TokenType.Word || words[3].Text != "from" ||
+                words[4].Type != TokenType.Word || words[4].Text != "my" ||
+                words[5].Type != TokenType.Word || words[5].Text != "bag")
+                throw new ParseException($"`fill list` looks like this: `{shape}`", line.Line);
+            CheckEndOfLine(words, 6, line.Line, shape);
+            return new FillListNode { Line = line.Line, Thing = words[2].Text };
+        }
+
         private StatementNode ParseAddBacklog(BodyLineNode line)
         {
             var words = line.Words;
@@ -1582,6 +1656,10 @@ namespace Game
             if (words.Count >= 3 && words[1].Type == TokenType.Word && words[1].Text == "to" &&
                 words[2].Type == TokenType.Word && words[2].Text == "backlog")
                 return ParseAddBacklog(line);
+            // `add row to list <thing> with <value>` — a runtime list row (Task 34 Part A),
+            // not `add <value> to <variable>` with a variable called "row".
+            if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "row")
+                return ParseAddListRow(line);
             // `add buff "stim" to me for 8 seconds` is a buff word (Task 27 Part C), not the
             // `add <value> to <variable>` statement.
             if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "buff")

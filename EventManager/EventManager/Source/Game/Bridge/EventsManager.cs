@@ -218,6 +218,8 @@ namespace Game
                 FlaxActions.SetChoiceVisible(context, thing, visible);
             // The dialogue history is painted into the scene's authored row labels (Task 35 Part D).
             Runtime.OnBacklogChanged = lines => FlaxActions.SetBacklog(lines);
+            // Runtime lists are painted into their own authored rows (Task 34 Part A).
+            Runtime.OnListChanged = (name, rows) => FlaxActions.SetList(name, rows);
             Runtime.OnSetControlColor = (context, thing, color) =>
                 FlaxActions.SetControlColor(thing, color);
             Runtime.OnSetProgress = (context, thing, value, reveal) =>
