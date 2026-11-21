@@ -1074,6 +1074,43 @@ Check(Math.Abs(AnimPlayback.Progress(11, slowerAnchor, 2, 0.5, false) - 0.5) < 1
       Math.Abs(AnimPlayback.ReanchoredStart(11, 10, 2, 1, 1) - 10) < 1e-9,
     "halving the speed keeps the played half, walks the rest at the new pace, and an unchanged speed is a no-op");
 
+// ---- Task 33 Part C: the upper-body slot words ----
+
+var upperPlay = parser.Parse("when me appears\n  play anim \"Shoot\" upper body\n");
+var upperPlaySpec = ActionWords.Parse(((RawActionNode)upperPlay.Events[0].Body[0].Statement!).Words, _ => { });
+Check(upperPlaySpec.Verb == ActionVerb.PlayAnim && upperPlaySpec.Thing == "Shoot" && upperPlaySpec.UpperBody,
+    "`play anim \"Shoot\" upper body` parses to PlayAnim with the layer flag set");
+
+var upperLoop = parser.Parse("when me appears\n  loop anim \"Aim\" upper body\n");
+var upperLoopSpec = ActionWords.Parse(((RawActionNode)upperLoop.Events[0].Body[0].Statement!).Words, _ => { });
+Check(upperLoopSpec.Verb == ActionVerb.LoopAnim && upperLoopSpec.Thing == "Aim" && upperLoopSpec.UpperBody,
+    "`loop anim \"Aim\" upper body` parses to LoopAnim with the layer flag set");
+
+var upperStop = parser.Parse("when me appears\n  stop anim upper body\n");
+var upperStopSpec = ActionWords.Parse(((RawActionNode)upperStop.Events[0].Body[0].Statement!).Words, _ => { });
+Check(upperStopSpec.Verb == ActionVerb.StopAnim && upperStopSpec.UpperBody,
+    "`stop anim upper body` parses to StopAnim with the layer flag set");
+
+var fullBodyPlay = parser.Parse("when me appears\n  play anim \"Walk\"\n");
+var fullBodyPlaySpec = ActionWords.Parse(((RawActionNode)fullBodyPlay.Events[0].Body[0].Statement!).Words, _ => { });
+var fullBodyStop = parser.Parse("when me appears\n  stop anim\n");
+var fullBodyStopSpec = ActionWords.Parse(((RawActionNode)fullBodyStop.Events[0].Body[0].Statement!).Words, _ => { });
+Check(fullBodyPlaySpec.Verb == ActionVerb.PlayAnim && !fullBodyPlaySpec.UpperBody &&
+      fullBodyStopSpec.Verb == ActionVerb.StopAnim && !fullBodyStopSpec.UpperBody,
+    "the plain `play anim` / `stop anim` forms stay whole-body");
+
+// `when anim "<name>" reaches <n>%` has to read whichever play is running the clip: the whole-body
+// state when it matches, otherwise the upper-body layer, which has no whole-body state at all.
+Check(AnimPlayback.PickForPercent("walk", "walk", 2, "swing", 2, out bool bodyWins) && !bodyWins,
+    "the whole-body play answers the percent poll when it is the named clip, even with a layer running");
+Check(AnimPlayback.PickForPercent("swing", null, 0, "swing", 2, out bool layerWins) && layerWins,
+    "a layered attack with no whole-body state falls back to the upper-body play");
+Check(!AnimPlayback.PickForPercent("swing", "walk", 2, "aim", 2, out _) &&
+      !AnimPlayback.PickForPercent("swing", null, 0, null, 0, out _),
+    "a different clip on either layer, or no play at all, stays unreachable");
+Check(Math.Abs(AnimPlayback.Progress(11, 10, 2, 1, false) - 0.5) < 1e-9,
+    "the layered clip's progress uses the same speed-scaled clock as the whole-body one");
+
 // ------------------------------------------------------------------
 // Task 14 Part A: Particle System words
 // ------------------------------------------------------------------

@@ -82,6 +82,15 @@ namespace Game
         /// clip, so it survives clip changes; the bridge writes it to
         /// <see cref="AnimatedModel.UpdateSpeed"/>, which Flax applies to the running graph live.</summary>
         private static readonly Dictionary<Actor, float> AnimSpeeds = new Dictionary<Actor, float>();
+        /// <summary>The Animation Slot name the authored base graph must carry for the upper-body
+        /// layer (Task 33 Part C). The mask, the Blend With Mask node and the slot node are content.
+        /// </summary>
+        private const string UpperBodySlot = "UpperBody";
+        /// <summary>Blend time for the slot's blend in and out, so the layer fades instead of popping.</summary>
+        private const float UpperBodyBlend = 0.2f;
+        /// <summary>Each actor's running upper-body slot clip, so a held trigger does not restart it
+        /// and `when anim "..." ends` still knows when a layered one-shot finished.</summary>
+        private static readonly Dictionary<Actor, UpperState> UpperStates = new Dictionary<Actor, UpperState>();
         /// <summary>Monotonic play token per clip start (Task 33 Part B). `when anim ... reaches ...%`
         /// fires once per token, so every `play anim` / `loop anim` re-arms it — restarting the same
         /// clip, changing speed or letting it loop again does not.</summary>
@@ -180,6 +189,19 @@ namespace Game
             public double StartTime;     // when the current clip started, for re-timing at a new speed
             public double Length;        // clip length in seconds (0 for a loop, which has no end)
             public int Play;             // play token, used to fire a percent trigger once per play
+        }
+
+        /// <summary>A clip running in the <see cref="UpperBodySlot"/> slot (Task 33 Part C). The legs
+        /// are untouched by it: the slot feeds a Blend With Mask, not the whole pose.</summary>
+        private sealed class UpperState
+        {
+            public string Clip;          // normalized asset key, so a held trigger does not restart it
+            public string Name;          // as written in the event, pushed to `when anim ... ends`
+            public bool OneShot;
+            public double EndTime;
+            public double StartTime;     // anchor for re-timing the end at a new speed
+            public double Length;
+            public int Play;             // play token, so a layered `reaches` fires once per play
         }
 
         public static void WarnOnce(string message)
@@ -636,6 +658,26 @@ namespace Game
             {
                 foreach (var (actor, clip) in ended)
                     EventsManager.Instance?.HandleAnimEnd(actor, clip);
+            }
+
+            // A layered one-shot ends the same way: `when anim "Shoot" ends` has to fire for
+            // `play anim "Shoot" upper body`, or the documented stop-the-layer event never runs.
+            if (UpperStates.Count > 0)
+            {
+                List<(Actor Actor, string Clip)> upperEnded = null;
+                foreach (var pair in UpperStates)
+                {
+                    UpperState upper = pair.Value;
+                    if (!upper.OneShot || Time.GameTime < upper.EndTime)
+                        continue;
+                    upper.OneShot = false;
+                    (upperEnded ??= new List<(Actor, string)>()).Add((pair.Key, upper.Name));
+                }
+                if (upperEnded != null)
+                {
+                    foreach (var (actor, clip) in upperEnded)
+                        EventsManager.Instance?.HandleAnimEnd(actor, clip);
+                }
             }
 
             // One-shot particles: when a tracked non-looping effect stops emitting on its own,
@@ -6014,6 +6056,12 @@ namespace Game
         /// </summary>
         private static void StartAnim(EventContext context, ActionSpec spec, bool loop)
         {
+            if (spec.UpperBody)
+            {
+                StartUpperBody(context, spec, loop);
+                return;
+            }
+
             string word = loop ? "loop anim" : "play anim";
             var me = context.Me as Actor;
             if (me == null)
@@ -6089,6 +6137,89 @@ namespace Game
         }
 
         /// <summary>
+        /// <c>play anim "&lt;name&gt;" upper body</c> / <c>loop anim "&lt;name&gt;" upper body</c>
+        /// (Task 33 Part C): the clip is played into the base Anim Graph's <c>UpperBody</c> Animation
+        /// Slot, which the author wired into the Pose B side of a Blend With Mask node. The mask
+        /// keeps the hips and legs on the locomotion pose, so a shooting clip never stops the walk.
+        /// This must never go through <see cref="AnimationGraph.InitAsAnimation"/>, which replaces the
+        /// whole pose — the exact bug the layer exists to fix — so a model without an authored base
+        /// graph gets a warning and nothing else.
+        /// </summary>
+        private static void StartUpperBody(EventContext context, ActionSpec spec, bool loop)
+        {
+            string word = loop ? "loop anim" : "play anim";
+            var me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce($"\u201C{word} \u201C{spec.Thing}\u201D upper body\u201D needs to run on an actor's sheet — the global Game sheet has no model to animate.");
+                return;
+            }
+            var model = ModelOf(me);
+            if (model == null)
+            {
+                WarnOnce($"\u201C{word} \u201C{spec.Thing}\u201D upper body\u201D needs an AnimatedModel on \u201C{me.Name}\u201D.");
+                return;
+            }
+            if (model.AnimationGraph == null ||
+                (AnimStates.TryGetValue(me, out AnimState body) && body.Graph != null && body.Graph == model.AnimationGraph))
+            {
+                WarnOnce($"\u201C{word} \u201C{spec.Thing}\u201D upper body\u201D needs \u201C{me.Name}\u201D to have a base Anim Graph with an " +
+                    "Animation Slot named \u201CUpperBody\u201D behind a Blend With Mask node (plus a SkeletonMask) — " +
+                    "the bridge cannot build one, and a single-clip graph would replace the legs too.");
+                return;
+            }
+
+            Animation anim = LoadAnimation(spec.Thing);
+            if (anim == null)
+            {
+                WarnOnce($"I don't know the anim \u201C{spec.Thing}\u201D. This project has: {AvailableAnimNames()}.");
+                return;
+            }
+
+            string clip = AssetNames.Key(spec.Thing);
+            if (UpperStates.TryGetValue(me, out UpperState playing) && playing.Clip == clip &&
+                (!playing.OneShot || Time.GameTime < playing.EndTime))
+                return; // held triggers call this every tick — never restart mid-clip
+
+            // The speed lives on the model (Task 33 Part A), and Flax scales the whole graph with
+            // it — slots included — so the slot is asked for 1x instead of applying the actor's
+            // speed a second time.
+            model.UpdateSpeed = AnimSpeedOf(me);
+            model.PlaySlotAnimation(UpperBodySlot, anim, 1f, UpperBodyBlend, UpperBodyBlend, loop ? -1 : 0);
+
+            UpperStates[me] = new UpperState
+            {
+                Clip = clip,
+                Name = spec.Thing.Trim(),
+                OneShot = !loop,
+                EndTime = loop ? double.MaxValue : AnimPlayback.EndTime(Time.GameTime, anim.Length, AnimSpeedOf(me)),
+                StartTime = Time.GameTime,
+                Length = anim.Length,
+                Play = ++AnimPlayCounter,
+            };
+        }
+
+        /// <summary>
+        /// <c>stop anim upper body</c> (Task 33 Part C): clears the slot, so the mask blends the
+        /// upper body back onto the locomotion pose. The full-body clip and its graph are untouched.
+        /// </summary>
+        private static void StopUpperBody(EventContext context)
+        {
+            var me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Cstop anim upper body\u201D needs to run on an actor's sheet — the global Game sheet has no model to animate.");
+                return;
+            }
+            var model = ModelOf(me);
+            if (model == null)
+                return;
+            if (model.AnimationGraph != null)
+                model.StopSlotAnimation(UpperBodySlot);
+            UpperStates.Remove(me);
+        }
+
+        /// <summary>
         /// <c>set anim speed to &lt;n&gt;</c> (Task 33 Part A): the acting actor's playback speed. It lives for
         /// the actor, not the clip, so a new clip inherits it, and it is written to Flax's
         /// <see cref="AnimatedModel.UpdateSpeed"/> — a live delta-time scale, so the running clip
@@ -6127,6 +6258,16 @@ namespace Game
                 state.StartTime = AnimPlayback.ReanchoredStart(Time.GameTime, state.StartTime, state.Length,
                     previous, speed);
             }
+
+            // A layered play counts its end and its percent the same way, so `when anim ... ends`
+            // and `when anim ... reaches <n>%` keep matching the picture instead of the old speed.
+            if (UpperStates.TryGetValue(me, out UpperState upper) && upper.Length > 0)
+            {
+                if (upper.OneShot)
+                    upper.EndTime = AnimPlayback.RetimedEnd(Time.GameTime, upper.StartTime, upper.Length, previous, speed);
+                upper.StartTime = AnimPlayback.ReanchoredStart(Time.GameTime, upper.StartTime, upper.Length,
+                    previous, speed);
+            }
         }
 
         /// <summary>
@@ -6138,13 +6279,22 @@ namespace Game
         {
             progress = 0;
             play = 0;
-            if (!(key is Actor actor) || !AnimStates.TryGetValue(actor, out AnimState state))
+            if (!(key is Actor actor))
                 return false;
-            if (state.Length <= 0 || state.Clip != AssetNames.Key(clip))
+            AnimStates.TryGetValue(actor, out AnimState state);
+            UpperStates.TryGetValue(actor, out UpperState upper);
+            // A layered clip has no whole-body state, so the poll falls back to the slot's clock —
+            // `play anim "Swing" upper body` can time its hit off the clip like any other attack.
+            if (!AnimPlayback.PickForPercent(AssetNames.Key(clip), state?.Clip, state?.Length ?? 0,
+                    upper?.Clip, upper?.Length ?? 0, out bool useUpper))
                 return false;
-            progress = AnimPlayback.Progress(Time.GameTime, state.StartTime, state.Length,
-                AnimSpeedOf(actor), state.Loop);
-            play = state.Play;
+
+            double start = useUpper ? upper.StartTime : state.StartTime;
+            double length = useUpper ? upper.Length : state.Length;
+            bool loop = useUpper ? !upper.OneShot : state.Loop;
+            progress = AnimPlayback.Progress(Time.GameTime, start, length, AnimSpeedOf(actor), loop);
+            // The per-play token comes from whichever play answered, so a restart re-arms the edge.
+            play = useUpper ? upper.Play : state.Play;
             return true;
         }
 
@@ -6180,6 +6330,12 @@ namespace Game
         /// <summary>Stop the current animation and restore the previous one.</summary>
         private static void StopAnim(EventContext context, ActionSpec spec)
         {
+            if (spec.UpperBody)
+            {
+                StopUpperBody(context);
+                return;
+            }
+
             var me = context.Me as Actor;
             if (me == null)
             {
@@ -6190,6 +6346,8 @@ namespace Game
             if (model == null)
                 return;
 
+            // The slot lives on the graph this is about to replace, so nothing is layered any more.
+            UpperStates.Remove(me);
             AnimStates.TryGetValue(me, out AnimState state);
             if (state == null)
             {

@@ -76,6 +76,32 @@ namespace Game
             => Math.Max(0, now - startTime) * ClampSpeed(speed);
 
         /// <summary>
+        /// Which play a <c>reaches</c> poll should read: the whole-body clip when it is the one asked
+        /// for, otherwise the upper-body layer (Task 33 Part C). A <c>play anim "Swing" upper body</c>
+        /// has no whole-body state at all — its only clock is the slot's — so without the fallback the
+        /// layered attack could never fire on the clip's impact moment.
+        /// </summary>
+        /// <param name="wanted">The normalized clip key the trigger names.</param>
+        /// <param name="bodyClip">The whole-body play's clip key (null when nothing is playing).</param>
+        /// <param name="bodyLength">Its clip length; 0 means there is no clock to read.</param>
+        /// <param name="upperClip">The layered play's clip key (null when the slot is idle).</param>
+        /// <param name="upperLength">Its clip length; 0 means no clock either.</param>
+        /// <param name="useUpper">True when the answer came from the layer.</param>
+        public static bool PickForPercent(string wanted, string bodyClip, double bodyLength,
+            string upperClip, double upperLength, out bool useUpper)
+        {
+            useUpper = false;
+            if (bodyLength > 0 && bodyClip == wanted)
+                return true;
+            if (upperLength > 0 && upperClip == wanted)
+            {
+                useUpper = true;
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
         /// The start time a running clip must be treated as having after its speed changes, so the
         /// time already played at <paramref name="oldSpeed"/> still counts. Progress is measured from
         /// that anchor, so without this a percent trigger would jump: half a clip played at 1×, then

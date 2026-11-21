@@ -162,6 +162,10 @@ namespace Game
         public List<Token> Leftover = new List<Token>();
         /// <summary><c>select all &lt;unit type&gt;</c> / <c>deselect all</c>.</summary>
         public bool All;
+        /// <summary><c>play anim "&lt;name&gt;" upper body</c> (and the <c>loop</c> / <c>stop</c> forms):
+        /// the clip goes into the base Anim Graph's <c>UpperBody</c> Animation Slot, behind a Blend With
+        /// Mask, instead of replacing the whole pose (Task 33 Part C).</summary>
+        public bool UpperBody;
         /// <summary><c>select units near me by &lt;dist&gt;</c>.</summary>
         public bool Near;
         /// <summary>Radius for the <see cref="Near"/> form of <c>select</c>.</summary>
@@ -374,6 +378,14 @@ namespace Game
                         return Finish(spec, ActionVerb.StopSound, words, 2);
                     if (words.Count >= 2 && words[1].Text == "music")
                         return Finish(spec, ActionVerb.StopMusic, words, 2);
+                    // `stop anim upper body` (Task 33 Part C): only the layer, so the legs keep
+                    // walking. Checked before the whole-body `stop anim`.
+                    if (words.Count >= 4 && words[1].Text == "anim" &&
+                        words[2].Text == "upper" && words[3].Text == "body")
+                    {
+                        spec.UpperBody = true;
+                        return Finish(spec, ActionVerb.StopAnim, words, 4);
+                    }
                     if (words.Count >= 2 && words[1].Text == "anim")
                         return Finish(spec, ActionVerb.StopAnim, words, 2);
                     if (words.Count >= 3 && words[1].Text == "particle" && words[2].Type == TokenType.Str)
@@ -1464,6 +1476,14 @@ namespace Game
             }
             if (words.Count >= 2 && words[0].Text == "loop" && words[1].Text == "music")
                 return Unknown(spec, words, "\u201Cloop music\u201D needs a clip name in quotes, like \u201Cloop music \"menu\"\u201D, or a list: \u201Cloop music random from \"menu, level1\"\u201D", warn);
+            // `play anim "<name>" upper body` (Task 33 Part C): into the slot, not the whole pose.
+            if (words.Count >= 5 && words[0].Text == "play" && words[1].Text == "anim" &&
+                words[2].Type == TokenType.Str && words[3].Text == "upper" && words[4].Text == "body")
+            {
+                spec.Thing = words[2].Text;
+                spec.UpperBody = true;
+                return Finish(spec, ActionVerb.PlayAnim, words, 5);
+            }
             if (words.Count >= 3 && words[0].Text == "play" && words[1].Text == "anim" && words[2].Type == TokenType.Str)
             {
                 spec.Thing = words[2].Text;
@@ -1478,6 +1498,13 @@ namespace Game
             }
             if (words.Count >= 2 && words[0].Text == "play" && words[1].Text == "particle")
                 return Unknown(spec, words, "\u201Cplay particle\u201D needs a name in quotes, like \u201Cplay particle \"smoke\"\u201D", warn);
+            if (words.Count >= 5 && words[0].Text == "loop" && words[1].Text == "anim" &&
+                words[2].Type == TokenType.Str && words[3].Text == "upper" && words[4].Text == "body")
+            {
+                spec.Thing = words[2].Text;
+                spec.UpperBody = true;
+                return Finish(spec, ActionVerb.LoopAnim, words, 5);
+            }
             if (words.Count >= 3 && words[0].Text == "loop" && words[1].Text == "anim" && words[2].Type == TokenType.Str)
             {
                 spec.Thing = words[2].Text;

@@ -663,16 +663,24 @@ when every 0.2 seconds
       animation event tracks through the project’s own `MarkerAnimEvent` (an authored `AnimEvent`):
       Flax exposes an Animation’s event list to the editor only, so a marker has to be placed on the
       clip. A clip with no markers falls back to `reaches <n>%`, as the registry documents.
-- [ ] **Part C — Upper-body layer.** Authored content, not a runtime graph trick. Add the
-      character’s base Anim Graph asset: a `Blend With Mask` node whose Pose A is the locomotion pose
-      and Pose B is an `Animation Slot` node feeding the final output. Add a `SkeletonMask` asset for
-      it with spine, chest, neck, head, shoulders, arms and hands enabled and **hips, root, legs and
-      feet disabled** — the shoot clip animates those bones too, and the mask is what keeps the walk
-      owning them. `play anim "<name>" upper body` resolves to
-      `model.PlaySlotAnimation("UpperBody", clip, speed, blendIn, blendOut, loopCount)`; `stop anim
-      upper body` calls `StopSlotAnimation`, restoring the locomotion pose with the legs still
-      walking. Slot playback must never go through `InitAsAnimation`, which replaces the whole pose
-      including the legs — the bug this part exists to fix.
+- [x] **Part C — Upper-body layer.** `play anim "<name>" upper body` and `loop anim "<name>" upper
+      body` call `AnimatedModel.PlaySlotAnimation("UpperBody", clip, 1, 0.2, 0.2, loop ? -1 : 0)`;
+      `stop anim upper body` calls `StopSlotAnimation("UpperBody")`. The speed argument stays 1 on
+      purpose: the actor's speed already rides on `AnimatedModel.UpdateSpeed` (Part A), which scales
+      the whole graph including slots, so asking the slot for it as well would apply it twice. A
+      layered play is tracked separately from the full-body clip, so a held trigger does not restart
+      it, `stop anim` drops it with the graph it lived on, a mid-clip speed change re-times its end,
+      and `when anim "<name>" ends` fires for a layered one-shot (which is what the docs example's
+      `stop anim upper body` hangs off). Slot playback never goes through `InitAsAnimation`, which
+      replaces the whole pose including the legs — the bug this part exists to fix — so a model with
+      no authored base graph, or whose graph is one of the bridge's own single-clip graphs, gets a
+      single warning instead.
+      **Content dependency, now the only thing left:** the character's base Anim Graph (a `Blend With
+      Mask` node whose Pose A is the locomotion pose and Pose B an `Animation Slot` named `UpperBody`,
+      feeding the final output) and a `SkeletonMask` for it with spine, chest, neck, head, shoulders,
+      arms and hands enabled and **hips, root, legs and feet disabled** are authored in the Flax editor.
+      The bridge cannot synthesize them, and no character in this project ships them yet, so the words
+      are ready but the layer is unplaytested until those assets exist.
 - [ ] **Part D — Root motion.** Toggle whether the clip’s root motion moves the actor or is ignored,
       and document interaction with `move` and `goto`. Ownership rule: **root motion belongs to the
       locomotion clip only** — slot clips never write the actor transform, so an upper-body clip

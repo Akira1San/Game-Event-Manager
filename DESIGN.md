@@ -1318,13 +1318,18 @@ window around a broken runtime.
   that stops those channels reaching the output, so the walk keeps owning the pelvis and feet. A mask
   that includes the hips overrides the walk's pelvis motion and visibly detaches the legs.
   *Slot words.* `play anim "<name>" upper body` is
-  `PlaySlotAnimation("UpperBody", clip, speed, blendIn, blendOut, loopCount)` and
-  `stop anim upper body` is `StopSlotAnimation` — the legs keep walking through both. Slot playback
-  must never go through `InitAsAnimation`, which replaces the whole pose; that substitution is exactly
-  the bug the layer exists to fix.
-  *Speed is live, not baked.* `set anim speed to <n>` is passed as the slot's `speed` argument, so it
-  changes the running clip with no restart, and the per-sheet value persists across clip changes with
-  each new clip inheriting it. A full-body clip on the virtual graph bakes speed at graph build, so a
+  `PlaySlotAnimation("UpperBody", clip, 1, 0.2, 0.2, loopCount)` (0 once, -1 forever) and
+  `stop anim upper body` is `StopSlotAnimation("UpperBody")` — the legs keep walking through both.
+  The slot is asked for 1× because the actor's speed already rides on `AnimatedModel.UpdateSpeed`,
+  which scales the whole graph including slots: passing it twice would play the layer at speed².
+  A layered one-shot is tracked apart from the full-body clip, so a held trigger does not restart it
+  and `when anim "<name>" ends` still fires for it. Slot playback must never go through
+  `InitAsAnimation`, which replaces the whole pose; that substitution is exactly the bug the layer
+  exists to fix, so a model without an authored base graph is warned about instead.
+  *Speed is live, not baked.* `set anim speed to <n>` is one number per actor, written to
+  `AnimatedModel.UpdateSpeed`, so it changes the running clip with no restart — slot clips included,
+  since the graph scales as a whole — and it persists across clip changes with each new clip
+  inheriting it. A full-body clip on the virtual graph bakes speed at graph build, so a
   live change there rebuilds the graph (a restart) — a documented limit that disappears once a
   character's playback is routed through slots.
   *Clip timing comes from the clip, not a guessed `wait`.* `when anim "<name>" reaches <n>%` polls the
