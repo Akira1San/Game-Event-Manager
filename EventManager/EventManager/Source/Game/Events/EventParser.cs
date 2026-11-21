@@ -1180,6 +1180,9 @@ namespace Game
             if (words.Count > 2 && words[1].Type == TokenType.Word && words[1].Text == "text" &&
                 words[2].Type == TokenType.Word && words[2].Text == "of")
                 return ParseSetText(line);
+            if (words.Count > 2 && words[1].Type == TokenType.Word && words[1].Text == "tooltip" &&
+                words[2].Type == TokenType.Word && words[2].Text == "of")
+                return ParseSetTooltip(line);
             // `set build progress to <n>` / `set build progress of <building> to <n>`
             // — RTS construction progress (Task 18 Part C).
             if (words.Count >= 3 && words[1].Type == TokenType.Word && words[1].Text == "build" &&
@@ -1514,6 +1517,28 @@ namespace Game
             index++;
             node.Value = ReadValue(words, ref index, line.Line);
             CheckEndOfLine(words, index, line.Line, $"set text of {node.Target} to <value>");
+            return node;
+        }
+
+        /// <summary>
+        /// <c>set tooltip of &lt;thing&gt; to &lt;value&gt;</c> — hover text on a UI control
+        /// (Task 34 Part D). The value is evaluated like any other, so a tooltip can come from a
+        /// variable; an empty text clears the tip.
+        /// </summary>
+        private SetTooltipNode ParseSetTooltip(BodyLineNode line)
+        {
+            var words = line.Words;
+            var node = new SetTooltipNode { Line = line.Line };
+            int index = 3;
+            if (index >= words.Count || words[index].Type != TokenType.Word)
+                throw new ParseException("after `set tooltip of` comes the name of the thing — `set tooltip of SwordSlot to \"12 damage\"`", line.Line);
+            node.Thing = words[index].Text;
+            index++;
+            if (index >= words.Count || words[index].Type != TokenType.Word || words[index].Text != "to")
+                throw new ParseException("a `set tooltip of` line joins the thing and the text with `to` — `set tooltip of SwordSlot to \"12 damage\"`", line.Line);
+            index++;
+            node.Value = ReadValue(words, ref index, line.Line);
+            CheckEndOfLine(words, index, line.Line, $"set tooltip of {node.Thing} to <value>");
             return node;
         }
 

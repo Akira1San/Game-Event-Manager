@@ -14722,9 +14722,107 @@ Check(!UiHitTest.IsClickablePoint(plainControl,
 Check(!UiHitTest.IsClickablePoint(new UiRect(100, 50, 0, 0), null, 100, 50),
     "a zero-size control is never clickable");
 
+// ------------------------------------------------------------------
+// Task 34 Part D: tooltips and groups
+// ------------------------------------------------------------------
+
+var tooltipLiteral = parser.Parse("when BagGridSlot1 is clicked\n  set tooltip of SwordSlot to \"12 damage\"\n");
+Check(tooltipLiteral.Events[0].Body[0].Statement is SetTooltipNode tooltipNode &&
+      tooltipNode.Thing == "SwordSlot" && tooltipNode.Value is TextValue tooltipText &&
+      tooltipText.Text == "12 damage",
+    "`set tooltip of SwordSlot to \"12 damage\"` parses to a SetTooltipNode");
+
+var tooltipVariable = parser.Parse("when BagGridSlot1 is clicked\n  set tooltip of BagGrid to my SelectedItem\n");
+Check(tooltipVariable.Events[0].Body[0].Statement is SetTooltipNode tooltipVarNode &&
+      tooltipVarNode.Thing == "BagGrid" && tooltipVarNode.Value is VariableValue tooltipVarValue &&
+      tooltipVarValue.Name == "SelectedItem",
+    "`set tooltip of BagGrid to my SelectedItem` takes the hover text from a variable");
+
+ExpectParseError("when me is clicked\n  set tooltip of SwordSlot\n", "to",
+    "`set tooltip of` without `to <value>` is a friendly error");
+
+var tooltipWorld = new FakeWorld();
+var tooltipEngine = FreshEngine(tooltipWorld);
+var tooltipActor = new FakeActor("BagGrid");
+string tooltipShown = null;
+tooltipEngine.OnSetTooltip = (context, thing, text) => tooltipShown = thing + "=" + text;
+tooltipEngine.AddSheet(tooltipActor, parser.Parse("when game starts\n  set my SelectedItem to \"Sword\"\n  set tooltip of BagGrid to my SelectedItem\n"));
+tooltipEngine.SessionStarted();
+tooltipEngine.Tick(0);
+Check(tooltipShown == "BagGrid=Sword",
+    "the runtime resolves the tooltip's value and hands it to the bridge | got " + (tooltipShown ?? "nothing"));
+
+var showGroupProgram = parser.Parse("when game starts\n  show group bag\n");
+var showGroupSpec = ActionWords.Parse(((RawActionNode)showGroupProgram.Events[0].Body[0].Statement!).Words, _ => { });
+Check(showGroupSpec.Verb == ActionVerb.ShowGroup && showGroupSpec.Thing == "bag" &&
+      showGroupSpec.Leftover.Count == 0,
+    "`show group bag` parses to ShowGroup with the tag");
+
+var hideGroupProgram = parser.Parse("when game starts\n  hide group bag\n");
+var hideGroupSpec = ActionWords.Parse(((RawActionNode)hideGroupProgram.Events[0].Body[0].Statement!).Words, _ => { });
+Check(hideGroupSpec.Verb == ActionVerb.HideGroup && hideGroupSpec.Thing == "bag",
+    "`hide group bag` parses to HideGroup with the tag");
+
+var bareGroupProgram = parser.Parse("when game starts\n  show group\n");
+string bareGroupWarning = null;
+var bareGroupSpec = ActionWords.Parse(((RawActionNode)bareGroupProgram.Events[0].Body[0].Statement!).Words,
+    message => bareGroupWarning = message);
+Check(bareGroupSpec.Verb == ActionVerb.Unknown && bareGroupWarning != null &&
+      bareGroupWarning.Contains("show group bag"),
+    "a bare `show group` is refused with the shape to write | W=" + bareGroupWarning);
+
+// The bridge's `Actors()` cannot see an inactive actor, so `show group` needs its own query.
+var groupWorld = new FakeWorld();
+var bagPanel = new FakeActor("BagPanel");
+var questPanel = new FakeActor("QuestPanel");
+groupWorld.AddActor(bagPanel);
+groupWorld.AddActor(questPanel);
+groupWorld.SetTag(bagPanel, "bag");
+groupWorld.SetTag(questPanel, "quest");
+groupWorld.SetHidden(bagPanel, true);
+Check(!new List<object>(groupWorld.Actors()).Contains(bagPanel) &&
+      new List<object>(groupWorld.ActorsWithTag("bag")).Contains(bagPanel) &&
+      !new List<object>(groupWorld.ActorsWithTag("bag")).Contains(questPanel),
+    "a hidden panel is still found by its tag, which the ordinary actor list cannot do");
+groupWorld.SetHidden(bagPanel, false);
+Check(new List<object>(groupWorld.Actors()).Contains(bagPanel) &&
+      new List<object>(groupWorld.ActorsWithTag("bag")).Contains(bagPanel),
+    "showing the panel again puts it back in the ordinary actor list");
+
+// The slot's art is a child control, and Flax only asks the hovered control for its tooltip, so
+// the text has to reach the subtree the cursor can land on.
+var tooltipRoot = new FakeControlNode("BagGridSlot1");
+var tooltipArt = new FakeControlNode("Icon");
+var tooltipLabel = new FakeControlNode("Label");
+var tooltipGlyph = new FakeControlNode("Glyph");
+tooltipRoot.Children.Add(tooltipArt);
+tooltipRoot.Children.Add(tooltipLabel);
+tooltipArt.Children.Add(tooltipGlyph);
+var tooltipTargets = UiTooltipTargets.Collect(tooltipRoot, node => node.Children);
+Check(tooltipTargets.Count == 4 && tooltipTargets[0] == tooltipRoot &&
+      tooltipTargets.Contains(tooltipArt) && tooltipTargets.Contains(tooltipLabel) &&
+      tooltipTargets.Contains(tooltipGlyph),
+    "a tooltip on a slot reaches the child art the cursor actually hits, root first");
+Check(UiTooltipTargets.Collect<FakeControlNode>(null, node => node.Children).Count == 0,
+    "an actor with no control has no tooltip targets");
+var tooltipLeafOnly = UiTooltipTargets.Collect(tooltipLabel, node => node.Children);
+Check(tooltipLeafOnly.Count == 1 && tooltipLeafOnly[0] == tooltipLabel,
+    "a control with no children is its own only tooltip target");
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);
+
+class FakeControlNode
+{
+    public string Name;
+    public List<FakeControlNode> Children = new List<FakeControlNode>();
+
+    public FakeControlNode(string name)
+    {
+        Name = name;
+    }
+}
 
 class FakeActor
 {
@@ -14765,6 +14863,7 @@ class FakeWorld : IEventWorld
     private readonly HashSet<string> held = new HashSet<string>();
     private readonly Dictionary<(object, object), double> distances = new Dictionary<(object, object), double>();
     private readonly HashSet<(object, string)> tags = new HashSet<(object, string)>();
+    private readonly HashSet<object> hidden = new HashSet<object>();
     private readonly HashSet<object> moving = new HashSet<object>();
     private readonly List<object> actors = new List<object>();
     private readonly HashSet<(object, object)> touching = new HashSet<(object, object)>();
@@ -14793,6 +14892,16 @@ class FakeWorld : IEventWorld
     public void SetTag(object target, string tag)
     {
         tags.Add((target, tag));
+    }
+
+    /// <summary>Mimics the bridge hiding an actor: <see cref="Actors"/> stops seeing it, while
+    /// <see cref="ActorsWithTag"/> still does, which is what `show group` needs.</summary>
+    public void SetHidden(object actor, bool on)
+    {
+        if (on)
+            hidden.Add(actor);
+        else
+            hidden.Remove(actor);
     }
 
     public void AddActor(object actor)
@@ -15047,7 +15156,20 @@ class FakeWorld : IEventWorld
 
     public IReadOnlyList<object> Actors()
     {
-        return actors;
+        var active = new List<object>();
+        foreach (object actor in actors)
+            if (!hidden.Contains(actor))
+                active.Add(actor);
+        return active;
+    }
+
+    public IReadOnlyList<object> ActorsWithTag(string tag)
+    {
+        var found = new List<object>();
+        foreach (object actor in actors)
+            if (tags.Contains((actor, tag)))
+                found.Add(actor);
+        return found;
     }
 
     public bool IsDescendantOf(object child, object root)

@@ -46,6 +46,10 @@ namespace Game
         object FindActor(string name);
         /// <summary>Every live actor a contact poll may consider (active only, no templates).</summary>
         IReadOnlyList<object> Actors();
+        /// <summary>Every actor carrying <paramref name="tag"/>, <b>including inactive ones</b> —
+        /// a hidden group must still be findable so `show group` can bring it back (Task 34 D).
+        /// <see cref="Actors"/> cannot answer this: it skips inactive actors on purpose.</summary>
+        IReadOnlyList<object> ActorsWithTag(string tag);
         /// <summary>True when the cursor is currently over the actor (point &amp; click hover).</summary>
         bool IsHovered(object actor);
         /// <summary>True when <paramref name="actor"/> carries a UI Button that is currently
@@ -198,6 +202,11 @@ namespace Game
         }
 
         public IReadOnlyList<object> Actors()
+        {
+            return new object[0];
+        }
+
+        public IReadOnlyList<object> ActorsWithTag(string tag)
         {
             return new object[0];
         }

@@ -399,6 +399,36 @@ namespace Game
             return found;
         }
 
+        /// <summary>Every actor tagged <paramref name="tag"/>, inactive actors included: a panel
+        /// closed by `hide group` is inactive, and `show group` must still find it (Task 34 D).</summary>
+        public IReadOnlyList<object> ActorsWithTag(string tag)
+        {
+            var found = new List<object>();
+            var scenes = Level.Scenes;
+            for (int s = 0; s < scenes.Length; s++)
+            {
+                var scene = scenes[s];
+                if (scene == null)
+                    continue;
+                CollectTagged(scene, tag, found);
+            }
+            return found;
+        }
+
+        /// <summary>Walks every child whether or not it is active, unlike <see cref="Collect"/>.
+        /// A tagged template would be turned on by `show group`, so leave templates untagged.</summary>
+        private static void CollectTagged(Actor node, string tag, List<object> found)
+        {
+            foreach (Actor child in node.Children)
+            {
+                if (child == null)
+                    continue;
+                if (child.HasTag(tag))
+                    found.Add(child);
+                CollectTagged(child, tag, found);
+            }
+        }
+
         /// <summary>The active scene camera. Flax's <c>Level.FindActor</c> is case-sensitive
         /// while scenes name the camera "Camera" or "camera", so fall back to any active
         /// <see cref="FlaxEngine.Camera"/> actor.</summary>

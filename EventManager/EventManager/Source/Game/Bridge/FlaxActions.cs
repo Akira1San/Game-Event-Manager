@@ -1425,6 +1425,12 @@ namespace Game
                 case ActionVerb.Show:
                     SetActive(context, spec.Thing, true);
                     break;
+                case ActionVerb.ShowGroup:
+                    SetGroupVisible(context, spec.Thing, true);
+                    break;
+                case ActionVerb.HideGroup:
+                    SetGroupVisible(context, spec.Thing, false);
+                    break;
                 case ActionVerb.ShowText:
                     ShowHudText(spec.Thing);
                     break;
@@ -2890,6 +2896,30 @@ namespace Game
             }
             else
                 WarnOnce($"I couldn't find the thing \u201C{thing}\u201D to {(on ? "show" : "hide")}.");
+        }
+
+        /// <summary>`show group &lt;tag&gt;` / `hide group &lt;tag&gt;` — every actor carrying the
+        /// tag, hidden ones included so a group can come back (Task 34 Part D). Tagging the panel
+        /// actor is enough: its children follow their parent's active state.</summary>
+        private static void SetGroupVisible(EventContext context, string tag, bool on)
+        {
+            if (string.IsNullOrEmpty(tag))
+            {
+                WarnOnce("\u201Cshow group\u201D / \u201Chide group\u201D needs a tag, like \u201Chide group bag\u201D.");
+                return;
+            }
+            int found = 0;
+            foreach (object member in context.World.ActorsWithTag(tag))
+            {
+                if (!(member is Actor actor))
+                    continue;
+                actor.IsActive = on;
+                if (on)
+                    EventsManager.Instance?.AttachSpawnedActor(actor);
+                found++;
+            }
+            if (found == 0)
+                WarnOnce($"I couldn't find anything tagged \u201C{tag}\u201D to {(on ? "show" : "hide")} \u2014 tag the panel actor in the scene.");
         }
 
         private static void Spawn(EventContext context, ActionSpec spec)
@@ -5341,6 +5371,32 @@ namespace Game
                 return "(none)";
             names.Sort(StringComparer.OrdinalIgnoreCase);
             return string.Join(", ", names);
+        }
+
+        /// <summary><c>set tooltip of &lt;thing&gt; to &lt;value&gt;</c> — the hover text a UI
+        /// control shows; an empty text clears it (Task 34 Part D).</summary>
+        public static void SetTooltip(string thing, string text)
+        {
+            if (string.IsNullOrEmpty(thing))
+            {
+                WarnOnce("\u201Cset tooltip of\u201D needs the name of the thing, like \u201Cset tooltip of SwordSlot to \"12 damage\"\u201D.");
+                return;
+            }
+            var control = FindControl<FlaxEngine.GUI.Control>(thing, out UIControl ui);
+            if (control == null)
+            {
+                WarnOnce($"\u201Cset tooltip of {thing}\u201D needs an actor with a UI control on a UIControl (I couldn't find one called \u201C{thing}\u201D).");
+                return;
+            }
+            // Flax shows only the hovered control's own tooltip (Control.OnMouseMove checks that
+            // control's ShowTooltip), so a slot whose art is a child Button or Label would show
+            // nothing with the text on the UIControl's root alone. Stamp the whole subtree and let
+            // the control under the cursor answer (UiTooltipTargets is engine-free and checked).
+            foreach (var target in UiTooltipTargets.Collect(control,
+                         child => child is FlaxEngine.GUI.ContainerControl container
+                             ? container.Children
+                             : null))
+                target.TooltipText = text ?? "";
         }
 
         public static void SetText(string thing, string text, bool reveal = true)

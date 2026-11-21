@@ -449,6 +449,8 @@ namespace Game
         /// <summary>Write a UI text. <c>reveal</c> is false for a bind, which writes a value but
         /// must not un-hide a control the sheet hid (see <see cref="SetTextNode.Reveal"/>)</summary>.
         public Action<EventContext, string, ValueBox, bool> OnSetText = (context, thing, value, reveal) => { };
+        /// <summary>Hover text for a UI control (`set tooltip of`). An empty text clears it.</summary>
+        public Action<EventContext, string, string> OnSetTooltip = (context, thing, text) => { };
         /// <summary>Play a step sound: <paramref name="material"/> is the surface name (e.g.
         /// "Grass"), <paramref name="clipName"/> is the resolved clip to play. The bridge
         /// wires this to actual audio playback.</summary>
@@ -2494,6 +2496,10 @@ namespace Game
                 else if (statement is SetTextNode setText)
                 {
                     OnSetText(context, setText.Target, context.Evaluate(setText.Value), setText.Reveal);
+                }
+                else if (statement is SetTooltipNode tooltip)
+                {
+                    OnSetTooltip(context, tooltip.Thing, context.Evaluate(tooltip.Value).AsText());
                 }
                 else if (statement is TypeTextNode typeText)
                 {

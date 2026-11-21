@@ -74,6 +74,9 @@ namespace Game
         PanCamera,
         Hide,
         Show,
+        // Whole panels by tag (Task 34 Part D)
+        ShowGroup,
+        HideGroup,
         ShowText,
         HideText,
         RestartScene,
@@ -1541,6 +1544,20 @@ namespace Game
                 return Unknown(spec, words, showText
                     ? "\u201Cshow text\u201D displays quoted text, like \u201Cshow text \"Game Over\"\""
                     : "\u201Chide text\u201D takes nothing after it", warn);
+            }
+            // `show group <tag>` / `hide group <tag>` — a whole panel at once (Task 34 Part D).
+            // Checked before the plain `show <thing>` form so "group" is never an actor name.
+            if (words.Count >= 2 && (words[0].Text == "show" || words[0].Text == "hide") && words[1].Text == "group")
+            {
+                bool showGroup = words[0].Text == "show";
+                if (words.Count >= 3 && IsThing(words[2]))
+                {
+                    spec.Thing = words[2].Text;
+                    return Finish(spec, showGroup ? ActionVerb.ShowGroup : ActionVerb.HideGroup, words, 3);
+                }
+                return Unknown(spec, words, showGroup
+                    ? "\u201Cshow group\u201D needs a tag, like \u201Cshow group bag\u201D"
+                    : "\u201Chide group\u201D needs a tag, like \u201Chide group bag\u201D", warn);
             }
             // `reveal area around me by <radius>` / `hide area around me by <radius>` — RTS
             // fog of war (Task 18 Part F). Checked before the plain `hide <thing>` form so

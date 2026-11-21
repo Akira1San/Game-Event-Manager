@@ -885,8 +885,36 @@ fill them; a later version can create controls. Either way, the event text stays
       mistyped cell trigger is an unknown trigger that never fires, like every other mistyped trigger
       (the language has no load-time error path for trigger shapes). Editor play-check pending (a
       real grid of slots with icons, a scroll panel, and a tint on the selected slot).
-- [ ] **Part D — Tooltips and groups.** Hover text on slots, and `show/hide group <tag>` for whole
-      panels (bag, quest log, pause menu) without naming every child.
+- [x] **Part D — Tooltips and groups.** `set tooltip of <thing> to <value>` writes the hover text
+      of the actor's UI control (`Control.TooltipText`), so a tooltip can be a literal or a value —
+      `set tooltip of BagGrid to my SelectedItem` follows the selection; an empty text clears it, and
+      an actor with no control on a `UIControl` gets one warning naming it. Flax shows only the
+      hovered control's own tooltip (`Control.OnMouseMove` asks that control's `ShowTooltip`, which
+      is false for empty text) and never walks up to a parent, so the text is stamped on the whole
+      control subtree through the engine-free `Runtime/UiTooltipTargets.Collect` — the slot's child
+      Button/Label/icon answers the cursor, not just the `UIControl` root. `show group <tag>` /
+      `hide group <tag>` show or hide every actor carrying that Flax tag, checked before the plain
+      `show <thing>` form so `group` never becomes an actor name. This needed one new world query:
+      `IEventWorld.Actors()` deliberately skips inactive actors (contact polls must not tick
+      templates), so a panel closed by `hide group` would have been invisible to `show group`.
+      `ActorsWithTag` walks every scene actor whether or not it is active, implemented by
+      `FlaxWorld` (`CollectTagged`), `DefaultEventWorld` and the test world. Tags are authored on the
+      actor in the editor — there is no runtime `tag` word — and tagging the panel actor is enough
+      because its children follow their parent's active state. `EventRuntime.OnSetTooltip` carries
+      the tooltip to the bridge beside `OnSetText`. Registry + `keywords.html` rows for all three
+      words. 12 new checks (literal and variable tooltips, the value resolved through the runtime
+      hook, the friendly parse error, both group words, the bare `show group` hint, a hidden
+      panel found by tag then again after showing it, and the tooltip walk: child art included,
+      root first, a leaf is its own only target, a missing root has none) -> **2447 passed,
+      0 failed**; `dotnet build Source/Game.csproj -c Editor.Windows.Debug` and
+      `Flax.Build -target=GameEditorTarget` pass. Known limits: the bridge's group loop (setting
+      `IsActive` on each member, re-attaching spawned ones) is not unit-tested, only the query under
+      it; `show group` turns on every tagged member unconditionally, so a member hidden
+      individually is shown too; tooltips are set on the controls and are not stored in the runtime,
+      so they do not survive a scene reload; and a template actor carrying the tag would be woken
+      by `show group`, so leave templates untagged. The subtree stamp was reasoned from Flax's own
+      `Control.OnMouseEnter` / `OnMouseMove` source (a child control only shows its own text), but
+      the visible hover behaviour is still an editor play-check.
 - [ ] **Part E — Inventory example.** A real bag window: open/close, select item, tooltip, use
       SelectedItem on a door (chains with Task 9 D), and a vendor list if time allows.
 - [ ] **Part F — Tests and docs.** Row count, empty values, index bounds, click mapping, hot reload

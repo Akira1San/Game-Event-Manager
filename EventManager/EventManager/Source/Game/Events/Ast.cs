@@ -100,6 +100,14 @@ namespace Game
         public bool Reveal = true;
     }
 
+    /// <summary><c>set tooltip of &lt;thing&gt; to &lt;value&gt;</c> — the hover text a UI control
+    /// shows (Task 34 Part D). A blank value clears the tooltip.</summary>
+    public class SetTooltipNode : StatementNode
+    {
+        public string Thing = "";
+        public ValueNode Value = new TextValue();
+    }
+
     /// <summary><c>type text "&lt;text&gt;" into &lt;thing&gt; speed &lt;n&gt;</c> — reveals the
     /// words a character at a time (Task 35 Part A). The timing lives in the runtime's
     /// <see cref="Typewriter"/>; only the finished reveal raises `when text finishes`.</summary>

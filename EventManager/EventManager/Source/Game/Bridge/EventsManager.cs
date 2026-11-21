@@ -203,6 +203,7 @@ namespace Game
             {
                 FlaxActions.SetText(thing, value.AsText(), reveal);
             };
+            Runtime.OnSetTooltip = (context, thing, text) => FlaxActions.SetTooltip(thing, text);
             Runtime.OnSetButtonEnabled = (context, thing, enabled) =>
                 FlaxActions.SetButtonEnabled(thing, enabled);
             Runtime.OnSetImageBrush = (context, thing, sprite) =>
