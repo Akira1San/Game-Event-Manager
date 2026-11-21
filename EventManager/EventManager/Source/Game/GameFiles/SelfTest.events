@@ -72,10 +72,11 @@ when my Count becomes 3
 when message "case 3" arrives
   test "an edge fires once, not per tick"
   set my EdgeHits to 0
-  set my Count to 0
-  add 1 to my Count
-  add 1 to my Count
-  add 1 to my Count
+  # 3 → 4 crosses nothing; 4 → 3 is the one equality edge. (`becomes 3` also fires on a
+  # downward crossing of 3, so 3 → 1 → 3 would honestly count twice.)
+  set my Count to 4
+  wait 0.2 seconds
+  add -1 to my Count
   wait 0.5 seconds
   expect my EdgeHits is 1
   pass
@@ -95,8 +96,9 @@ when message "case 4" arrives
   set my Speed to 400
   goto Marker
   wait 1.4 seconds
+  # `me is near Marker` would only see actors that carry a sheet (FindNamedActor), and a
+  # waypoint has none — the arrival edge itself is the assertion that works in both tiers.
   expect my Arrived is 1
-  expect me is near Marker by 150
   pass
   send message "case 5" to me
 

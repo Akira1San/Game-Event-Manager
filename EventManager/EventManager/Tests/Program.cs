@@ -1074,6 +1074,90 @@ foreach (string selfTestActor in selfTestActors)
 }
 Check(selfTestSceneActors, "SelfTest.scene holds every prop, marker and label the sheet names");
 
+// ------------------------------------------------------------------
+// Task 51 Part D: the headless tier — the shipped sheet against a fake world.
+// ------------------------------------------------------------------
+// The documented editor tier. A case belongs here only when the fake world cannot reach it
+// (real ray-casts, collider contacts, a jump arc, the ladder probe, clone spawn); the suite
+// compares this list with the file's own tags, so a case cannot be quietly demoted to it.
+var headlessExcluded = new List<string>
+{
+    "contact is enter-edge (editor only)",
+    "sees then stops seeing (editor only)",
+    "jump takes off and lands (editor only)",
+    "ladder climb starts and lands (editor only)",
+    "checkpoint saves on touch (editor only)",
+    "respawn at returns to the marker (editor only)",
+    "spawn runs the clone sheet (editor only)",
+    "destroy removes the prop (editor only)",
+};
+Check(string.Join(" | ", selfTestLabels.FindAll(label => label.EndsWith("(editor only)"))) ==
+      string.Join(" | ", headlessExcluded),
+    "the shipped `(editor only)` tags are exactly the documented Part D list, in file order");
+
+SelfTest.Reset();
+SelfTest.ExcludedLabels.Add("demo");
+SelfTest.Reset();
+Check(!SelfTest.IsExcluded("demo") && SelfTest.ExcludedLabels.Count == 0,
+    "`SelfTest.Reset` clears the headless exclusions, so a Play runs every case");
+
+foreach (string headlessLabel in headlessExcluded)
+    SelfTest.ExcludedLabels.Add(headlessLabel);
+
+var headlessWorld = new FakeWorld();
+var headlessEngine = FreshEngine(headlessWorld);
+var headlessPlayer = new FakeActor("Player");
+var headlessDummy = new FakeActor("Dummy");
+var headlessMarker = new FakeActor("Marker");
+var headlessResult = new FakeActor("ResultLabel");
+headlessWorld.AddActor(headlessPlayer);
+headlessWorld.AddActor(headlessDummy);
+headlessWorld.AddActor(headlessMarker);
+headlessWorld.AddActor(headlessResult);
+// The one bridge verb the headless cases reach is `goto <waypoint>`: the fake bridge answers the
+// walk by landing the distance the `when me arrives at` poll reads, so the arrival edge is real
+// runtime behaviour and only the movement itself is faked.
+headlessEngine.OnRawAction = (context, words) =>
+{
+    if (words.Count >= 2 && words[0].Text == "goto")
+    {
+        object headlessTarget = headlessWorld.FindActor(words[1].Text);
+        if (headlessTarget != null)
+            headlessWorld.SetDistance(context.Me, headlessTarget, 0);
+    }
+};
+var headlessDummyProgram = parser.Parse(File.ReadAllText("Source/Game/GameFiles/SelfTest_Dummy.events"));
+headlessEngine.AddSheet(headlessPlayer, selfTestProgram);
+headlessEngine.AddSheet(headlessDummy, headlessDummyProgram);
+headlessEngine.SessionStarted();
+// ~20 s of 50 ms frames: the sheet's own waits total under 8 s, so this is generous rather than
+// tuned to the run.
+for (int headlessStep = 0; headlessStep <= 400 && SelfTest.SelfTestEndsRaises == 0; headlessStep++)
+    headlessEngine.Tick(headlessStep * 0.05);
+
+foreach (var headlessCase in SelfTest.Cases)
+{
+    if (headlessCase.State == CaseState.Failed)
+        Console.WriteLine("  headless FAIL " + headlessCase.Label + " — " + headlessCase.FailureReason);
+    else if (headlessCase.State == CaseState.Skipped && !headlessExcluded.Contains(headlessCase.Label))
+        Console.WriteLine("  headless SKIP " + headlessCase.Label + " — " + headlessCase.GateText);
+}
+Check(SelfTest.Cases.Count == 13,
+    $"the shipped file registers its 13 cases against the fake world ({SelfTest.Cases.Count} found)");
+Check(SelfTest.TestFailed == 0, $"no headless case fails ({SelfTest.TestFailed} failed)");
+var headlessPassed = SelfTest.Cases.FindAll(c => c.State == CaseState.Passed);
+Check(SelfTest.TestPassed == 5 && headlessPassed.Count == 5,
+    $"the five bridge-free cases pass headless ({SelfTest.TestPassed} passed)");
+Check(string.Join(",", headlessPassed.ConvertAll(c => c.Label)) ==
+      "variables and set/add,timers and wait,an edge fires once, not per tick,goto arrives at the marker,message routes to the dummy",
+    "the headless PASS split is exactly the five documented bridge-free cases, in order");
+Check(SelfTest.SkippedCount() == 8 && SelfTest.Cases.TrueForAll(c =>
+          c.State != CaseState.Skipped || headlessExcluded.Contains(c.Label)),
+    "the eight editor-only cases report SKIP and nothing else does");
+Check(SelfTest.SelfTestEndsRaises == 1,
+    "the shipped sheet raises `when self test ends` once in the headless tier");
+SelfTest.ExcludedLabels.Clear();
+
 var sight = parser.Parse("when me appears\n  hide me\n\nwhen me stops seeing Player by 8\n  show me\n");
 Check(sight.Events.Count == 2 && sight.Events[1].Trigger.Count == 6,
       "`when me stops seeing Player by 8` validates through the alt trigger shape");

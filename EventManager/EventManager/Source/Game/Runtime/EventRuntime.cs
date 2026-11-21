@@ -2290,6 +2290,13 @@ namespace Game
             CaseRecord caseForEvent = null;
             if (sheet.CasesByEvent != null && sheet.CasesByEvent.TryGetValue(eventIndex, out caseForEvent))
             {
+                // Task 51 Part D: a case the current tier cannot evaluate is SKIP, and its body
+                // never runs — the headless suite excludes the `(editor only)` cases this way.
+                if (SelfTest.IsExcluded(caseForEvent.Label))
+                {
+                    caseForEvent.State = CaseState.Skipped;
+                    return;
+                }
                 sheet.CurrentCase = caseForEvent;
                 if (caseForEvent.State == CaseState.Idle)
                     caseForEvent.StartedAt = Time;

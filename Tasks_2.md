@@ -2375,11 +2375,30 @@ once Task 28 lands. Task 36 Part G's five-step platformer check becomes five cas
       and `Flax.Build -target=GameEditorTarget` exits 0. The editor Play itself (the actual move,
       jump and ladder look) is still the user's run — nothing in this part watched the scene play.
       Editor-only cases have no fake-world assertions yet; that is Part D.
-- [ ] **Part D — The headless tier.** `Tests/Program.cs` runs the shipped file through the pure
+- [x] **Part D — The headless tier.** `Tests/Program.cs` runs the shipped file through the pure
       runner against a fake world, asserts the exact case count and the PASS/FAIL split, and fails
       the suite on any `FAIL`. A `(editor only)` tag marks the cases the fake world cannot reach; a
       suite check asserts those are exactly the documented list, so a case cannot be quietly
-      demoted to editor-only when a fake-world fix would do.
+      demoted to editor-only when a fake-world fix would do. Shipped: the suite parses
+      `SelfTest.events` with the same parser the editor uses, registers it on a `Player` sheet in a
+      `FakeWorld` (with `Dummy` and `ResultLabel`, plus `SelfTest_Dummy.events` so the routing case
+      really runs on another sheet), and ticks 50 ms frames for ~20 s. The one bridge verb the five
+      bridge-free cases reach is `goto <waypoint>`, so the tier's `OnRawAction` stands in for the
+      walk (it lands the distance the `when me arrives at` poll reads) — the arrival edge and every
+      assertion stay real runtime behaviour. The run settles at **13 cases, PASS 5 / FAIL 0 /
+      SKIP 8**, and the suite checks the count, the zero FAIL, the five passing labels in order, the
+      eight SKIP labels and a single `when self test ends`. Exclusion is explicit in the runner, not
+      silent: `SelfTest.ExcludedLabels` (+ `IsExcluded`, cleared by `Reset`) makes `RunEvent` report
+      an excluded case SKIP without running its body, and a suite check compares the file's
+      `(editor only)` tags with the documented eight **in file order**, so a case cannot be demoted
+      to the list without editing both. The tier found two real sheet bugs, both fixed here: case 3
+      set `Count` from 3 down to 1, and `becomes 3` also fires on a downward crossing of 3, so the
+      edge counted twice (3 → 4 → 3 is one equality edge); and `expect me is near Marker by 150`
+      can never be true, because `FindNamedActor` only resolves actors that carry a sheet and a
+      waypoint has none — the case now asserts the arrival edge itself, which works in both tiers.
+      8 new checks -> **2350 passed, 0 failed**; `dotnet build Source/Game.csproj -c
+      Editor.Windows.Debug` 0 errors (13 pre-existing XML-doc warnings, none in the new code). The editor Play of `SelfTest.scene` is still the
+      user's run; Part E is open.
 - [ ] **Part E — Status reconciliation and docs.** Every `[ ] Verify (user, editor)` bullet in
       `TASKS.md` and `Tasks_2.md` either names its case or carries one line saying why it cannot be
       automated (feel, audio, visual); the stale claims get fixed at the same time (e.g. the note at

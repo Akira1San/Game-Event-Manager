@@ -43,6 +43,18 @@ namespace Game
         /// <summary>How many times `when self test ends` has been raised (once total).</summary>
         public static int SelfTestEndsRaises;
 
+        /// <summary>Labels this run cannot evaluate (Task 51 Part D). The headless tier lists the
+        /// `(editor only)` cases here, and the runner reports them SKIP without running their
+        /// bodies, so an excluded case is visible in the report instead of silently passing. A
+        /// Play leaves this empty and everything runs.</summary>
+        public static readonly HashSet<string> ExcludedLabels = new HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>True when the case's label was handed to <see cref="ExcludedLabels"/>.</summary>
+        public static bool IsExcluded(string label)
+        {
+            return !string.IsNullOrEmpty(label) && ExcludedLabels.Contains(label);
+        }
+
         public static void Register(CaseRecord c) => Cases.Add(c);
 
         /// <summary>How many cases settled as skipped in this round.</summary>
@@ -66,6 +78,7 @@ namespace Game
             TestFailed = 0;
             TimeoutSeconds = 5.0;
             SelfTestEndsRaises = 0;
+            ExcludedLabels.Clear();
         }
 
         public static void Pass(CaseRecord c)
