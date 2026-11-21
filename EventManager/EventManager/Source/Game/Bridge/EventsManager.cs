@@ -220,6 +220,8 @@ namespace Game
             Runtime.OnBacklogChanged = lines => FlaxActions.SetBacklog(lines);
             // Runtime lists are painted into their own authored rows (Task 34 Part A).
             Runtime.OnListChanged = (name, rows) => FlaxActions.SetList(name, rows);
+            // Runtime grids are painted into their own authored slots (Task 34 Part B).
+            Runtime.OnGridChanged = (name, slots) => FlaxActions.SetGrid(name, slots);
             Runtime.OnSetControlColor = (context, thing, color) =>
                 FlaxActions.SetControlColor(thing, color);
             Runtime.OnSetProgress = (context, thing, value, reveal) =>

@@ -479,12 +479,29 @@ namespace Game
                 line.Statement = new ClearListNode { Line = line.Line, Thing = line.Words[2].Text };
                 return;
             }
+            // `clear grid <thing>` — empty a runtime grid (Task 34 Part B).
+            if (first.Text == "clear" && line.Words.Count >= 2 &&
+                line.Words[1].Type == TokenType.Word && line.Words[1].Text == "grid")
+            {
+                if (line.Words.Count != 3 || line.Words[2].Type != TokenType.Word)
+                    throw new ParseException("`clear grid` names the grid — `clear grid BagGrid`", line.Line);
+                CheckEndOfLine(line.Words, 3, line.Line, "clear grid BagGrid");
+                line.Statement = new ClearGridNode { Line = line.Line, Thing = line.Words[2].Text };
+                return;
+            }
             // `fill list <thing> from my bag` — the one fill word (Task 34 Part A): the runtime
             // turns the bag's stacks into rows, so a bag window needs no line per item.
             if (first.Text == "fill" && line.Words.Count >= 2 &&
                 line.Words[1].Type == TokenType.Word && line.Words[1].Text == "list")
             {
                 line.Statement = ParseFillList(line);
+                return;
+            }
+            // `fill grid <thing> from my bag` — the same one fill word for a grid (Task 34 Part B).
+            if (first.Text == "fill" && line.Words.Count >= 2 &&
+                line.Words[1].Type == TokenType.Word && line.Words[1].Text == "grid")
+            {
+                line.Statement = ParseFillGrid(line);
                 return;
             }
             // `show choice "…"` — numbered dialogue choices (Task 35 Part C). Checked before the
@@ -1126,6 +1143,10 @@ namespace Game
             // not a global variable called "row".
             if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "row")
                 return ParseSetListRow(line);
+            // `set slot <n> of grid <thing> to <value>` / `… empty` — a runtime grid slot
+            // (Task 34 Part B), not a global variable called "slot".
+            if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "slot")
+                return ParseSetGridSlot(line);
             // `set root motion on` / `off` — the actor's root-motion switch (Task 33 Part D). Another
             // action word, not a global called "root motion", so it goes to the action parser (which
             // also owns the friendly warning for a bare `set root motion`).
@@ -1536,6 +1557,47 @@ namespace Game
             node.Value = ReadValue(words, ref index, line.Line);
             CheckEndOfLine(words, index, line.Line, $"set row {number} of list {node.Thing} to <value>");
             return node;
+        }
+
+        private StatementNode ParseSetGridSlot(BodyLineNode line)
+        {
+            var words = line.Words;
+            const string shape = "set slot 1 of grid BagGrid to Sword";
+            if (words.Count < 7 || words[2].Type != TokenType.Number ||
+                words[3].Type != TokenType.Word || words[3].Text != "of" ||
+                words[4].Type != TokenType.Word || words[4].Text != "grid" ||
+                words[5].Type != TokenType.Word)
+                throw new ParseException($"`set slot` looks like this: `{shape}` or `set slot 3 of grid BagGrid empty`", line.Line);
+            int number = (int)words[2].Number;
+            if (number < 1 || words[2].Number != number)
+                throw new ParseException($"slots are numbered from 1 — `set slot 1 of grid {words[5].Text} to Sword`", line.Line);
+            if (words[6].Type == TokenType.Word && words[6].Text == "empty")
+            {
+                CheckEndOfLine(words, 7, line.Line, $"set slot {number} of grid {words[5].Text} empty");
+                return new SetGridSlotNode { Line = line.Line, Thing = words[5].Text, Index = number, IsEmpty = true };
+            }
+            if (words[6].Type != TokenType.Word || words[6].Text != "to")
+                throw new ParseException($"`set slot` joins the item with `to`, or clears it with `empty` — `{shape}`", line.Line);
+            var node = new SetGridSlotNode { Line = line.Line, Thing = words[5].Text, Index = number };
+            int index = 7;
+            if (index >= words.Count)
+                throw new ParseException($"`set slot {number} of grid {node.Thing}` needs the item after `to`", line.Line);
+            node.Value = ReadValue(words, ref index, line.Line);
+            CheckEndOfLine(words, index, line.Line, $"set slot {number} of grid {node.Thing} to <value>");
+            return node;
+        }
+
+        private StatementNode ParseFillGrid(BodyLineNode line)
+        {
+            var words = line.Words;
+            const string shape = "fill grid BagGrid from my bag";
+            if (words.Count != 6 || words[2].Type != TokenType.Word ||
+                words[3].Type != TokenType.Word || words[3].Text != "from" ||
+                words[4].Type != TokenType.Word || words[4].Text != "my" ||
+                words[5].Type != TokenType.Word || words[5].Text != "bag")
+                throw new ParseException($"`fill grid` looks like this: `{shape}`", line.Line);
+            CheckEndOfLine(words, 6, line.Line, shape);
+            return new FillGridNode { Line = line.Line, Thing = words[2].Text };
         }
 
         private StatementNode ParseFillList(BodyLineNode line)

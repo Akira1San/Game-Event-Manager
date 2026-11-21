@@ -5491,35 +5491,56 @@ namespace Game
             }
         }
 
-        /// <summary>The labels a list fills, in order: `&lt;List&gt;Row1`, `&lt;List&gt;Row2`, … or
-        /// `Row1`, `Row2`, … children of an actor named after the list (Task 34 Part A).</summary>
-        private static void FindListRows(string thing, List<FlaxEngine.GUI.Label> labels, List<Actor> actors)
+        /// <summary>
+        /// The actors a list or grid fills, in order: `&lt;Thing&gt;Row1`, `&lt;Thing&gt;Row2`, … (or
+        /// `Slot1`, … for a grid), or `Row1`, `Row2`, … children of an actor named after the thing
+        /// (Task 34 Parts A and B). A slot with only an icon has no Label, so this collects actors
+        /// rather than labels.
+        /// </summary>
+        private static void FindRowActors(string thing, string prefix, List<Actor> actors)
         {
             Actor container = Level.FindActor(thing);
             if (container != null)
             {
                 for (int index = 1; ; index++)
                 {
-                    Actor row = FindChildNamed(container, "Row" + index);
-                    var label = LabelOn(row);
-                    if (label == null)
+                    Actor row = FindChildNamed(container, prefix + index);
+                    if (row == null)
                         break;
-                    labels.Add(label);
                     actors.Add(row);
                 }
             }
-            if (labels.Count > 0)
+            if (actors.Count > 0)
                 return;
             for (int index = 1; ; index++)
             {
-                string name = thing + "Row" + index;
-                Actor row = Level.FindActor(name);
-                var label = LabelOn(row);
-                if (label == null)
+                Actor row = Level.FindActor(thing + prefix + index);
+                if (row == null)
                     break;
-                labels.Add(label);
                 actors.Add(row);
             }
+        }
+
+        /// <summary>The Image a slot uses as its icon: a child actor named <c>Icon</c>, or the one
+        /// Image child control (Task 34 Part B). The owning actor is returned so an empty slot can
+        /// hide the picture while the slot frame itself stays on screen.</summary>
+        private static FlaxEngine.GUI.Image FindSlotIcon(Actor slot, out Actor iconActor)
+        {
+            iconActor = null;
+            Actor child = FindChildNamed(slot, "Icon");
+            if (child is UIControl childUi && childUi.Control is FlaxEngine.GUI.Image named)
+            {
+                iconActor = child;
+                return named;
+            }
+            var found = new List<UIControl>();
+            CollectControls<FlaxEngine.GUI.Image>(slot, found);
+            if (found.Count == 1 && found[0].Control is FlaxEngine.GUI.Image image)
+            {
+                iconActor = found[0];
+                return image;
+            }
+            return null;
         }
 
         /// <summary>The label a row/slot actor shows: its own Label/Button control, or the one
@@ -5562,26 +5583,74 @@ namespace Game
         /// </summary>
         public static void SetList(string thing, IReadOnlyList<string> rows)
         {
-            var labels = new List<FlaxEngine.GUI.Label>();
             var actors = new List<Actor>();
-            FindListRows(thing, labels, actors);
-            if (labels.Count == 0)
+            FindRowActors(thing, "Row", actors);
+            if (actors.Count == 0)
             {
                 WarnOnce($"I couldn't find the rows for list \u201C{thing}\u201D. Create UIControl actors named \u201C{thing}Row1\u201D, \u201C{thing}Row2\u201D, … with a Label (or \u201CRow1\u201D, \u201CRow2\u201D, … children of an actor named \u201C{thing}\u201D; put them in a scroll panel if the list is long).");
                 return;
             }
-            for (int i = 0; i < labels.Count; i++)
+            for (int i = 0; i < actors.Count; i++)
             {
                 string text = i < rows.Count ? rows[i] ?? "" : "";
                 bool has = text.Length > 0;
-                labels[i].Text = text;
-                labels[i].Visible = has;
-                if (actors[i] != null)
-                    actors[i].IsActive = has;
+                var label = LabelOn(actors[i]);
+                if (label != null)
+                {
+                    label.Text = text;
+                    label.Visible = has;
+                }
+                actors[i].IsActive = has;
             }
-            if (rows.Count > labels.Count)
+            if (rows.Count > actors.Count)
             {
-                WarnOnce($"The list \u201C{thing}\u201D has only {labels.Count} row{(labels.Count == 1 ? "" : "s")}, so the rest of its data is not shown. Add \u201C{thing}Row{labels.Count + 1}\u201D and so on (inside a scroll panel if the list is long).");
+                WarnOnce($"The list \u201C{thing}\u201D has only {actors.Count} row{(actors.Count == 1 ? "" : "s")}, so the rest of its data is not shown. Add \u201C{thing}Row{actors.Count + 1}\u201D and so on (inside a scroll panel if the list is long).");
+            }
+        }
+
+        /// <summary>
+        /// <c>clear grid</c> / <c>set slot</c> / <c>fill grid</c> (Task 34 Part B): paints a runtime
+        /// grid into its authored slots — `BagGridSlot1`, `BagGridSlot2`, … or `Slot1`, `Slot2`, …
+        /// children of an actor called `BagGrid`. The slot frame stays on screen even when the slot
+        /// is empty; its Label blanks and its icon hides, so an empty bag slot still looks like a
+        /// slot and (Part C) never fires a click. Selection highlight is authored with `tween` or
+        /// `set color`, so no word is needed for it.
+        /// </summary>
+        public static void SetGrid(string thing, IReadOnlyList<GridSlot> slots)
+        {
+            var actors = new List<Actor>();
+            FindRowActors(thing, "Slot", actors);
+            if (actors.Count == 0)
+            {
+                WarnOnce($"I couldn't find the slots for grid \u201C{thing}\u201D. Create UIControl actors named \u201C{thing}Slot1\u201D, \u201C{thing}Slot2\u201D, … (or \u201CSlot1\u201D, \u201CSlot2\u201D, … children of an actor named \u201C{thing}\u201D), each with a Label and, optionally, a child Image actor named \u201CIcon\u201D.");
+                return;
+            }
+            for (int i = 0; i < actors.Count; i++)
+            {
+                GridSlot slot = i < slots.Count ? slots[i] : null;
+                string text = slot == null ? "" : slot.Text ?? "";
+                bool has = text.Length > 0;
+                var label = LabelOn(actors[i]);
+                if (label != null)
+                {
+                    label.Text = text;
+                    label.Visible = has;
+                }
+                var icon = FindSlotIcon(actors[i], out Actor iconActor);
+                if (icon != null)
+                {
+                    var texture = has && slot != null && !string.IsNullOrEmpty(slot.Icon)
+                        ? LoadTexture(slot.Icon)
+                        : null;
+                    if (texture != null)
+                        icon.Brush = new FlaxEngine.GUI.TextureBrush { Texture = texture };
+                    if (iconActor != null)
+                        iconActor.IsActive = texture != null;
+                }
+            }
+            if (slots.Count > actors.Count)
+            {
+                WarnOnce($"The grid \u201C{thing}\u201D has only {actors.Count} slot{(actors.Count == 1 ? "" : "s")}, so the rest of its data is not shown. Add \u201C{thing}Slot{actors.Count + 1}\u201D and so on (inside a scroll panel if the grid is long).");
             }
         }
 

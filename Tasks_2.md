@@ -831,8 +831,30 @@ fill them; a later version can create controls. Either way, the event text stays
       `dotnet build Source/Game.csproj -c Editor.Windows.Debug` 0 errors (13 pre-existing doc
       warnings). Editor play-check pending (authored row labels, the scroll panel and a real
       repaint after a hot reload).
-- [ ] **Part B — Grid words.** Clear/set/empty; slot = an image + label; selection highlight via
+- [x] **Part B — Grid words.** Clear/set/empty; slot = an image + label; selection highlight via
       `tween`/`set color`.
+      New engine-free `Runtime/Grids.cs` (`GridManager` / `GridModel` / `GridSlot`) holds each grid's
+      slots as runtime state, so a hot reload keeps them and `SceneStarted` repaints them beside the
+      lists. The four statements are their own nodes: `clear grid <thing>`, `set slot <n> of grid
+      <thing> to <value>`, `set slot <n> of grid <thing> empty` and the same one fill word shape as
+      Part A, `fill grid <thing> from my bag`. Slots are numbered from 1 (a literal 0 is a friendly
+      load-time error, and a line that neither says `to` nor `empty` names both shapes); writing
+      past the end pads empty slots; `empty` clears one slot's text and icon without touching the
+      numbering. A bare item name is kept as written (`to Sword`), while a global that really
+      exists still reads its value (`set Gold to 42` → the slot shows 42); an undefined bare word is
+      never evaluated, so the ordinary “read before set” warning does not fire for an item name.
+      `fill grid` replaces the grid with one slot per bag stack in the bag's stable order, the text
+      carrying the count (`Sword x2`) while the icon keeps the bare name so the picture resolves.
+      Every word raises `OnGridChanged(name, slots)`; `FlaxActions.SetGrid` paints
+      `BagGridSlot1`, `BagGridSlot2`, … or `Slot1`, `Slot2`, … children of an actor named `BagGrid`,
+      keeps the slot frame on screen when the slot is empty (the Label blanks and the optional
+      `Icon` child hides), resolves the icon through the same loose texture index as `set image`
+      with no warning for an item that has no art, and warns once naming the slot to create plus the
+      overflow count. Selection highlight stays authored with `tween` / `set color`, so no word was
+      added for it. Registry + `keywords.html` rows. 20 new checks -> **2416 passed, 0 failed**;
+      `dotnet build Source/Game.csproj -c Editor.Windows.Debug` 0 errors (13 pre-existing doc
+      warnings) and `Flax.Build -target=GameEditorTarget` exits 0. Editor play-check pending (a real
+      grid of authored slots with icons, a selection tint, and a hot reload repaint).
 - [ ] **Part C — Click routing.** Row/slot index → the matching trigger; clicks on empty slots do
       not fire; the row’s value is readable as `my ClickedRow` / `my ClickedSlot`.
 - [ ] **Part D — Tooltips and groups.** Hover text on slots, and `show/hide group <tag>` for whole

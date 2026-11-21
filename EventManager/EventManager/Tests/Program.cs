@@ -14406,6 +14406,170 @@ Check(WordRegistry.All.Any(e => e.Word == "clear list <thing>") &&
       WordRegistry.All.Any(e => e.Word == "fill list <thing> from my bag"),
     "the word book lists all four list words");
 
+// ------------------------------------------------------------------
+// Task 34 Part B: the grid words
+// ------------------------------------------------------------------
+
+// The four shapes each parse into their own statement, not into a variable called "grid" or "slot".
+var gridShapeProg = parser.Parse(@"
+when game starts
+  clear grid BagGrid
+  set slot 1 of grid BagGrid to Sword
+  set slot 3 of grid BagGrid empty
+  fill grid BagGrid from my bag
+");
+Check(gridShapeProg.Events[0].Body[0].Statement is ClearGridNode gridClearNode &&
+      gridClearNode.Thing == "BagGrid",
+    "`clear grid BagGrid` parses to a ClearGridNode");
+Check(gridShapeProg.Events[0].Body[1].Statement is SetGridSlotNode gridSetNode &&
+      gridSetNode.Thing == "BagGrid" && gridSetNode.Index == 1 && !gridSetNode.IsEmpty &&
+      gridSetNode.Value is VariableValue gridSetValue && gridSetValue.Name == "Sword",
+    "`set slot 1 of grid BagGrid to Sword` parses to a SetGridSlotNode with index 1");
+Check(gridShapeProg.Events[0].Body[2].Statement is SetGridSlotNode gridEmptyNode &&
+      gridEmptyNode.Thing == "BagGrid" && gridEmptyNode.Index == 3 && gridEmptyNode.IsEmpty,
+    "`set slot 3 of grid BagGrid empty` parses to a SetGridSlotNode marked empty");
+Check(gridShapeProg.Events[0].Body[3].Statement is FillGridNode gridFillNode &&
+      gridFillNode.Thing == "BagGrid",
+    "`fill grid BagGrid from my bag` parses to a FillGridNode");
+
+// A slot is numbered from 1; 0 is a friendly load-time error rather than a silent no-op.
+string slotZeroError = null;
+try
+{
+    parser.Parse("when game starts\n  set slot 0 of grid BagGrid to Sword\n");
+}
+catch (ParseException error)
+{
+    slotZeroError = error.Message;
+}
+Check(slotZeroError != null && slotZeroError.Contains("from 1"),
+    "`set slot 0` explains that slots are numbered from 1");
+
+// `set slot` joins with `to`, or clears with `empty`; anything else names both shapes.
+string slotShapeError = null;
+try
+{
+    parser.Parse("when game starts\n  set slot 1 of grid BagGrid Sword\n");
+}
+catch (ParseException error)
+{
+    slotShapeError = error.Message;
+}
+Check(slotShapeError != null && slotShapeError.Contains("empty"),
+    "a `set slot` line that neither says `to` nor `empty` explains both shapes");
+
+string fillGridShapeError = null;
+try
+{
+    parser.Parse("when game starts\n  fill grid BagGrid from my bag now\n");
+}
+catch (ParseException error)
+{
+    fillGridShapeError = error.Message;
+}
+Check(fillGridShapeError != null && fillGridShapeError.Contains("fill grid BagGrid from my bag"),
+    "a bent `fill grid` explains its shape");
+
+// The runtime: a bare item name, a variable value, and the bag fill's text/icon split.
+var gridWorld = new FakeWorld();
+var gridEngine = FreshEngine(gridWorld);
+var gridActor = new FakeActor("Player");
+gridWorld.AddActor(gridActor);
+var gridPaints = new Dictionary<string, GridSlot[]>(StringComparer.OrdinalIgnoreCase);
+var gridWarnings = new List<string>();
+gridEngine.OnRuntimeWarning = message => gridWarnings.Add(message);
+gridEngine.OnGridChanged = (name, slots) => gridPaints[name] = System.Linq.Enumerable.ToArray(slots);
+gridEngine.AddSheet(gridActor, parser.Parse(@"
+when game starts
+  add Sword to my bag
+  add Sword to my bag
+  add Potion to my bag
+  set my Quest to ""Find the key""
+  set slot 1 of grid TestGrid to my Quest
+  set slot 2 of grid TestGrid to Sword
+  fill grid BagGrid from my bag
+"));
+gridEngine.SessionStarted();
+gridEngine.Tick(0);
+var testSlots = gridEngine.Grids.SlotsFor("TestGrid");
+Check(testSlots.Count == 2 && testSlots[0].Text == "Find the key",
+    "`set slot … to my Quest` shows the variable's value");
+Check(testSlots[1].Text == "Sword" && testSlots[1].Icon == "Sword",
+    "a bare `to Sword` keeps the item name even though no variable called Sword exists");
+var bagSlots = gridEngine.Grids.SlotsFor("BagGrid");
+Check(bagSlots.Count == 2 && bagSlots[0].Text == "Potion" &&
+      bagSlots[1].Text == "Sword x2" && bagSlots[1].Icon == "Sword",
+    "`fill grid BagGrid from my bag` is one slot per stack, the icon keeping the bare name");
+Check(gridEngine.Grids.SlotsFor("baggrid").Count == 2,
+    "grid names are matched case-insensitively, like actor names");
+Check(gridPaints.TryGetValue("BagGrid", out GridSlot[] paintedGrid) && paintedGrid.Length == 2 &&
+      paintedGrid[1].Text == "Sword x2",
+    "every grid word repaints the whole grid, so the bridge always has the current slots");
+Check(gridWarnings.Count == 0,
+    "well-formed grid words warn nothing — a bare `to Sword` is not an unset variable read");
+
+// Padding and empty slots: writing past the end keeps the numbering, `empty` clears one slot,
+// and a defined global still reads its value where an undefined word keeps its name.
+var gridPadEngine = FreshEngine(new FakeWorld());
+gridPadEngine.AddSheet(new FakeActor("Player"), parser.Parse(@"
+when game starts
+  set Gold to 42
+  set slot 1 of grid G to Gold
+  set slot 2 of grid G to ""B""
+  set slot 4 of grid G empty
+"));
+gridPadEngine.SessionStarted();
+gridPadEngine.Tick(0);
+var paddedSlots = gridPadEngine.Grids.SlotsFor("G");
+Check(paddedSlots.Count == 4 && paddedSlots[0].Text == "42" &&
+      paddedSlots[1].Text == "B" && paddedSlots[2].Text == "" && paddedSlots[3].Text == "",
+    "`set slot` past the end pads empty slots, and a defined global reads its value (42)");
+Check(paddedSlots[3].Icon == "",
+    "`set slot … empty` clears the icon as well as the text");
+
+// `clear grid` empties, and refilling from an empty bag leaves no stale slots.
+var gridClearEngine = FreshEngine(new FakeWorld());
+gridClearEngine.AddSheet(new FakeActor("Player"), parser.Parse(@"
+when game starts
+  set slot 1 of grid C to ""Stale""
+  clear grid C
+  set slot 1 of grid E to ""Stale""
+  fill grid E from my bag
+"));
+gridClearEngine.SessionStarted();
+gridClearEngine.Tick(0);
+Check(gridClearEngine.Grids.CountOf("C") == 0,
+    "`clear grid` forgets every slot");
+Check(gridClearEngine.Grids.CountOf("E") == 0,
+    "`fill grid … from my bag` replaces the grid, so an empty bag leaves no stale slots");
+
+// A hot reload keeps the slots, and a new scene repaints them.
+var gridReloadEngine = FreshEngine(new FakeWorld());
+var gridReloadActor = new FakeActor("Player");
+gridReloadEngine.AddSheet(gridReloadActor, parser.Parse("when game starts\n  set slot 1 of grid G to \"A\"\n"));
+gridReloadEngine.SessionStarted();
+gridReloadEngine.Tick(0);
+var gridReloadSheet = gridReloadEngine.FindSheetFor(gridReloadActor);
+gridReloadEngine.SwapSheetProgram(gridReloadSheet, parser.Parse("when game starts\n  set slot 1 of grid G to \"B\"\n"));
+Check(gridReloadEngine.Grids.CountOf("G") == 1 &&
+      gridReloadEngine.Grids.SlotsFor("G")[0].Text == "A",
+    "a hot reload keeps the last filled slots (the new `when game starts` never ran)");
+GridSlot[] gridRepaint = null;
+gridReloadEngine.OnGridChanged = (name, slots) =>
+{
+    if (string.Equals(name, "G", StringComparison.OrdinalIgnoreCase))
+        gridRepaint = System.Linq.Enumerable.ToArray(slots);
+};
+gridReloadEngine.SceneStarted("");
+Check(gridRepaint != null && gridRepaint.Length == 1 && gridRepaint[0].Text == "A",
+    "a scene that authors the slots repaints the grid the runtime already has");
+
+Check(WordRegistry.All.Any(e => e.Word == "clear grid <thing>") &&
+      WordRegistry.All.Any(e => e.Word == "set slot <n> of grid <thing> to <value>") &&
+      WordRegistry.All.Any(e => e.Word == "set slot <n> of grid <thing> empty") &&
+      WordRegistry.All.Any(e => e.Word == "fill grid <thing> from my bag"),
+    "the word book lists all four grid words");
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);

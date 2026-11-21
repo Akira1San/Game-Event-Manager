@@ -368,6 +368,9 @@ namespace Game
         /// <summary>The runtime lists behind `clear list` / `add row` / `set row` / `fill list`
         /// (Task 34 Part A). The rows survive a hot reload and a scene change.</summary>
         public ListManager Lists = new ListManager();
+        /// <summary>The runtime grids behind `clear grid` / `set slot` / `fill grid`
+        /// (Task 34 Part B). The slots survive a hot reload and a scene change.</summary>
+        public GridManager Grids = new GridManager();
 
         /// <summary>The global `my cursor` reads and `when cursor changes` watches (Task 48
         /// Part E). The bridge writes the resolved name here every frame.</summary>
@@ -474,6 +477,9 @@ namespace Game
         /// when a scene loads (Task 34 Part A). The rows are the argument, so the bridge needs no
         /// sheet context and a scene that authors no rows simply warns once.</summary>
         public Action<string, IReadOnlyList<string>> OnListChanged = (name, rows) => { };
+        /// <summary>Paint one runtime grid into the scene's authored slots after a grid word, and
+        /// when a scene loads (Task 34 Part B).</summary>
+        public Action<string, IReadOnlyList<GridSlot>> OnGridChanged = (name, slots) => { };
 
         private readonly List<SheetInstance> sheets = new List<SheetInstance>();
         private readonly HashSet<string> warnedLines = new HashSet<string>();
@@ -682,6 +688,10 @@ namespace Game
             // before it loaded (Task 34 Part A).
             foreach (string listName in Lists.Names())
                 OnListChanged(listName, Lists.RowsFor(listName));
+            // Grids repaint the same way, so a bag window comes back after a scene change
+            // (Task 34 Part B).
+            foreach (string gridName in Grids.Names())
+                OnGridChanged(gridName, Grids.SlotsFor(gridName));
         }
 
         /// <summary>Pushes <c>when scene starts</c> to the sheets of the actors that just arrived
@@ -2451,6 +2461,18 @@ namespace Game
                 {
                     ExecuteFillList(context, fillList);
                 }
+                else if (statement is ClearGridNode clearGrid)
+                {
+                    ExecuteClearGrid(clearGrid);
+                }
+                else if (statement is SetGridSlotNode setGridSlot)
+                {
+                    ExecuteSetGridSlot(context, setGridSlot);
+                }
+                else if (statement is FillGridNode fillGrid)
+                {
+                    ExecuteFillGrid(context, fillGrid);
+                }
                 // Task 51 Part A: `expect` evaluates its parsed condition against the running
                 // case; `pass` closes the current case as passed. Both are no-ops (with a
                 // friendly warning) when no case is currently running.
@@ -2749,6 +2771,77 @@ namespace Game
             }
             Lists.Fill(node.Thing, values);
             OnListChanged(node.Thing, Lists.RowsFor(node.Thing));
+        }
+
+        /// <summary><c>clear grid &lt;thing&gt;</c> — Task 34 Part B. Empties every slot; the
+        /// bridge paints the authored slots empty but keeps their frames on screen.</summary>
+        private void ExecuteClearGrid(ClearGridNode node)
+        {
+            Grids.Clear(node.Thing);
+            OnGridChanged(node.Thing, Grids.SlotsFor(node.Thing));
+        }
+
+        /// <summary>
+        /// <c>set slot &lt;n&gt; of grid &lt;thing&gt; to &lt;value&gt;</c> / <c>… empty</c> —
+        /// Task 34 Part B. Writing past the end pads empty slots. A bare item name is kept as
+        /// written, like <c>set image of</c>: `to Sword` names the item even though no variable
+        /// called `Sword` exists, while a global that does exist still reads its value.
+        /// </summary>
+        private void ExecuteSetGridSlot(EventContext context, SetGridSlotNode node)
+        {
+            if (node.IsEmpty)
+            {
+                if (!Grids.Empty(node.Thing, node.Index))
+                {
+                    OnRuntimeWarning($"slots are numbered from 1 — `set slot {node.Index} of grid {node.Thing} empty` was ignored.");
+                    return;
+                }
+            }
+            else
+            {
+                // `to Sword` names an item even though no variable called `Sword` exists, while
+                // `to Gold` still reads a Gold that was really set. An undefined bare word is kept
+                // as written without evaluating it, so the ordinary "read before set" warning
+                // never fires for a slot that simply shows an item's name.
+                string text;
+                if (node.Value is VariableValue bare && bare.Owner.Length == 0 &&
+                    !context.Variables.HasGlobal(bare.Name))
+                {
+                    text = bare.Name;
+                }
+                else
+                {
+                    text = context.Evaluate(node.Value).AsText();
+                }
+                if (!Grids.Set(node.Thing, node.Index, text, text))
+                {
+                    OnRuntimeWarning($"slots are numbered from 1 — `set slot {node.Index} of grid {node.Thing}` was ignored.");
+                    return;
+                }
+            }
+            OnGridChanged(node.Thing, Grids.SlotsFor(node.Thing));
+        }
+
+        /// <summary>
+        /// <c>fill grid &lt;thing&gt; from my bag</c> — Task 34 Part B's fill word. One slot per
+        /// carried stack in the bag's stable order, the text carrying the count (`Sword x2`) while
+        /// the icon keeps the bare name, so the picture still resolves. Replaces the grid, so an
+        /// empty bag leaves no stale slots.
+        /// </summary>
+        private void ExecuteFillGrid(EventContext context, FillGridNode node)
+        {
+            var slots = new List<GridSlot>();
+            foreach (string name in BagNames(context.Me))
+            {
+                int count = BagCount(context.Me, name);
+                slots.Add(new GridSlot
+                {
+                    Text = count > 1 ? name + " x" + count : name,
+                    Icon = name,
+                });
+            }
+            Grids.Fill(node.Thing, slots);
+            OnGridChanged(node.Thing, Grids.SlotsFor(node.Thing));
         }
 
         /// <summary>

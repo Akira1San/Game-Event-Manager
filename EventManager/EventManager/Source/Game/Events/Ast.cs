@@ -186,6 +186,31 @@ namespace Game
         public string Thing = "";
     }
 
+    /// <summary><c>clear grid &lt;thing&gt;</c> — empties a runtime grid, leaving its authored
+    /// slots on screen but empty (Task 34 Part B).</summary>
+    public class ClearGridNode : StatementNode
+    {
+        public string Thing = "";
+    }
+
+    /// <summary><c>set slot &lt;n&gt; of grid &lt;thing&gt; to &lt;value&gt;</c> or <c>… empty</c> —
+    /// writes one slot (Task 34 Part B).</summary>
+    public class SetGridSlotNode : StatementNode
+    {
+        public string Thing = "";
+        public int Index;
+        public ValueNode Value = new TextValue();
+        /// <summary><c>set slot 3 of grid BagGrid empty</c>: clear the text and the icon.</summary>
+        public bool IsEmpty;
+    }
+
+    /// <summary><c>fill grid &lt;thing&gt; from my bag</c> — replaces the grid with one slot per
+    /// carried item, a count when there is more than one (Task 34 Part B).</summary>
+    public class FillGridNode : StatementNode
+    {
+        public string Thing = "";
+    }
+
     /// <summary><c>clear dialogue</c> — dismisses what this sheet's dialogue is showing: the line
     /// being typed (without answering `when text finishes`), its choices and its speaker
     /// (Task 35 Part D). The backlog is history, so it is left alone.</summary>
