@@ -1,0 +1,10 @@
+# ---------------- SelfTest_Dummy.events (Task 51 Part C) ----------------
+# The `Dummy` actor in SelfTest.scene: a target for `me sees` / `me stops seeing` and for the
+# `send message` routing case. It lives in its own file so the dummy never registers a copy of
+# the runner's cases — every `when` block with an `expect` is a case, and this sheet has none.
+
+when me appears
+  set PingCount to 0
+
+when message "ping" arrives
+  add 1 to PingCount

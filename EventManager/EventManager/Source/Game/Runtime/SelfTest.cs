@@ -45,6 +45,29 @@ namespace Game
 
         public static void Register(CaseRecord c) => Cases.Add(c);
 
+        /// <summary>How many cases settled as skipped in this round.</summary>
+        public static int SkippedCount()
+        {
+            int skipped = 0;
+            foreach (var c in Cases)
+                if (c.State == CaseState.Skipped)
+                    skipped++;
+            return skipped;
+        }
+
+        /// <summary>Starts a fresh self-test round. The state above is static, so the editor's
+        /// second Play would otherwise report the first run's cases and never raise
+        /// `when self test ends` again (Task 51 Part C). The manager calls this once when a
+        /// scene boots, before any sheet registers, so an ordinary play is unaffected.</summary>
+        public static void Reset()
+        {
+            Cases.Clear();
+            TestPassed = 0;
+            TestFailed = 0;
+            TimeoutSeconds = 5.0;
+            SelfTestEndsRaises = 0;
+        }
+
         public static void Pass(CaseRecord c)
         {
             if (c.State != CaseState.Passed && c.State != CaseState.Failed)

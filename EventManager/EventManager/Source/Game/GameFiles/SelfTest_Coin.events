@@ -1,0 +1,9 @@
+# ---------------- SelfTest_Coin.events (Task 51 Part C) ----------------
+# The inactive `SelfTest_Coin` template in SelfTest.scene. `spawn SelfTest_Coin at SpawnPoint`
+# clones it, the clone's own sheet runs (`when me appears` is per clone), and it cleans itself up
+# so a second Play of the scene starts from an empty world.
+
+when me appears
+  set CoinSpawned to 1
+  wait 0.3 seconds
+  destroy me

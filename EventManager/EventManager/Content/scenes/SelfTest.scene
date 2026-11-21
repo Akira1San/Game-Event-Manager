@@ -1,0 +1,554 @@
+{
+	"ID": "5e1f0000000000000000000000000001",
+	"TypeName": "FlaxEngine.SceneAsset",
+	"EngineBuild": 7012,
+	"Data": [
+		{
+			"ID": "5e1f0000000000000000000000000001",
+			"TypeName": "FlaxEngine.Scene",
+			"LightmapSettings": {
+				"IndirectLightingIntensity": 1.0,
+				"GlobalObjectsScale": 1.0,
+				"ChartsPadding": 3,
+				"AtlasSize": 1024,
+				"BounceCount": 1,
+				"CompressLightmaps": true,
+				"UseGeometryWithNoMaterials": true,
+				"Quality": 10
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000002",
+			"TypeName": "FlaxEngine.DirectionalLight",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "Sun",
+			"Transform": {
+				"Translation": {
+					"X": 40.0,
+					"Y": 160.0,
+					"Z": 0.0
+				},
+				"Orientation": {
+					"X": 0.3826834559440613,
+					"Y": 0.0,
+					"Z": 0.0,
+					"W": 0.9238795042037964
+				}
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000003",
+			"TypeName": "FlaxEngine.Sky",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "Sky",
+			"Transform": {
+				"Translation": {
+					"X": 40.0,
+					"Y": 150.0,
+					"Z": 0.0
+				}
+			},
+			"Sun": "5e1f0000000000000000000000000002"
+		},
+		{
+			"ID": "5e1f0000000000000000000000000004",
+			"TypeName": "FlaxEngine.SkyLight",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "SkyLight",
+			"Brightness": 2.5,
+			"CustomTexture": "c54410104ff39427bc11e5bc761d66b0"
+		},
+		{
+			"ID": "5e1f0000000000000000000000000005",
+			"TypeName": "FlaxEngine.Camera",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "Camera",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 516.66796875,
+					"Z": -438.3500671386719
+				},
+				"Orientation": {
+					"X": 0.4625765383243561,
+					"Y": 0.0,
+					"Z": 0.0,
+					"W": 0.8865793943405151
+				}
+			},
+			"FOV": 70.0
+		},
+		{
+			"ID": "5e1f0000000000000000000000000006",
+			"TypeName": "FlaxEngine.AudioListener",
+			"ParentID": "5e1f0000000000000000000000000005",
+			"Name": "Audio Listener"
+		},
+		{
+			"ID": "5e1f0000000000000000000000000007",
+			"TypeName": "FlaxEngine.UICanvas",
+			"ParentID": "5e1f0000000000000000000000000005",
+			"Name": "UICanvas",
+			"Transform": {
+				"Orientation": {
+					"X": 1.0,
+					"Y": 4.371138828673793e-8,
+					"Z": 4.371138828673793e-8,
+					"W": 1.910685465164705e-15
+				}
+			},
+			"V": {}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000008",
+			"TypeName": "FlaxEngine.UIControl",
+			"ParentID": "5e1f0000000000000000000000000007",
+			"Name": "ResultLabel",
+			"Control": "FlaxEngine.GUI.Label",
+			"Data": {
+				"Text": "Self test — waiting",
+				"CaseOption": 0,
+				"Bold": true,
+				"Italic": false,
+				"TextColor": {
+					"R": 1.0,
+					"G": 1.0,
+					"B": 1.0,
+					"A": 1.0
+				},
+				"TextColorHighlighted": {
+					"R": 1.0,
+					"G": 1.0,
+					"B": 1.0,
+					"A": 1.0
+				},
+				"HorizontalAlignment": 1,
+				"VerticalAlignment": 1,
+				"Wrapping": 0,
+				"BaseLinesGapScale": 1.0,
+				"Font": {
+					"Font": "4508d98f4aa1f0bd59362b81d47e38f4",
+					"Size": 24.0
+				},
+				"Material": null,
+				"Margin": {
+					"Left": 0.0,
+					"Right": 0.0,
+					"Top": 0.0,
+					"Bottom": 0.0
+				},
+				"ClipText": false,
+				"AutoWidth": false,
+				"AutoHeight": false,
+				"AutoFitText": false,
+				"AutoFitTextRange": {
+					"X": 0.1,
+					"Y": 100.0
+				},
+				"ClipChildren": true,
+				"CullChildren": true,
+				"AnchorMin": {
+					"X": 0.0,
+					"Y": 0.0
+				},
+				"AnchorMax": {
+					"X": 0.0,
+					"Y": 0.0
+				},
+				"Offsets": {
+					"Left": 20.0,
+					"Right": 620.0,
+					"Top": 20.0,
+					"Bottom": 60.0
+				},
+				"Scale": {
+					"X": 1.0,
+					"Y": 1.0
+				},
+				"Pivot": {
+					"X": 0.5,
+					"Y": 0.5
+				},
+				"Shear": {
+					"X": 0.0,
+					"Y": 0.0
+				},
+				"Rotation": 0.0,
+				"BackgroundColor": {
+					"R": 0.0,
+					"G": 0.0,
+					"B": 0.0,
+					"A": 0.0
+				},
+				"BackgroundBrush": null,
+				"Enabled": true,
+				"Visible": true,
+				"AutoFocus": false
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000010",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "Floor",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": -10.0,
+					"Z": 0.0
+				},
+				"Scale": {
+					"X": 40.0,
+					"Y": 0.2,
+					"Z": 40.0
+				}
+			},
+			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "1771b53343d461faacdf2c8581b1fdbb",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000011",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "5e1f0000000000000000000000000010",
+			"Name": "Box Collider",
+			"Size": {
+				"X": 4000.0,
+				"Y": 20.0,
+				"Z": 4000.0
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000020",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "GameManager"
+		},
+		{
+			"ID": "5e1f0000000000000000000000000021",
+			"TypeName": "Game.EventsManager",
+			"ParentID": "5e1f0000000000000000000000000020",
+			"V": {
+				"Runtime": {
+					"Variables": {
+						"OnWarning": {}
+					},
+					"World": {
+						"$type": "Game.DefaultEventWorld, Game.CSharp"
+					}
+				},
+				"ContactMode": 1
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000030",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "Player",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 125.0,
+					"Z": 0.0
+				}
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000031",
+			"TypeName": "FlaxEngine.CharacterController",
+			"ParentID": "5e1f0000000000000000000000000030",
+			"Radius": 50.0,
+			"Height": 150.0,
+			"StepOffset": 30.0,
+			"SlopeLimit": 45.0
+		},
+		{
+			"ID": "5e1f0000000000000000000000000032",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "5e1f0000000000000000000000000030",
+			"V": {
+				"EventFile": "SelfTest",
+				"SelfTestSheet": true,
+				"UsePhysicsMovement": true,
+				"ConfigureCharacterBody": true,
+				"CharacterRadius": 50.0,
+				"CharacterHeight": 150.0,
+				"CharacterStepOffset": 30.0,
+				"CharacterSlopeLimit": 45.0,
+				"CharacterGroundCheckDistance": 10.0
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000040",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "StartPad",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 125.0,
+					"Z": 0.0
+				}
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000041",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "JumpPad",
+			"Transform": {
+				"Translation": {
+					"X": 400.0,
+					"Y": 125.0,
+					"Z": 0.0
+				}
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000042",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "Marker",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 125.0,
+					"Z": 200.0
+				}
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000043",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "WatchPoint",
+			"Transform": {
+				"Translation": {
+					"X": -600.0,
+					"Y": 125.0,
+					"Z": 0.0
+				}
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000044",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "FarAway",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 125.0,
+					"Z": 2000.0
+				}
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000045",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "LadderFoot",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 125.0,
+					"Z": 600.0
+				}
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000046",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "Ladder",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 0.0,
+					"Z": 640.0
+				}
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000047",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "5e1f0000000000000000000000000046",
+			"Name": "Box Collider",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 150.0,
+					"Z": 0.0
+				}
+			},
+			"Size": {
+				"X": 20.0,
+				"Y": 300.0,
+				"Z": 20.0
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000048",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "CheckpointA",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 125.0,
+					"Z": -600.0
+				}
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000049",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "5e1f0000000000000000000000000048",
+			"Name": "Box Collider",
+			"IsTrigger": true,
+			"Size": {
+				"X": 200.0,
+				"Y": 200.0,
+				"Z": 200.0
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000050",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "TouchPad",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 125.0,
+					"Z": -200.0
+				}
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000051",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "5e1f0000000000000000000000000050",
+			"Name": "Box Collider",
+			"IsTrigger": true,
+			"Size": {
+				"X": 200.0,
+				"Y": 200.0,
+				"Z": 200.0
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000052",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "SpawnPoint",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 125.0,
+					"Z": 800.0
+				}
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000053",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "BreakPoint",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 125.0,
+					"Z": -800.0
+				}
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000054",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "Dummy",
+			"Transform": {
+				"Translation": {
+					"X": 600.0,
+					"Y": 125.0,
+					"Z": 0.0
+				}
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000055",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "5e1f0000000000000000000000000054",
+			"Name": "Box Collider",
+			"Size": {
+				"X": 100.0,
+				"Y": 200.0,
+				"Z": 100.0
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000056",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "5e1f0000000000000000000000000054",
+			"V": {
+				"EventFile": "SelfTest_Dummy"
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000057",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"Name": "Breakable",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 125.0,
+					"Z": -800.0
+				}
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000058",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "5e1f0000000000000000000000000057",
+			"Name": "Box Collider",
+			"IsTrigger": true,
+			"Size": {
+				"X": 200.0,
+				"Y": 200.0,
+				"Z": 200.0
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000060",
+			"TypeName": "FlaxEngine.EmptyActor",
+			"ParentID": "5e1f0000000000000000000000000001",
+			"IsActive": false,
+			"Name": "SelfTest_Coin",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": -500.0,
+					"Z": 0.0
+				}
+			}
+		},
+		{
+			"ID": "5e1f0000000000000000000000000061",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "5e1f0000000000000000000000000060",
+			"V": {
+				"EventFile": "SelfTest_Coin"
+			}
+		}
+	]
+}

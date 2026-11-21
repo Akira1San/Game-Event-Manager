@@ -2355,9 +2355,26 @@ once Task 28 lands. Task 36 Part G's five-step platformer check becomes five cas
       `self test timeout <n> seconds`), SKIP detection for gates that never open, warning capture,
       `TestPassed`/`TestFailed` globals, `when self test ends`, and one console line per case in
       sheet order. Deterministic: no `random` in a case unless the seed is fixed by `Rng.Seed`.
-- [ ] **Part C — `SelfTest.scene` + `SelfTest.events`.** The props, the actor, the `Self Test` flag,
+- [x] **Part C — `SelfTest.scene` + `SelfTest.events`.** The props, the actor, the `Self Test` flag,
       the `ResultLabel`, and the first case set (the coverage list above). Written so a reader can
-      learn the language from it — it is a documentation artefact as much as a test.
+      learn the language from it — it is a documentation artefact as much as a test. Shipped:
+      `Content/scenes/SelfTest.scene` (authored JSON: Player with a CharacterController +
+      `EventSheet SelfTest` and *Self Test* ticked, the pads/markers/ladder/checkpoint/dummy/breakable
+      props, the inactive `SelfTest_Coin` template, `ResultLabel`, one `EventsManager`),
+      `GameFiles/SelfTest.events` (13 cases: variables, timers/`wait`, variable edges, `goto`
+      arrival, message routing, contact enter-edge, `sees`/`stops seeing`, jump, ladder, checkpoint
+      save + `CheckpointSaved` gate, `respawn at`, spawn + clone sheet, `destroy`; cases are chained
+      by `send message "case N" to me` so one body runs at a time), plus the two small helper sheets
+      `SelfTest_Dummy.events` and `SelfTest_Coin.events`. Eight cases are tagged `(editor only)` —
+      that is the documented Part D list. Three small runtime additions the run needed: the
+      `EventSheet` *Self Test* flag (with the `SelfTest.events` filename convention) exposed as
+      `SheetInstance.IsSelfTest`; `SelfTest.Reset()` called once from `EventsManager.OnStart`, so a
+      second Play reports only itself instead of the previous run's cases; and one
+      `self test: PASS n / FAIL n / SKIP n` summary line after the per-case report. 8 new checks in
+      the suite -> **2342 passed, 0 failed**; `dotnet build Source/Game.csproj` 0 warnings/0 errors
+      and `Flax.Build -target=GameEditorTarget` exits 0. The editor Play itself (the actual move,
+      jump and ladder look) is still the user's run — nothing in this part watched the scene play.
+      Editor-only cases have no fake-world assertions yet; that is Part D.
 - [ ] **Part D — The headless tier.** `Tests/Program.cs` runs the shipped file through the pure
       runner against a fake world, asserts the exact case count and the PASS/FAIL split, and fails
       the suite on any `FAIL`. A `(editor only)` tag marks the cases the fake world cannot reach; a

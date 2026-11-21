@@ -255,6 +255,10 @@ namespace Game
         /// <summary>Opt-in (EventSheet "Use Physics Movement"): move through the actor's
         /// body instead of assigning Position. Off = the normal transform path.</summary>
         public bool UsePhysicsMovement;
+        /// <summary>Set by the EventSheet "Self Test" flag (or a sheet named `SelfTest`): this
+        /// file is the project's self-test sheet (Task 51 Part C). Case discovery still comes
+        /// from the `expect` lines, so the marker never changes how an ordinary sheet runs.</summary>
+        public bool IsSelfTest;
         /// <summary>Which local player this sheet belongs to (1 or 2, from the actor name), or 0
         /// for a sheet that is not a player and reads physical keys globally.</summary>
         public int Player;
@@ -520,7 +524,7 @@ namespace Game
             return AddSheet(actor, program, actor == null ? "" : actor.ToString());
         }
 
-        public SheetInstance AddSheet(object actor, ProgramFile program, string sourceName)
+        public SheetInstance AddSheet(object actor, ProgramFile program, string sourceName, bool selfTest = false)
         {
             string actorName = World.NameOf(actor);
             var sheet = new SheetInstance
@@ -529,6 +533,7 @@ namespace Game
                 ActorName = actorName,
                 Player = Players.TryReadNumber(actorName, out int playerNumber) ? playerNumber : 0,
                 SourceName = sourceName ?? "",
+                IsSelfTest = selfTest,
                 Program = program,
                 AnchorTime = Time,
             };
@@ -1802,6 +1807,9 @@ namespace Game
                         break;
                 }
             }
+            // The count the play-check reads: one line, after the case lines, so "PASS 12 /
+            // FAIL 1" is the answer to the editor run rather than something to tally by hand.
+            Console.WriteLine($"self test: PASS {SelfTest.TestPassed} / FAIL {SelfTest.TestFailed} / SKIP {SelfTest.SkippedCount()}");
         }
 
         /// <summary>

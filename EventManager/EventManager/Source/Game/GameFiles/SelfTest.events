@@ -1,0 +1,263 @@
+# ---------------- SelfTest.events (Task 51 Part C) ----------------
+# The project's self-test sheet: ordinary events that drive the game and assert what happened,
+# so a mechanic's play-check is one run that prints PASS/FAIL/SKIP per case and a count, instead
+# of "open the editor, hold W, and look".
+#
+# SETUP (editor) — `Content/scenes/SelfTest.scene` is the authored scene:
+#   1. Player: a CharacterController with an EventSheet whose Event File is `SelfTest`, standing
+#      on the Floor. Tick "Use Physics Movement" and "Configure Character Body"; the sheet reads
+#      `me is on ground` through the controller's own probe. "Self Test" is ticked too (the
+#      filename convention would mark it anyway).
+#   2. Props, all empty actors (positions in the scene): StartPad, JumpPad, Marker, TouchPad,
+#      WatchPoint, FarAway, LadderFoot, Ladder, CheckpointA, SpawnPoint, BreakPoint, Dummy and
+#      Breakable (both with a BoxCollider — Dummy's is solid so `me sees` can ray-cast to it,
+#      Breakable's is a trigger). `SelfTest_Coin` is an inactive template for `spawn`.
+#   3. ResultLabel in a UICanvas: the bind at the bottom shows the two counters, so the answer is
+#      readable in-game as well as in the console.
+#   4. One EventsManager on GameManager, as every scene needs.
+#
+# THE WORDS — four of them, and a case is a block:
+#   test "<label>"   names the case; without it the case is `case 1`, `case 2`, … by block order.
+#   expect <condition>  asserts any condition the language already accepts (`is`, `is not`,
+#                    `higher than`, `near`, `exists`, `does not exist`, `has tag`, …). It is
+#                    parsed by Conditions.Parse, so there is no second comparison grammar.
+#   pass             closes the case as passed. A case without `pass` still passes when its body
+#                    runs to the end — `pass` is how a reader sees the case end.
+#   when self test ends   one summary hook, raised once after every case has settled.
+# A false `expect` fails the case, prints the expectation's own text, and keeps running the body
+# (so the chain below still reaches the later cases). A case whose gate never opens is SKIP, never
+# PASS. `self test timeout <n> seconds` raises the 5 s deadline; a stuck case quotes its last line.
+#
+# WHY THE MESSAGES: every case must run one at a time, and a case is a block, not a sequencer. The
+# first case opens on `me appears`; each case ends by sending the next case's message to itself, so
+# the blocks read top to bottom and a wait in one case can never overlap the next. Cases tagged
+# "(editor only)" need real physics/ray-casts and are the documented editor tier (Task 51 Part D);
+# everything else also runs in the headless suite against the fake world.
+#
+# `expect count of …` (Task 28) is not in the language yet, so the first sheet has no case for it.
+
+# --- the counter the timer case reads --------------------------------------
+when every 0.25 seconds
+  add 1 to my Ticks
+
+# =========================================================================
+# CASE 1 — variables and set/add
+# =========================================================================
+when me appears
+  test "variables and set/add"
+  self test timeout 8 seconds
+  set my Count to 2
+  add 1 to my Count
+  expect my Count is 3
+  pass
+  send message "case 2" to me
+
+# =========================================================================
+# CASE 2 — timers and wait
+# =========================================================================
+when message "case 2" arrives
+  test "timers and wait"
+  set my Ticks to 0
+  wait 0.7 seconds
+  expect my Ticks is higher than 1
+  pass
+  send message "case 3" to me
+
+# =========================================================================
+# CASE 3 — variables and edges: `becomes` fires on the edge, not every tick
+# =========================================================================
+when my Count becomes 3
+  add 1 to my EdgeHits
+
+when message "case 3" arrives
+  test "an edge fires once, not per tick"
+  set my EdgeHits to 0
+  set my Count to 0
+  add 1 to my Count
+  add 1 to my Count
+  add 1 to my Count
+  wait 0.5 seconds
+  expect my EdgeHits is 1
+  pass
+  send message "case 4" to me
+
+# =========================================================================
+# CASE 4 — movement and `goto` arrival
+# =========================================================================
+when me arrives at Marker
+  set my Arrived to 1
+
+when message "case 4" arrives
+  test "goto arrives at the marker"
+  teleport me to StartPad
+  wait 0.3 seconds
+  set my Arrived to 0
+  set my Speed to 400
+  goto Marker
+  wait 1.4 seconds
+  expect my Arrived is 1
+  expect me is near Marker by 150
+  pass
+  send message "case 5" to me
+
+# =========================================================================
+# CASE 5 — `send message` routing: the dummy's own sheet answers
+# =========================================================================
+when message "case 5" arrives
+  test "message routes to the dummy"
+  set PingCount to 0
+  send message "ping" to Dummy
+  wait 0.3 seconds
+  expect PingCount is 1
+  pass
+  send message "case 6" to me
+
+# =========================================================================
+# CASE 6 — contact is enter-edge, not per-tick
+# =========================================================================
+when me touches TouchPad
+  add 1 to my TouchCount
+
+when message "case 6" arrives
+  test "contact is enter-edge (editor only)"
+  set my TouchCount to 0
+  teleport me to TouchPad
+  wait 0.8 seconds
+  expect my TouchCount is 1
+  teleport me to StartPad
+  wait 0.3 seconds
+  pass
+  send message "case 7" to me
+
+# =========================================================================
+# CASE 7 — `sees` / `stops seeing` edges
+# =========================================================================
+when me sees Dummy by 900
+  set my Seen to 1
+
+when me stops seeing Dummy
+  set my LostSight to 1
+
+when message "case 7" arrives
+  test "sees then stops seeing (editor only)"
+  teleport me to FarAway
+  wait 0.5 seconds
+  set my Seen to 0
+  set my LostSight to 0
+  teleport me to WatchPoint
+  wait 0.6 seconds
+  expect my Seen is 1
+  teleport me to FarAway
+  wait 0.6 seconds
+  expect my LostSight is 1
+  pass
+  send message "case 8" to me
+
+# =========================================================================
+# CASE 8 — jump: take-off, then landing (the airborne gate also refuses a double jump)
+# =========================================================================
+when message "case 8" arrives
+  test "jump takes off and lands (editor only)"
+  teleport me to JumpPad
+  wait 0.5 seconds
+  expect me is on ground
+  jump strength 420
+  wait 0.15 seconds
+  expect me is airborne
+  wait 1.5 seconds
+  expect me is on ground
+  pass
+  send message "case 9" to me
+
+# =========================================================================
+# CASE 9 — ladder: `climb` holds the ascent, then the climb ends and the body lands
+# The 40 cm "do not re-grab at the top" gate is the sheet's own condition, documented in
+# Platformer.events; the language has no "is not near", so that edge stays a visual check.
+# =========================================================================
+when message "case 9" arrives
+  test "ladder climb starts and lands (editor only)"
+  teleport me to LadderFoot
+  wait 0.4 seconds
+  climb Ladder
+  wait 0.4 seconds
+  expect me is climbing
+  wait 2 seconds
+  expect me is on ground
+  pass
+  send message "case 10" to me
+
+# =========================================================================
+# CASE 10 — `save checkpoint` on touch, and the `CheckpointSaved` gate that makes it once
+# =========================================================================
+when me touches CheckpointA
+  my CheckpointSaved is 0
+  save checkpoint
+  set my CheckpointSaved to 1
+  add 1 to my SaveCount
+
+when message "case 10" arrives
+  test "checkpoint saves on touch (editor only)"
+  set my CheckpointSaved to 0
+  set my SaveCount to 0
+  teleport me to CheckpointA
+  wait 0.8 seconds
+  expect my CheckpointSaved is 1
+  expect my SaveCount is 1
+  teleport me to StartPad
+  wait 0.3 seconds
+  teleport me to CheckpointA
+  wait 0.6 seconds
+  expect my SaveCount is 1
+  pass
+  send message "case 11" to me
+
+# =========================================================================
+# CASE 11 — `respawn at` returns the body to the marker
+# =========================================================================
+when message "case 11" arrives
+  test "respawn at returns to the marker (editor only)"
+  teleport me to FarAway
+  wait 0.4 seconds
+  set my Speed to 400
+  goto Marker
+  wait 0.3 seconds
+  respawn at CheckpointA
+  wait 0.4 seconds
+  expect me is near CheckpointA by 80
+  expect me is on ground
+  pass
+  send message "case 12" to me
+
+# =========================================================================
+# CASE 12 — `spawn` clones the template and its own sheet runs
+# =========================================================================
+when message "case 12" arrives
+  test "spawn runs the clone sheet (editor only)"
+  set CoinSpawned to 0
+  spawn SelfTest_Coin at SpawnPoint
+  wait 0.8 seconds
+  expect CoinSpawned is 1
+  pass
+  send message "case 13" to me
+
+# =========================================================================
+# CASE 13 — `destroy` removes the prop (`does not exist` is the readable half)
+# =========================================================================
+when me touches Breakable
+  destroy Breakable
+
+when message "case 13" arrives
+  test "destroy removes the prop (editor only)"
+  teleport me to BreakPoint
+  wait 0.5 seconds
+  expect Breakable does not exist
+  pass
+
+# =========================================================================
+# the summary hook: one line after every case has settled
+# =========================================================================
+when self test ends
+  print "Self test finished: the PASS/FAIL/SKIP lines above are the report."
+
+# The counts, live on screen as well as in the console.
+bind ResultLabel to TestPassed and TestFailed format "Self test — PASS {0} / FAIL {1}"

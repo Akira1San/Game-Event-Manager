@@ -16,6 +16,22 @@ namespace Game
         [Tooltip(".events file name (with or without the extension). Blank = this actor's name.")]
         public string EventFile = "";
 
+        /// <summary>
+        /// Marks this file as the project's self-test sheet (Task 51). The marking is per file,
+        /// not per actor — tick it on the one actor that plays `SelfTest.events`, or rely on the
+        /// filename convention. Cases still come from the `expect` lines, so a sheet without
+        /// them behaves exactly as before.
+        /// </summary>
+        [Tooltip("This .events file is the project's self-test sheet. A file named SelfTest.events is one automatically.")]
+        public bool SelfTestSheet = false;
+
+        /// <summary>True when this component's file is a self-test sheet: the explicit flag, or
+        /// the `SelfTest.events` filename convention.</summary>
+        public bool IsSelfTestSheet()
+        {
+            return SelfTestSheet || string.Equals(SourceName(), "SelfTest", StringComparison.OrdinalIgnoreCase);
+        }
+
         /// <summary>Material → clip-name pairs for <c>play step sound "&lt;material&gt;"</c>
         /// (Task 13 C). E.g. Grass → footstep. The sheet reads these when it starts; changing
         /// them at runtime has no effect until the sheet is re-attached.</summary>

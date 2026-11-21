@@ -188,6 +188,10 @@ namespace Game
                 return;
             }
             Instance = this;
+            // A fresh self-test round per Play (Task 51 Part C). No sheet has registered yet —
+            // components register through `Instance`, which only exists from here on — so this
+            // cannot wipe a case this scene is about to discover.
+            SelfTest.Reset();
             FlaxActions.Warn = FlaxActions.WarnOnce;
             Runtime.World = _world;
             Runtime.PollOverlaps = true; // overlaps is distance-based in every mode
@@ -447,11 +451,13 @@ namespace Game
             Actor actor = component == null ? null : component.Actor;
             if (actor == null)
                 return;
+            bool selfTest = component.IsSelfTestSheet();
             SheetInstance existing = Runtime.FindSheetFor(actor);
             if (existing != null)
             {
                 // Keep the opt-in and step-sound map in sync when a component re-registers
                 // (clone, scene wake).
+                existing.IsSelfTest = selfTest;
                 existing.UsePhysicsMovement = component.UsePhysicsMovement;
                 existing.GroundCheckDistance = component.ReadCharacterBodySettings().GroundCheckDistance;
                 SyncStepSoundMap(existing, component.StepSoundMap);
@@ -470,7 +476,7 @@ namespace Game
                 return;
             }
             _missingShown.Remove(source);
-            SheetInstance sheet = Runtime.AddSheet(actor, program.File, source);
+            SheetInstance sheet = Runtime.AddSheet(actor, program.File, source, selfTest);
             sheet.UsePhysicsMovement = component.UsePhysicsMovement;
             sheet.GroundCheckDistance = component.ReadCharacterBodySettings().GroundCheckDistance;
             SyncStepSoundMap(sheet, component.StepSoundMap);
@@ -503,7 +509,8 @@ namespace Game
             var added = actor.AddScript<EventSheet>();
             if (added == null)
             {
-                Runtime.AddSheet(actor, program.File, source);
+                Runtime.AddSheet(actor, program.File, source,
+                    string.Equals(source, "SelfTest", StringComparison.OrdinalIgnoreCase));
                 return;
             }
             added.EventFile = source;

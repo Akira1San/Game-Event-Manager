@@ -982,6 +982,98 @@ Check(SelfTest.TestPassed == 1 && SelfTest.TestFailed == 1, "one case passes and
 Check(counterEngine.Variables.GetGlobal("TestPassed").AsNumber() == 1, "`TestPassed` is synced to a global");
 Check(counterEngine.Variables.GetGlobal("TestFailed").AsNumber() == 1, "`TestFailed` is synced to a global");
 
+// ------------------------------------------------------------------
+// Task 51 Part C: the shipped self-test sheet and its scene.
+// ------------------------------------------------------------------
+SelfTest.Reset();
+Check(SelfTest.Cases.Count == 0 && SelfTest.TestPassed == 0 && SelfTest.TestFailed == 0 &&
+      SelfTest.SelfTestEndsRaises == 0 && Math.Abs(SelfTest.TimeoutSeconds - 5.0) < 1e-9,
+    "`SelfTest.Reset` clears the static round so a second editor Play reports only itself");
+
+string selfTestEventsPath = "Source/Game/GameFiles/SelfTest.events";
+var selfTestProgram = parser.Parse(File.ReadAllText(selfTestEventsPath));
+var selfTestUnknown = new List<string>();
+var selfTestLabels = new List<string>();
+int selfTestActions = 0;
+foreach (var selfTestEvent in selfTestProgram.Events)
+{
+    bool carriesExpect = false;
+    string selfTestLabel = "";
+    foreach (var selfTestLine in selfTestEvent.Body)
+    {
+        if (selfTestLine.Statement is ExpectNode)
+            carriesExpect = true;
+        if (selfTestLine.Statement is TestNode selfTestTest && selfTestLabel.Length == 0)
+            selfTestLabel = selfTestTest.Label;
+        if (selfTestLine.IsCondition)
+            continue;
+        RawActionNode selfTestRaw = selfTestLine.Statement as RawActionNode;
+        if (selfTestRaw == null)
+            continue;
+        selfTestActions++;
+        string selfTestVerb = selfTestRaw.Words[0].Text;
+        ActionSpec selfTestSpec = ActionWords.Parse(selfTestRaw.Words, null);
+        // `wait`, `print` and `send` are runtime statements handled beside ActionWords, exactly
+        // like the platformer example's own word check.
+        if (selfTestSpec.Verb == ActionVerb.Unknown &&
+            selfTestVerb != "wait" && selfTestVerb != "print" && selfTestVerb != "send")
+            selfTestUnknown.Add(string.Join(" ", selfTestRaw.Words.ConvertAll(word => word.Text)));
+    }
+    if (carriesExpect)
+        selfTestLabels.Add(selfTestLabel);
+}
+if (selfTestUnknown.Count > 0)
+    Console.WriteLine("  first self-test line that is not a shipped word: " + selfTestUnknown[0]);
+Check(selfTestActions > 50 && selfTestUnknown.Count == 0,
+    $"every action line in SelfTest.events is a shipped word ({selfTestActions} lines), so the example cannot drift");
+Check(selfTestLabels.Count == 13 && selfTestLabels[0] == "variables and set/add" &&
+      selfTestLabels[selfTestLabels.Count - 1] == "destroy removes the prop (editor only)",
+    $"SelfTest.events carries the 13 chained cases in order ({selfTestLabels.Count} found)");
+Check(selfTestLabels.IndexOf("contact is enter-edge (editor only)") >= 0 &&
+      selfTestLabels.IndexOf("sees then stops seeing (editor only)") >= 0 &&
+      selfTestLabels.IndexOf("jump takes off and lands (editor only)") >= 0 &&
+      selfTestLabels.IndexOf("ladder climb starts and lands (editor only)") >= 0 &&
+      selfTestLabels.IndexOf("checkpoint saves on touch (editor only)") >= 0 &&
+      selfTestLabels.IndexOf("respawn at returns to the marker (editor only)") >= 0 &&
+      selfTestLabels.IndexOf("spawn runs the clone sheet (editor only)") >= 0 &&
+      selfTestLabels.IndexOf("destroy removes the prop (editor only)") >= 0,
+    "the editor-only cases keep their `(editor only)` tag, the documented Part D list");
+Check(selfTestLabels.IndexOf("variables and set/add") >= 0 &&
+      selfTestLabels.IndexOf("timers and wait") >= 0 &&
+      selfTestLabels.IndexOf("an edge fires once, not per tick") >= 0 &&
+      selfTestLabels.IndexOf("goto arrives at the marker") >= 0 &&
+      selfTestLabels.IndexOf("message routes to the dummy") >= 0,
+    "the headless-safe cases are present and untagged");
+Check(string.Join(",", selfTestLabels.FindAll(l => l.Length == 0)) == "",
+    "every self-test case carries a `test` label");
+
+// The scene is authored JSON; these checks keep the sheet's actor names and the Self Test flag
+// from drifting away from the file the suite just parsed.
+string selfTestScenePath = "Content/scenes/SelfTest.scene";
+string selfTestScene = File.ReadAllText(selfTestScenePath);
+Check(selfTestScene.Contains("\"SelfTestSheet\": true") &&
+      selfTestScene.Contains("\"EventFile\": \"SelfTest\"") &&
+      selfTestScene.Contains("Game.EventsManager"),
+    "SelfTest.scene marks its player's sheet `Self Test` and carries the required EventsManager");
+string[] selfTestActors =
+{
+    "\"Name\": \"Player\"", "\"Name\": \"StartPad\"", "\"Name\": \"JumpPad\"", "\"Name\": \"Marker\"",
+    "\"Name\": \"TouchPad\"", "\"Name\": \"WatchPoint\"", "\"Name\": \"FarAway\"",
+    "\"Name\": \"LadderFoot\"", "\"Name\": \"Ladder\"", "\"Name\": \"CheckpointA\"",
+    "\"Name\": \"SpawnPoint\"", "\"Name\": \"BreakPoint\"", "\"Name\": \"Dummy\"",
+    "\"Name\": \"Breakable\"", "\"Name\": \"SelfTest_Coin\"", "\"Name\": \"ResultLabel\"",
+};
+bool selfTestSceneActors = true;
+foreach (string selfTestActor in selfTestActors)
+{
+    if (!selfTestScene.Contains(selfTestActor))
+    {
+        selfTestSceneActors = false;
+        Console.WriteLine("  SelfTest.scene is missing " + selfTestActor);
+    }
+}
+Check(selfTestSceneActors, "SelfTest.scene holds every prop, marker and label the sheet names");
+
 var sight = parser.Parse("when me appears\n  hide me\n\nwhen me stops seeing Player by 8\n  show me\n");
 Check(sight.Events.Count == 2 && sight.Events[1].Trigger.Count == 6,
       "`when me stops seeing Player by 8` validates through the alt trigger shape");
