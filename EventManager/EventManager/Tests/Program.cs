@@ -14809,6 +14809,42 @@ var tooltipLeafOnly = UiTooltipTargets.Collect(tooltipLabel, node => node.Childr
 Check(tooltipLeafOnly.Count == 1 && tooltipLeafOnly[0] == tooltipLabel,
     "a control with no children is its own only tooltip target");
 
+// ------------------------------------------------------------------
+// Task 34 Part F: the text-only fallback and the model's own bounds
+// ------------------------------------------------------------------
+// No scene actors at all: the words are data, so a sheet still records what a later paint (or a
+// hot reload) will show. Warning about missing row/slot actors is the bridge's job, not the model's.
+var bareWorld = new FakeWorld();
+var bareEngine = FreshEngine(bareWorld);
+var bareActor = new FakeActor("BareSheet");
+bareEngine.AddSheet(bareActor, parser.Parse("when game starts\n  set slot 1 of grid Bare to Sword\n  add row to list BareList with \"Find the key\"\n"));
+bareEngine.SessionStarted();
+bareEngine.Tick(0);
+var bareSlots = bareEngine.Grids.SlotsFor("Bare");
+Check(bareWorld.Actors().Count == 0 && bareSlots.Count == 1 &&
+      bareSlots[0].Text == "Sword" && bareSlots[0].Icon == "Sword",
+    "a grid slot fills with no scene actor to paint it, the bare name kept for its icon");
+Check(bareEngine.Lists.CountOf("BareList") == 1 &&
+      bareEngine.Lists.RowsFor("BareList")[0] == "Find the key",
+    "a list row fills with no scene actor either");
+Check(bareEngine.Grids.SlotsFor("NoSuchGrid").Count == 0 &&
+      bareEngine.Grids.CountOf("NoSuchGrid") == 0 &&
+      bareEngine.Lists.RowsFor("NoSuchList").Count == 0,
+    "reading an unknown list or grid is empty, not a new ghost record");
+
+// A slot whose art is only its text: no icon name is fine, the text still shows.
+bareEngine.Grids.Set("Bare", 2, "Torch", "");
+Check(bareEngine.Grids.SlotsFor("Bare")[1].Text == "Torch" &&
+      bareEngine.Grids.SlotsFor("Bare")[1].Icon == "",
+    "a text-only slot keeps its text with no icon name");
+
+// No cap on rows: twenty quests are twenty rows. Scrolling them is the scene's job.
+for (int bareRow = 1; bareRow <= 20; bareRow++)
+    bareEngine.Lists.Add("Quests", "Quest " + bareRow);
+Check(bareEngine.Lists.CountOf("Quests") == 20 &&
+      bareEngine.Lists.RowsFor("Quests")[19] == "Quest 20",
+    "twenty quests are twenty rows, in order, with no truncation");
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);

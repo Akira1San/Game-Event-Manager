@@ -917,8 +917,23 @@ fill them; a later version can create controls. Either way, the event text stays
       the visible hover behaviour is still an editor play-check.
 - [ ] **Part E — Inventory example.** A real bag window: open/close, select item, tooltip, use
       SelectedItem on a door (chains with Task 9 D), and a vendor list if time allows.
-- [ ] **Part F — Tests and docs.** Row count, empty values, index bounds, click mapping, hot reload
-      keeps the last filled rows, and a text-only fallback still works.
+- [x] **Part F — Tests and docs.** Each item now has a check behind it: row count (`CountOf` /
+      `RowsFor`, the five-row fill and the case-insensitive `questlist`), empty values (a blank
+      `add row` keeps its numbering and shows nothing; `set slot … empty` clears text and icon),
+      index bounds (slot 0 is a load-time friendly error, writing past the end pads, reading an
+      unknown list or grid is empty rather than a ghost record), click mapping (Part C's trigger
+      checks, the `Icon` child mapping up, an empty cell never firing), and hot reload
+      (`SwapSheetProgram` then the list/grid still holds the old rows and appends the new one).
+      The text-only fallback got the four checks it was missing: a grid slot and a list row fill in
+      a world with **no scene actors at all** (the words are data; warning about missing row/slot
+      actors is the bridge's job), an unknown list or grid reads empty, a slot with no icon name
+      keeps its text, and twenty quests are twenty rows in order with no truncation — scrolling
+      them is the scene's job. Registry + `keywords.html` rows arrived with Parts A–D. 5 new checks
+      -> **2452 passed, 0 failed**. Still editor play-checks rather than units: the bridge painting
+      authored rows/slots (and warning once when they are missing), a repaint after a hot reload,
+      and a 20-row scroll panel; the Task 34 done-when items (pickup adds a row/slot with no new
+      actor, slot 1 selects and the Task 9 D door flow, a 20-quest list scrolls) depend on the
+      Part E bag scene.
 
 ### Done-when
 
