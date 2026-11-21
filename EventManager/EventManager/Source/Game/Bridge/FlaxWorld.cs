@@ -549,6 +549,13 @@ namespace Game
             return false;
         }
 
+        /// <summary>The actor's scene parent, or null for a root actor (Task 34 Part C).</summary>
+        public object ParentOf(object actor)
+        {
+            var a = actor as Actor;
+            return a == null ? null : a.Parent;
+        }
+
         // ---- RTS state (Task 18 Part H) ----
         // The live EventRuntime owns the selection, resources, fog, construction progress and
         // order queues, so the world forwards these queries to it. Before the manager exists

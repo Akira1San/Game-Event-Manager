@@ -115,9 +115,25 @@ namespace Game
         SelfTestEnds,
     }
 
+    /// <summary>
+    /// The runtime UI model a click addresses (Task 34 Part C): `when row 2 of list QuestList is
+    /// clicked` names a list row, `when slot 1 of grid BagGrid is clicked` names a grid slot. An
+    /// ordinary `when <thing> is clicked` is <see cref="None"/> and matches by actor name as before.
+    /// </summary>
+    public enum ClickedCell
+    {
+        None,
+        List,
+        Grid,
+    }
+
     public class TriggerDescriptor
     {
         public TriggerKind Kind = TriggerKind.Unknown;
+        /// <summary>For a row/slot click (Task 34 Part C): which runtime model the trigger names.</summary>
+        public ClickedCell Cell;
+        /// <summary>The 1-based row/slot index of a row/slot click; 0 for an ordinary click.</summary>
+        public int CellIndex;
         public string Key = "";
         public string RequireName = "";
         /// <summary>For <c>when &lt;building&gt; finishes training &lt;unit&gt;</c>: the trained
@@ -461,6 +477,13 @@ namespace Game
             }
             if (words.Length >= 3 && words[words.Length - 2] == "is" && words[words.Length - 1] != "clicked" && words[0] != "me" && words[0] != "other")
                 return KeyDescriptor(words, trigger);
+            // `when row <n> of list <thing> is clicked` / `when slot <n> of grid <thing> is clicked`
+            // (Task 34 Part C) — a click on the actor the bridge paints for that index, matched
+            // against the runtime list/grid so an empty row or slot never fires. Must come before
+            // the generic `is clicked` shape, which would otherwise read the whole phrase as a name.
+            if (words.Length >= 3 && (words[0] == "row" || words[0] == "slot") &&
+                trigger[1].Type == TokenType.Number && words[2] == "of")
+                return CellClickDescriptor(trigger, words);
             if (words.Length >= 4 && words[words.Length - 3] == "is" && words[words.Length - 2] == "right" && words[words.Length - 1] == "clicked")
                 return new TriggerDescriptor { Kind = TriggerKind.RightClicked, RequireName = Join(trigger, 0, words.Length - 3) };
             if (words.Length >= 4 && words[words.Length - 3] == "is" && words[words.Length - 2] == "middle" && words[words.Length - 1] == "clicked")
@@ -555,6 +578,36 @@ namespace Game
                 return changes;
             }
             return new TriggerDescriptor { Kind = TriggerKind.Unknown };
+        }
+
+        /// <summary>
+        /// <c>when row &lt;n&gt; of list &lt;thing&gt; is clicked</c> / <c>when slot &lt;n&gt; of grid
+        /// &lt;thing&gt; is clicked</c> (Task 34 Part C). The row's/slot's value is handed to the body
+        /// as <c>my ClickedRow</c> / <c>my ClickedSlot</c>.
+        /// </summary>
+        private static TriggerDescriptor CellClickDescriptor(List<Token> trigger, string[] words)
+        {
+            bool isRow = words[0] == "row";
+            // A malformed shape stays an unknown trigger, like every other mistyped trigger in the
+            // language: it never fires, rather than turning the rest of the sentence into an actor
+            // name (`row 1 of list QuestList`) that could never match.
+            if (words.Length < 7 || words[words.Length - 2] != "is" || words[words.Length - 1] != "clicked")
+                return new TriggerDescriptor { Kind = TriggerKind.Unknown };
+            if (words[3] != (isRow ? "list" : "grid"))
+                return new TriggerDescriptor { Kind = TriggerKind.Unknown };
+            int index = (int)trigger[1].Number;
+            if (index < 1 || trigger[1].Number != index)
+                return new TriggerDescriptor { Kind = TriggerKind.Unknown };
+            string thing = Join(trigger, 4, words.Length - 2);
+            if (thing.Length == 0)
+                return new TriggerDescriptor { Kind = TriggerKind.Unknown };
+            return new TriggerDescriptor
+            {
+                Kind = TriggerKind.Clicked,
+                Cell = isRow ? ClickedCell.List : ClickedCell.Grid,
+                CellIndex = index,
+                RequireName = thing,
+            };
         }
 
         /// <summary>

@@ -14570,6 +14570,123 @@ Check(WordRegistry.All.Any(e => e.Word == "clear grid <thing>") &&
       WordRegistry.All.Any(e => e.Word == "fill grid <thing> from my bag"),
     "the word book lists all four grid words");
 
+// ------------------------------------------------------------------
+// Task 34 Part C: row/slot click routing
+// ------------------------------------------------------------------
+
+// The two trigger shapes classify to their own model and index, not to an actor name.
+var cellProg = parser.Parse(@"
+when row 2 of list QuestList is clicked
+  set Picked to my ClickedRow
+
+when slot 1 of grid BagGrid is clicked
+  set Picked to my ClickedSlot
+");
+var rowClickDesc = TriggerClassifier.Classify(cellProg.Events[0]);
+Check(rowClickDesc.Kind == TriggerKind.Clicked && rowClickDesc.Cell == ClickedCell.List &&
+      rowClickDesc.CellIndex == 2 && rowClickDesc.RequireName == "QuestList",
+    "`when row 2 of list QuestList is clicked` classifies to a list-cell click at index 2");
+var slotClickDesc = TriggerClassifier.Classify(cellProg.Events[1]);
+Check(slotClickDesc.Kind == TriggerKind.Clicked && slotClickDesc.Cell == ClickedCell.Grid &&
+      slotClickDesc.CellIndex == 1 && slotClickDesc.RequireName == "BagGrid",
+    "`when slot 1 of grid BagGrid is clicked` classifies to a grid-cell click at index 1");
+
+var multiNameCell = TriggerClassifier.Classify(parser.Parse(
+    "when row 1 of list Big Quest List is clicked\n  set Picked to my ClickedRow\n").Events[0]);
+Check(multiNameCell.RequireName == "Big Quest List",
+    "a list name with spaces survives the row-click shape");
+
+// A mistyped cell shape is an unknown trigger, like every other mistyped trigger: it never
+// fires, and it is never read as an actor called "row 1 of list QuestList".
+Check(TriggerClassifier.Classify(parser.Parse(
+          "when row 1 of grid BagGrid is clicked\n  set Picked to 1\n").Events[0]).Kind == TriggerKind.Unknown &&
+      TriggerClassifier.Classify(parser.Parse(
+          "when slot 0 of grid BagGrid is clicked\n  set Picked to 1\n").Events[0]).Kind == TriggerKind.Unknown,
+    "`row … of grid` and slot 0 are unknown triggers, not silent actor-name matches");
+
+// Runtime: the click lands on the authored row/slot actor, empty cells never fire, and the
+// body reads the cell's text.
+var cellWorld = new FakeWorld();
+var cellEngine = FreshEngine(cellWorld);
+var cellPlayer = new FakeActor("Player");
+var questRow1 = new FakeActor("QuestListRow1");
+var questRow2 = new FakeActor("QuestListRow2");
+var bagSlot1 = new FakeActor("BagGridSlot1");
+var bagSlot2 = new FakeActor("BagGridSlot2");
+var bagIcon = new FakeActor("Icon");
+bagIcon.Parent = bagSlot1;
+foreach (var actor in new object[] { cellPlayer, questRow1, questRow2, bagSlot1, bagSlot2, bagIcon })
+    cellWorld.AddActor(actor);
+cellEngine.AddSheet(cellPlayer, parser.Parse(@"
+when row 1 of list QuestList is clicked
+  set PickedRow to my ClickedRow
+  add 1 to RowClicks
+
+when row 2 of list QuestList is clicked
+  add 1 to EmptyRowClicks
+
+when slot 1 of grid baggrid is clicked
+  set PickedSlot to my ClickedSlot
+  add 1 to SlotClicks
+
+when slot 2 of grid BagGrid is clicked
+  add 1 to EmptySlotClicks
+"));
+cellEngine.Lists.Add("QuestList", "Find the key");
+cellEngine.Lists.Add("QuestList", "");
+cellEngine.Grids.Set("BagGrid", 1, "Sword", "Sword");
+cellEngine.Grids.Set("BagGrid", 2, "", "");
+cellEngine.RaiseClick(questRow1, TriggerKind.Clicked);
+cellEngine.Tick(1);
+Check(cellEngine.Variables.GetGlobal("PickedRow").AsText() == "Find the key" &&
+      cellEngine.Variables.GetGlobal("RowClicks").AsNumber() == 1,
+    "clicking a list's row actor fires that row's block and `my ClickedRow` is its text");
+cellEngine.RaiseClick(questRow2, TriggerKind.Clicked);
+cellEngine.Tick(2);
+Check(cellEngine.Variables.GetGlobal("EmptyRowClicks").AsNumber() == 0,
+    "a blank row never fires, even though its actor is still clicked");
+cellEngine.RaiseClick(bagSlot1, TriggerKind.Clicked);
+cellEngine.Tick(3);
+Check(cellEngine.Variables.GetGlobal("PickedSlot").AsText() == "Sword" &&
+      cellEngine.Variables.GetGlobal("SlotClicks").AsNumber() == 1,
+    "clicking a grid slot fires its block and `my ClickedSlot` is the slot's text");
+cellEngine.RaiseClick(bagSlot2, TriggerKind.Clicked);
+cellEngine.Tick(4);
+Check(cellEngine.Variables.GetGlobal("EmptySlotClicks").AsNumber() == 0,
+    "an empty slot never fires");
+cellEngine.RaiseClick(bagIcon, TriggerKind.Clicked);
+cellEngine.Tick(5);
+Check(cellEngine.Variables.GetGlobal("SlotClicks").AsNumber() == 2,
+    "a click on the slot's `Icon` counts as a click on the slot");
+cellEngine.RaiseClick(new FakeActor("SomethingElse"), TriggerKind.Clicked);
+cellEngine.Tick(6);
+Check(cellEngine.Variables.GetGlobal("RowClicks").AsNumber() == 1 &&
+      cellEngine.Variables.GetGlobal("SlotClicks").AsNumber() == 2,
+    "a click on an unrelated actor fires neither row nor slot block");
+
+// The `Row1` / `Slot1` child-of-the-container convention resolves through the scene parent.
+var cellChildWorld = new FakeWorld();
+var cellChildEngine = FreshEngine(cellChildWorld);
+var childPlayer = new FakeActor("Player");
+var bagContainer = new FakeActor("BagGrid");
+var bagChildSlot = new FakeActor("Slot1");
+bagChildSlot.Parent = bagContainer;
+foreach (var actor in new object[] { childPlayer, bagContainer, bagChildSlot })
+    cellChildWorld.AddActor(actor);
+cellChildEngine.AddSheet(childPlayer, parser.Parse(
+    "when slot 1 of grid BagGrid is clicked\n  set PickedChild to my ClickedSlot\n"));
+cellChildEngine.Grids.Set("BagGrid", 1, "Shield", "Shield");
+cellChildEngine.RaiseClick(bagChildSlot, TriggerKind.Clicked);
+cellChildEngine.Tick(1);
+Check(cellChildEngine.Variables.GetGlobal("PickedChild").AsText() == "Shield",
+    "a `Slot1` child of an actor named after the grid answers `when slot 1 of grid … is clicked`");
+
+Check(WordRegistry.All.Any(e => e.Word == "when row <n> of list <thing> is clicked") &&
+      WordRegistry.All.Any(e => e.Word == "when slot <n> of grid <thing> is clicked") &&
+      WordRegistry.All.Any(e => e.Word == "my ClickedRow") &&
+      WordRegistry.All.Any(e => e.Word == "my ClickedSlot"),
+    "the word book lists both cell triggers and both clicked-value names");
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);
@@ -14598,6 +14715,9 @@ class DecoratedActor
     }
 
     public string Name;
+    /// <summary>The scene parent, so a test can author `Row1` / `Slot1` children of a container
+    /// like the bridge's row/slot lookup does (Task 34 Part C).</summary>
+    public object Parent;
 
     public override string ToString()
     {
@@ -14898,6 +15018,11 @@ class FakeWorld : IEventWorld
     public bool IsDescendantOf(object child, object root)
     {
         return ReferenceEquals(child, root);
+    }
+
+    public object ParentOf(object actor)
+    {
+        return (actor as FakeActor)?.Parent;
     }
 
     private readonly Dictionary<(object, string), (double Progress, int Play)> animProgress =

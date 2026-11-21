@@ -855,8 +855,30 @@ fill them; a later version can create controls. Either way, the event text stays
       `dotnet build Source/Game.csproj -c Editor.Windows.Debug` 0 errors (13 pre-existing doc
       warnings) and `Flax.Build -target=GameEditorTarget` exits 0. Editor play-check pending (a real
       grid of authored slots with icons, a selection tint, and a hot reload repaint).
-- [ ] **Part C — Click routing.** Row/slot index → the matching trigger; clicks on empty slots do
+- [x] **Part C — Click routing.** Row/slot index → the matching trigger; clicks on empty slots do
       not fire; the row’s value is readable as `my ClickedRow` / `my ClickedSlot`.
+      Two trigger shapes, `when row <n> of list <thing> is clicked` and `when slot <n> of grid
+      <thing> is clicked`, classify to `TriggerKind.Clicked` with a new `ClickedCell` marker and the
+      1-based index (parsed before the generic `is clicked` shape, so the phrase never becomes an
+      actor name). Matching walks up from the clicked actor: `<Thing>Row1` / `<Thing>Slot1`, a
+      `Row1` / `Slot1` child of an actor named after the list/grid, or anything inside one (a slot's
+      `Icon`), which needed one new world query — `IEventWorld.ParentOf` — implemented by
+      `FlaxWorld`, `DefaultEventWorld` and the test world. A cell fires only while the runtime model
+      still holds text there (`Lists.RowsFor` / `Grids.SlotsFor`), so a blank row from `add row` and
+      a slot cleared by `set slot … empty` never fire; a click on an unrelated actor fires nothing.
+      Just before the body runs, `BindClickedCell` writes the cell's text onto the sheet answering
+      the click, so `my ClickedRow` / `my ClickedSlot` is readable (`Sword x2` for a counted stack).
+      Ordinary `when <thing> is clicked` is untouched. Registry + `keywords.html` rows for both
+      triggers and both value names. 12 new checks -> **2428 passed, 0 failed**; `dotnet build
+      Source/Game.csproj -c Editor.Windows.Debug` 0 errors and `Flax.Build -target=GameEditorTarget`
+      exits 0. Known limits recorded here rather than hidden: the engine hit-test broadcasts a click
+      to every `UIControl` under the cursor and does not clip to a scroll panel, so a filled row
+      scrolled out of view but under the cursor could still fire (a bridge hit-test fix, not a word);
+      the trigger is data-driven, so hand-authored rows that no `add row` / `set row` line filled do
+      not answer clicks; `my ClickedRow` keeps the last clicked value after its block ends; and a
+      mistyped cell trigger is an unknown trigger that never fires, like every other mistyped trigger
+      (the language has no load-time error path for trigger shapes). Editor play-check pending (a
+      real grid of slots with icons, a scroll panel, and a tint on the selected slot).
 - [ ] **Part D — Tooltips and groups.** Hover text on slots, and `show/hide group <tag>` for whole
       panels (bag, quest log, pause menu) without naming every child.
 - [ ] **Part E — Inventory example.** A real bag window: open/close, select item, tooltip, use

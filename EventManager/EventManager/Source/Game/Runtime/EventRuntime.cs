@@ -1732,6 +1732,10 @@ namespace Game
                         // body runs: `my amount` (the slot's name) and `my DamageTaken`.
                         if (sheet.Triggers[eventIndex].MessagePattern)
                             BindMessageCaptures(sheet, sheet.Triggers[eventIndex], signal);
+                        // A row/slot click hands the cell's value to the body as `my ClickedRow`
+                        // / `my ClickedSlot` (Task 34 Part C).
+                        if (sheet.Triggers[eventIndex].Cell != ClickedCell.None)
+                            BindClickedCell(sheet, sheet.Triggers[eventIndex]);
                         if (IsContactKind(signal.Kind) && signal.Other != null)
                         {
                             // A distance poll already fired this pair: ignore the collider's echo.
@@ -2015,6 +2019,12 @@ namespace Game
         {
             if (descriptor.Kind != signal.Kind)
                 return false;
+            // `when row <n> of list <thing> is clicked` / `when slot <n> of grid <thing> is clicked`
+            // (Task 34 Part C): the click must land on the actor the bridge paints for that index,
+            // and only while that row/slot still holds a value — a blank row or an empty slot
+            // never fires, so a selection cannot land on nothing.
+            if (descriptor.Cell != ClickedCell.None)
+                return CellClickMatches(descriptor, signal);
             // ---- local multiplayer (Task 16 Part F) ----
             // Player signals are broadcast with the number in the signal, so the filter is a
             // number, not a name. `when all players dead` has no number to match.
@@ -2179,6 +2189,74 @@ namespace Game
             if (context.Me == null || context.Me is GlobalHost)
                 return false;
             return target.Owner == "my" || target.Owner == "me" || target.Owner.Length == 0;
+        }
+
+        /// <summary>
+        /// True when a click addresses row/slot <c>CellIndex</c> of the named runtime model and
+        /// that cell still holds a value (Task 34 Part C). "Holds a value" is the model's own
+        /// text: a blank `add row` or a `set slot … empty` leaves the frame on screen but never
+        /// fires, which is what stops a click on nothing from selecting nothing.
+        /// </summary>
+        private bool CellClickMatches(TriggerDescriptor descriptor, PushSignal signal)
+        {
+            string prefix = descriptor.Cell == ClickedCell.List ? "Row" : "Slot";
+            if (!IsCellActor(signal.Other, descriptor.RequireName, prefix, descriptor.CellIndex))
+                return false;
+            return CellValue(descriptor).Length > 0;
+        }
+
+        /// <summary>The value a row/slot click names, or "" when that cell holds nothing.</summary>
+        private string CellValue(TriggerDescriptor descriptor)
+        {
+            if (descriptor.Cell == ClickedCell.List)
+            {
+                var rows = Lists.RowsFor(descriptor.RequireName);
+                return descriptor.CellIndex <= rows.Count ? rows[descriptor.CellIndex - 1] ?? "" : "";
+            }
+            var slots = Grids.SlotsFor(descriptor.RequireName);
+            if (descriptor.Cell != ClickedCell.Grid || descriptor.CellIndex > slots.Count)
+                return "";
+            return slots[descriptor.CellIndex - 1].Text ?? "";
+        }
+
+        /// <summary>
+        /// True when <paramref name="clicked"/> is row/slot <c>index</c> of <c>thing</c>: the actor
+        /// named `&lt;Thing&gt;Row1` / `&lt;Thing&gt;Slot1`, a `Row1` / `Slot1` child of an actor named
+        /// after the list/grid, or anything inside one (the slot's `Icon`), which is why the walk
+        /// goes up the hierarchy rather than only comparing the clicked actor's own name (Task 34
+        /// Part C).
+        /// </summary>
+        private bool IsCellActor(object clicked, string thing, string prefix, int index)
+        {
+            string direct = thing + prefix + index;
+            string child = prefix + index;
+            object node = clicked;
+            for (int depth = 0; node != null && depth < 8; depth++)
+            {
+                string name = NameOf(node);
+                if (string.Equals(name, direct, StringComparison.OrdinalIgnoreCase))
+                    return true;
+                if (string.Equals(name, child, StringComparison.OrdinalIgnoreCase))
+                {
+                    object parent = World.ParentOf(node);
+                    if (parent != null &&
+                        string.Equals(NameOf(parent), thing, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+                node = World.ParentOf(node);
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Writes the clicked cell's value onto the sheet that answers the click, so its body can
+        /// read <c>my ClickedRow</c> / <c>my ClickedSlot</c> (Task 34 Part C). The value is the
+        /// text the row/slot shows, not the index — the trigger line already names the index.
+        /// </summary>
+        private void BindClickedCell(SheetInstance sheet, TriggerDescriptor descriptor)
+        {
+            string name = descriptor.Cell == ClickedCell.List ? "ClickedRow" : "ClickedSlot";
+            Variables.SetLocal(sheet.Actor, name, ValueBox.OfText(CellValue(descriptor)));
         }
 
         /// <summary>

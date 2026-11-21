@@ -72,6 +72,9 @@ namespace Game
         /// descendant in the scene hierarchy — so a contact poll skips the actor's own child
         /// colliders instead of testing them as foreign contact targets.</summary>
         bool IsDescendantOf(object child, object root);
+        /// <summary>The actor's parent in the scene hierarchy, or null at the top. Row/slot clicks
+        /// use it to recognise `Row1` / `Slot1` children of the list/grid actor (Task 34 Part C).</summary>
+        object ParentOf(object actor);
         /// <summary>
         /// Progress (0–1, and past 1 after a loop's first pass) through a clip
         /// <paramref name="actor"/> is playing right now, with a token that changes every time that
@@ -242,6 +245,11 @@ namespace Game
         public bool IsDescendantOf(object child, object root)
         {
             return ReferenceEquals(child, root);
+        }
+
+        public object ParentOf(object actor)
+        {
+            return null;
         }
 
         // ---- RTS state (Task 18 Part H) ----
