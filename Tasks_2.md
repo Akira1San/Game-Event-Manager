@@ -431,9 +431,30 @@ when me touches Checkpoint
       missing source or parent is warned about and the root is skipped (or left at the scene root),
       while an unknown kind is skipped; `scene` records are left to Part B's scene section. The
       words stay Part E.
-- [ ] **Part E — Slots, autosave, deletion, errors.** Default slot, named slots, autosave, delete,
+- [x] **Part E — Slots, autosave, deletion, errors.** Default slot, named slots, autosave, delete,
       corrupt-file warning, version-mismatch refusal with a friendly message, and a “save from a
       global sheet” path.
+      *Landed:* `Runtime/SaveGames.cs` is the engine-free coordinator behind `save game`
+      (`save game to "<slot>"`), `load game` (`load game from "<slot>"`), `autosave` and
+      `delete save "<slot>"`. A blank slot means `SaveFile.DefaultSlot` (`default`); `autosave`
+      always writes `SaveFile.AutosaveSlot` (`autosave`), so a checkpoint never overwrites a save
+      the player made, and `load game from "autosave"` resumes it. Every attempt returns a
+      `SaveGames.Result` with `Outcome` (`Saved`/`Loaded`/`Deleted`/`Missing`/`Damaged`/
+      `NewerVersion`/`Refused`/`Failed`), the normalized slot and one friendly message; the bridge
+      passes `FlaxActions.Warn`, so a typo, missing file, damaged JSON or newer schema is a warning
+      and never an exception. A load reads the file **before** touching anything, so missing,
+      damaged and newer saves leave the running game alone; a scene the project no longer has is
+      refused by `SaveSnapshot.Load` for the same reason. `when game saves` fires after the file is
+      written; `when game loads` fires after the scene reloaded and globals, spawns and actors are
+      restored (`RaisePushAll`, so it runs on the restored sheets next tick). Both triggers carry the
+      slot name. `save slot exists "<slot>"` reads the disk through the new
+      `EventRuntime.SaveProjectFolder`, which `EventsManager` sets from
+      `EventFiles.LocateProjectFolder` (the folder holding `Content` and `Source`), so a runtime
+      without a project folder answers no instead of throwing. `save stats` / `load stats` remain the
+      in-memory checkpoint and still run before action parsing. The bridge wires
+      `CaptureSaveScene` + the Part C/D helpers to `SaveGames.Save/Load`; `delete save` removes one
+      file and reports an already-gone slot as missing. The words are in `WordRegistry` and
+      `keywords.html`.
 - [ ] **Part F — Tests.** Round-trip globals, per-object values, bag and equipment; load into a
       clean scene; missing actor in the save; extra actor in the scene; old schema version; corrupted
       file; two slots isolated; hot reload does not clobber restored values.
@@ -715,7 +736,8 @@ when every 0.2 seconds
       action line is a shipped word and that the four Task 33 trigger kinds all appear, so a doc that
       drifted from the language fails in CI instead of in the editor.
       **Two bullets stay editor play-checks** — they exist only on content this project does not ship
-      yet, so no suite check can prove them: (1) `stop anim upper body` blends the masked bones back
+      yet, so no suite check can prove them (Task 51 Part E: that is the written reason — a case can
+      exercise words, not content the project has never shipped): (1) `stop anim upper body` blends the masked bones back
       onto the locomotion pose with the legs still walking (base graph + `SkeletonMask`); (2) `set
       root motion on` moves the actor once, without double-moving it beside `move` (authored graph
       with root motion enabled + a clip imported with root motion). Play-check list:
@@ -875,7 +897,9 @@ add typing speed, portrait/speaker handling, choice numbering and a backlog.
       pressing the choice underneath. `when text finishes` (plus the named `when text of
       <thing> finishes`) is a broadcast trigger, so a Game sheet can hear any finished line.
       23 new checks -> **2184 passed, 0 failed**; GameEditorTarget build 0 errors (pre-existing
-      XML-doc warnings only). Editor play-check pending.
+      XML-doc warnings only). Editor play-check pending — Task 51 Part E: no case, because what
+      remains is a label typing on an authored `DialogLabel` with a font and panel you can look at;
+      the typing, skip, choice and backlog logic is played from disk through `Innkeeper.events`.
 - [x] **Part B — Portraits and speaker.** Find the image/label on the named actor, swap the asset by
       name (same resolver as `play sound` / `set image`), and keep the speaker label separate.
       `set portrait of <thing> to "<sprite>"` is a `SetPortraitNode` executed through
@@ -888,7 +912,8 @@ add typing speed, portrait/speaker handling, choice numbering and a backlog.
       clears both. Missing actors/labels warn once and name the actor to create.
       9 new checks -> **2193 passed, 0 failed**; GameEditorTarget build 0 errors. Editor
       play-check (a portrait actually appearing in a scene) pending, since it needs authored
-      Image/Label actors and imported portrait textures.
+      Image/Label actors and imported portrait textures. Task 51 Part E: no case — an asset swap
+      onto authored actors is visual; the resolver and its warn-once are unit-covered.
 - [x] **Part C — Choices.** Number visible choice buttons, capture the picked index, clear the
       choices on pick. Buttons remain ordinary actors so they can be styled in the editor.
       `show choice "<text>"` is a `ShowChoiceNode`; `Runtime/Choices.cs` (`ChoiceManager`,
@@ -903,7 +928,9 @@ add typing speed, portrait/speaker handling, choice numbering and a backlog.
       `send message "choice picked"` reaches the same trigger. A button no set is using keeps
       its ordinary click; a missing slot warns once and names the actor to create.
       17 new checks -> **2210 passed, 0 failed**; GameEditorTarget build 0 errors. Editor
-      play-check (a real clicked button in a scene) pending.
+      play-check (a real clicked button in a scene) pending. Task 51 Part E: no case — a real click
+      needs the authored buttons and the editor's input; `RaiseClick`, the numbering and the pick
+      are unit-covered.
 - [x] **Part D — Backlog.** Append lines to a scrollable list (Task 34) for adventure/RPG history.
       Task 34's list words do not exist yet, so the backlog uses Task 34's own first-version
       convention: the runtime keeps the history and the scene's authored row labels show it.
@@ -923,7 +950,8 @@ add typing speed, portrait/speaker handling, choice numbering and a backlog.
       (`ChoiceManager.Take`), and the speaker it wrote clears (`Speaker` global + `SpeakerLabel`)
       while a speaker another sheet wrote survives. The backlog is history, so it is left alone.
       17 new checks -> **2227 passed, 0 failed**; GameEditorTarget build 0 errors. Editor
-      play-check (authored `BacklogRow` actors actually filling) pending.
+      play-check (authored `BacklogRow` actors actually filling) pending. Task 51 Part E: no case —
+      filling authored rows is visual; the history, its cap and its survival are unit-covered.
 - [x] **Part E — Tests and example.** Typing completion exactly once, skip, choice 1 vs choice 2,
       portrait miss warns once, and a three-node conversation with a story flag.
       `Source/Game/GameFiles/Innkeeper.events` is the shipped conversation, wired only from these
@@ -937,7 +965,9 @@ add typing speed, portrait/speaker handling, choice numbering and a backlog.
       checks; a missing portrait's warn-once lives in the bridge, so it remains unverified until an
       editor play-check. 24 new checks -> **2251 passed, 0 failed**. Only editor play-checks
       remain for Task 35 (authored `DialogLabel`, `SpeakerLabel`, portrait, `Choice1`/`Choice2` and
-      `BacklogRow*` actors in a scene).
+      `BacklogRow*` actors in a scene) — and Task 51 Part E leaves all of them reason-carrying, not
+      cases: they are authored UI actors and one picture, while the conversation itself (both
+      branches, the flag, the backlog, the close, click-to-skip) is played from disk in the suite.
 
 ### Done-when
 
@@ -1099,6 +1129,12 @@ when my Health becomes 0
       checks and Task 21 A; the bridge and the editor are not, so **the play-check below is still
       yours.**
 
+      *(Task 51 Part E — four of the five steps below are now cases in `SelfTest.scene`, run there in
+      the editor: `jump takes off and lands`, `ladder climb starts and lands`, `checkpoint saves on
+      touch`, `respawn at returns to the marker`. All four are `(editor only)`, so the headless tier
+      reports them `SKIP` instead of quietly passing; what no case can judge is the number on step 1
+      (≈90 cm), the pose on step 2, and the label surviving death on step 5.)*
+
       **Editor play-check — `PlatformerTest` scene.** Setup is in the sheet's header (Player with a
       CharacterController + EventSheet `Platformer`, a thin `Ladder` BoxCollider against the
       platform, a `Checkpoint` actor, a `CheckpointLabel` in a UICanvas, optional Idle / Run /
@@ -1138,8 +1174,8 @@ when my Health becomes 0
 
 - A cube jumps onto a crate, lands, cannot re-jump mid-air (proven by the shipped G4 checks), and
   dies/respawns at the last checkpoint.
-- A character climbs a ladder to a platform and steps off at the top (G4's editor play-check is
-  still open).
+- A character climbs a ladder to a platform and steps off at the top (four of its mechanics are
+  `(editor only)` cases in `SelfTest.scene`, so the check is that scene's run).
 - A one-way platform is passable from below and solid from above in the character mode.
 - A sheet with `set gravity scale to 0` floats, and `0.5` visibly halves the jump peak.
 
@@ -1149,10 +1185,11 @@ when my Health becomes 0
   G4. **Double jumps are Task 21 Part A** — this task only relies on the shipped airborne gate,
   and a project that never asks for `jump again` keeps single jumps.
 - `coyote time` / jump buffering are tuning values, not words; park unless a game needs them.
-- `me is on ground` is a condition, not a trigger (triggers starting with `me` only know `touches`,
-  `overlaps`, `arrives`, `hears`, `sees`, `is near`, `is hovered`, `appears`, `gets …`). A landing
-  state is a poll (`when every …` plus the gate) until someone adds a `when me lands` trigger,
-  which is new work and not part of this task.
+- `me is on ground` is a condition, not a trigger. A **landing edge does exist**: `when me lands`
+  shipped with Task 28 Part C (`Triggers.cs`, beside `when <building> lifts off`), so the older
+  claim here that it would be "new work" was stale and is corrected (Task 51 Part E).
+  `Platformer.events` still polls, because it picks a pose from the state every tick rather than
+  reacting to one edge — a sheet that wants the moment itself should use the trigger.
 
 ---
 
@@ -1239,8 +1276,9 @@ when message "fire" arrives
       [for radius <r>]` (radius 150 default) sends real `"damage"` from the caster through
       armor → shield → health and the matchup gate — no caster destruction, no effect of its own,
       and bullets are skipped so splash never chains. Clicks/Escape/right-click and the optional
-      `AimMarker` scene actor are the bridge half. 34 unit checks in `Tests/Program.cs`; the editor
-      play-check is pending. The three table rows above (`damage area`, `aim`/`cancel aim`,
+      `AimMarker` scene actor are the bridge half.       34 unit checks in `Tests/Program.cs`; the editor
+      play-check is pending — Task 51 Part E: no case, because a clicked aim needs a scene and a
+      cursor value (Task 39 Part B); the rules are the 34 unit checks. The three table rows above (`damage area`, `aim`/`cancel aim`,
       `when aim picks a target`) all ship — except that a spot written as `Mouse` in the example
       resolves only if a scene actor is named `Mouse`; a cursor-position value is Task 39 Part B.
 - [ ] **Part E — Loot tables and affixes.** Weighted table data in `.events`; `spawn item from` and
@@ -2237,7 +2275,7 @@ when message "close dialogue" arrives
 
 ---
 
-## Task 51 — Self-Test Sheet: Automated Play-Checks `[ ]`
+## Task 51 — Self-Test Sheet: Automated Play-Checks `[~]`
 
 Goal: stop asking a human to open the editor, hold W, and *look* at a cube. Right now every shipped
 mechanic ends with a `[ ] Verify (user, editor)` line — jump height, checkpoint respawn, steering,
@@ -2398,13 +2436,38 @@ once Task 28 lands. Task 36 Part G's five-step platformer check becomes five cas
       waypoint has none — the case now asserts the arrival edge itself, which works in both tiers.
       8 new checks -> **2350 passed, 0 failed**; `dotnet build Source/Game.csproj -c
       Editor.Windows.Debug` 0 errors (13 pre-existing XML-doc warnings, none in the new code). The editor Play of `SelfTest.scene` is still the
-      user's run; Part E is open.
-- [ ] **Part E — Status reconciliation and docs.** Every `[ ] Verify (user, editor)` bullet in
+      user's run; Part E shipped below.
+- [x] **Part E — Status reconciliation and docs.** Every `[ ] Verify (user, editor)` bullet in
       `TASKS.md` and `Tasks_2.md` either names its case or carries one line saying why it cannot be
-      automated (feel, audio, visual); the stale claims get fixed at the same time (e.g. the note at
-      `Tasks_2.md:1102` that says no `when me lands` trigger exists). `keywords.html` rows,
-      `DESIGN.md` §9 entry (why a case is a block, and why `expect` reuses the condition grammar),
-      and a `Task 51` line in the execution order.
+      automated (feel, audio, visual); the stale claims get fixed at the same time. `keywords.html`
+      rows, `DESIGN.md` §9 entry (why a case is a block, and why `expect` reuses the condition
+      grammar), and a `Task 51` line in the execution order.
+      Shipped: the two open `Verify (user, editor)` bullets in `TASKS.md` (hot reload during Play;
+      assigning `EventSheet` in a scene), the older `TASKS.md` notes that said "editor run pending"
+      (the one-file mini-game, the dynamic bullet and the `Colliders` acceptance, the guard patrol,
+      Task 5's animation play and character example, Task 7's patrol/chase, `Enemy_Walls`' chase /
+      separation / four body modes, the arcade lane, the point-and-click loop, spells, loot
+      affixes), and the editor play-check notes in this file (animation and root motion, dialogue
+      typing, portrait, choices, backlog, the platformer list, aim) each gained a bracketed
+      `Task 51 Part E` line, and each line is one of two kinds: **the case that covers
+      it** — the four `(editor only)` cases in `SelfTest.scene` (`jump takes off and lands`, `ladder
+      climb starts and lands`, `checkpoint saves on touch`, `respawn at returns to the marker`) — or
+      **the reason no case can exist**: a baked NavMesh or authored scene, a real click or cursor
+      value, a picture, a font, a measured height, a feel. Task 35's four notes are all
+      reason-carrying, since what remains there is authored UI actors and one portrait.
+      The stale claim is corrected: the park note under the platformer's edge cases said a landing
+      state needs a poll "until someone adds a `when me lands` trigger", but that trigger shipped
+      with Task 28 Part C (`Triggers.cs`, beside `when <building> lifts off`) — it now says so and
+      explains that
+      `Platformer.events` polls because it picks a pose each tick, not because the edge is missing.
+      `keywords.html` already carried all four words (`test "<label>"`, `pass`, `expect`, `when self
+      test ends`) and the `self test timeout <n> seconds` row from Parts A–B, so no row was added
+      there; `DESIGN.md` §9 gained the entry on why a case is a block, why `expect` re-parses
+      through `Conditions.Parse`, why a gate that never opens is `SKIP`, and how the two tiers share
+      one file. The execution-order item (`Task 51`, "do it early despite being last in the list")
+      already existed from the spec session and was left as written. Docs and status only, no code
+      and no check changed — the suite is untouched at **2350 passed, 0 failed**. The editor Play of
+      `SelfTest.scene` (and with it the eight `(editor only)` cases) is still the user's run.
 
 ### Done-when
 

@@ -1201,6 +1201,24 @@ window around a broken runtime.
   is skipped with a warning. Transient audio/effect actors and placed/scene children are not
   separate records, and duplicate child names across prefab instances remain the existing runtime
   ambiguity.
+  Slots, autosave and errors (Part E, decided): the words are `save game` / `save game to "<slot>"`,
+  `load game` / `load game from "<slot>"`, `autosave`, `delete save "<slot>"`, the triggers
+  `when game saves` / `when game loads`, and the condition `save slot exists "<slot>"`. A blank slot
+  means `default`; `autosave` is a fixed `autosave` slot so a checkpoint never overwrites a save
+  the player made, and `load game from "autosave"` resumes it. `Runtime/SaveGames.cs` owns the
+  words and returns a `Result` (`Saved`, `Loaded`, `Deleted`, `Missing`, `Damaged`,
+  `NewerVersion`, `Refused`, `Failed`) with the normalized slot and one friendly sentence; the
+  bridge displays it through `FlaxActions.Warn`, so a broken slot never throws at a sheet. A load
+  reads the file before changing anything, which keeps a missing, damaged or newer save from
+  half-loading; a save whose scene the project no longer has is `Refused` for the same reason.
+  `when game saves` is raised after the write and `when game loads` after the full restore, both
+  through `RaisePushAll` with the slot name, so a listener runs against the restored sheets on the
+  next tick. `save game` captures the runtime, not the acting sheet, so the same words work on the
+  global Game sheet. `save slot exists` reads `EventRuntime.SaveProjectFolder`, set by
+  `EventsManager` from `EventFiles.LocateProjectFolder` (the folder holding both `Content` and
+  `Source`); a runtime without that folder says no. `delete save` removes one file and treats an
+  already-gone slot as `Missing`. `save stats` / `load stats` stay the in-memory checkpoint and still
+  run before action parsing, so the disk pair never changes their behaviour.
   Not saved in v1, by design: in-flight `wait` continuations, active tweens, particle
   lifetimes, queued pushes and the current path — those restart cleanly rather than resuming
   mid-air.
@@ -1356,6 +1374,29 @@ window around a broken runtime.
   until a character's base graph and mask exist as project assets. Bone names in the mask must be
   matched against the real skeleton — other skeletons (the BGE dragon, for instance) need their own
   mask, and a mask built for the wrong skeleton silently blends nothing.
+
+- **Self-test sheets: a case is a block, not a sequence (Task 51, decided).** The vocabulary is
+  four words — `test "<label>"`, `expect <condition>`, `pass`, `when self test ends` — plus a
+  per-file *Self Test* flag on the `EventSheet`. **A case is an ordinary block**, run when its
+  `when` fires, not a sequencer: the language gains no control flow, a sheet still reads as an
+  example, and the next case is entered by the message the previous one sends. That flatness is
+  the whole reason it fits this syntax — a runner with stages would be a second language beside
+  the first. **`expect` re-parses its tail through `Conditions.Parse`**, so there is no second
+  comparison grammar to drift: every condition the language already accepts (including Task 28's
+  `count of …`, when it lands) is fair game, and a malformed one gets the ordinary friendly
+  condition error at load instead of a test-specific one.
+  *Judging is deliberately unkind.* `pass` reached before the 5 s timeout is a pass; a false
+  `expect` fails and quotes the expectation with both values; a case whose gate never opens is
+  `SKIP`, never `PASS`, because the silently-not-run case is the bug the sheet exists to kill; and
+  a warning raised inside a case fails it.
+  *Two tiers, one file.* The editor plays `SelfTest.scene` and prints `PASS n / FAIL n / SKIP n`;
+  the unit suite plays the same `.events` against `FakeWorld`. A case the fake world cannot reach
+  is tagged `(editor only)` in its label, and the exclusion is stated out loud rather than
+  inferred: `SelfTest.ExcludedLabels` makes `RunEvent` report those cases `SKIP` without running
+  their bodies, and a suite check compares the tags with the documented list **in file order**, so
+  demoting a case needs two edits and cannot happen quietly. The tier earns its keep — its first
+  run found two real sheet bugs (an edge that also fires on a downward crossing; an assertion
+  against an actor the resolver cannot see).
 
 ## 10. The one-paragraph pitch
 

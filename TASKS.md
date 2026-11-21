@@ -196,6 +196,8 @@ top-to-bottom order.)
   children are arrays).
 - [ ] Verify: play a one-file mini-game — press W → cube moves — **needs the user's
   editor run** (see session log for the exact steps).
+  *(Task 51 Part E — no case: a scene, a cube and a person pressing W; the words parse and the
+  runtime rules are unit-covered.)*
 
 ### Part D — Hot reload
 - [x] The manager polls the GameFiles folder (0.25s cadence, mtime signatures — no
@@ -216,6 +218,10 @@ top-to-bottom order.)
 - [ ] Verify (user, editor): with the game playing, save a fix to `Player.events` — the
   change takes effect during the same play session without a restart; save a typo — the
   friendly error appears and the old behavior keeps running until the fix saves.
+  *(Task 51 Part E — no case, and this is the reason: the swap, the friendly error and the old
+  tree playing on are all played headlessly through the real loader (`EventFiles` on temp
+  GameFiles folders). What is left is the editor's own file watcher noticing a save during Play,
+  which no fake world can supply.)*
 
 ### Part E — Per-actor event sheets (the component way)
 
@@ -262,6 +268,9 @@ only the *policy* of who gets which tree changes.
   ("is the engine object still alive") against the real Flax 1.13 API.
 - [ ] Verify (user, editor): assign `EventSheet` to Player/Bullet/Enemy with their files;
   a blank-field dummy still works by name; clones shoot/move via the template's component.
+  *(Task 51 Part E — no case: attach priority, dedupe, clone inheritance and late registration
+  are unit-covered; what is left is assigning the component in the scene inspector, which needs
+  a serialized scene rather than a fake world.)*
 
 ---
 
@@ -313,9 +322,12 @@ opt-in so the existing example and `Distance` mode stay unchanged.
   **Editor run pending** — settings documented in DESIGN §5. Setup: `Bullet` = a **RigidBody**
   actor (dynamic, gravity off, CCD on) named `Bullet`, with the mesh + trigger `SphereCollider`
   as its children, `EventSheet` on the body with `Bullet.events` and *Use Physics Movement* on.
+  *(Task 51 Part E — no case: tunneling and CCD are engine-body behaviour only a real PhysX scene
+  shows; the velocity, brake and push rules are unit-covered.)*
 - [x] Decided Player/Enemy movement: **stay kinematic** (exact arcade speed, not shoved by
   bullets; `hide me` → `wait` → `show me` resumes because the body follows `IsActive`).
   Editor confirm of the hurt cycle still pending.
+  *(Task 51 Part E — no case: a hurt animation is a look on an authored clip.)*
 - [x] Decided `push`: a real `AddForce(..., ForceMode.Impulse)` on a **dynamic** body;
   kinematic/no-body keeps the old transform nudge (forces do nothing on kinematic bodies).
 - [x] Tests: 13 pure-runtime checks (mode selection, dynamic velocity keeps gravity, brake,
@@ -323,6 +335,8 @@ opt-in so the existing example and `Distance` mode stay unchanged.
   **249/249 green**; module build 0/0. Final body settings documented in DESIGN §5.
 - [ ] Editor acceptance in `Colliders` mode with no PhysX console errors (bullet tunneling +
   Player/Enemy hurt cycle) — **pending the user's editor run**.
+  *(Task 51 Part E — no case: PhysX's own console output and a hurt animation need the real
+  engine.)*
 
 ---
 
@@ -335,7 +349,7 @@ invisible. Depends on Tasks 1–3 (like Task 4). DESIGN.md Section 5 "Armature c
 ### Part A — The template graph
 - [x] Character pipeline works: model/armature exported from Blender into the Flax project,
   `char_test` scene has the dragon rigged with AnimatedModel + template Anim Graph (state names = Action names).
-- [x] Verify: `play anim "Idle"` wired via reflective `AnimatedModel.PlayState`; `dragon.events` created for editor play check (editor run pending — Flax API names may need matching against the real `AnimationController`/`PlayState` surface).
+- [x] Verify: `play anim "Idle"` wired via reflective `AnimatedModel.PlayState`; `dragon.events` created for editor play check (editor run pending — Flax API names may need matching against the real `AnimationController`/`PlayState` surface). *(Task 51 Part E — no case: playback only exists on an engine model; the parse-and-classify side is unit-covered.)*
 
 ### Part B — Animation words in the system
 - [x] Word registry entries + parser/lexer support: `play anim "<name>"`, `loop anim "<name>"`,
@@ -349,7 +363,7 @@ invisible. Depends on Tasks 1–3 (like Task 4). DESIGN.md Section 5 "Armature c
 ### Part C — The character example
 - [x] Write `Character.events` exactly as the DESIGN.md "Armature characters" snippet:
   walk-loop / idle on release / one-shot shoot / back to idle when the shot ends.
-- [x] Verify: code path wired (move → loop anim, release → play anim, shoot → play anim + shoot ends → idle); editor play check pending walk/shoot export.
+- [x] Verify: code path wired (move → loop anim, release → play anim, shoot → play anim + shoot ends → idle); editor play check pending walk/shoot export. *(Task 51 Part E — no case: it needs the dragon's exported armature and template graph; the words parse and classify in the suite.)*
 
 ---
 
@@ -423,6 +437,8 @@ DESIGN.md Section 5 "Enemy brains & navigation (the BGE way)" defines everything
   for future diagnostics.
 - [ ] Editor verify: guard patrols indefinitely across waypoint moves/rebuilds —
   pending user's editor run.
+  *(Task 51 Part E — no case: an indefinite patrol is time in a scene; `PollArrival` and the
+  waypoint rules are unit-covered.)*
 - [ ] Note any behavior that felt wrong or vocabulary gap, file a line in DESIGN.md §9.
 
 ### Part E — Forward-facing goto movement
@@ -634,6 +650,8 @@ wants Variant 2 or NavMesh `goto`.
       "path exists" query word).
 - [ ] Editor play check in `TK4_LOS_Test` (bake the NavMesh once): patrol → chase in the open →
       wall breaks the ray → hunt reacquires → 6 s give-up → patrol — pending user's editor run.
+      *(Task 51 Part E — no case: a baked NavMesh plus an authored level; the patrol/hunt/give-up
+      logic is unit-covered.)*
 
 ### Part G2 — Wall negotiation for the no-NavMesh chase (C#, proposed) `[x]`
 Goal: let the line-of-sight chaser **round** an obstacle instead of walking into it or giving up, so
@@ -684,7 +702,8 @@ need colliders — the same requirement the existing sight check already has.
 **Done-when**
 - [ ] Player steps behind one corner: the enemy rounds it and reacquires via `sees player` instead
       of falling into `hunt`/patrol. **(editor run pending: `Enemy_Walls.events` on a second enemy
-      in `TK4_LOS_Test`)**
+      in `TK4_LOS_Test`)** *(Task 51 Part E — no case: a baked NavMesh plus a corner built in a
+      level.)*
 - [x] Head-on wall with both sides open: picks the smaller deviation, no left/right vibration.
       (pure checks: smallest-clear fan order, 0.3 s hysteresis, lean-aware tie-break)
 - [x] No raycasts while the direct path is clear; ≤7 rays per blocked tick per actor.
@@ -692,6 +711,8 @@ need colliders — the same requirement the existing sight check already has.
 - [ ] Verified in all four move modes (transform, dynamic, kinematic, character).
       **Editor run pending** — the steering only produces a heading, so it reaches the body through
       the existing `MoveSubject`; this is the same hand-off Task 12 tested per mode.
+      *(Task 51 Part E — no case: four body modes need four real bodies; the heading arithmetic is
+      unit-covered.)*
 - [x] Opt-in only: existing scenes and `.events` behave exactly as before.
 - [x] Concave pockets (U-shapes) still fall back to `hunt`/patrol — documented limit, not a bug.
 - [x] Record the corner-sampling vs wall-following decision and any vocabulary friction in DESIGN §9.
@@ -709,7 +730,8 @@ rounds the corner, then hand over to the blind arc. **Tests:** 19 new pure check
 fan order/budget, smallest deviation, both sides, hysteresis + expiry + tie-break, clear = one ray,
 stuck force-sampling and reset, tangent + flip, blind fan ray cap, clear/reset, companion sheet)
 → **1340/1340 green**. Module build: 0 errors (7 pre-existing XML-doc warnings elsewhere) —
-**editor play checks still yours** (bake the NavMesh once for the patrol; the chase needs none).
+**editor play checks still yours** (bake the NavMesh once for the patrol; the chase needs none) —
+no Task 51 case, for G1's reason: NavMesh plus level content.
 
 **Out of scope:** agent-to-agent avoidance, separation/flocking, and full local pathfinding.
 Variant 2 (waypoint graph) and NavMesh `goto` remain the answers for corridors and long routes.
@@ -771,7 +793,8 @@ toward` only, separation range/perpendicularity/behind/stack/weight/blend, `Move
 clamps + zero dt, both shipped sheets chasing with `facing forward`) → **1359/1359 green**. Module
 build: 0 errors (the same 7 pre-existing XML-doc warnings). **Editor play check still yours:** two
 chasers no longer wedge, bodies face travel on the chase and on patrol, no wall crossing or landing
-on the player, no lurch on a frame hitch, and the `[jump]` log stays quiet.
+on the player, no lurch on a frame hitch, and the `[jump]` log stays quiet. *(Task 51 Part E — no case: feel in a real crowd; the separation
+arithmetic and both shipped sheets are unit-covered.)*
 
 ### Part G3 — Arcade lane enemy (Double Dragon / Contra style) `[x]`
 Goal: an arcade-floor enemy with none of the top-down machinery — no NavMesh, no raycasts, no
@@ -868,7 +891,8 @@ scene composes existing pieces (no C#).
   `EnemiesAlive -1` + `Kills Zombie 1`, spawner cap at 4, near gate stops spawning, plus the
   condition-lookup follow-up below) → **1378/1378 green**; Flax module build clean. **Editor play
   checks still yours** (walk right, contact once, kill five, lane bounds) — nothing here was run
-  in the editor.
+  in the editor. *(Task 51 Part E — no case: the lane needs the authored scene; the five mechanics
+  are unit-covered.)*
 
 **Follow-up (same day) — condition lookups resolve players like triggers do.** A *condition*
 looked names up literally (`EventRuntime.FindNamedActor`), so the portable lowercase `player`
@@ -1087,6 +1111,8 @@ DESIGN.md Section 5 "Point & click adventures (the composition showcase)" define
   pick up → click door again = opens → NPC dialogue choices set a story flag.
   (play verification awaits the user's editor run; all five `.events` files parse clean and
   the full unit suite is 318/318 green)
+  *(Task 51 Part E — no case: a hover, a click and a walk through an authored level is a play
+  session, not a word test.)*
 - [x] Note any vocabulary friction in a DESIGN.md §9 line.
 
 ### Part D — Inventory selection & use-item-on-object
@@ -1169,6 +1195,8 @@ Same shape as `WeaponData`: `<Spell><Field>` globals in a new `SpellData.events`
 - [ ] Done-when: two spells with different mana/cooldowns fire from the same player sheet.
       **Editor run pending** — needs E2's `my Mana` block on the player sheet and a `Fireball`
       actor in the scene to stage the projectile clones.
+      *(Task 51 Part E — no case: it needs authored sheets and an actor in a scene; the spend and
+      cooldown rules are unit-covered.)*
 
 **As shipped (2026-11-16):** `Runtime/Spells.cs` — `SpellStats`, `SpellData` (the
 `<Spell><Field>` table: `LoadData`, `TrySplitField`, `CanonicalFor`, `KnownNames`, `TryGet`,
@@ -1221,6 +1249,8 @@ shipped data file) → **1476/1476 green**; module build 0 errors.
       **Editor run pending** — place a `Ring` actor in the scene (the template the clone stages
       from), add a sheet with `spawn Ring at me rarity "Rare" level 12`, and read the clone's
       `my FireResist` / `my ItemName`.
+      *(Task 51 Part E — no case: a rolled ring needs a spawned clone in a scene; the generator is
+      unit-covered.)*
 
 **As shipped (2026-11-16):** `Runtime/Items.cs` — `ItemBase`/`ItemData` (`<Base>Slot`,
 `Damage`, `Armor`, `ItemLevel` from `ItemData.events`), `AffixDef`/`RarityDef`/`AffixData`
