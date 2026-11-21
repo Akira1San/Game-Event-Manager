@@ -14687,6 +14687,41 @@ Check(WordRegistry.All.Any(e => e.Word == "when row <n> of list <thing> is click
       WordRegistry.All.Any(e => e.Word == "my ClickedSlot"),
     "the word book lists both cell triggers and both clicked-value names");
 
+// ------------------------------------------------------------------
+// Task 34 Part C follow-up: a clipped row/slot is not clickable
+// ------------------------------------------------------------------
+
+// The bridge falls back to its own screen rectangle when Flax's canvas delivered no mouse
+// event; that fallback now intersects the control with every clipping parent. The geometry is
+// engine-free, so the rules are checked here.
+var plainControl = new UiRect(100, 50, 200, 40);
+Check(UiHitTest.IsClickablePoint(plainControl, null, 150, 70),
+    "a point inside a control with no clipping parents is clickable");
+Check(!UiHitTest.IsClickablePoint(plainControl, null, 50, 70),
+    "a point outside the control is not clickable");
+
+// A row scrolled half past the bottom edge of its panel is drawn clipped: the visible half
+// answers, the clipped half does not, even though both are inside the row's own rectangle.
+var clippedRow = new UiRect(100, 300, 200, 60);
+var panelClip = new UiRect(80, 40, 260, 280); // bottom edge at y = 320
+Check(UiHitTest.IsClickablePoint(clippedRow, new List<UiRect> { panelClip }, 150, 310),
+    "the visible part of a partially clipped row is clickable");
+Check(!UiHitTest.IsClickablePoint(clippedRow, new List<UiRect> { panelClip }, 150, 330),
+    "the clipped part of that row is not clickable");
+
+// Every clipping parent counts, not just the nearest one.
+var outerClip = new UiRect(0, 0, 120, 1000);
+Check(!UiHitTest.IsClickablePoint(plainControl,
+        new List<UiRect> { new UiRect(0, 0, 1000, 1000), outerClip }, 150, 70),
+    "a point outside an outer clipping parent is not clickable");
+
+// Closed/collapsed parents and controls hold nothing.
+Check(!UiHitTest.IsClickablePoint(plainControl,
+        new List<UiRect> { new UiRect(0, 0, 0, 500) }, 150, 70),
+    "a collapsed clipping parent blocks the click");
+Check(!UiHitTest.IsClickablePoint(new UiRect(100, 50, 0, 0), null, 100, 50),
+    "a zero-size control is never clickable");
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);
@@ -14699,6 +14734,9 @@ class FakeActor
     }
 
     public string Name;
+    /// <summary>The scene parent, so a test can author `Row1` / `Slot1` children of a container
+    /// like the bridge's row/slot lookup does (Task 34 Part C).</summary>
+    public object Parent;
 
     public override string ToString()
     {
@@ -14715,9 +14753,6 @@ class DecoratedActor
     }
 
     public string Name;
-    /// <summary>The scene parent, so a test can author `Row1` / `Slot1` children of a container
-    /// like the bridge's row/slot lookup does (Task 34 Part C).</summary>
-    public object Parent;
 
     public override string ToString()
     {

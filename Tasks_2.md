@@ -871,10 +871,16 @@ fill them; a later version can create controls. Either way, the event text stays
       Ordinary `when <thing> is clicked` is untouched. Registry + `keywords.html` rows for both
       triggers and both value names. 12 new checks -> **2428 passed, 0 failed**; `dotnet build
       Source/Game.csproj -c Editor.Windows.Debug` 0 errors and `Flax.Build -target=GameEditorTarget`
-      exits 0. Known limits recorded here rather than hidden: the engine hit-test broadcasts a click
-      to every `UIControl` under the cursor and does not clip to a scroll panel, so a filled row
-      scrolled out of view but under the cursor could still fire (a bridge hit-test fix, not a word);
-      the trigger is data-driven, so hand-authored rows that no `add row` / `set row` line filled do
+      exits 0. A follow-up fixed the clipping hole this note used to record: the bridge's fallback
+      screen-rect test (`MouseOverUIControl`, used when Flax's canvas delivered no mouse event) now
+      builds the rect from `Control.ScreenPos`/`Width`/`Height` and intersects it with every parent
+      that clips (`ContainerControl.ClipChildren` or a `ScrollableControl`), through the engine-free
+      `Runtime/UiHitTest.cs`, so the hidden part of a partially scrolled row cannot be clicked; a
+      collapsed parent or a zero-size control is never clickable, and `VisibleInHierarchy` is
+      honoured. The engine test still broadcasts a click to every `UIControl` under the cursor (a
+      container hears a click its child also hears), and clipping for the visibility of the control
+      tree relies on Flax's own `IsMouseOver`, which already walks clipped children. Known limits
+      recorded here rather than hidden: the trigger is data-driven, so hand-authored rows that no `add row` / `set row` line filled do
       not answer clicks; `my ClickedRow` keeps the last clicked value after its block ends; and a
       mistyped cell trigger is an unknown trigger that never fires, like every other mistyped trigger
       (the language has no load-time error path for trigger shapes). Editor play-check pending (a

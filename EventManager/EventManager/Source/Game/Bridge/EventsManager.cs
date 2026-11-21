@@ -1879,6 +1879,14 @@ namespace Game
         /// actor transform when it is not. `ui.Position` is the control's top-left corner (X in
         /// screen pixels, Y world up), so Y is flipped — the old text-sized box treated that
         /// corner as a centre, which left the right half of a 190 px wide button unclickable.</summary>
+        /// <summary>
+        /// True when the mouse is over <paramref name="ui"/> and not clipped away by a parent.
+        /// Flax's own <c>IsMouseOver</c> already walks the clipped tree, so it stays the first
+        /// answer (exact when the canvas receives mouse events). The fallback — needed when the
+        /// canvas delivered nothing — now tests the control's real screen rectangle and intersects
+        /// it with every parent that clips, so a list row scrolled behind the edge of its panel, or
+        /// a slot outside a container with `ClipChildren`, cannot be clicked where it is not drawn.
+        /// </summary>
         private static bool MouseOverUIControl(UIControl ui, Float2 mousePos)
         {
             var control = ui.Control;
@@ -1892,12 +1900,23 @@ namespace Game
                 return false;
             if (control.IsMouseOver)
                 return true;
-
-            Float2 topLeft = new Float2(ui.Position.X, -ui.Position.Y);
-            float width = control.Width > 0 ? control.Width : 120f;
-            float height = control.Height > 0 ? control.Height : 40f;
-            return mousePos.X >= topLeft.X && mousePos.X <= topLeft.X + width &&
-                   mousePos.Y >= topLeft.Y && mousePos.Y <= topLeft.Y + height;
+            if (!control.VisibleInHierarchy)
+                return false;
+            var clips = new List<UiRect>();
+            for (FlaxEngine.GUI.Control parent = control.Parent; parent != null; parent = parent.Parent)
+            {
+                bool scrolls = parent is FlaxEngine.GUI.ScrollableControl;
+                bool clipsChildren = parent is FlaxEngine.GUI.ContainerControl container &&
+                                     container.ClipChildren;
+                if (!scrolls && !clipsChildren)
+                    continue;
+                Float2 corner = parent.ScreenPos;
+                clips.Add(new UiRect(corner.X, corner.Y, parent.Width, parent.Height));
+            }
+            Float2 topLeft = control.ScreenPos;
+            return UiHitTest.IsClickablePoint(
+                new UiRect(topLeft.X, topLeft.Y, control.Width, control.Height),
+                clips, mousePos.X, mousePos.Y);
         }
 
         /// <summary>Collect every EventSheet component currently on scene actors, so manager and
