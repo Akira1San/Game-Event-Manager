@@ -1103,6 +1103,16 @@ namespace Game
         private StatementNode ParseSet(BodyLineNode line)
         {
             var words = line.Words;
+            // `set root motion on` / `off` — the actor's root-motion switch (Task 33 Part D). Another
+            // action word, not a global called "root motion", so it goes to the action parser (which
+            // also owns the friendly warning for a bare `set root motion`).
+            if (words.Count >= 3 && words[1].Type == TokenType.Word && words[1].Text == "root" &&
+                words[2].Type == TokenType.Word && words[2].Text == "motion")
+            {
+                var rootMotionRaw = new RawActionNode { Line = line.Line };
+                rootMotionRaw.Words.AddRange(words);
+                return rootMotionRaw;
+            }
             // `set anim speed to <n>` — animation playback speed (Task 33 Part A). An action word,
             // not a global variable called "anim speed", so it goes to the action parser.
             if (words.Count >= 3 && words[1].Type == TokenType.Word && words[1].Text == "anim" &&

@@ -2097,7 +2097,8 @@ namespace Game
             if (descriptor.Kind == TriggerKind.AnimMarker)
                 return string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase) &&
                        string.Equals(signal.Marker, descriptor.RequireMarker, StringComparison.OrdinalIgnoreCase);
-            if (descriptor.Kind == TriggerKind.AnimEnd || descriptor.Kind == TriggerKind.ParticleEnd)
+            if (descriptor.Kind == TriggerKind.AnimEnd || descriptor.Kind == TriggerKind.AnimStart ||
+                descriptor.Kind == TriggerKind.ParticleEnd)
                 return string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase);
             // `when music ends`: any track, or the one the trigger names. Music is global, so the
             // signal is broadcast and a name-less trigger answers every sheet (Task 31).

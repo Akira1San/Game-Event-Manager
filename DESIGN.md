@@ -1344,7 +1344,14 @@ window around a broken runtime.
   *Root motion belongs to the locomotion clip only.* `AnimatedModel.RootMotionTarget` is assigned once
   on the base graph and drives nothing else; slot clips never write the actor transform, so an
   upper-body clip cannot double-apply displacement or slide the feet. The single-clip fallback graphs
-  keep `rootMotion: false`.
+  keep `rootMotion: false` — there the clip is the whole pose and the sheet's `move` / `goto` owns the
+  transform, so clip motion would double the displacement. `set root motion on` / `off` (default off)
+  is therefore a narrow word: Flax exposes the mode only as the `InitAsAnimation` build flag and
+  `RootMotionTarget` at runtime, never as a property of an authored graph, so the bridge can only aim
+  an authored graph's already-extracted motion at the sheet's actor, and `off` cannot disable it.
+  A clip that actually moves its actor needs an authored graph with root motion enabled plus a clip
+  imported with root motion — content, not code — and its motion adds to `move`, so an actor should be
+  driven by one or the other.
   **Content dependency:** the bridge cannot synthesize any of this, so Task 33 C is not startable
   until a character's base graph and mask exist as project assets. Bone names in the mask must be
   matched against the real skeleton — other skeletons (the BGE dragon, for instance) need their own

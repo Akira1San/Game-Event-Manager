@@ -1111,6 +1111,115 @@ Check(!AnimPlayback.PickForPercent("swing", "walk", 2, "aim", 2, out _) &&
 Check(Math.Abs(AnimPlayback.Progress(11, 10, 2, 1, false) - 0.5) < 1e-9,
     "the layered clip's progress uses the same speed-scaled clock as the whole-body one");
 
+// ---- Task 33 Part D: the root-motion toggle ----
+
+var rootOn = parser.Parse("when me appears\n  set root motion on\n");
+var rootOnSpec = ActionWords.Parse(((RawActionNode)rootOn.Events[0].Body[0].Statement!).Words, _ => { });
+Check(rootOnSpec.Verb == ActionVerb.SetRootMotion && rootOnSpec.RootMotionOn,
+    "`set root motion on` parses to SetRootMotion with the switch on");
+
+var rootOff = parser.Parse("when me appears\n  set root motion off\n");
+var rootOffSpec = ActionWords.Parse(((RawActionNode)rootOff.Events[0].Body[0].Statement!).Words, _ => { });
+Check(rootOffSpec.Verb == ActionVerb.SetRootMotion && !rootOffSpec.RootMotionOn,
+    "`set root motion off` parses to SetRootMotion with the switch off");
+
+var rootBare = parser.Parse("when me appears\n  set root motion\n");
+var rootBareSpec = ActionWords.Parse(((RawActionNode)rootBare.Events[0].Body[0].Statement!).Words, _ => { });
+Check(rootBareSpec.Verb == ActionVerb.Unknown,
+    "`set root motion` without on/off is a friendly unknown, not a variable write");
+
+Check(RootMotion.OutcomeFor(true, false) == RootMotion.Outcome.AuthoredGraph &&
+      RootMotion.OutcomeFor(true, true) == RootMotion.Outcome.FallbackIgnores &&
+      RootMotion.OutcomeFor(false, false) == RootMotion.Outcome.NoGraph,
+    "root motion is only reachable on an authored base graph — never on a bridge-built single-clip graph");
+
+// ---- Task 33 Part E: start edges, the remaining edges, and the example sheet ----
+
+var animStart = parser.Parse("when anim \"Attack\" starts\n  set Started to 1\n");
+var animStartDesc = TriggerClassifier.Classify(animStart.Events[0]);
+Check(animStartDesc.Kind == TriggerKind.AnimStart && animStartDesc.RequireName == "Attack",
+    "`when anim \"Attack\" starts` classifies to AnimStart with the clip name");
+
+var startEngine = FreshEngine(new FakeWorld());
+startEngine.AddSheet(new FakeActor("Swordsman"),
+    parser.Parse("when anim \"attack\" starts\n  add 1 to Starts\n"));
+startEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.AnimStart, Name = "Attack" });
+startEngine.Tick(0);
+startEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.AnimStart, Name = "Walk" });
+startEngine.Tick(0.1);
+Check(startEngine.Variables.GetGlobal("Starts").AsNumber() == 1,
+    "an anim start push answers its own clip and only its clip, matched loosely");
+
+var markerOnceEngine = FreshEngine(new FakeWorld());
+markerOnceEngine.AddSheet(new FakeActor("Swordsman"),
+    parser.Parse("when anim \"attack\" hits \"impact\"\n  add 1 to Hits\n"));
+markerOnceEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.AnimMarker, Name = "Attack", Marker = "impact" });
+markerOnceEngine.Tick(0);
+markerOnceEngine.Tick(0.1);
+markerOnceEngine.Tick(0.2);
+Check(markerOnceEngine.Variables.GetGlobal("Hits").AsNumber() == 1,
+    "one marker crossing fires once — the push is an edge, not a per-tick poll");
+
+var zeroWorld = new FakeWorld();
+var zeroEngine = FreshEngine(zeroWorld);
+var zeroHero = new FakeActor("Hero");
+zeroEngine.AddSheet(zeroHero, parser.Parse("when anim \"Attack\" reaches 0%\n  add 1 to Zero\n"));
+zeroWorld.SetAnimProgress(zeroHero, "Attack", 0, 1);
+zeroEngine.Tick(0);
+zeroWorld.SetAnimProgress(zeroHero, "Attack", 0.4, 1);
+zeroEngine.Tick(0.1);
+Check(zeroEngine.Variables.GetGlobal("Zero").AsNumber() == 1,
+    "`reaches 0%` fires on the first tick and not again as the clip runs on");
+
+var hundredWorld = new FakeWorld();
+var hundredEngine = FreshEngine(hundredWorld);
+var hundredHero = new FakeActor("Hero");
+hundredEngine.AddSheet(hundredHero, parser.Parse("when anim \"Attack\" reaches 100%\n  add 1 to Done\n"));
+hundredWorld.SetAnimProgress(hundredHero, "Attack", 0.99, 1);
+hundredEngine.Tick(0);
+hundredWorld.SetAnimProgress(hundredHero, "Attack", 1, 1);
+hundredEngine.Tick(0.1);
+Check(hundredEngine.Variables.GetGlobal("Done").AsNumber() == 1,
+    "`reaches 100%` waits for the last frame, not the tick before it");
+
+Check(Math.Abs(AnimPlayback.EndTime(10, 2, 2) - 11) < 1e-9 &&
+      AnimPlayback.ClampSpeed(0) == AnimPlayback.MinSpeed &&
+      AnimPlayback.ClampSpeed(99) == AnimPlayback.MaxSpeed &&
+      Math.Abs(AnimPlayback.RetimedEnd(11, 10, 2, 1, 2) - 11.5) < 1e-9,
+    "speed arithmetic: the end scales with speed, out-of-range speeds clamp, and a mid-clip change keeps what was played");
+
+// The example sheet is the acceptance sheet for the editor play-checks, so the suite loads it and
+// proves every action line in it is a shipped word — a sheet that drifted would otherwise only
+// surface in the editor.
+string animationPath = "Source/Game/GameFiles/Animation.events";
+var animationProgram = parser.Parse(File.ReadAllText(animationPath));
+var animationUnknown = new List<string>();
+var animationTriggers = new List<TriggerKind>();
+int animationActions = 0;
+foreach (var animationEvent in animationProgram.Events)
+{
+    animationTriggers.Add(TriggerClassifier.Classify(animationEvent).Kind);
+    foreach (var animationLine in animationEvent.Body)
+    {
+        if (animationLine.IsCondition)
+            continue;
+        RawActionNode animationRaw = animationLine.Statement as RawActionNode;
+        if (animationRaw == null)
+            continue;
+        animationActions++;
+        ActionSpec animationSpec = ActionWords.Parse(animationRaw.Words, null);
+        if (animationSpec.Verb == ActionVerb.Unknown)
+            animationUnknown.Add(string.Join(" ", animationRaw.Words.ConvertAll(word => word.Text)));
+    }
+}
+if (animationUnknown.Count > 0)
+    Console.WriteLine("  first animation line that is not a shipped word: " + animationUnknown[0]);
+Check(animationProgram.Events.Count >= 8 && animationActions >= 8 && animationUnknown.Count == 0,
+    $"every action line in the animation example is a shipped word ({animationActions} lines)");
+Check(animationTriggers.Contains(TriggerKind.AnimStart) && animationTriggers.Contains(TriggerKind.AnimReaches) &&
+      animationTriggers.Contains(TriggerKind.AnimEnd) && animationTriggers.Contains(TriggerKind.AnimMarker),
+    "the animation example exercises the start, end, percent and marker triggers");
+
 // ------------------------------------------------------------------
 // Task 14 Part A: Particle System words
 // ------------------------------------------------------------------

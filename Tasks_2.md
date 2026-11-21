@@ -600,7 +600,7 @@ not a post-process dependency.
 
 ---
 
-## Task 33 — Animation Depth `[ ]`
+## Task 33 — Animation Depth `[x]`
 
 Goal: `play anim` / `loop anim` / `stop anim` cover the BGE basics, but action games need speed
 control, hit windows and layering. Without this, fighting/action RPG/platformer timing lives in
@@ -681,13 +681,51 @@ when every 0.2 seconds
       arms and hands enabled and **hips, root, legs and feet disabled** are authored in the Flax editor.
       The bridge cannot synthesize them, and no character in this project ships them yet, so the words
       are ready but the layer is unplaytested until those assets exist.
-- [ ] **Part D — Root motion.** Toggle whether the clip’s root motion moves the actor or is ignored,
-      and document interaction with `move` and `goto`. Ownership rule: **root motion belongs to the
-      locomotion clip only** — slot clips never write the actor transform, so an upper-body clip
-      cannot double-apply displacement or slide the feet. Assign `AnimatedModel.RootMotionTarget` once
-      on the base graph; do not enable `rootMotion` on any single-clip fallback graph.
-- [ ] **Part E — Tests and docs.** Speed arithmetic, 0%/100% edges, marker once, start/end edges,
-      upper body stop restores base, root motion toggle does not double-move the actor.
+- [x] **Part D — Root motion.** `set root motion on` / `off` is a per-sheet action word
+      (`ActionVerb.SetRootMotion`, `ActionSpec.RootMotionOn`) with the default **off**, so no existing
+      sheet changes behaviour. Engine-free `Runtime/RootMotion.cs` holds the rules the bridge obeys:
+      `OutcomeFor(hasGraph, bridgeBuiltGraph)` says what the word can actually do — `NoGraph` warns
+      that nothing is animated yet, `FallbackIgnores` warns that a bridge-built single-clip graph never
+      extracts root motion (there the clip *is* the whole pose, and `move` / `goto` owns the transform,
+      so both would double the displacement), and `AuthoredGraph` is the only case with a real effect:
+      the graph's `AnimatedModel.RootMotionTarget` is pointed at the sheet's actor **once** (without a
+      target Flax applies the motion to the model itself, usually a child of that actor). Ownership
+      rule, enforced by construction: **root motion belongs to the locomotion clip only** — nothing in
+      the bridge enables it for a slot, so an upper-body clip cannot double-apply displacement or
+      slide the feet (`RootMotion.SlotsMove` is false).
+      **What the code cannot do, and needs content for:** Flax's C# API exposes root motion only as the
+      `InitAsAnimation` build flag for a virtual graph and as `RootMotionTarget` at runtime — there is
+      no property to flip extraction on an authored graph. So with only the bridge's own graphs, the
+      toggle can do nothing at all, and `set root motion off` cannot switch off an authored graph that
+      extracts motion; a clip actually moving its actor needs an authored base Anim Graph with root
+      motion enabled (Extract Node / Center of Mass plus flags) and a clip imported with root motion —
+      both are editor content. Interaction with `move` / `goto`: clip motion is applied **in addition
+      to** the sheet's own movement, so drive an actor one way or the other, not both.
+- [x] **Part E — Tests and docs.** The table's last word is built here too: `when anim "<name>"
+      starts` (`TriggerKind.AnimStart`, matched loosely like `ends`) is pushed by the bridge when a
+      play really begins — `play anim` / `loop anim`, whole-body or layered — so a held trigger that
+      re-plays nothing pushes nothing.
+      Suite checks: speed arithmetic (`EndTime` scales, out-of-range speeds clamp, `RetimedEnd` keeps
+      what was played), `reaches 0%` firing on the first tick and not again, `reaches 100%` waiting
+      for the last frame, one marker crossing firing once rather than per tick, and the start/end
+      edges answering their own clip only.
+      The example sheet `Source/Game/GameFiles/Animation.events` is the acceptance sheet: a hit at
+      `reaches 60%`, the `hits "impact"` alternative, a shooting layer over a walk, live speed and
+      `set root motion on`, with editor setup notes in its header. The suite loads it and proves every
+      action line is a shipped word and that the four Task 33 trigger kinds all appear, so a doc that
+      drifted from the language fails in CI instead of in the editor.
+      **Two bullets stay editor play-checks** — they exist only on content this project does not ship
+      yet, so no suite check can prove them: (1) `stop anim upper body` blends the masked bones back
+      onto the locomotion pose with the legs still walking (base graph + `SkeletonMask`); (2) `set
+      root motion on` moves the actor once, without double-moving it beside `move` (authored graph
+      with root motion enabled + a clip imported with root motion). Play-check list:
+        1. Left Mouse: the swing damages at ~60% of the clip, not before, and `when anim "Attack"
+           starts` fires once per press.
+        2. Hold Left Shift: the swing and the walk visibly speed up with no restart or pop.
+        3. Walk with W, then Right Mouse: the upper body shoots while the legs keep walking; the
+           layer fades out when the clip ends, and `stop anim upper body` leaves the walk intact.
+        4. With root motion content: walking moves the actor once (watch it beside `move`), and
+           `set root motion off` does not double it.
 
 ### Done-when
 

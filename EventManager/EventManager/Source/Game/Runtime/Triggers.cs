@@ -45,6 +45,9 @@ namespace Game
         WatchChanges,
         Message,
         AnimEnd,
+        /// <summary><c>when anim "&lt;name&gt;" starts</c> (Task 33 Part E): fires once when a clip is
+        /// played on this actor, matching the name as written in the <c>play anim</c> / <c>loop anim</c>.</summary>
+        AnimStart,
         /// <summary><c>when anim "&lt;name&gt;" reaches &lt;n&gt;%</c> and
         /// <c>when anim "&lt;name&gt;" hits "&lt;marker&gt;"</c> (Task 33 Part B).</summary>
         AnimReaches,
@@ -493,6 +496,10 @@ namespace Game
                     RequireName = trigger[1].Text,
                     RequireMarker = trigger[3].Text,
                 };
+            // `when anim "<name>" starts` (Task 33 Part E): the enter edge of a play. The bridge pushes
+            // it when a clip actually starts, so a held trigger that re-plays nothing fires nothing.
+            if (words.Length == 3 && words[0] == "anim" && words[2] == "starts")
+                return new TriggerDescriptor { Kind = TriggerKind.AnimStart, RequireName = trigger[1].Text };
             if (words.Length >= 3 && words[0] == "anim")
                 return new TriggerDescriptor { Kind = TriggerKind.AnimEnd, RequireName = trigger[1].Text };
             // `when music ends` — the one music player stopped. The optional quoted name only

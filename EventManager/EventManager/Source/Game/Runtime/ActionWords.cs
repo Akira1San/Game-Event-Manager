@@ -53,6 +53,9 @@ namespace Game
         StopAnim,
         /// <summary><c>set anim speed to &lt;n&gt;</c> — per-sheet playback speed (Task 33 Part A).</summary>
         SetAnimSpeed,
+        /// <summary><c>set root motion on</c> / <c>off</c> (Task 33 Part D): the actor's own switch for
+        /// whether the clip's extracted motion moves it.</summary>
+        SetRootMotion,
         PlayParticle,
         StopParticle,
         SetLightIntensity,
@@ -162,6 +165,9 @@ namespace Game
         public List<Token> Leftover = new List<Token>();
         /// <summary><c>select all &lt;unit type&gt;</c> / <c>deselect all</c>.</summary>
         public bool All;
+        /// <summary><c>set root motion on</c> / <c>off</c>: the state the word asked for (Task 33 Part D).
+        /// What it can actually change depends on the graph — see <see cref="RootMotion"/>.</summary>
+        public bool RootMotionOn;
         /// <summary><c>play anim "&lt;name&gt;" upper body</c> (and the <c>loop</c> / <c>stop</c> forms):
         /// the clip goes into the base Anim Graph's <c>UpperBody</c> Animation Slot, behind a Blend With
         /// Mask, instead of replacing the whole pose (Task 33 Part C).</summary>
@@ -1333,6 +1339,16 @@ namespace Game
                 }
                 case "set":
                 {
+                    // `set root motion on` / `off` (Task 33 Part D): its own action word, not a
+                    // variable called "root motion". Checked before `set <var> to ...`.
+                    if (words.Count >= 4 && words[1].Text == "root" && words[2].Text == "motion" &&
+                        (words[3].Text == "on" || words[3].Text == "off"))
+                    {
+                        spec.RootMotionOn = words[3].Text == "on";
+                        return Finish(spec, ActionVerb.SetRootMotion, words, 4);
+                    }
+                    if (words.Count >= 3 && words[1].Text == "root" && words[2].Text == "motion")
+                        return Unknown(spec, words, "\u201Cset root motion\u201D takes \u201Con\u201D or \u201Coff\u201D, like \u201Cset root motion on\u201D", warn);
                     // `set anim speed to <n>` — the acting actor's playback speed (Task 33 Part A).
                     // Its own action word, not a global variable called "anim speed".
                     if (words.Count >= 5 && words[1].Text == "anim" && words[2].Text == "speed" && words[3].Text == "to")

@@ -1395,6 +1395,9 @@ namespace Game
                 case ActionVerb.SetAnimSpeed:
                     SetAnimSpeed(context, spec);
                     break;
+                case ActionVerb.SetRootMotion:
+                    SetRootMotion(context, spec);
+                    break;
                 case ActionVerb.CameraFollow:
                     StartCameraFollow(context, spec);
                     break;
@@ -6134,6 +6137,10 @@ namespace Game
                 PreviousName = state?.Name,
                 PreviousLoop = state?.Loop ?? true,
             };
+
+            // `when anim "<name>" starts` (Task 33 Part E): this is a real play, not the early
+            // return above, so the enter edge fires exactly once per play.
+            EventsManager.Instance?.HandleAnimStart(me, spec.Thing.Trim());
         }
 
         /// <summary>
@@ -6197,6 +6204,9 @@ namespace Game
                 Length = anim.Length,
                 Play = ++AnimPlayCounter,
             };
+
+            // A layered play is a play too: `when anim "Shoot" starts` answers it (and `ends` already does).
+            EventsManager.Instance?.HandleAnimStart(me, spec.Thing.Trim());
         }
 
         /// <summary>
@@ -6268,6 +6278,58 @@ namespace Game
                 upper.StartTime = AnimPlayback.ReanchoredStart(Time.GameTime, upper.StartTime, upper.Length,
                     previous, speed);
             }
+        }
+
+        /// <summary>
+        /// <c>set root motion on</c> / <c>off</c> (Task 33 Part D). Root motion belongs to the
+        /// locomotion clip only: the layered slot never feeds it, and the bridge's own single-clip
+        /// graphs are built with it ignored, because there the clip is the whole pose and the sheet's
+        /// <c>move</c> / <c>goto</c> already owns the transform. On an authored base graph the one thing
+        /// this word can do at runtime is point <see cref="FlaxEngine.AnimatedModel.RootMotionTarget"/> at
+        /// the sheet's actor, once — without a target Flax applies the motion to the model itself, which
+        /// is usually a child of that actor. Whether the graph extracts motion at all is authored
+        /// content: Flax exposes the mode only as a build flag.
+        /// </summary>
+        private static void SetRootMotion(EventContext context, ActionSpec spec)
+        {
+            var me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Cset root motion\u201D needs to run on an actor's sheet — the global Game sheet has no model to animate.");
+                return;
+            }
+            var model = ModelOf(me);
+            if (model == null)
+            {
+                WarnOnce($"\u201Cset root motion\u201D needs an AnimatedModel on \u201C{me.Name}\u201D.");
+                return;
+            }
+
+            // A graph the bridge created is one of its single-clip ones; anything else is authored.
+            bool bridgeGraph = AnimStates.TryGetValue(me, out AnimState state) &&
+                (state.Graph == model.AnimationGraph || state.PreviousGraph == model.AnimationGraph);
+            switch (RootMotion.OutcomeFor(model.AnimationGraph != null, bridgeGraph))
+            {
+                case RootMotion.Outcome.NoGraph:
+                    WarnOnce($"\u201Cset root motion\u201D needs an animation on \u201C{me.Name}\u201D first — there is no Anim Graph to extract motion from.");
+                    return;
+                case RootMotion.Outcome.FallbackIgnores:
+                    WarnOnce("\u201Cset root motion\u201D needs an authored base Anim Graph with root motion enabled: the bridge's " +
+                        "single-clip graphs always ignore it (their clip is the whole pose and `move` / `goto` owns the transform), " +
+                        "so this clip will not move the actor.");
+                    return;
+            }
+
+            if (!spec.RootMotionOn)
+            {
+                WarnOnce("\u201Cset root motion off\u201D cannot disable an authored graph's own root motion — Flax exposes the mode " +
+                    "only when a graph is built, so turn extraction off in the graph (or gate it with a graph parameter) instead.");
+                return;
+            }
+
+            // Authored graph: aim the extracted motion at the sheet's actor, once.
+            if (model.RootMotionTarget == null)
+                model.RootMotionTarget = me;
         }
 
         /// <summary>

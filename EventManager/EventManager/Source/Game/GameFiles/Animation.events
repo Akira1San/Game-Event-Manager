@@ -1,0 +1,56 @@
+# ---------------- Animation.events (Task 33 Part E) ----------------
+# The animation-depth kit in one sheet: a hit timed by the clip itself, an authored marker as the
+# alternative to that percent, a shooting layer over a walk, live speed and the root-motion switch.
+# Every word here is shipped (Task 33 Parts A-D), so this file is also the acceptance sheet for
+# Task 33's play-check list in Tasks_2.md.
+#
+# SETUP (editor):
+#   1. Player: an AnimatedModel with clips named Attack, Shoot, Aim and Walk (any skeleton; the
+#      bridge matches clip names loosely and warns once per unknown name).
+#   2. For `hits "impact"`: a Marker Anim Event on Attack's Animation Event track, named impact.
+#      Flax keeps a clip's event list editor-side, so a clip without one never fires that trigger —
+#      the `reaches 60%` block below is the fallback, and the two are alternatives: keep one.
+#   3. For the upper-body layer: Task 33 Part C's authored base Anim Graph (a Blend With Mask whose
+#      Pose B is an Animation Slot named UpperBody) plus a SkeletonMask with the spine and arms
+#      enabled and the hips, root, legs and feet disabled. Without that graph the layer warns and
+#      does nothing, so the legs keep walking either way.
+#   4. For root motion: an authored base graph with root motion enabled and a clip imported with
+#      root motion. On the bridge's own single-clip graphs the word warns and ignores it.
+#
+# Keys: Left Mouse attacks, Right Mouse fires the layered shot, Left Shift jogs the animation.
+
+# --- a hit timed by the clip, not a guessed wait ---
+when Left Mouse is pressed
+  play anim "Attack"
+
+when anim "Attack" starts
+  set my ComboWindow to 1
+
+when anim "Attack" reaches 60%
+  damage area around me by my Damage for radius 180
+  play sound "swing"
+
+when anim "Attack" reaches 100%
+  set my ComboWindow to 0
+
+# --- the marker form: drop the 60% block above and author `impact` on the clip instead ---
+when anim "Attack" hits "impact"
+  set my ImpactFromMarker to 1
+
+# --- shooting while walking: the legs keep the locomotion clip ---
+when Right Mouse is pressed
+  play anim "Shoot" upper body
+
+when anim "Shoot" ends
+  stop anim upper body
+
+# --- live speed, and letting the clip move the actor ---
+when Left Shift is held
+  set anim speed to 1.8
+
+when Left Shift is released
+  set anim speed to 1
+
+when me appears
+  loop anim "Walk"
+  set root motion on

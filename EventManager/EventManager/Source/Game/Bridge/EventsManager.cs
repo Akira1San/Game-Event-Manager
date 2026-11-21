@@ -108,6 +108,18 @@ namespace Game
             Runtime.PushContact(TriggerKind.Overlaps, me, other);
         }
 
+        /// <summary>
+        /// A clip started on this actor — push `when anim "&lt;name&gt;" starts` (Task 33 Part E). The
+        /// bridge only calls this when playback really began, so a held trigger that re-plays the clip
+        /// it already has does not push another enter edge.
+        /// </summary>
+        public void HandleAnimStart(Actor actor, string animName)
+        {
+            if (actor == null || string.IsNullOrEmpty(animName))
+                return;
+            Runtime.RaisePush(actor, new PushSignal { Kind = TriggerKind.AnimStart, Name = animName });
+        }
+
         /// <summary>An animation one-shot finished on this actor — push an AnimEnd trigger to its sheet.</summary>
         public void HandleAnimEnd(Actor actor, string animName)
         {
