@@ -165,6 +165,9 @@ namespace Game
         /// qualifier, and since the G2 follow-up also a <c>move toward</c> one.</summary>
         public bool FaceForward;
         public ValueNode AmountNode;
+        /// <summary><c>jump again</c> (Task 21 Part A): the airborne gate is bypassed only for this
+        /// form, and only while the actor's <c>my Jumps</c> count still has a take-off left.</summary>
+        public bool Again;
         public List<Token> Leftover = new List<Token>();
         /// <summary><c>select all &lt;unit type&gt;</c> / <c>deselect all</c>.</summary>
         public bool All;
@@ -1028,16 +1031,24 @@ namespace Game
 
                 case "jump":
                 {
-                    // `jump` / `jump strength 350`: a vertical take-off, refused in mid-air by
-                    // the bridge. No strength means the default arc; `my JumpPower` works too.
+                    // `jump` / `jump strength 350` / `jump again` / `jump again strength 420`: a
+                    // vertical take-off. A plain `jump` is refused in mid-air by the bridge;
+                    // `jump again` is the counted exception (Task 21 Part A) and only passes
+                    // while `my Jumps` still has a take-off left. No strength means the default
+                    // arc; `my JumpPower` works too.
                     int jumpIndex = 1;
-                    if (words.Count >= 3 && words[1].Text == "strength")
+                    if (words.Count >= 2 && words[1].Text == "again")
                     {
-                        spec.AmountNode = ValueNodeAt(words, 2, out int strengthUsed);
-                        spec.HasNumber = words[2].Type == TokenType.Number;
+                        spec.Again = true;
+                        jumpIndex = 2;
+                    }
+                    if (words.Count >= jumpIndex + 2 && words[jumpIndex].Text == "strength")
+                    {
+                        spec.AmountNode = ValueNodeAt(words, jumpIndex + 1, out int strengthUsed);
+                        spec.HasNumber = words[jumpIndex + 1].Type == TokenType.Number;
                         if (spec.HasNumber)
-                            spec.Number = words[2].Number;
-                        jumpIndex = 2 + strengthUsed;
+                            spec.Number = words[jumpIndex + 1].Number;
+                        jumpIndex += 1 + strengthUsed;
                     }
                     if (!spec.HasNumber && spec.AmountNode == null)
                     {

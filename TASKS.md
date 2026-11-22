@@ -1829,21 +1829,33 @@ events-only ships an example sheet and no engine change.
 | D | Boss patterns | **events-only** core (optional C# spawn shapes) |
 | E | Screen shake | C# (new word) |
 
-### Part A — Double jumps (C#)
+### Part A — Double jumps (C#) `[x]`
 **Single owner:** this part is the only specification of double jump. `Tasks_2.md` Task 36 Part B
 defers to it and adds no clause of its own. The take-off gate it builds on shipped with Task 7 G4
 phase 3 (2026-11-16): `FlaxActions.Jump` refuses whenever `IsGrounded` is false, which is exactly
-what makes a held key safe. A double jump is a counted exception, not a removed gate.
-- [ ] Keep a per-actor remaining-jumps count: `my Jumps` (default 1) read at take-off, decremented
+what makes a held key safe. **Shipped 2026-11-22:** a double jump is a counted exception, not a
+removed gate.
+- [x] Keep a per-actor remaining-jumps count: `my Jumps` (default 1) read at take-off, decremented
       on each take-off, reset when the actor is grounded again (the same place `JumpingCharacters`
-      / `ScriptedJumps` are cleared on landing).
-- [ ] Word: `jump again` (and `jump again strength <n>`), sharing the `ActionVerb.Jump` path with a
-      flag so the airborne gate is bypassed only while the count is above zero.
-- [ ] A scripted-arc actor (no body) gets the same count, so `jump again` works in transform mode.
-- [ ] Tests: second take-off in the air succeeds and the third fails; landing restores the count;
-      `jump` on the ground still costs one when `my Jumps` is set higher.
+      / `ScriptedJumps` are cleared on landing). Reset it in the two other places the jump flags
+      are already cleared, or a respawn or restart keeps a spent jump: `TeleportSubject` (so
+      `respawn at` restores the count, alongside fall speed and climbs) and the per-scene clear in
+      `Step`, which empties `CharacterFallSpeeds` / `JumpingCharacters` / `ScriptedJumps`.
+      Shipped as `FlaxActions.JumpsSpent` (the *absence* of an entry is a whole count, so a
+      dynamic body — which has no jump flag to clear — also gets its jumps back on the next
+      grounded take-off), with the arithmetic in the pure `PhysicsMovement.JumpsLeft`.
+- [x] Word: `jump again` (and `jump again strength <n>`), sharing the `ActionVerb.Jump` path with a
+      flag (`ActionSpec.Again`) so the airborne gate is bypassed only while the count is above
+      zero (`PhysicsMovement.CanJump`).
+- [x] A scripted-arc actor (no body) gets the same count, so `jump again` works in transform mode —
+      the count lives in the bridge, not in a body.
+- [x] Tests: second take-off in the air succeeds and the third fails; landing restores the count;
+      `jump` on the ground still costs one when `my Jumps` is set higher. Parse checks cover
+      `jump again` / `jump again strength <n>` / `jump again strength my JumpPower` and that a
+      plain `jump` carries no bypass; the count is unit-tested through `JumpsLeft` / `CanJump`.
 - Done-when: the player hops twice in the air and cannot hop a third time; landing on a crate
-  restores a double jump; an enemy sheet with `my Jumps` 0 never double-jumps.
+  restores a double jump; an enemy sheet with `my Jumps` 0 never double-jumps. *(The three
+  take-offs and the landing reset are unit-covered; the crate hop itself is an editor play-check.)*
 
 ### Part B — Wall jumps (C#)
 A wall jump needs two things the engine does not have: a sideways wall probe, and **horizontal

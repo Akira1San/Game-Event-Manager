@@ -1199,13 +1199,20 @@ when my Health becomes 0
       volumes ignored), the jump's own airborne flag, and Task 28's altitude, so a lifted unit
       still reads airborne. Transform mode is covered by the same pivot ray; a sheet whose
       `GroundCheckDistance` is 0 always reads airborne.
-- [~] **Part B — Jump.** Shipped except the counted second take-off. `jump` / `jump strength <n>`
-      routes by body (CharacterController fall speed, dynamic `LinearVelocity.Y`, scripted
-      `PhysicsMovement.JumpStep` arc for kinematic and bodyless actors), plays a `Jump` clip only
-      when the actor has a skinned model and the project has the clip, and refuses while airborne.
-      The second and later take-offs are **Task 21 Part A** (`my Jumps` + `jump again`), which
-      reuses this same `ActionVerb.Jump` path; this task keeps the gate as the default so a held
-      `jump` can never burn an extra jump.
+- [x] **Part B — Jump.** Shipped 2026-11-16, with the counted second take-off on 2026-11-22
+      (**Task 21 Part A**, the single owner of double jump, which reuses this same
+      `ActionVerb.Jump` path). `jump` / `jump strength <n>` / `jump again` /
+      `jump again strength <n>` routes by body (CharacterController fall speed, dynamic
+      `LinearVelocity.Y`, scripted `PhysicsMovement.JumpStep` arc for kinematic and bodyless
+      actors), plays a `Jump` clip only when the actor has a skinned model and the project has the
+      clip, and refuses while airborne unless the word is `jump again` and the actor's
+      `my Jumps` still has a take-off left (default 1 per landing, so a bare `jump` can never
+      chain; 2 allows one air jump, 0 forbids it). The count comes back on landing, `respawn at`
+      and a scene restart. Two known limits of the shipped arc are not covered by a test or the
+      play-check: it writes `Position.Y` directly instead of going through `Move`, so it is
+      unswept and a transform-mode actor can clip a ceiling it jumps into; and a Dynamic sheet
+      whose `RigidBody` is missing or not on an ancestor silently falls back to that arc, without
+      the child-body warning the move path gives.
 - [x] **Part C — Ladders.** Shipped 2026-11-16: `climb <thing>` / `climb down` with an optional
       `speed <n>`, `stop climbing`, `me is climbing`. X/Z lock to the ladder actor's axis, Y is
       driven at the climb speed (default 150 cm/s), the span is the ladder's collider height or

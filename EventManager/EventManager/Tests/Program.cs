@@ -9352,6 +9352,67 @@ Check(jumpEngine.Variables.GetGlobal("GroundTicks").AsNumber() == 2,
     "landing is detected — the on-ground gate goes true again");
 
 // ------------------------------------------------------------------
+// Task 21 Part A: double jumps — `jump again` and the `my Jumps` count
+// ------------------------------------------------------------------
+
+// The word: `jump again` shares the jump verb and carries the flag the bridge checks, with and
+// without a strength, and a sheet may read the strength from a variable as `jump` does.
+var againJump = parser.Parse("when every 0 seconds\n  jump again");
+var againSpec = ActionWords.Parse(againJump.Events[0].Body[0].Words, null);
+Check(againSpec.Verb == ActionVerb.Jump && againSpec.Again &&
+      Math.Abs(againSpec.Number - PhysicsMovement.DefaultJumpStrength) < 1e-9,
+    "`jump again` parses to the jump verb with the counted-exception flag");
+
+var strongAgainJump = parser.Parse("when every 0 seconds\n  jump again strength 420");
+var strongAgainSpec = ActionWords.Parse(strongAgainJump.Events[0].Body[0].Words, null);
+Check(strongAgainSpec.Verb == ActionVerb.Jump && strongAgainSpec.Again &&
+      Math.Abs(strongAgainSpec.Number - 420) < 1e-9,
+    "`jump again strength 420` keeps the authored take-off strength");
+
+var variableAgainJump = parser.Parse("when every 0 seconds\n  jump again strength my JumpPower");
+var variableAgainSpec = ActionWords.Parse(variableAgainJump.Events[0].Body[0].Words, null);
+Check(variableAgainSpec.Again && variableAgainSpec.AmountNode is VariableValue againAmount &&
+      againAmount.Name == "JumpPower",
+    "`jump again strength my JumpPower` reads the amount from the actor's own variable");
+
+var plainJumpAgainCheck = parser.Parse("when every 0 seconds\n  jump");
+Check(!ActionWords.Parse(plainJumpAgainCheck.Events[0].Body[0].Words, null).Again,
+    "a plain `jump` does not carry the airborne bypass");
+
+// The count: `my Jumps` defaults to one take-off per landing, so a sheet that never sets it
+// cannot double jump; a higher count is spent one take-off at a time and comes back on landing.
+Check(PhysicsMovement.JumpsLeft(PhysicsMovement.DefaultJumps, 0) == 1,
+    "`my Jumps` defaults to one take-off, so a plain jump leaves nothing for the air");
+Check(PhysicsMovement.JumpsLeft(2, 0) == 2 && PhysicsMovement.JumpsLeft(2, 1) == 1 &&
+      PhysicsMovement.JumpsLeft(2, 2) == 0,
+    "`my Jumps` 2 spends one take-off at a time and reaches zero after two");
+Check(PhysicsMovement.JumpsLeft(2, 3) == 0 && PhysicsMovement.JumpsLeft(-1, 0) == 0,
+    "the count never goes below zero, however many take-offs were spent");
+
+Check(!PhysicsMovement.CanJump(false, false, 2) && PhysicsMovement.CanJump(true, false, 0),
+    "a plain `jump` is refused in the air and allowed on the ground, even with no counted jump left");
+Check(PhysicsMovement.CanJump(false, true, 1) && !PhysicsMovement.CanJump(false, true, 0),
+    "`jump again` passes in the air only while a counted take-off is left");
+
+// The loop the done-when describes: ground jump, one air jump, the third refused, and landing
+// hands the whole count back.
+int doubleJumpsSpent = 0;
+int doubleJumpsLeft = PhysicsMovement.JumpsLeft(2, doubleJumpsSpent);
+Check(PhysicsMovement.CanJump(true, false, doubleJumpsLeft),
+    "double jump: the ground take-off is allowed");
+doubleJumpsSpent++;
+doubleJumpsLeft = PhysicsMovement.JumpsLeft(2, doubleJumpsSpent);
+Check(PhysicsMovement.CanJump(false, true, doubleJumpsLeft),
+    "double jump: the first air take-off succeeds");
+doubleJumpsSpent++;
+doubleJumpsLeft = PhysicsMovement.JumpsLeft(2, doubleJumpsSpent);
+Check(!PhysicsMovement.CanJump(false, true, doubleJumpsLeft),
+    "double jump: the third take-off is refused");
+Check(PhysicsMovement.JumpsLeft(2, 0) == 2, "double jump: landing restores the whole count");
+Check(PhysicsMovement.JumpsLeft(0, 0) == 0 && !PhysicsMovement.CanJump(false, true, 0),
+    "an enemy with `my Jumps` 0 never double-jumps");
+
+// ------------------------------------------------------------------
 // Task 7 G4 phase 4: `climb` / `climb down` / `stop climbing`
 // ------------------------------------------------------------------
 

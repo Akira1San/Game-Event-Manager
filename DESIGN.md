@@ -1301,12 +1301,19 @@ window around a broken runtime.
   decays), a dynamic body by setting `LinearVelocity.Y`, and an actor with no body (or a kinematic
   one) by a scripted `JumpStep` arc that moves its `Position.Y` from the take-off height. "Airborne"
   is the jump's own flag rather than the ground ray, because at take-off the floor is still inside
-  the probe — that flag is also what refuses a second take-off, so holding the key cannot chain
-  jumps. The on-ground query answers from the controller's ground check when there is one, else a
+  the   probe — that flag is also what refuses a second take-off, so holding the key cannot chain
+  jumps. A double jump is a counted exception rather than a removed gate (Task 21 Part A):
+  `jump again` passes in the air only while the actor's `my Jumps` still has a take-off left —
+  default 1 per landing, so a sheet that never sets it cannot double jump; 2 allows one air jump,
+  0 forbids it for good. The bridge keeps the spent count, so a scripted-arc actor gets the same
+  allowance as a body, and landing, `respawn at` or a scene restart hands the whole count back.
+  The on-ground query answers from the controller's ground check when there is one, else a
   short downward probe that ignores the actor's own colliders and triggers; a world without physics
   reports grounded, so the gate never blocks a sheet in a test or a bare scene. Parked: coyote time,
   jump buffering, variable-height jumps (releasing mid-air), wall jumps and moving-platform carry —
-  a platform moving under a jumping actor is not rideable yet.
+  a platform moving under a jumping actor is not rideable yet. The scripted arc writes `Position.Y`
+  directly rather than through `Move`, so it is unswept: a transform-mode actor can clip a ceiling.
+  A Dynamic sheet with no `RigidBody` on itself or an ancestor silently takes that same arc.
 
 ---
 

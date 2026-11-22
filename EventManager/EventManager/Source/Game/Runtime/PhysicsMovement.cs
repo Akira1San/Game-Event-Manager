@@ -335,6 +335,27 @@ namespace Game
         public static double JumpVelocity(double strength)
             => Math.Max(MinJumpStrength, strength);
 
+        /// <summary><c>my Jumps</c> when the sheet does not set it: one take-off per landing, so
+        /// the plain <c>jump</c> is the whole story (Task 21 Part A).</summary>
+        public const int DefaultJumps = 1;
+
+        /// <summary>
+        /// Take-offs left since the last landing: the authored <c>my Jumps</c> minus the ones
+        /// already spent. A negative, fractional or missing value floors at zero rather than going
+        /// negative, and spending more than the count never makes the number negative.
+        /// </summary>
+        public static int JumpsLeft(double configured, int spent)
+            => Math.Max(0, (int)Math.Floor(Math.Max(0.0, configured)) - Math.Max(0, spent));
+
+        /// <summary>
+        /// Whether a take-off is allowed: on the ground always (the jump flag, not the count, is
+        /// what stops a held key there), in the air only for <c>jump again</c> while a counted
+        /// take-off is left. That is why a double jump is a counted exception rather than a
+        /// removed gate — every other airborne <c>jump</c> is still refused.
+        /// </summary>
+        public static bool CanJump(bool grounded, bool again, int jumpsLeft)
+            => grounded || (again && jumpsLeft > 0);
+
         /// <summary>
         /// One tick of a scripted jump arc (an actor with no physics body): rise while the upward
         /// speed lasts, fall under gravity, land at height 0. The step moves by the pre-gravity

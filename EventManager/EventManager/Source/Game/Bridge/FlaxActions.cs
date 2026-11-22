@@ -114,6 +114,10 @@ namespace Game
 
         /// <summary>In-flight scripted jump arcs, advanced every tick in <see cref="Step"/>.</summary>
         private static readonly Dictionary<Actor, ScriptedJump> ScriptedJumps = new Dictionary<Actor, ScriptedJump>();
+        /// <summary>Take-offs spent since the actor last stood on the ground (Task 21 Part A). The
+        /// absence of an entry means a whole `my Jumps` is left; landing removes it, so the count
+        /// comes back after every touch-down, warp and scene restart.</summary>
+        private static readonly Dictionary<Actor, int> JumpsSpent = new Dictionary<Actor, int>();
         /// <summary>Sources spawned by <c>play sound</c>, with the actor whose sheet started them.</summary>
         private static readonly List<(Actor Owner, AudioSource Source)> ActiveSounds = new List<(Actor, AudioSource)>();
         /// <summary>The single music player behind `play music` / `loop music` (Task 31). It is
@@ -305,6 +309,7 @@ namespace Game
             CharacterFallSpeeds.Clear();
             JumpingCharacters.Clear();
             ScriptedJumps.Clear();
+            JumpsSpent.Clear();
             Climbs.Clear();
             SoundIndexCache = null;
             AnimIndexCache = null;
@@ -561,6 +566,8 @@ namespace Game
                     if (jumper == null || jumper.Scene == null)
                     {
                         ScriptedJumps.Remove(jumper);
+                        if (jumper != null)
+                            JumpsSpent.Remove(jumper);
                         continue;
                     }
                     PhysicsMovement.JumpStep(jump.Height, jump.VelocityY, Math.Abs(Physics.Gravity.Y), DeltaTime,
@@ -570,7 +577,10 @@ namespace Game
                     jumper.Position = new Vector3(jumper.Position.X, (float)(jump.BaseY + height), jumper.Position.Z);
                     MovedThisTick.Add(jumper);
                     if (PhysicsMovement.JumpLanded(jump.Height, jump.VelocityY))
+                    {
                         ScriptedJumps.Remove(jumper);
+                        JumpsSpent.Remove(jumper); // landed: `jump again` is available once more
+                    }
                 }
             }
 
@@ -2231,7 +2241,10 @@ namespace Game
                         out double cx, out double cy, out double cz, out double newFallSpeed);
                     CharacterFallSpeeds[subject] = (float)newFallSpeed;
                     if (jumping && grounded && newFallSpeed <= 0f)
+                    {
                         JumpingCharacters.Remove(subject); // landed: the next tick walks again
+                        JumpsSpent.Remove(subject);
+                    }
                     character.Move(new Vector3((float)cx, (float)cy, (float)cz));
                     break;
                 }
@@ -2549,6 +2562,7 @@ namespace Game
             CharacterFallSpeeds.Remove(subject);
             JumpingCharacters.Remove(subject);
             ScriptedJumps.Remove(subject);
+            JumpsSpent.Remove(subject); // a respawn hands the actor its whole `my Jumps` back
             Climbs.Remove(subject);
 
             RigidBody body = FindBody(subject);
@@ -2734,11 +2748,16 @@ namespace Game
         }
 
         /// <summary>
-        /// `jump` / `jump strength <n>` (Task 7 G4 phase 3): a vertical take-off, refused while
-        /// the actor is already in the air so holding the key cannot chain jumps. A
+        /// `jump` / `jump strength &lt;n&gt;` / `jump again` (Task 7 G4 phase 3; the counted second
+        /// take-off is Task 21 Part A): a vertical take-off, refused while the actor is already in
+        /// the air so holding the key cannot chain jumps — `jump again` is the one exception and
+        /// passes only while the actor's `my Jumps` still has a take-off left. A
         /// CharacterController gets the take-off as its stored vertical speed (the same number
         /// gravity then decays), a dynamic body gets <c>LinearVelocity.Y</c>, and a kinematic body
-        /// or an actor with no body at all runs the scripted arc from <see cref="Step"/>.
+        /// or an actor with no body at all runs the scripted arc from <see cref="Step"/>. That arc
+        /// writes <c>Position.Y</c> directly, so it is unswept and can clip a ceiling; a Dynamic
+        /// sheet with no RigidBody on itself or an ancestor silently falls back to it, without the
+        /// warning the move path gives a child body.
         /// Plays a `Jump` clip when the actor has an AnimatedModel and the project has one.
         /// </summary>
         private static void Jump(EventContext context, ActionSpec spec)
@@ -2749,8 +2768,14 @@ namespace Game
                 WarnOnce("\u201Cjump\u201D needs to run on an actor's sheet — the global Game sheet has no body to jump.");
                 return;
             }
-            if (!IsGrounded(me))
+            bool grounded = IsGrounded(me);
+            if (grounded)
+                JumpsSpent.Remove(me); // standing on something starts the count over (a dynamic body has no jump flag to clear)
+            JumpsSpent.TryGetValue(me, out int jumpsSpent);
+            int jumpsLeft = PhysicsMovement.JumpsLeft(ConfiguredJumps(context, me), jumpsSpent);
+            if (!PhysicsMovement.CanJump(grounded, spec.Again, jumpsLeft))
                 return;
+            JumpsSpent[me] = jumpsSpent + 1;
             double strength = PhysicsMovement.JumpVelocity(ResolveNumber(context, spec));
             PhysicsMoveMode mode = ResolveMoveMode(me, context.Sheet != null && context.Sheet.UsePhysicsMovement);
 
@@ -2782,6 +2807,16 @@ namespace Game
                     StartScriptedJump(me, strength);
                     break;
             }
+        }
+
+        /// <summary>The actor's `my Jumps` — how many take-offs it gets between landings — or
+        /// <see cref="PhysicsMovement.DefaultJumps"/> when the sheet never set it. Asks
+        /// <see cref="EventVariables.HasLocal"/> first, so a sheet without the variable never warns.</summary>
+        private static double ConfiguredJumps(EventContext context, Actor me)
+        {
+            return context.Variables != null && context.Variables.HasLocal(me, "Jumps")
+                ? context.Variables.GetLocal(me, "Jumps").AsNumber()
+                : PhysicsMovement.DefaultJumps;
         }
 
         /// <summary>
