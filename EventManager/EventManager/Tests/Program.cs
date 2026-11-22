@@ -4926,6 +4926,29 @@ when 1 is pressed
           camShake.FollowTarget == null && camShake.AtTarget == null && camShake.LookAtTarget == null,
         "teardown leaves no shake and no targets behind");
 
+    // `camera follows` (Task 52) keeps the camera's placed offset and eases back into it.
+    CameraPoint placedOffset = CameraFollow.Offset(
+        new CameraPoint(240, 266, -158), new CameraPoint(315, 10, 47));
+    Check(Math.Abs(placedOffset.X + 75) < 1e-9 && Math.Abs(placedOffset.Y - 256) < 1e-9 &&
+          Math.Abs(placedOffset.Z + 205) < 1e-9,
+        "`camera follows` captures camera minus target, so a side-placed camera stays to the side");
+    Check(CameraFollow.Alpha(0, 0.016) == 1,
+        "a damping of 0 snaps the camera, which is what a follow did before Task 52");
+    double follow60 = CameraFollow.Alpha(CameraFollow.DefaultDamping, 1.0 / 60.0);
+    double follow30 = CameraFollow.Alpha(CameraFollow.DefaultDamping, 1.0 / 30.0);
+    Check(follow60 > 0 && follow60 < 0.2 && Math.Abs((1 - Math.Pow(1 - follow60, 2)) - follow30) < 1e-9,
+        "the follow closes the same share of the gap per second at 30 and 60 fps");
+    Check(CameraFollow.Alpha(CameraFollow.DefaultDamping, 0) == 0,
+        "a zero-length tick moves the camera nowhere");
+    Check(CameraFollow.Alpha(10, 0.016) > CameraFollow.Alpha(3, 0.016),
+        "a bigger damping follows harder");
+    Check(CameraFollow.DampingFrom(new EventVariables()) == CameraFollow.DefaultDamping,
+        "a sheet that never sets CameraFollowDamping gets the default follow feel");
+    var followVars = new EventVariables();
+    followVars.SetGlobal(CameraFollow.DampingVariable, ValueBox.OfNumber(2.5));
+    Check(Math.Abs(CameraFollow.DampingFrom(followVars) - 2.5) < 1e-9,
+        "`set CameraFollowDamping to 2.5` tunes the follow");
+
     // The TK4 sprint sheet leans on the walk/sprint branches being mutually exclusive: whether a
     // body line like `Left Shift is held` gates correctly decides if Shift does anything at all.
     var sprGateWorld = new FakeWorld();

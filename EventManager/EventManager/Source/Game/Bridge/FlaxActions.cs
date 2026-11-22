@@ -6917,8 +6917,10 @@ namespace Game
         }
 
         /// <summary>
-        /// <c>camera follows &lt;thing&gt;</c>: remember the current camera offset and keep it
-        /// while the target moves, so whatever framing the scene author chose is preserved.
+        /// <c>camera follows &lt;thing&gt;</c> (Task 52): keep the camera where the scene *placed*
+        /// it relative to the subject — position minus target position — so a camera authored to
+        /// the side of the player stays to the side instead of jumping on top of them. The
+        /// authored rotation is kept too: a follow never re-aims the shot.
         /// </summary>
         private static void StartCameraFollow(EventContext context, ActionSpec spec)
         {
@@ -6935,22 +6937,13 @@ namespace Game
                 return;
             }
 
-            // Use the default top-down framing (CameraHeight/CameraDepth globals) so
-            // "camera follows Player" always returns to the normal player camera framing,
-            // regardless of where the camera was snapped to before (e.g. by camera at).
-            float camHeight = (float)context.Runtime.Variables.GetGlobal("CameraHeight").AsNumber();
-            float camDepth = (float)context.Runtime.Variables.GetGlobal("CameraDepth").AsNumber();
+            // The placed framing is the offset: where the camera sits now, relative to the
+            // subject it is about to follow (CameraFollow.Offset).
+            CameraPoint offset = CameraFollow.Offset(
+                ToPoint(camera.Position), ToPoint(target.Position));
             // Following releases both the snap and the aim (CameraState.Follow).
-            context.Runtime.Camera.Follow(target, new CameraPoint(0.0, camHeight, camDepth));
+            context.Runtime.Camera.Follow(target, offset);
             context.Runtime.Variables.SetGlobal(CameraRig.FreeVariable, ValueBox.OfNumber(0));
-            // Reset the tilt from the CameraPitch global (45° = the oblique framing older
-            // scenes use, 90° = straight down for TK4), so the camera isn't left rotated
-            // from a previous "camera looks at".
-            float camPitch = (float)CameraFraming.ClampPitch(
-                context.Runtime.Variables.GetGlobal("CameraPitch").AsNumber());
-            Actor followCamera = FlaxWorld.FindCamera();
-            if (followCamera != null)
-                followCamera.Orientation = Quaternion.Euler(camPitch, 0.0f, 0.0f);
             context.Runtime.Variables.SetGlobal("CameraFollow", ValueBox.OfNumber(0));
         }
 

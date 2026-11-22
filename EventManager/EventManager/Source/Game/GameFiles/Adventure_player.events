@@ -3,7 +3,3 @@ when Ground is clicked
 
 when me arrives at there
   loop anim "animation idle pose"
-
-when Left Mouse is pressed
-  camera switch PlayerCamera
-  camera follows Player

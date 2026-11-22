@@ -330,7 +330,7 @@ when Escape is pressed
 | `goto <thing>` | `goto Player` | navigation: walks there using the baked NavMesh (walls avoided for free); pairs with `arrives at` |
 | `goto there` | `goto there` | point & click: walks to the **last clicked position** (pairs with `when Ground is clicked`) |
 | `camera looks at <thing>` | `camera looks at Chest` | aim the view at any actor |
-| `camera follows <thing>` | `camera follows Player` | keeps them centered while they move; aiming at something else releases the follow. Framing comes from the `CameraHeight` / `CameraDepth` / `CameraPitch` globals — `CameraDepth = -CameraHeight / tan(CameraPitch)` centres the target, and `CameraPitch 90` is straight down (TK4) |
+| `camera follows <thing>` | `camera follows Player` | follows from where the camera was **placed**: the offset is the camera's position minus the target's, so a camera authored to the side of the player stays to the side and keeps its rotation. It eases into that offset (`CameraFollowDamping`, per second, default 6; 0 snaps), so the view trails a moving subject and settles back when it stops; aiming at something else releases the follow. `camera at` still frames from the `CameraHeight` / `CameraDepth` / `CameraPitch` globals — `CameraDepth = -CameraHeight / tan(CameraPitch)` centres, and `CameraPitch 90` is straight down (TK4) |
 | `look at <thing>` | `look at Player` | one-shot snap: turn toward the target, once |
 | `face <thing>` | `face Player` | continuous: keeps turning toward the target while it moves (BGE Track To) â€” the turret/chaser word |
 | `teleport me/other to <thing>` | `teleport me to SpawnPoint` | |
@@ -1481,6 +1481,25 @@ window around a broken runtime.
   the death off in the same tick, so the death block switches to a `dying` state (which closes
   every fight block at once), plays `Die`, waits 0.8 s and only then destroys. A model without
   one of those clips warns once and the block still runs, so a placeholder mesh plays the fight. **Where it attacks from is data too:** three or more empty actors named `AttackPoint`, parented to the player, give the front/back/flank entrance — `goto random AttackPoint` picks one, then `goto nearest player` closes the last stretch before the swing. No offset maths and no new word: the sheet can only walk to *named things*, and `goto` walks the floor, so a point floating above the player is flattened onto the ground plane (an aerial entrance needs `jump`, not an empty). Once health is below 200 the boss also calls in help: a polled timer sets a `summon` state, a `chance` ladder picks Pistolboy / UziRebel / ShotgunManiac (a random *type* has no word — `spawn` takes one template), `set my Reach to random 110 to 170` spreads the arrival, and `my Summons` caps the help at four so a long fight cannot fill the room. Every way out of `fight` clears `my Attacking` — `retreat`, `flinch` and `dying` — because an attack run skipped by its own `my state is "fight"` guard would otherwise leave the flag at 1 and the boss would never attack again; and the summon timer carries `my Attacking is 0`, so the roar never fires across a close swing. The enraged throw is a three-knife fan: one knife from `KnifeCenter` and two from the rotated `KnifeLeft` / `KnifeRight` empties, all parented to the boss, with a 0.08 s stagger between them and a state guard after each gap so a hit stops the rest of the throw. `spawn` copies the spot's orientation and a projectile flies along its own facing, so the fan lives entirely in the empties' rotation — no aiming code. The earlier phase keeps its single plain throw.
+
+- **A follow keeps the shot you placed (Task 52):** `camera follows <thing>` used to build its
+  offset from the `CameraHeight` / `CameraDepth` globals, so a camera authored to the side of the
+  player jumped onto them the moment the verb ran. The offset is now the camera's own position
+  minus the target's (`CameraFollow.Offset`), captured once when the follow starts, and the
+  authored rotation is left alone — a follow moves the camera, it never re-aims it. The follow
+  also stopped snapping: each tick the camera closes `1 - exp(-damping * dt)` of the remaining
+  gap, so it trails a moving subject and glides the last stretch back into its offset when the
+  subject stops (the TK / Mario spring-back). The damping is `CameraFollowDamping`, per second,
+  default **6** — about 63% of the gap every 1/6 s — and `0` means snap, which is exactly what
+  every scene that used the verb before this task got. Because the easing is an exponential of
+  `dt` rather than a fixed per-frame lerp, 30, 60 and 144 fps feel the same. Zoom still scales
+  the offset, so a zoomed follow stays a zoomed follow. `camera at`, `camera looks at`,
+  `camera switch`, the free camera and the shake are untouched, and a scene that never writes
+  `camera follows` sees no change at all. The demo wiring is the shape the task asked for: the
+  camera's script lives in `PlayerCamera.events` (`camera switch PlayerCamera` +
+  `camera follows Player`) and the `PlayerCamera` actor's blank `Event File` resolves to it by
+  name, so no player sheet owns the camera. Parked: an authored `camera follows <thing> offset
+  <n>` word, and a follow that also eases rotation.
 
 ## 10. The one-paragraph pitch
 

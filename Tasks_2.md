@@ -2650,6 +2650,62 @@ once Task 28 lands. Task 36 Part G's five-step platformer check becomes five cas
 
 ---
 
+## Task 52 — Camera Follow With Placed Offset `[x]`
+
+Goal: `camera follows <thing>` keeps the camera's authored placement instead of snapping to dead-center, and settles back into that offset with a smooth spring when the player stops moving. Today `StartCameraFollow` builds the offset from default `CameraHeight`/`CameraDepth` globals (often 0), so a placed camera jumps onto the player and sits on top of them. This task makes the camera follow at its own side position/rotation and damp back to it.
+
+Depends on Tasks 1–3, 26. **Presentation primitive** (P1).
+
+### Proposed words
+
+| Kind | Word | Example |
+|---|---|---|
+| action | `camera follows <thing>` | `camera follows Player` (keeps the camera's placed offset) |
+
+The verb already exists in `WordRegistry`; this task is the **behavior fix** to make it honor the camera's real placed position and add damping.
+
+### Examples
+
+```text
+# ---- PlayerCamera.events: the camera's own sheet ----
+when game starts
+  camera switch PlayerCamera
+  camera follows Player
+
+# ---- player.events: untouched ----
+when Ground is clicked
+  goto there speed 100
+
+when me arrives at there
+  loop anim "animation idle pose"
+```
+
+### Parts
+
+- [x] **Part A — Capture the camera's real offset.** `StartCameraFollow` (`Bridge/FlaxActions.cs`) reads `camera.Position - target.Position` instead of the `CameraHeight`/`CameraDepth` globals, so a camera placed to the side of the player stays there. The camera keeps its authored rotation — remove the `Quaternion.Euler(CameraPitch, 0, 0)` reset.
+- [x] **Part B — Smooth follow with damping.** `UpdateCameraFollow` (`Bridge/EventsManager.cs`) lerps the camera toward `target.Position + offset` each tick instead of snapping, so when the player stops the camera slowly drifts back into its offset position (spring-back feel like TK/Mario). Frame-rate independent `dt`; `followSpeed` tuned to taste.
+- [x] **Part C — `PlayerCamera.events` owns the camera.** New `Source/Game/GameFiles/PlayerCamera.events` holds `camera switch PlayerCamera` + `camera follows Player`. Remove any camera lines from `player.events` so the camera script lives in its own file, not the player's.
+- [x] **Part D — Scene wiring.** Add an `EventSheet` component pointing at `PlayerCamera` to the `PlayerCamera` actor in `Content/scenes/AdventureTest.scene`.
+- [x] **Part E — Tests and docs.** Unit check that `StartCameraFollow` uses `camera.Position - target.Position`; editor play-check: camera starts at its side placement, follows the player keeping the offset, and settles back into the offset after the player stops. Record the damping value and follow speed in `DESIGN.md` §9.
+      Shipped: `Runtime/CameraFollow.cs` (`Offset` = camera minus target, `Alpha` = `1 - exp(-damping * dt)`,
+      `DampingFrom` reading the `CameraFollowDamping` global, default **6**/s, `0` = snap) with 7 checks,
+      `StartCameraFollow` capturing the placed offset and leaving the rotation alone (the `CameraPitch`
+      Euler reset is gone), `UpdateCameraFollow(delta)` easing toward `target + offset` instead of
+      snapping (zoom still scales the offset), `PlayerCamera.events` holding `camera switch PlayerCamera`
+      + `camera follows Player` with the `PlayerCamera` actor's blank `Event File` resolving to it, and
+      the leftover commented camera lines removed from `Adventure_player.events` (they left a `when`
+      with no body, so that shipped file failed to parse). `keywords.html` and `DESIGN.md` §9 updated.
+      Editor play-check pending (feel of the 6/s damping).
+
+### Done-when
+
+- A camera placed to the side of the player starts at that position and keeps it while following.
+- When the player stops moving, the camera smoothly returns to its offset rather than snapping.
+- The camera lives in `PlayerCamera.events`, not `player.events`.
+- No existing camera word or sheet changes behavior when `camera follows` is not used.
+
+---
+
 ## Suggested execution order
 
 Do not run these by number. The dependency-friendly order is:

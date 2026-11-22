@@ -681,8 +681,9 @@ namespace Game
             Cursors.Update(Runtime.Variables, Time.GameTime);
             UpdateFogVisibility();
             // Follow last: the tick is what moves the player (`move forward` lands immediately),
-            // so a camera snapped before it trailed the subject by one frame and shimmered.
-            UpdateCameraFollow();
+            // so a camera snapped before it trailed the subject by one frame and shimmered. The
+            // tick's delta drives the follow damping (Task 52 Part B).
+            UpdateCameraFollow(delta);
             // Free-pan (Task 26) last of all: it owns the camera only in free mode, and it needs
             // this tick's mouse and key state.
             UpdateCameraPan(delta);
@@ -899,7 +900,7 @@ namespace Game
             }
         }
 
-        private void UpdateCameraFollow()
+        private void UpdateCameraFollow(float delta)
         {
             var camera = FlaxWorld.FindCamera();
             if (camera == null)
@@ -918,10 +919,20 @@ namespace Game
                 CameraPoint offset = cam.FollowOffset;
                 // Zoom (Task 26 Part A) pulls the same framing closer or further away.
                 float scale = (float)CameraRig.ScaleFor(CameraRig.ZoomFrom(Runtime.Variables));
-                camera.Position = target.Position + new Vector3(
+                Vector3 want = target.Position + new Vector3(
                     (float)offset.X,
                     (float)(offset.Y * scale),
                     (float)(offset.Z * scale));
+                // Ease toward the follow point instead of snapping (Task 52 Part B): the camera
+                // trails a little while the subject moves and settles back into its placed offset
+                // when it stops. The alpha is frame-rate independent, so the feel does not change
+                // with the frame rate; `CameraFollowDamping` tunes it and 0 means snap.
+                double alpha = CameraFollow.Alpha(
+                    CameraFollow.DampingFrom(Runtime.Variables), delta);
+                if (alpha >= 1.0)
+                    camera.Position = want;
+                else if (alpha > 0.0)
+                    camera.Position += (want - camera.Position) * (float)alpha;
                 return;
             }
 
