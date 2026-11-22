@@ -1885,18 +1885,37 @@ character had no air velocity to push away from the wall. **Shipped 2026-11-22.*
       the ground next to the same wall does nothing. *(The gate and the arithmetic are
       unit-covered; the feel against a real crate wall is an editor play-check.)*
 
-### Part C — Multi-exit ladders (events-only)
+### Part C — Multi-exit ladders (events-only) `[x]`
 `stop climbing` already keeps the climber's Y where it let go, so an exit at an intermediate height
 is a sheet pattern, not an engine feature: stop at the right height, then walk off toward the exit
 marker. Only snapping X/Z onto a named ledge would need C#, and that is optional polish.
-- [ ] Example sheet `LadderTall.events` (or a section in `Player.events`): a ladder with an exit at
-      the bottom, one mid-height, and the top — `when me is climbing and me is near Ledge2 by 40`
-      → `stop climbing` + `move toward Ledge2 speed 60`, the same block per ledge.
-- [ ] Make the example robust: no `wait` in the exit block, and a `when me is climbing and me is on
-      ground` fallback so a missed exit drops the climber back to the bottom cleanly.
-- [ ] Note in `keywords.html` / `DESIGN.md §9`: the mid-ladder exit is authoring, not a new word.
+**Shipped 2026-11-22** as `GameFiles/LadderTall.events`; no engine change.
+- [x] Example sheet `LadderTall.events`: one tall ladder with an exit at the bottom, one mid-height
+      and the top, in `stop climbing` + `move toward` form. The per-ledge trigger had to change from
+      the drafted `when me is climbing and me is near Ledge2 by 40`: `when me is near` is **X/Z
+      only** (a cylinder, no height) and enter-edge, and a climb pins X/Z to the ladder axis, so
+      the distance to every ledge marker is identical at every rung and the edge has already fired
+      on the walk up to the ladder. Height therefore comes from the three things that do know it —
+      the ladder's span end (top exit, automatic), the let-go key (`S`, the mid exit at any
+      landing) and `nearest` (3D) for the walk target: `move toward nearest Ledge speed 120`.
+- [x] Robust: no `wait` anywhere in the exit path; one key press starts one climb, so a finished
+      climb never re-grabs the ladder; and a let-go that misses a landing falls to the floor, where
+      Ledge1 is the nearest marker, so `move toward nearest Ledge` walks it back to the bottom
+      cleanly. (The drafted `me is climbing and me is on ground` fallback could not ship: it fires
+      in the same tick as a ground grab and releases the ladder before the climb starts.)
+- [x] Follow-up (same day): the missing piece was never on the ladder — it was a **height word**.
+      `me is above <thing> by <n>` is in (`ConditionKind.Above` → `IEventWorld.Height`, the actor's
+      Y with a margin), so `LadderTall.events` now takes its mid exit automatically where the height
+      says a landing is: `when E is held` / `me is climbing` / `me is above Ledge2 by 2` →
+      `stop climbing` + `move toward Ledge2 speed 120`. Holding nothing climbs straight past to the
+      top, which is the done-when's second half. `near` stays X/Z only on purpose — changing it
+      would silently re-measure every existing range and chase gate.
+- [x] Noted in `keywords.html` (climb row + the new `me is above` condition row) and `DESIGN.md §9`:
+      the mid-ladder exit is authoring, not a new word.
 - Done-when: one ladder serves three exits with no C#, and a player who keeps climbing past the
-      mid exit still reaches the top.
+      mid exit still reaches the top. *(Play-check in the editor belongs to the author: build the
+      ladder and three markers per the sheet's setup block; the suite only proves the sheet parses,
+      uses shipped words and keeps `stop climbing` + `move toward nearest Ledge` with no `wait`.)*
 - Optional C# polish (skip unless authoring proves painful): `exit ladder at <thing>` snapping the
       climber's X/Z onto the ledge before letting go.
 

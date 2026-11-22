@@ -1,0 +1,67 @@
+# ---------------- LadderTall.events (Task 21 Part C) ----------------
+# One tall ladder, three exits — the bottom, a mid-height landing and the top — and no C#.
+#
+# The engine already has most of this: `climb` ends at the end of its span (the ladder's collider
+# height, or `my LadderHeight`), `stop climbing` lets go at any height and keeps that height, and
+# `me is above <thing> by <n>` compares the climber's height with a landing marker. The height
+# word is the important one: `me is near <thing>` measures X/Z only, and a climb pins X/Z to the
+# ladder's axis, so near cannot tell the bottom of the ladder from the top. `above` reads Y.
+#
+# SETUP (editor) — one scene, e.g. "LadderTallTest":
+#   1. Player: a CharacterController + an EventSheet whose Event File is `LadderTall`, with
+#      "Configure Character Body" ticked, standing on the floor at the foot of the ladder.
+#   2. Ladder: a thin, tall BoxCollider against the wall. Its Y is the foot of the climb and its
+#      collider height is the span, so put the top landing's floor at the top of that span (or
+#      author `my LadderHeight`). A mid landing is a platform the ladder passes; it does not
+#      interrupt the climb, the player steps off onto it.
+#   3. Three exit markers (empty actors): Ledge1 on the bottom floor, Ledge2 on the mid landing's
+#      floor, Ledge3 on the top landing's floor, a metre or so out from the ladder so each one is
+#      unambiguous and `move toward nearest Ledge` walks the player onto the right landing.
+#   4. Optional poses: animations called Idle / Run / Climb on the model.
+#
+# Keys: W walks and starts a climb, S lets go anywhere, E takes the exit at the landing the
+# climber has reached.
+
+# --- climbing -----------------------------------------------------------------------------
+# One press starts one climb: starting it from a held key would re-grab the ladder the moment
+# the span ends and leave the player stuck against it. W still walks while held.
+when W is pressed
+  unless me is climbing
+  me is on ground
+  me is near Ladder by 40
+  climb Ladder
+
+when W is held
+  unless me is climbing
+  move forward speed 220
+
+# --- the mid-height exit ------------------------------------------------------------------
+# `me is above Ledge2 by 2` says the climber's feet have reached the mid landing (the 2 cm margin
+# keeps the release at or just above its floor, where the character is still grounded). Hold E
+# and the climb stops there and walks on; hold nothing and the same ladder carries on to the top.
+when E is held
+  me is climbing
+  me is above Ledge2 by 2
+  stop climbing
+  move toward Ledge2 speed 120
+
+# --- letting go anywhere ------------------------------------------------------------------
+# S is the manual let-go: useful at the bottom, and the way out of a climb that overshot a
+# landing. `stop climbing` keeps the let-go height instead of dropping the player.
+when S is pressed
+  me is climbing
+  stop climbing
+
+# --- walking onto the landing ---------------------------------------------------------------
+# `move` is one nudge per line, so this re-issues the walk every tick E is held. `nearest Ledge`
+# is the closest marker by 3D distance, so the height the player let go at chooses the exit —
+# the mid landing or the top. A let-go that misses a landing falls to the floor, where Ledge1 is
+# nearest, so a missed exit ends at the bottom cleanly instead of hanging on the ladder.
+when E is held
+  unless me is climbing
+  me is on ground
+  move toward nearest Ledge speed 120
+
+# --- the top exit --------------------------------------------------------------------------
+# The climb ends at the top of the span on its own, so the top exit needs no block of its own:
+# the player stands on the top landing and E walks them onto Ledge3 with the block above.

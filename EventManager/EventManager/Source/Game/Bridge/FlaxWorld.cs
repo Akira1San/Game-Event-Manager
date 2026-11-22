@@ -191,6 +191,12 @@ namespace Game
             return FlaxActions.IsTouchingWall(actor as Actor);
         }
 
+        public double Height(object actor)
+        {
+            Actor act = actor as Actor;
+            return act != null && act.Scene != null ? act.Position.Y : 0.0;
+        }
+
         public bool TryGetAnimProgress(object actor, string clip, out double progress, out int play)
         {
             return FlaxActions.TryGetAnimProgress(actor, clip, out progress, out play);

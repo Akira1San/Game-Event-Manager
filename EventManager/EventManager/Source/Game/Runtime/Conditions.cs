@@ -23,6 +23,10 @@ namespace Game
         Climbing,
         /// <summary>`me is touching wall` — a wall is within the side probes (Task 21 Part B).</summary>
         TouchingWall,
+        /// <summary>`me is above &lt;thing&gt; by &lt;n&gt;` — compares the two actors' heights (Y).
+        /// `near` measures X/Z only, so this is the word that knows how high up a ladder a climber
+        /// is (Task 21 Part C follow-up).</summary>
+        Above,
         // Hearing (Task 16 Part B)
         Hears,
         // Typed enemies (Task 16 Part D)
@@ -712,6 +716,22 @@ namespace Game
             int isIndex = IndexOf(texts, "is");
             if (isIndex > 0)
             {
+                // `me is above <thing> by <n>` / `other is above me by <n>` — the height
+                // comparison. Checked before the value comparisons below, which would read the
+                // actor name as a variable (Task 21 Part C follow-up).
+                int aboveIndex = IndexOf(texts, "above", isIndex);
+                if (aboveIndex > 0)
+                {
+                    node.Kind = ConditionKind.Above;
+                    SetSubject(node, tokens, texts, isIndex);
+                    node.Thing = ThingAfter(tokens, aboveIndex);
+                    int aboveByIndex = Array.IndexOf(texts, "by", aboveIndex);
+                    if (aboveByIndex > aboveIndex && aboveByIndex + 1 < tokens.Count &&
+                        tokens[aboveByIndex + 1].Type == TokenType.Number)
+                        node.Distance = tokens[aboveByIndex + 1].Number;
+                    return node;
+                }
+
                 bool higher = Array.IndexOf(texts, "higher", isIndex) >= 0;
                 bool lower = Array.IndexOf(texts, "lower", isIndex) >= 0;
                 if (higher || lower)
@@ -739,22 +759,7 @@ namespace Game
                 {
                     node.Kind = ConditionKind.Near;
                     SetSubject(node, tokens, texts, isIndex);
-                    if (nearIndex + 1 < tokens.Count)
-                    {
-                        node.Thing = tokens[nearIndex + 1].Text;
-                        // Player references are two words, same as the trigger forms:
-                        // `me is near nearest player by 60` and `me is near player 2 by 60`.
-                        string thingWord = node.Thing;
-                        bool more = nearIndex + 2 < tokens.Count;
-                        string next = more ? tokens[nearIndex + 2].Text : "";
-                        if ((string.Equals(thingWord, "nearest", StringComparison.OrdinalIgnoreCase) ||
-                             string.Equals(thingWord, "all", StringComparison.OrdinalIgnoreCase)) &&
-                            string.Equals(next, "player", StringComparison.OrdinalIgnoreCase))
-                            node.Thing = thingWord.ToLowerInvariant() + " " + next;
-                        else if (string.Equals(thingWord, "player", StringComparison.OrdinalIgnoreCase) &&
-                                 more && tokens[nearIndex + 2].Type == TokenType.Number)
-                            node.Thing = "player " + tokens[nearIndex + 2].Number.ToString("0");
-                    }
+                    node.Thing = ThingAfter(tokens, nearIndex);
                     int byIndex = Array.IndexOf(texts, "by");
                     if (byIndex >= 0 && byIndex + 1 < tokens.Count && tokens[byIndex + 1].Type == TokenType.Number)
                         node.Distance = tokens[byIndex + 1].Number;
@@ -857,6 +862,16 @@ namespace Game
                     if (thing == null)
                         return false;
                     return context.World.Distance2D(anchor, thing) <= node.Distance;
+                }
+                case ConditionKind.Above:
+                {
+                    object thing = context.Runtime.FindThing(node.Thing, context.Me);
+                    object anchor = node.Name == "other" && context.Other != null ? context.Other : context.Me;
+                    if (thing == null || anchor == null)
+                        return false;
+                    // `<n>` is a margin: "above by 4" means at least 4 up, "above" means level or
+                    // higher (the same 0 margin), so a climber's feet at the landing count.
+                    return context.World.Height(anchor) >= context.World.Height(thing) + node.Distance;
                 }
                 case ConditionKind.UnitTypeIs:
                     return UnitTypes.Is(context, node.Name);
@@ -1118,6 +1133,25 @@ namespace Game
                 default:
                     return false;
             }
+        }
+
+        /// <summary>Reads the actor name after a preposition, including the two-word player
+        /// references: `nearest player`, `all players`, `player 2`.</summary>
+        private static string ThingAfter(List<Token> tokens, int index)
+        {
+            if (index < 0 || index + 1 >= tokens.Count)
+                return "";
+            string word = tokens[index + 1].Text;
+            bool more = index + 2 < tokens.Count;
+            string next = more ? tokens[index + 2].Text : "";
+            if ((string.Equals(word, "nearest", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(word, "all", StringComparison.OrdinalIgnoreCase)) &&
+                string.Equals(next, "player", StringComparison.OrdinalIgnoreCase))
+                return word.ToLowerInvariant() + " " + next;
+            if (string.Equals(word, "player", StringComparison.OrdinalIgnoreCase) &&
+                more && tokens[index + 2].Type == TokenType.Number)
+                return "player " + tokens[index + 2].Number.ToString("0");
+            return word;
         }
 
         private static void SetSubject(ConditionNode node, List<Token> tokens, string[] texts, int isIndex)

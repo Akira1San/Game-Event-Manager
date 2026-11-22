@@ -1274,8 +1274,18 @@ window around a broken runtime.
   CharacterController moves itself, everything else writes `Position` and a dynamic body is held
   at rest while it climbs). `me is climbing` exposes that state as a condition (through
   `IEventWorld.IsClimbing`), so a climb loop gates on the ladder itself instead of a flag variable.
-  Parked: ladders you can shoot down, moving ladders, and a top-exit that picks the destination
-  platform automatically.
+  A **multi-exit ladder is authoring, not a word** (Task 21 Part C, `GameFiles/LadderTall.events`):
+  the climb already ends at its span end (the top exit), `stop climbing` keeps the let-go height
+  (the mid exit at any landing), and `move toward nearest Ledge` picks the exit marker by 3D
+  distance, so the height the player let go at chooses the landing. A per-ledge *proximity* block
+  cannot do that job: `when me is near <thing>` is an X/Z cylinder with no height and it fires on
+  the enter edge, which a climb has already consumed on the way up to the ladder — so the height
+  word `me is above <thing> by <n>` does it instead (`ConditionKind.Above` compares two actors'
+  Y with a margin through `IEventWorld.Height`), which makes an exit automatic at the landing it
+  names. `near` stays X/Z-only on purpose: re-measuring every existing range and chase gate in 3D
+  would change what shipped sheets already mean. Parked: ladders
+  you can shoot down, moving ladders, and a top-exit that picks the destination platform
+  automatically (`nearest Ledge` picks a marker, not a platform).
 
 - **Audio as one music player plus three volumes (Task 31):** there is exactly one music
   `AudioSource` behind `play music` / `loop music`; a second track replaces the first rather than

@@ -631,6 +631,54 @@ Check(platformerWords.Contains("save") && platformerWords.Contains("respawn") &&
       platformerWords.Contains("stop"),
     "the platformer example exercises jump, climb, save checkpoint and respawn at");
 
+// Task 21 Part C — the tall ladder is events-only, so its example sheet is the whole feature. The
+// suite loads it like the platformer: every action line must be a shipped word, and the exits
+// must stay `stop climbing` + `move toward nearest Ledge` with no `wait` in the path.
+string ladderTallPath = "Source/Game/GameFiles/LadderTall.events";
+var ladderTallProgram = parser.Parse(File.ReadAllText(ladderTallPath));
+var ladderTallUnknown = new List<string>();
+int ladderTallActions = 0;
+var ladderTallWords = new HashSet<string>();
+foreach (var ladderTallEvent in ladderTallProgram.Events)
+{
+    foreach (var ladderTallLine in ladderTallEvent.Body)
+    {
+        if (ladderTallLine.IsCondition)
+            continue;
+        RawActionNode ladderTallRaw = ladderTallLine.Statement as RawActionNode;
+        if (ladderTallRaw == null)
+            continue;
+        ladderTallActions++;
+        ladderTallWords.Add(ladderTallRaw.Words[0].Text);
+        ActionSpec ladderTallSpec = ActionWords.Parse(ladderTallRaw.Words, null);
+        if (ladderTallSpec.Verb == ActionVerb.Unknown)
+            ladderTallUnknown.Add(string.Join(" ", ladderTallRaw.Words.ConvertAll(word => word.Text)));
+    }
+}
+if (ladderTallUnknown.Count > 0)
+    Console.WriteLine("  first tall-ladder line that is not a shipped word: " + ladderTallUnknown[0]);
+Check(ladderTallProgram.Events.Count >= 4 && ladderTallActions >= 4 && ladderTallUnknown.Count == 0,
+    $"every action line in the tall-ladder example is a shipped word ({ladderTallActions} lines)");
+Check(ladderTallWords.Contains("climb") && ladderTallWords.Contains("stop") &&
+      ladderTallWords.Contains("move") && !ladderTallWords.Contains("wait"),
+    "the tall-ladder example exits with stop climbing and move toward nearest Ledge, with no wait");
+// The mid exit is chosen by height, which is the one thing a climb cannot express any other way:
+// `me is near` is X/Z only, so the sheet gates on `me is above <thing> by <n>`.
+bool ladderTallHeightGate = false;
+foreach (var ladderTallEvent in ladderTallProgram.Events)
+{
+    foreach (var ladderTallLine in ladderTallEvent.Body)
+    {
+        if (!ladderTallLine.IsCondition)
+            continue;
+        foreach (var ladderTallWord in ladderTallLine.Words)
+            if (ladderTallWord.Text == "above")
+                ladderTallHeightGate = true;
+    }
+}
+Check(ladderTallHeightGate,
+    "the tall-ladder example picks its landing with `me is above <thing> by <n>`");
+
 // The checkpoint block gates itself. `when me touches <actor>` is enter-edge, but a body that steps
 // out of the marker and back in — or respawns right onto it — would save the same pose and print
 // again, so the example keeps `my CheckpointSaved` beside the pose. These checks read the shipped
@@ -2302,6 +2350,62 @@ nearEngine.Tick(1);
 nearWorld.SetDistance(humanGuy, towerGuy, 9.5);
 nearEngine.Tick(2);
 Check(nearEngine.Variables.GetGlobal("NearCount").AsNumber() == 1, "`me is near <thing> by <dist>` uses world distances");
+
+// Task 21 Part C follow-up: `me is above <thing> by <dist>` is the height question `near` cannot
+// answer (it is X/Z only), so the tall ladder's exits gate on it.
+var aboveNode = Conditions.Parse(new List<Token>
+{
+    new Token { Type = TokenType.Word, Text = "me" },
+    new Token { Type = TokenType.Word, Text = "is" },
+    new Token { Type = TokenType.Word, Text = "above" },
+    new Token { Type = TokenType.Word, Text = "Ledge2" },
+    new Token { Type = TokenType.Word, Text = "by" },
+    new Token { Type = TokenType.Number, Text = "2", Number = 2 },
+});
+Check(aboveNode.Kind == ConditionKind.Above && aboveNode.Thing == "Ledge2" && aboveNode.Distance == 2,
+    "`me is above Ledge2 by 2` parses to a height comparison with a 2 cm margin");
+var abovePlain = Conditions.Parse(new List<Token>
+{
+    new Token { Type = TokenType.Word, Text = "me" },
+    new Token { Type = TokenType.Word, Text = "is" },
+    new Token { Type = TokenType.Word, Text = "above" },
+    new Token { Type = TokenType.Word, Text = "Ledge2" },
+});
+Check(abovePlain.Kind == ConditionKind.Above && abovePlain.Thing == "Ledge2" && abovePlain.Distance == 0,
+    "`me is above Ledge2` needs no margin and reads as level-or-higher");
+var aboveOther = Conditions.Parse(new List<Token>
+{
+    new Token { Type = TokenType.Word, Text = "other" },
+    new Token { Type = TokenType.Word, Text = "is" },
+    new Token { Type = TokenType.Word, Text = "above" },
+    new Token { Type = TokenType.Word, Text = "me" },
+    new Token { Type = TokenType.Word, Text = "by" },
+    new Token { Type = TokenType.Number, Text = "5", Number = 5 },
+});
+Check(aboveOther.Kind == ConditionKind.Above && aboveOther.Thing == "me" && aboveOther.Name == "other",
+    "`other is above me by 5` reads the other side's height, not my own");
+
+var aboveWorld = new FakeWorld();
+var aboveEngine = FreshEngine(aboveWorld);
+var aboveClimber = new FakeActor("Climber");
+var midLanding = new FakeActor("Ledge2");
+var aboveProgram = parser.Parse(@"when every 1 seconds
+  me is above Ledge2 by 2
+  set AboveCount to AboveCount + 1");
+aboveEngine.AddSheet(aboveClimber, aboveProgram);
+aboveEngine.AddSheet(midLanding, parser.Parse("# placeholder\n"));
+aboveWorld.SetHeight(midLanding, 300);
+// Below the landing by 40: the exit must not fire mid-climb.
+aboveWorld.SetHeight(aboveClimber, 260);
+// The same X/Z as the landing, so only the height word can tell them apart.
+aboveWorld.SetDistance(aboveClimber, midLanding, 0);
+aboveEngine.Tick(1);
+Check(aboveEngine.Variables.GetGlobal("AboveCount").AsNumber() == 0,
+    "`me is above <thing> by <n>` stays false while the climber is below the landing");
+aboveWorld.SetHeight(aboveClimber, 302);
+aboveEngine.Tick(2);
+Check(aboveEngine.Variables.GetGlobal("AboveCount").AsNumber() == 1,
+    "`me is above <thing> by <n>` fires at the landing even with zero horizontal distance");
 
 var existsWorld = new FakeWorld();
 var existEngine = FreshEngine(existsWorld);
@@ -15557,6 +15661,18 @@ class FakeWorld : IEventWorld
 
     private readonly Dictionary<object, (double X, double Z)> positions = new Dictionary<object, (double X, double Z)>();
     private readonly HashSet<(object, double, double)> blockedPoints = new HashSet<(object, double, double)>();
+    private readonly Dictionary<object, double> heights = new Dictionary<object, double>();
+
+    /// <summary>Puts an actor at a height, which is what `me is above <thing> by <n>` reads.</summary>
+    public void SetHeight(object actor, double y)
+    {
+        heights[actor] = y;
+    }
+
+    public double Height(object actor)
+    {
+        return heights.TryGetValue(actor, out double y) ? y : 0.0;
+    }
 
     /// <summary>Places an actor on the ground plane, so point distances (sound positions) work.</summary>
     public void SetPosition(object actor, double x, double z)

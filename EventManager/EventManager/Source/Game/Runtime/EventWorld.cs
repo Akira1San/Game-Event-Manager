@@ -34,6 +34,10 @@ namespace Game
         /// <summary>True when a wall is in reach of the actor's four side probes — the answer
         /// behind `me is touching wall` and the gate `wall jump` shares (Task 21 Part B).</summary>
         bool IsTouchingWall(object actor);
+        /// <summary>The actor's world height (its position Y). Backs
+        /// <c>me is above &lt;thing&gt; by &lt;n&gt;</c> — <see cref="Distance2D"/> cannot answer a
+        /// height question because it measures X/Z only (Task 21 Part C follow-up).</summary>
+        double Height(object actor);
         /// <summary>The physics-material name of <paramref name="actor"/>'s collider (e.g.
         /// "Grass", "Stone"), or empty when it has no collider or no material assigned.</summary>
         string MaterialOf(object actor);
@@ -183,6 +187,13 @@ namespace Game
         {
             // No physics means no walls, so the word is simply false here.
             return false;
+        }
+
+        public double Height(object actor)
+        {
+            // A world with no transforms has no heights either: every actor reads 0, so `above`
+            // compares flat and only the margin in the line matters.
+            return 0.0;
         }
 
         public string MaterialOf(object actor)

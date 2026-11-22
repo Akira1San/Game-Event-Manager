@@ -113,6 +113,7 @@ namespace Game
             new WordEntry { Kind = "condition", Word = "<var> is not <value>", Example = "my health is lower than 1" },
             new WordEntry { Kind = "condition", Word = "<thing> exists", Example = "Key exists", AltShape = "<thing> does not exist" },
             new WordEntry { Kind = "condition", Word = "me is near <thing> by <dist>", Example = "me is near Player by 2" },
+            new WordEntry { Kind = "condition", Word = "me is above <thing> by <dist>", Example = "me is above Ledge2 by 2" },
             new WordEntry { Kind = "condition", Word = "me is moving", Example = "me is moving" },
             new WordEntry { Kind = "condition", Word = "me is climbing", Example = "me is climbing", AltShape = "true while the actor holds a ladder because of `climb` — gate a climb loop on it instead of tracking a flag variable" },
             new WordEntry { Kind = "condition", Word = "me is on ground", Example = "me is on ground", AltShape = "`me is airborne` is its opposite · the gate a `jump` needs, so holding the key cannot chain jumps · `me is touching wall` reads the side probes instead" },
