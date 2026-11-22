@@ -4876,6 +4876,56 @@ when 1 is pressed
     Check(Math.Abs(CameraFraming.CenteredDepth(-5, 45)) < 1e-9,
         "a negative height cannot flip the camera in front of the target");
 
+    // Camera state: one owner per runtime. The position words are exclusive where they must be,
+    // and the aim is independent of whichever word places the camera.
+    var camState = new CameraState();
+    Check(camState.PositionFor(false) == CameraState.PositionSource.None &&
+          camState.PositionFor(true) == CameraState.PositionSource.Free,
+        "an untouched camera owns nothing until a verb or `camera free` claims it");
+    camState.Follow(new object(), new CameraPoint(0, 260, -170));
+    Check(camState.PositionFor(false) == CameraState.PositionSource.Follow &&
+          Math.Abs(camState.FollowOffset.Y - 260) < 1e-9,
+        "`camera follows` owns the position with the offset captured at arm time");
+    camState.LookAt(new object());
+    Check(camState.LookAtTarget != null && camState.FollowTarget == null,
+        "`camera looks at` takes the aim and releases the follow");
+    camState.SnapTo(new object(), new CameraPoint(0, 260, -170));
+    Check(camState.PositionFor(true) == CameraState.PositionSource.At && camState.LookAtTarget != null,
+        "`camera at` moves the position, keeps a live aim and outranks free-pan");
+    camState.Follow(new object(), new CameraPoint(0, 100, -100));
+    Check(camState.AtTarget == null && camState.LookAtTarget == null,
+        "`camera follows` releases both the snap and the aim");
+    Check(!camState.FreeOwns(true) && !camState.FreeOwns(false),
+        "free-pan never owns a camera a rig target has taken");
+    camState.Release();
+    Check(camState.FreeOwns(true) && camState.ShakeOffset.X == 0,
+        "`camera free` releases every target, so free-pan owns the camera again");
+
+    // A destroyed actor drops out of its own slot: losing the snap target must not cancel an aim
+    // that still has a live one (the old static fields cleared both together).
+    var camDead = new CameraState();
+    object camDeadTarget = new object();
+    object camLiveAim = new object();
+    camDead.SnapTo(camDeadTarget, CameraPoint.Zero);
+    camDead.LookAtTarget = camLiveAim;
+    camDead.ForgetDead(t => ReferenceEquals(t, camDeadTarget));
+    Check(camDead.AtTarget == null && ReferenceEquals(camDead.LookAtTarget, camLiveAim),
+        "a destroyed snap target is dropped without cancelling a live aim");
+
+    var camShake = new CameraState();
+    Check(camShake.NextShakeSeed() == 1 && camShake.NextShakeSeed() == 2,
+        "each shake gets its own seed, so two slams never wobble identically");
+    camShake.Shake = new CameraState.ShakeState
+    {
+        Strength = 6, Duration = 0.3, Offset = new CameraPoint(1, 2, 3),
+    };
+    Check(camShake.IsShaking && camShake.ShakeOffset.Z == 3,
+        "a running shake hands its offset to the rig that places the camera");
+    camShake.Reset();
+    Check(!camShake.IsShaking && camShake.ShakeOffset.X == 0 &&
+          camShake.FollowTarget == null && camShake.AtTarget == null && camShake.LookAtTarget == null,
+        "teardown leaves no shake and no targets behind");
+
     // The TK4 sprint sheet leans on the walk/sprint branches being mutually exclusive: whether a
     // body line like `Left Shift is held` gates correctly decides if Shift does anything at all.
     var sprGateWorld = new FakeWorld();

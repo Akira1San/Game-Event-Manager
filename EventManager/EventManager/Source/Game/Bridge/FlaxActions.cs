@@ -161,38 +161,11 @@ namespace Game
         /// <summary>Particles currently playing per actor, used to detect when a one-shot finishes
         /// and raise <c>when particle "&lt;name&gt;" ends</c>.</summary>
         private static readonly Dictionary<object, ParticleState> ParticleStates = new Dictionary<object, ParticleState>();
-        /// <summary>Actor the camera keeps centered (<c>camera follows &lt;thing&gt;</c>).</summary>
-        internal static Actor CameraFollowTarget;
-        /// <summary>Camera position minus the target position, captured when the follow starts.</summary>
-        internal static Vector3 CameraFollowOffset;
-        /// <summary>Actor the camera aims at (<c>camera looks at &lt;thing&gt;</c>).</summary>
-        internal static Actor CameraLookAtTarget;
-        /// <summary>Actor the camera snaps to each tick (<c>camera at &lt;thing&gt;</c>).</summary>
-        internal static Actor CameraAtTarget;
-        /// <summary>Default top-down offset applied when snapping via <c>camera at</c>, so
-        /// framing/zoom stays consistent with the player camera.</summary>
-        internal static Vector3 CameraAtOffset;
-
-        /// <summary>One running <c>shake camera</c> (Task 21 Part E): its strength and length, how
-        /// far in it is, the seed its wobble comes from, and the framing it started over — so the
-        /// shake is always an offset on top of the rig, never a new saved position.</summary>
-        internal struct CameraShakeState
-        {
-            public double Strength;
-            public double Duration;
-            public double Elapsed;
-            public int Seed;
-            public long Tick;
-            public Vector3 BasePosition;
-            /// <summary>The displacement this tick's maths produced. Free-pan mode rewrites the
-            /// camera from the pan focus after the shake step, so it re-adds this offset itself.</summary>
-            public Vector3 Offset;
-        }
-
-        /// <summary>Null when nothing is shaking. There is one shake, refreshed rather than
-        /// stacked, so two slams in a row cannot make the view drift.</summary>
-        internal static CameraShakeState? Shake;
-        private static int ShakeSeed;
+        /// <summary>The camera state this bridge drives: targets, framing offsets and the running
+        /// shake. One <see cref="CameraState"/> per <see cref="EventRuntime"/>, so the camera is
+        /// owned by the runtime instead of by static fields on this class — two managers, or a
+        /// second play session, can never inherit each other's camera.</summary>
+        private static CameraState Cam => EventsManager.Instance?.Runtime?.Camera;
         /// <summary>World position of the last mouse click on bare ground — the <c>goto there</c> target.</summary>
         public static Vector3? LastClickPosition;
 
@@ -339,11 +312,6 @@ namespace Game
             AnimIndexCache = null;
             AnimFullNames = null;
             ParticleStates.Clear();
-            CameraFollowTarget = null;
-            CameraLookAtTarget = null;
-            CameraAtTarget = null;
-            CameraAtOffset = Vector3.Zero;
-            Shake = null;
             foreach (AnimState state in AnimStates.Values)
             {
                 if (state.Graph != null)
@@ -744,49 +712,49 @@ namespace Game
             if (wanderRuntime != null)
                 StepWanderers(wanderRuntime);
 
-            // `camera follows <thing>`: translate the camera by the target's movement, keeping
-            // the offset captured when the follow started (the authored framing never changes).
-            if (CameraFollowTarget != null && CameraFollowTarget.Scene == null)
+            // Every camera rig target is read from this runtime's own camera state. A subject
+            // that left the scene drops out of its own slot, so losing the followed actor does not
+            // also cancel an aim that still has a live target.
+            CameraState cam = Cam;
+            if (cam != null)
             {
-            CameraFollowTarget = null;
-            CameraLookAtTarget = null;
-            }
-            if (CameraFollowTarget != null)
-            {
-                Actor camera = FlaxWorld.FindCamera();
-                if (camera != null)
-                    camera.Position = CameraFollowTarget.Position + CameraFollowOffset;
-            }
+                cam.ForgetDead(target => target is Actor body && body.Scene == null);
 
-            // `camera looks at <thing>`: keep the scene camera aimed at the target each tick,
-            // so the aim tracks a moving target and switching targets is smooth.
-            if (CameraLookAtTarget != null && CameraLookAtTarget.Scene == null)
-            {
-                CameraLookAtTarget = null;
-            }
-            if (CameraLookAtTarget != null)
-            {
-                Actor camera = FlaxWorld.FindCamera();
-                if (camera != null)
-                    LookAtNoRoll(camera, CameraLookAtTarget.Position);
-            }
+                // `camera follows <thing>`: translate the camera by the target's movement, keeping
+                // the offset captured when the follow started (the authored framing never changes).
+                Actor follow = cam.FollowTarget as Actor;
+                if (follow != null)
+                {
+                    Actor camera = FlaxWorld.FindCamera();
+                    if (camera != null)
+                        camera.Position = follow.Position + ToVector3(cam.FollowOffset);
+                }
 
-            // `camera at <thing>`: snap the camera to the target's position each tick
-            // (with the default top-down offset so zoom stays consistent).
-            if (CameraAtTarget != null && CameraAtTarget.Scene == null)
-            {
-                CameraAtTarget = null;
-            }
-            if (CameraAtTarget != null)
-            {
-                Actor camera = FlaxWorld.FindCamera();
-                if (camera != null)
-                    camera.Position = CameraAtTarget.Position + CameraAtOffset;
-            }
+                // `camera looks at <thing>`: keep the scene camera aimed at the target each tick,
+                // so the aim tracks a moving target and switching targets is smooth.
+                Actor lookAt = cam.LookAtTarget as Actor;
+                if (lookAt != null)
+                {
+                    Actor camera = FlaxWorld.FindCamera();
+                    if (camera != null)
+                        LookAtNoRoll(camera, lookAt.Position);
+                }
 
-            // `shake camera ...` (Task 21 Part E): applied last, on top of whatever the rig wrote
-            // this tick, so following, snapping and aiming all keep working while the view wobbles.
-            StepCameraShake();
+                // `camera at <thing>`: snap the camera to the target's position each tick
+                // (with the default top-down offset so zoom stays consistent).
+                Actor snap = cam.AtTarget as Actor;
+                if (snap != null)
+                {
+                    Actor camera = FlaxWorld.FindCamera();
+                    if (camera != null)
+                        camera.Position = snap.Position + ToVector3(cam.AtOffset);
+                }
+
+                // `shake camera ...` (Task 21 Part E): applied last, on top of whatever the rig
+                // wrote this tick, so following, snapping and aiming all keep working while the
+                // view wobbles.
+                StepCameraShake(cam);
+            }
         }
 
         /// <summary>
@@ -794,47 +762,46 @@ namespace Game
         /// the rig just wrote (or to the framing captured when the shake began, when no rig owns
         /// the camera), and put the camera exactly back where it was once the time runs out.
         /// </summary>
-        private static void StepCameraShake()
+        private static void StepCameraShake(CameraState cam)
         {
-            if (!Shake.HasValue)
+            if (cam == null || !cam.IsShaking)
                 return;
             Actor camera = FlaxWorld.FindCamera();
             if (camera == null)
             {
-                Shake = null;
+                cam.ClearShake();
                 return;
             }
-            CameraShakeState shake = Shake.Value;
+            CameraState.ShakeState shake = cam.Shake;
             // A rig rewrites the position absolutely every tick, so the framing underneath the
             // wobble is the rig's, not the start's. Free-pan mode is a rig too: its framing is the
             // pan focus plus the zoomed offsets, which `UpdateCameraPan` places later this frame.
             var variables = EventsManager.Instance?.Runtime?.Variables;
-            bool freePan = FreeCameraOwns(variables);
-            bool rigOwnsCamera = freePan || CameraFollowTarget != null || CameraAtTarget != null;
+            bool freePan = FreeCameraOwns(cam, variables);
+            bool rigOwnsCamera = freePan || cam.FollowTarget != null || cam.AtTarget != null;
             Vector3 basePosition = freePan ? FreeCameraPosition(variables)
-                : rigOwnsCamera ? camera.Position : shake.BasePosition;
+                : rigOwnsCamera ? camera.Position : ToVector3(shake.BasePosition);
             shake.Elapsed += DeltaTime;
             shake.Tick++;
             double amplitude = CameraShake.Amplitude(shake.Strength, shake.Duration, shake.Elapsed);
             if (amplitude <= 0.0)
             {
                 camera.Position = basePosition; // exact framing back, not an offset of zero
-                Shake = null;
+                cam.ClearShake();
                 return;
             }
             CameraShake.Offset(amplitude, shake.Seed, shake.Tick, out double ox, out double oy, out double oz);
             // The offset is added to the framing for this tick only: the camera's saved position is
             // always the rig's, so the shake can never accumulate into a drift.
-            shake.Offset = new Vector3((float)ox, (float)oy, (float)oz);
-            camera.Position = basePosition + shake.Offset;
-            Shake = shake;
+            shake.Offset = new CameraPoint(ox, oy, oz);
+            camera.Position = basePosition + ToVector3(shake.Offset);
         }
 
         /// <summary>
         /// <c>shake camera strength &lt;n&gt; for &lt;s&gt;</c>: start a shake, or refresh the running
         /// one. The stronger strength wins and the timer keeps the longer of the two, so a burst of
         /// slams lengthens the wobble instead of stacking amplitudes forever. The camera is put
-        /// back at <see cref="CameraShakeState.BasePosition"/> when the time runs out.
+        /// back at <see cref="CameraState.ShakeState.BasePosition"/> when the time runs out.
         /// </summary>
         private static void StartCameraShake(EventContext context, ActionSpec spec)
         {
@@ -852,31 +819,33 @@ namespace Game
             // captured one, unless a rig owns the camera (then the rig rewrites it every tick).
             // Free-pan mode's framing is never the displaced position, so it is rebuilt from the
             // pan focus instead of being read off the camera.
-            var variables = EventsManager.Instance?.Runtime?.Variables;
-            Vector3 basePosition = FreeCameraOwns(variables)
+            CameraState cam = context.Runtime != null ? context.Runtime.Camera : Cam;
+            if (cam == null)
+                return;
+            var variables = context.Runtime != null ? context.Runtime.Variables : null;
+            Vector3 basePosition = FreeCameraOwns(cam, variables)
                 ? FreeCameraPosition(variables)
-                : CameraFollowTarget != null || CameraAtTarget != null
+                : cam.FollowTarget != null || cam.AtTarget != null
                     ? camera.Position
-                    : Shake.HasValue ? Shake.Value.BasePosition : camera.Position;
-            if (Shake.HasValue)
+                    : cam.IsShaking ? ToVector3(cam.Shake.BasePosition) : camera.Position;
+            if (cam.IsShaking)
             {
-                CameraShakeState running = Shake.Value;
+                CameraState.ShakeState running = cam.Shake;
                 CameraShake.Merge(running.Strength, running.Elapsed, running.Duration, strength, duration,
                     out double mergedStrength, out double mergedDuration);
                 running.Strength = mergedStrength;
                 running.Duration = running.Elapsed + mergedDuration;
-                running.BasePosition = basePosition;
-                Shake = running;
+                running.BasePosition = ToPoint(basePosition);
                 return;
             }
-            Shake = new CameraShakeState
+            cam.Shake = new CameraState.ShakeState
             {
                 Strength = strength,
                 Duration = duration,
                 Elapsed = 0.0,
-                Seed = ++ShakeSeed,
+                Seed = cam.NextShakeSeed(),
                 Tick = 0,
-                BasePosition = basePosition,
+                BasePosition = ToPoint(basePosition),
             };
         }
 
@@ -6966,16 +6935,14 @@ namespace Game
                 return;
             }
 
-            CameraFollowTarget = target;
-            context.Runtime.Variables.SetGlobal(CameraRig.FreeVariable, ValueBox.OfNumber(0));
             // Use the default top-down framing (CameraHeight/CameraDepth globals) so
             // "camera follows Player" always returns to the normal player camera framing,
             // regardless of where the camera was snapped to before (e.g. by camera at).
             float camHeight = (float)context.Runtime.Variables.GetGlobal("CameraHeight").AsNumber();
             float camDepth = (float)context.Runtime.Variables.GetGlobal("CameraDepth").AsNumber();
-            CameraFollowOffset = new Vector3(0f, camHeight, camDepth);
-            CameraLookAtTarget = null; // following and aiming don't fight each tick
-            CameraAtTarget = null; // following and snapping don't fight each tick
+            // Following releases both the snap and the aim (CameraState.Follow).
+            context.Runtime.Camera.Follow(target, new CameraPoint(0.0, camHeight, camDepth));
+            context.Runtime.Variables.SetGlobal(CameraRig.FreeVariable, ValueBox.OfNumber(0));
             // Reset the tilt from the CameraPitch global (45° = the oblique framing older
             // scenes use, 90° = straight down for TK4), so the camera isn't left rotated
             // from a previous "camera looks at".
@@ -6985,16 +6952,6 @@ namespace Game
             if (followCamera != null)
                 followCamera.Orientation = Quaternion.Euler(camPitch, 0.0f, 0.0f);
             context.Runtime.Variables.SetGlobal("CameraFollow", ValueBox.OfNumber(0));
-        }
-
-        /// <summary>Release the camera from any explicit follow target (camera free).</summary>
-        private static void StopCameraFollow()
-        {
-            CameraFollowTarget = null;
-            CameraLookAtTarget = null; // free the camera entirely
-            CameraAtTarget = null; // free the camera entirely
-            CameraAtOffset = Vector3.Zero;
-            Shake = null; // a freed camera does not wobble
         }
 
         /// <summary>
@@ -7009,9 +6966,8 @@ namespace Game
                 WarnOnce($"I couldn't find \u201C{spec.Thing}\u201D for the camera to look at.");
                 return;
             }
-            CameraLookAtTarget = target;
             // Aiming elsewhere releases the follow — the two must not fight each tick.
-            CameraFollowTarget = null;
+            context.Runtime.Camera.LookAt(target);
             context.Runtime.Variables.SetGlobal(CameraRig.FreeVariable, ValueBox.OfNumber(0));
             Actor lookCamera = FlaxWorld.FindCamera();
             if (lookCamera != null)
@@ -7037,15 +6993,13 @@ namespace Game
                 WarnOnce("\u201Ccamera at\u201D needs a Camera actor in the scene.");
                 return;
             }
-            CameraAtTarget = target;
-            // Snapping elsewhere releases the follow — position sources must not fight.
-            CameraFollowTarget = null;
             context.Runtime.Variables.SetGlobal(CameraRig.FreeVariable, ValueBox.OfNumber(0));
             // Capture the default top-down framing so "camera at" keeps consistent zoom
             // with "camera follows Player" instead of snapping to exact target position.
+            // Snapping releases the follow but keeps a live aim (CameraState.SnapTo).
             float camHeight = (float)context.Runtime.Variables.GetGlobal("CameraHeight").AsNumber();
             float camDepth = (float)context.Runtime.Variables.GetGlobal("CameraDepth").AsNumber();
-            CameraAtOffset = new Vector3(0f, camHeight, camDepth);
+            context.Runtime.Camera.SnapTo(target, new CameraPoint(0.0, camHeight, camDepth));
             // Respect CameraPitch here too, so a snapped shot matches the follow framing.
             float camPitch = (float)CameraFraming.ClampPitch(
                 context.Runtime.Variables.GetGlobal("CameraPitch").AsNumber());
@@ -7081,11 +7035,8 @@ namespace Game
             }
             // The switched camera is now in control — release all explicit camera targets.
             ExitFreeCamera(context);
-            CameraFollowTarget = null;
-            CameraLookAtTarget = null;
-            CameraAtTarget = null;
-            CameraAtOffset = Vector3.Zero;
-            Shake = null; // the new camera starts from its own framing
+            // The new camera starts from its own framing: no targets, no residual wobble.
+            context.Runtime.Camera.Release();
         }
 
         /// <summary>Leaves free-pan mode: a follow/snap/aim/switch owns the camera again.</summary>
@@ -7113,7 +7064,9 @@ namespace Game
         {
             if (runtime == null)
                 return;
-            StopCameraFollow();
+            // Releasing every target also stops a running shake: the free camera is placed from
+            // the pan focus, so it must not be seeded from a wobbling position.
+            runtime.Camera.Release();
             EventVariables variables = runtime.Variables;
             double height = variables.GetGlobal("CameraHeight").AsNumber();
             double depth = variables.GetGlobal("CameraDepth").AsNumber();
@@ -7205,10 +7158,10 @@ namespace Game
         {
             if (runtime == null)
                 return;
+            CameraState cam = runtime.Camera;
             EventVariables variables = runtime.Variables;
-            if (variables.GetGlobal(CameraRig.FreeVariable).AsNumber() <= 0)
-                return;
-            if (CameraFollowTarget != null || CameraLookAtTarget != null || CameraAtTarget != null)
+            if (cam == null ||
+                !cam.FreeOwns(variables.GetGlobal(CameraRig.FreeVariable).AsNumber() > 0))
                 return;
             Actor camera = FlaxWorld.FindCamera();
             if (camera == null)
@@ -7216,17 +7169,25 @@ namespace Game
             // Free-pan mode is a camera rig like `camera follows` / `camera at`: it owns the
             // framing absolutely, so a running shake is layered on top here rather than being
             // wiped by this write (the pan step runs after the shake step each frame).
-            camera.Position = FreeCameraPosition(variables) + (Shake.HasValue ? Shake.Value.Offset : Vector3.Zero);
+            camera.Position = FreeCameraPosition(variables) + ToVector3(cam.ShakeOffset);
         }
 
         /// <summary>True when free-pan mode is what places the camera this tick: `camera free` was
         /// armed and no follow / aim / snap target has taken the camera back.</summary>
-        private static bool FreeCameraOwns(EventVariables variables)
+        private static bool FreeCameraOwns(CameraState cam, EventVariables variables)
         {
-            if (variables == null || variables.GetGlobal(CameraRig.FreeVariable).AsNumber() <= 0)
+            if (cam == null || variables == null)
                 return false;
-            return CameraFollowTarget == null && CameraLookAtTarget == null && CameraAtTarget == null;
+            return cam.FreeOwns(variables.GetGlobal(CameraRig.FreeVariable).AsNumber() > 0);
         }
+
+        /// <summary>The engine-free camera point as a world position.</summary>
+        private static Vector3 ToVector3(CameraPoint point)
+            => new Vector3((float)point.X, (float)point.Y, (float)point.Z);
+
+        /// <summary>A world position as the camera state's own point type.</summary>
+        private static CameraPoint ToPoint(Vector3 value)
+            => new CameraPoint(value.X, value.Y, value.Z);
 
         /// <summary>The framing free-pan mode wants: the pan focus with the zoomed height/depth
         /// offsets, with no shake offset mixed in.</summary>

@@ -319,6 +319,10 @@ namespace Game
         public IEventWorld World = new DefaultEventWorld();
         /// <summary>RTS selection + control groups (Task 18 Part A).</summary>
         public Selection Selection;
+        /// <summary>The camera's targets, captured framing offsets and running shake. One owner
+        /// per runtime, so the camera is runtime state like any other manager rather than a set of
+        /// static fields on the bridge — a new play session starts from a clean camera.</summary>
+        public CameraState Camera = new CameraState();
         /// <summary>RTS construction state, progress and grid occupancy (Task 18 Part C).</summary>
         public ConstructionManager Construction = new ConstructionManager();
         /// <summary>RTS production queues and training timers (Task 18 Part D).</summary>

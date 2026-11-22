@@ -652,6 +652,7 @@ namespace Game
             Runtime.Construction.Reset();
             Runtime.Orders.Reset();
             Runtime.Fog.Reset();
+            Runtime.Camera.Reset();
             Runtime.Terrain.Reset();
             Runtime.Sounds.Clear();
             Runtime.RemoveAllSheets();
@@ -908,16 +909,19 @@ namespace Game
             if (Runtime.Variables.GetGlobal(CameraRig.FreeVariable).AsNumber() > 0)
                 return;
 
-            // Explicit follow: camera follows <thing> (set by StartCameraFollow).
-            var target = FlaxActions.CameraFollowTarget;
+            // Explicit follow: camera follows <thing> (set by StartCameraFollow). The target and
+            // the captured offset live on this runtime's camera state.
+            CameraState cam = Runtime.Camera;
+            var target = cam != null ? cam.FollowTarget as Actor : null;
             if (target != null && target.Scene != null)
             {
+                CameraPoint offset = cam.FollowOffset;
                 // Zoom (Task 26 Part A) pulls the same framing closer or further away.
                 float scale = (float)CameraRig.ScaleFor(CameraRig.ZoomFrom(Runtime.Variables));
                 camera.Position = target.Position + new Vector3(
-                    FlaxActions.CameraFollowOffset.X,
-                    FlaxActions.CameraFollowOffset.Y * scale,
-                    FlaxActions.CameraFollowOffset.Z * scale);
+                    (float)offset.X,
+                    (float)(offset.Y * scale),
+                    (float)(offset.Z * scale));
                 return;
             }
 
