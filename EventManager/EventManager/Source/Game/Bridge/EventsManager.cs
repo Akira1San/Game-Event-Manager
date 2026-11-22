@@ -927,15 +927,31 @@ namespace Game
                 return;
 
             SheetInstance sheet = null;
+            string ignoredPlayer = null;
+            int firstPersonSheets = 0;
             foreach (SheetInstance candidate in Runtime.Sheets)
             {
                 if (!candidate.FirstPerson)
                     continue;
                 if (candidate.Actor is Actor body && body != null && body.Scene != null)
                 {
-                    sheet = candidate;
-                    break;
+                    firstPersonSheets++;
+                    if (sheet == null)
+                        sheet = candidate;
+                    else if (ignoredPlayer == null)
+                        ignoredPlayer = body.Name;
                 }
+            }
+            if (firstPersonSheets > 1)
+            {
+                // One mouse delta cannot turn two bodies: the first sheet found is driven and the
+                // rest are named, so the author sees which one to untick instead of wondering why
+                // the other player never looks around.
+                var driven = (Actor)sheet.Actor;
+                FlaxActions.WarnOnce(
+                    $"Event sheet: {firstPersonSheets} sheets have First Person ticked, so only " +
+                    $"\u201C{driven.Name}\u201D is driven and \u201C{ignoredPlayer}\u201D is ignored. " +
+                    "Tick First Person on one player per scene.");
             }
             if (sheet == null)
             {
@@ -966,11 +982,18 @@ namespace Game
 
             player.Orientation = Quaternion.Euler(0.0f, (float)yaw, 0.0f);
 
-            // The player's own camera, not whatever camera happens to be in the scene: a
-            // first-person rig aims the eyes it was given.
-            FlaxEngine.Camera camera = FlaxWorld.FindCameraUnder(player);
-            if (camera != null)
-                camera.LocalOrientation = Quaternion.Euler((float)pitch, 0.0f, 0.0f);
+            // The player's own camera, not whatever camera happens to be in the scene: aiming a
+            // fallback camera would silently tilt somebody else's shot. A player without eyes
+            // warns once and keeps the body turn, which still makes movement view-relative.
+            if (!FlaxWorld.TryFindCameraUnder(player, out FlaxEngine.Camera camera))
+            {
+                FlaxActions.WarnOnce(
+                    $"Event sheet: \u201C{player.Name}\u201D has First Person ticked but no active " +
+                    "Camera actor under it, so the mouse turns the body but has nothing to pitch. " +
+                    "Add a Camera as a child of the player at eye height.");
+                return;
+            }
+            camera.LocalOrientation = Quaternion.Euler((float)pitch, 0.0f, 0.0f);
         }
 
         private void UpdateCameraFollow(float delta)
