@@ -113,6 +113,11 @@ namespace Game
         /// <summary><c>when self test ends</c> — raised once when every self-test case on every
         /// sheet has passed, failed or been skipped (Task 51 Part B).</summary>
         SelfTestEnds,
+        /// <summary><c>when game saves</c> — raised after a save file was written (Task 30 Part E).</summary>
+        GameSaves,
+        /// <summary><c>when game loads</c> — raised after a save was loaded and restored
+        /// (Task 30 Part E).</summary>
+        GameLoads,
     }
 
     /// <summary>
@@ -429,6 +434,12 @@ namespace Game
             // self-test case on every sheet has settled.
             if (words.Length == 3 && words[0] == "self" && words[1] == "test" && words[2] == "ends")
                 return new TriggerDescriptor { Kind = TriggerKind.SelfTestEnds };
+            // Save/load (Task 30 Part E): both are broadcast after the work finished, so a
+            // `when game saves` / `when game loads` block sees the final state.
+            if (words.Length == 2 && words[0] == "game" && words[1] == "saves")
+                return new TriggerDescriptor { Kind = TriggerKind.GameSaves };
+            if (words.Length == 2 && words[0] == "game" && words[1] == "loads")
+                return new TriggerDescriptor { Kind = TriggerKind.GameLoads };
             if (words.Length >= 2 && words[0] == "game" && words[words.Length - 1] == "starts")
                 return new TriggerDescriptor { Kind = TriggerKind.GameStart };
             if (words.Length >= 2 && words[0] == "scene" && words[words.Length - 1] == "starts")

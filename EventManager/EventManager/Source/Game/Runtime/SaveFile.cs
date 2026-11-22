@@ -30,6 +30,13 @@ namespace Game
         /// <summary>The slot used by <c>save game</c> and when a blank slot name is given.</summary>
         public const string DefaultSlot = "default";
 
+        /// <summary>
+        /// The fixed slot <c>autosave</c> writes, so a checkpoint save never overwrites a
+        /// save the player made on purpose (Task 30 Part E). <c>load game from "autosave"</c>
+        /// resumes it.
+        /// </summary>
+        public const string AutosaveSlot = "autosave";
+
         /// <summary>The folder under the project root, not under Content (saves are not assets).</summary>
         public const string FolderName = "Saves";
 

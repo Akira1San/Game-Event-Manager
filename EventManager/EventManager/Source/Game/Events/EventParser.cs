@@ -571,6 +571,17 @@ namespace Game
                 line.Statement = new TimeoutNode { Line = line.Line, Seconds = line.Words[3].Number };
                 return;
             }
+            // `delete save "slot"` (Task 30 Part E): `delete` is not an action word anywhere
+            // else, so the disk word is checked here and then handed to ActionWords like every
+            // other ordinary action line.
+            if (first.Text == "delete" && line.Words.Count >= 2 &&
+                line.Words[1].Type == TokenType.Word && line.Words[1].Text == "save")
+            {
+                var deleteRaw = new RawActionNode { Line = line.Line };
+                deleteRaw.Words.AddRange(line.Words);
+                line.Statement = deleteRaw;
+                return;
+            }
             if (Array.IndexOf(WordRegistry.ActionWords, first.Text) >= 0)
             {
             if (first.Text == "set")

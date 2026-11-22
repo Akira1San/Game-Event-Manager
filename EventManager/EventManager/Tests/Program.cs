@@ -13488,6 +13488,233 @@ finally
 }
 
 // ------------------------------------------------------------------
+// Task 30 Part E - slots, autosave, deletion and the errors that keep the game running
+// ------------------------------------------------------------------
+{
+    List<Token> PartEWords(string line)
+    {
+        ProgramFile lineProgram = parser.Parse("when game starts\n  " + line);
+        return ((RawActionNode)lineProgram.Events[0].Body[0].Statement!).Words;
+    }
+
+    ConditionNode PartECondition(string line)
+    {
+        ProgramFile condProgram = parser.Parse("when game starts\n  unless " + line + "\n  print \"x\"");
+        return Conditions.Parse(condProgram.Events[0].Body[0].Words);
+    }
+
+    // ---- the words and triggers ----
+    ActionSpec saveDefaultSpec = ActionWords.Parse(PartEWords("save game"), null);
+    ActionSpec saveNamedSpec = ActionWords.Parse(PartEWords("save game to \"slot1\""), null);
+    ActionSpec loadDefaultSpec = ActionWords.Parse(PartEWords("load game"), null);
+    ActionSpec loadNamedSpec = ActionWords.Parse(PartEWords("load game from \"slot1\""), null);
+    ActionSpec deleteSpec = ActionWords.Parse(PartEWords("delete save \"slot1\""), null);
+    ActionSpec autoSpec = ActionWords.Parse(PartEWords("autosave"), null);
+    Check(saveDefaultSpec.Verb == ActionVerb.SaveGame && saveDefaultSpec.Thing == "" &&
+          saveNamedSpec.Verb == ActionVerb.SaveGame && saveNamedSpec.Thing == "slot1",
+        "`save game` writes the default slot and `save game to \"slot1\"` names one");
+    Check(loadDefaultSpec.Verb == ActionVerb.LoadGame && loadDefaultSpec.Thing == "" &&
+          loadNamedSpec.Verb == ActionVerb.LoadGame && loadNamedSpec.Thing == "slot1",
+        "`load game` reads the default slot and `load game from \"slot1\"` names one");
+    Check(deleteSpec.Verb == ActionVerb.DeleteSave && deleteSpec.Thing == "slot1",
+        "`delete save \"slot1\"` names the slot to remove");
+    Check(autoSpec.Verb == ActionVerb.Autosave && autoSpec.Thing == SaveFile.AutosaveSlot,
+        "`autosave` always targets the fixed autosave slot");
+    int saveGameWarnings = 0;
+    ActionSpec badSaveSpec = ActionWords.Parse(PartEWords("save game to slot1"), _ => saveGameWarnings++);
+    Check(badSaveSpec.Verb == ActionVerb.Unknown && saveGameWarnings == 1,
+        "a slot name that isn't quoted is refused with one friendly hint");
+
+    Check(TriggerClassifier.Classify(parser.Parse("when game saves\n  print \"x\"").Events[0]).Kind ==
+          TriggerKind.GameSaves,
+        "`when game saves` classifies as its own trigger");
+    Check(TriggerClassifier.Classify(parser.Parse("when game loads\n  print \"x\"").Events[0]).Kind ==
+          TriggerKind.GameLoads,
+        "`when game loads` classifies as its own trigger, not as `game starts`");
+
+    ConditionNode slotCondition = PartECondition("save slot exists \"slot1\"");
+    Check(slotCondition.Kind == ConditionKind.SaveSlotExists && slotCondition.Thing == "slot1",
+        "`save slot exists \"slot1\"` parses before the generic `<thing> exists` shape");
+
+    string partEProject = Path.Combine(Path.GetTempPath(), "event-manager-save-e-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        // ---- save, two named slots and autosave are independent ----
+        var contentRuntime = FreshEngine(new FakeWorld());
+        contentRuntime.SaveProjectFolder = partEProject;
+        contentRuntime.Variables.SetGlobal("Score", ValueBox.OfNumber(42));
+        SaveGames.Result defaultSave = SaveGames.Save(contentRuntime, "");
+        Check(defaultSave.Ok && defaultSave.Outcome == SaveGames.Outcome.Saved &&
+              defaultSave.Slot == SaveFile.DefaultSlot &&
+              SaveFile.Exists(partEProject, SaveFile.DefaultSlot),
+            "`save game` writes the default slot under the project's Saves folder");
+
+        contentRuntime.Variables.SetGlobal("Score", ValueBox.OfNumber(7));
+        SaveGames.Result namedSave = SaveGames.Save(contentRuntime, "slot1");
+        contentRuntime.Variables.SetGlobal("Score", ValueBox.OfNumber(99));
+        SaveGames.Result autoSave = SaveGames.Autosave(contentRuntime);
+        Check(namedSave.Ok && namedSave.Slot == "slot1" &&
+              autoSave.Ok && autoSave.Slot == SaveFile.AutosaveSlot &&
+              SaveFile.Exists(partEProject, "slot1") &&
+              SaveFile.Exists(partEProject, SaveFile.AutosaveSlot),
+            "a named slot and the autosave slot are separate files beside the default");
+
+        SaveVariable defaultScore = SaveFile.TryRead(partEProject, SaveFile.DefaultSlot).Data.Globals
+            .Find(variable => variable.Name == "Score");
+        SaveVariable namedScore = SaveFile.TryRead(partEProject, "slot1").Data.Globals
+            .Find(variable => variable.Name == "Score");
+        SaveVariable autoScore = SaveFile.TryRead(partEProject, SaveFile.AutosaveSlot).Data.Globals
+            .Find(variable => variable.Name == "Score");
+        Check(defaultScore != null && defaultScore.Number == 42 &&
+              namedScore != null && namedScore.Number == 7 &&
+              autoScore != null && autoScore.Number == 99,
+            "each slot keeps its own globals: writing slot1 and autosave never touches default");
+
+        // ---- loading restores the slot and raises `when game loads` ----
+        var loadRuntime = FreshEngine(new FakeWorld());
+        loadRuntime.SaveProjectFolder = partEProject;
+        loadRuntime.Variables.SetGlobal("Score", ValueBox.OfNumber(0));
+        loadRuntime.AddSheet(new FakeActor("LoadListener"), parser.Parse(
+            "when game loads\n  set LoadSeen to LoadSeen + 1"), "LoadListener");
+        SaveGames.Result defaultLoad = SaveGames.Load(loadRuntime, "");
+        Check(defaultLoad.Ok && defaultLoad.Outcome == SaveGames.Outcome.Loaded &&
+              loadRuntime.Variables.GetGlobal("Score").AsNumber() == 42,
+            "`load game` restores the default slot's globals");
+        loadRuntime.Tick(0);
+        Check(loadRuntime.Variables.GetGlobal("LoadSeen").AsNumber() == 1,
+            "`when game loads` runs after the restore, on the restored sheets");
+
+        SaveGames.Load(loadRuntime, "slot1");
+        Check(loadRuntime.Variables.GetGlobal("Score").AsNumber() == 7,
+            "`load game from \"slot1\"` restores that slot instead of the default");
+        SaveGames.Load(loadRuntime, SaveFile.AutosaveSlot);
+        Check(loadRuntime.Variables.GetGlobal("Score").AsNumber() == 99,
+            "`load game from \"autosave\"` resumes the checkpoint slot");
+
+        // ---- `save slot exists` reads the disk ----
+        var slotContext = new EventContext { Runtime = contentRuntime, Variables = contentRuntime.Variables };
+        Check(Conditions.Evaluate(PartECondition("save slot exists \"default\""), slotContext) &&
+              Conditions.Evaluate(PartECondition("save slot exists \"slot1\""), slotContext) &&
+              !Conditions.Evaluate(PartECondition("save slot exists \"never\""), slotContext),
+            "`save slot exists` is true only for slots with a file");
+        var noFolderRuntime = FreshEngine(new FakeWorld());
+        Check(!Conditions.Evaluate(PartECondition("save slot exists \"default\""),
+                new EventContext { Runtime = noFolderRuntime, Variables = noFolderRuntime.Variables }),
+            "a runtime with no project folder answers `save slot exists` with no instead of throwing");
+
+        // ---- `when game saves` fires after the write ----
+        var saveTriggerRuntime = FreshEngine(new FakeWorld());
+        saveTriggerRuntime.SaveProjectFolder = partEProject;
+        saveTriggerRuntime.AddSheet(new FakeActor("SaveListener"), parser.Parse(
+            "when game saves\n  set SaveSeen to SaveSeen + 1"), "SaveListener");
+        SaveGames.Result triggerSave = SaveGames.Save(saveTriggerRuntime, "event");
+        saveTriggerRuntime.Tick(0);
+        Check(triggerSave.Ok && saveTriggerRuntime.Variables.GetGlobal("SaveSeen").AsNumber() == 1,
+            "`when game saves` fires once with the slot that was just written");
+
+        // ---- delete, and the errors that leave the game alone ----
+        SaveGames.Result deleted = SaveGames.Delete(contentRuntime, "slot1");
+        SaveGames.Result deletedAgain = SaveGames.Delete(contentRuntime, "slot1");
+        Check(deleted.Ok && deleted.Outcome == SaveGames.Outcome.Deleted &&
+              !SaveFile.Exists(partEProject, "slot1") &&
+              !deletedAgain.Ok && deletedAgain.Outcome == SaveGames.Outcome.Missing,
+            "`delete save` removes the file, and deleting it again reports that it is gone");
+
+        double scoreBeforeErrors = loadRuntime.Variables.GetGlobal("Score").AsNumber();
+        var errorWarnings = new List<string>();
+        SaveGames.Result missingLoad = SaveGames.Load(loadRuntime, "absent", null, null,
+            message => errorWarnings.Add(message));
+        Check(!missingLoad.Ok && missingLoad.Outcome == SaveGames.Outcome.Missing &&
+              errorWarnings.Count == 1 &&
+              loadRuntime.Variables.GetGlobal("Score").AsNumber() == scoreBeforeErrors,
+            "loading a slot that isn't there warns and leaves the running game alone");
+
+        File.WriteAllText(SaveFile.PathFor(partEProject, "broken"), "{ this is not a save");
+        SaveGames.Result brokenLoad = SaveGames.Load(loadRuntime, "broken", null, null,
+            message => errorWarnings.Add(message));
+        Check(!brokenLoad.Ok && brokenLoad.Outcome == SaveGames.Outcome.Damaged &&
+              loadRuntime.Variables.GetGlobal("Score").AsNumber() == scoreBeforeErrors,
+            "a damaged save is reported without half-loading it");
+
+        File.WriteAllText(SaveFile.PathFor(partEProject, "future"),
+            "{\"format\":\"" + SaveFile.FormatName + "\",\"version\":999}");
+        SaveGames.Result futureLoad = SaveGames.Load(loadRuntime, "future", null, null,
+            message => errorWarnings.Add(message));
+        Check(!futureLoad.Ok && futureLoad.Outcome == SaveGames.Outcome.NewerVersion &&
+              loadRuntime.Variables.GetGlobal("Score").AsNumber() == scoreBeforeErrors,
+            "a save from a newer schema is refused, not guessed at");
+
+        File.WriteAllText(SaveFile.PathFor(partEProject, "old"),
+            "{\"format\":\"" + SaveFile.FormatName + "\",\"version\":0," +
+            "\"globals\":[{\"name\":\"Score\",\"kind\":\"number\",\"number\":5}]}");
+        var oldWarnings = new List<string>();
+        SaveGames.Result oldLoad = SaveGames.Load(loadRuntime, "old", null, null,
+            message => oldWarnings.Add(message));
+        Check(oldLoad.Ok && oldLoad.Outcome == SaveGames.Outcome.Loaded &&
+              loadRuntime.Variables.GetGlobal("Score").AsNumber() == 5 &&
+              oldWarnings.Count == 1,
+            "an older schema loads with one migration warning");
+
+        var refusedData = new SaveData { Scene = new SaveScene { Name = "NoSuchScene" } };
+        SaveFile.Write(partEProject, "refused", refusedData);
+        var refusedWarnings = new List<string>();
+        SaveGames.Result refusedLoad = SaveGames.Load(loadRuntime, "refused",
+            _ => false, null, message => refusedWarnings.Add(message));
+        Check(refusedLoad.Outcome == SaveGames.Outcome.Refused && !refusedLoad.Ok &&
+              refusedWarnings.Count == 1 &&
+              loadRuntime.Variables.GetGlobal("Score").AsNumber() == 5,
+            "a save whose scene is gone is refused before anything is changed");
+
+        SaveGames.Result noFolderSave = SaveGames.Save(FreshEngine(new FakeWorld()), "anything");
+        Check(!noFolderSave.Ok && noFolderSave.Outcome == SaveGames.Outcome.Failed,
+            "saving with no project folder fails with a message instead of throwing");
+
+        // ---- a sheet and its local variables travel through the coordinator ----
+        var actorWriter = FreshEngine(new FakeWorld());
+        actorWriter.SaveProjectFolder = partEProject;
+        var heroWriter = new FakeActor("Hero");
+        ProgramFile heroProgram = parser.Parse("when game starts\n  set my Hp to 10");
+        actorWriter.AddSheet(heroWriter, heroProgram, "Hero");
+        actorWriter.Variables.SetLocal(heroWriter, "Hp", ValueBox.OfNumber(3));
+        SaveGames.Result actorSave = SaveGames.Save(actorWriter, "actor");
+        SaveFileResult actorRead = SaveFile.TryRead(partEProject, "actor");
+        SaveActor savedHero = actorRead.Data.Actors.Find(actor => actor.Actor == "Hero");
+        SaveVariable savedHp = savedHero?.Variables.Find(variable => variable.Name == "Hp");
+        Check(actorSave.Ok && savedHero != null && savedHero.Source == "Hero" &&
+              savedHp != null && savedHp.Number == 3,
+            "`save game` captures each sheet's source and per-actor variables");
+
+        var actorReader = FreshEngine(new FakeWorld());
+        actorReader.SaveProjectFolder = partEProject;
+        var heroReader = new FakeActor("Hero");
+        actorReader.AddSheet(heroReader, heroProgram, "Hero");
+        SaveGames.Result actorLoad = SaveGames.Load(actorReader, "actor", null, null, null,
+            name => name == "Hero" ? heroReader : null,
+            source => source == "Hero" ? heroProgram : null);
+        Check(actorLoad.Ok && actorReader.Variables.GetLocal(heroReader, "Hp").AsNumber() == 3,
+            "`load game` puts a saved sheet's local variables back on the reloaded actor");
+
+        // ---- `save stats` / `load stats` remain the in-memory checkpoint ----
+        var statsRuntime = FreshEngine(new FakeWorld());
+        statsRuntime.AddSheet(new FakeActor("Stats"), parser.Parse(
+            "when game starts\n  set StatsProbe to 5\n  save stats\nwhen every 1 seconds\n  load stats"),
+            "Stats");
+        statsRuntime.SessionStarted();
+        statsRuntime.Tick(0);
+        statsRuntime.Variables.SetGlobal("StatsProbe", ValueBox.OfNumber(0));
+        statsRuntime.Tick(1);
+        Check(statsRuntime.Variables.GetGlobal("StatsProbe").AsNumber() == 5,
+            "`save stats` / `load stats` still checkpoint globals in memory beside the disk saves");
+    }
+    finally
+    {
+        if (Directory.Exists(partEProject))
+            Directory.Delete(partEProject, true);
+    }
+}
+
+
+// ------------------------------------------------------------------
 // RTS Task 32 Part A: the drag rectangle is authored content
 // ------------------------------------------------------------------
 // The Marquee actor is written into the scene by hand, so a typo in the control type, a

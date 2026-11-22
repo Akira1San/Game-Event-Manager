@@ -398,6 +398,12 @@ namespace Game
         public Levels Levels = new Levels();
         /// <summary>The bridge loads the scene `next level` picks; a test can just record it.</summary>
         public Action<string> OnLevelAdvance = name => { };
+        /// <summary>
+        /// The project root that <c>Saves/</c> lives under (Task 30 Part E). The bridge sets it
+        /// when it finds the GameFiles folder; a runtime without one treats every slot as
+        /// missing and every save/load as unavailable rather than throwing.
+        /// </summary>
+        public string SaveProjectFolder = "";
         /// <summary>The level `next level` asked for, loaded at the end of the tick so the
         /// `when level completes` events queued with it still run first.</summary>
         private string pendingLevel = "";

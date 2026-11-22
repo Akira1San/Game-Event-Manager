@@ -1464,6 +1464,31 @@ namespace Game
                 case ActionVerb.LoadScene:
                     LoadSceneByName(spec.Thing);
                     break;
+                case ActionVerb.SaveGame:
+                case ActionVerb.Autosave:
+                {
+                    // Task 30 Part E: the runtime half captures globals, sheets and spawns; the
+                    // bridge supplies the scene and the engine transform reads.
+                    if (spec.Verb == ActionVerb.Autosave)
+                        SaveGames.Autosave(context.Runtime, CaptureSaveScene(),
+                            CaptureSaveTransform, CaptureSaveActive, CaptureSaveParent, Warn);
+                    else
+                        SaveGames.Save(context.Runtime, spec.Thing, CaptureSaveScene(),
+                            CaptureSaveTransform, CaptureSaveActive, CaptureSaveParent, Warn);
+                    break;
+                }
+                case ActionVerb.LoadGame:
+                {
+                    SaveGames.Load(context.Runtime, spec.Thing, LoadLevel, name => AddSavedScene(name), Warn,
+                        FindSaveActor,
+                        source => EventsManager.Instance?.ProgramForSource(source),
+                        ApplySaveTransform, ApplySaveActive,
+                        CreateSavedSpawned, FinishSavedSpawned, SetSaveParent);
+                    break;
+                }
+                case ActionVerb.DeleteSave:
+                    SaveGames.Delete(context.Runtime, spec.Thing, Warn);
+                    break;
                 case ActionVerb.QuitGame:
                     Debug.LogWarning("QuitGame action triggered — calling Engine.Exit");
                     Engine.Exit(0, FatalErrorType.None);

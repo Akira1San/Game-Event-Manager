@@ -246,6 +246,9 @@ namespace Game
                 Debug.LogWarning("I couldn't find a GameFiles folder with .events files — events won't run this scene.");
                 return;
             }
+            // Saves live under the project root, not under Content (Task 30 Part E): the same
+            // walk that found GameFiles goes up once more to the folder holding Content+Source.
+            Runtime.SaveProjectFolder = EventFiles.LocateProjectFolder(_gameFilesFolder) ?? "";
             // The resource list is read before the other sheets are parsed, so a resource name or
             // spelling a game declares here is understood by every sheet it writes. Orphan
             // resource names simply stay global variables, so this never breaks a scene.

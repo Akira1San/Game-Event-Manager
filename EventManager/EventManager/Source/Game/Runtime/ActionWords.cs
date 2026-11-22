@@ -154,6 +154,15 @@ namespace Game
         CancelResearch,
         // Shared cooldowns (Task 27 Part E)
         PutOnCooldown,
+        // Save/load words (Task 30 Part E)
+        /// <summary><c>save game</c> / <c>save game to "&lt;slot&gt;"</c>.</summary>
+        SaveGame,
+        /// <summary><c>autosave</c> — writes the fixed <see cref="SaveFile.AutosaveSlot"/> slot.</summary>
+        Autosave,
+        /// <summary><c>load game</c> / <c>load game from "&lt;slot&gt;"</c>.</summary>
+        LoadGame,
+        /// <summary><c>delete save "&lt;slot&gt;"</c>.</summary>
+        DeleteSave,
     }
 
     public class ActionSpec
@@ -380,6 +389,50 @@ namespace Game
                 return AddBuff(spec, words, warn);
             if (verb == "remove" && words.Count >= 2 && words[1].Text == "buff")
                 return RemoveBuff(spec, words, warn);
+            // ---- save/load games (Task 30 Part E) ----
+            // Checked before the switch so `save checkpoint` keeps its own case and the
+            // `save stats` / `save bindings` statement lines (consumed by the runtime) never
+            // meet this parser at all.
+            if (verb == "save" && words.Count >= 2 && words[1].Text == "game")
+            {
+                if (words.Count == 2)
+                    return Finish(spec, ActionVerb.SaveGame, words, 2);
+                if (words.Count == 4 && words[2].Text == "to" && words[3].Type == TokenType.Str)
+                {
+                    spec.Thing = words[3].Text;
+                    return Finish(spec, ActionVerb.SaveGame, words, 4);
+                }
+                return Unknown(spec, words, "saves look like this: \u201Csave game\u201D or \u201Csave game to \"slot1\"\u201D", warn);
+            }
+            if (verb == "autosave")
+            {
+                if (words.Count == 1)
+                {
+                    spec.Thing = SaveFile.AutosaveSlot;
+                    return Finish(spec, ActionVerb.Autosave, words, 1);
+                }
+                return Unknown(spec, words, "\u201Cautosave\u201D stands alone \u2014 it always writes the \"autosave\" slot", warn);
+            }
+            if (verb == "load" && words.Count >= 2 && words[1].Text == "game")
+            {
+                if (words.Count == 2)
+                    return Finish(spec, ActionVerb.LoadGame, words, 2);
+                if (words.Count == 4 && words[2].Text == "from" && words[3].Type == TokenType.Str)
+                {
+                    spec.Thing = words[3].Text;
+                    return Finish(spec, ActionVerb.LoadGame, words, 4);
+                }
+                return Unknown(spec, words, "loads look like this: \u201Cload game\u201D or \u201Cload game from \"slot1\"\u201D", warn);
+            }
+            if (verb == "delete" && words.Count >= 2 && words[1].Text == "save")
+            {
+                if (words.Count == 3 && words[2].Type == TokenType.Str)
+                {
+                    spec.Thing = words[2].Text;
+                    return Finish(spec, ActionVerb.DeleteSave, words, 3);
+                }
+                return Unknown(spec, words, "\u201Cdelete save\u201D needs the slot name in quotes, like \u201Cdelete save \"slot1\"\u201D", warn);
+            }
             switch (verb)
             {
                 case "stop":

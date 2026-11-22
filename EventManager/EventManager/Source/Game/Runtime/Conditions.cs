@@ -91,6 +91,9 @@ namespace Game
         AllPlayersDead,
         // Key rebinding (Task 16 input follow-ups)
         Capturing,
+        /// <summary><c>save slot exists "&lt;slot&gt;"</c> — the slot has a file on disk
+        /// (Task 30 Part E).</summary>
+        SaveSlotExists,
     }
 
     public class ConditionNode
@@ -174,6 +177,16 @@ namespace Game
             if (texts.Length == 3 && texts[0] == "capturing" && texts[1] == "a" && texts[2] == "key")
             {
                 node.Kind = ConditionKind.Capturing;
+                return node;
+            }
+
+            // `save slot exists "slot1"` (Task 30 Part E). Checked before the generic
+            // `<thing> exists` shape, which would read "save slot" as an actor.
+            if (texts.Length == 4 && texts[0] == "save" && texts[1] == "slot" &&
+                texts[2] == "exists" && tokens[3].Type == TokenType.Str)
+            {
+                node.Kind = ConditionKind.SaveSlotExists;
+                node.Thing = tokens[3].Text;
                 return node;
             }
 
@@ -1079,6 +1092,13 @@ namespace Game
                     return context.Runtime != null && context.Runtime.AllPlayersDead;
                 case ConditionKind.Capturing:
                     return context.Runtime != null && context.Runtime.IsCapturingKey;
+                // `save slot exists "slot1"` (Task 30 Part E): a question about the disk, so a
+                // runtime with no project folder (a test, or a game whose folder was not found)
+                // simply says no rather than throwing.
+                case ConditionKind.SaveSlotExists:
+                    return context.Runtime != null &&
+                           !string.IsNullOrEmpty(context.Runtime.SaveProjectFolder) &&
+                           SaveFile.Exists(context.Runtime.SaveProjectFolder, node.Thing);
                 default:
                     return false;
             }

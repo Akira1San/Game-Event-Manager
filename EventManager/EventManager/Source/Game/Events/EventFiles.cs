@@ -33,6 +33,27 @@ namespace Game
             return null;
         }
 
+        /// <summary>
+        /// The project root a save folder belongs under (Task 30 Part E): the folder that holds
+        /// both <c>Content</c> and <c>Source</c>, found by walking up from the GameFiles folder.
+        /// Returns null when the layout isn't a Flax project, so callers can disable saving.
+        /// </summary>
+        public static string LocateProjectFolder(string startDir)
+        {
+            string current = startDir;
+            while (!string.IsNullOrEmpty(current))
+            {
+                if (Directory.Exists(Path.Combine(current, "Content")) &&
+                    Directory.Exists(Path.Combine(current, "Source")))
+                    return current;
+                string parent = Directory.GetParent(current)?.FullName;
+                if (parent == current)
+                    break;
+                current = parent;
+            }
+            return null;
+        }
+
         /// <summary>Closest existing file name to what the user wrote, or null when nothing is near
         /// (same near-miss rule the parser uses: distance at most 2 — "Playr" suggests "Player").</summary>
         public static string SuggestFileName(string wanted, System.Collections.Generic.IEnumerable<string> knownNames)
