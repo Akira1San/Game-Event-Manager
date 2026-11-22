@@ -31,6 +31,9 @@ namespace Game
         /// <summary>True while <paramref name="actor"/> is on a ladder because of `climb` — the
         /// state `me is climbing` reads (Task 7 G4 phase 4).</summary>
         bool IsClimbing(object actor);
+        /// <summary>True when a wall is in reach of the actor's four side probes — the answer
+        /// behind `me is touching wall` and the gate `wall jump` shares (Task 21 Part B).</summary>
+        bool IsTouchingWall(object actor);
         /// <summary>The physics-material name of <paramref name="actor"/>'s collider (e.g.
         /// "Grass", "Stone"), or empty when it has no collider or no material assigned.</summary>
         string MaterialOf(object actor);
@@ -173,6 +176,12 @@ namespace Game
         public bool IsClimbing(object actor)
         {
             // No ladders exist without a bridge, so nothing is climbing in a bare world.
+            return false;
+        }
+
+        public bool IsTouchingWall(object actor)
+        {
+            // No physics means no walls, so the word is simply false here.
             return false;
         }
 

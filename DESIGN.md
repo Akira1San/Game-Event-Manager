@@ -1307,10 +1307,16 @@ window around a broken runtime.
   default 1 per landing, so a sheet that never sets it cannot double jump; 2 allows one air jump,
   0 forbids it for good. The bridge keeps the spent count, so a scripted-arc actor gets the same
   allowance as a body, and landing, `respawn at` or a scene restart hands the whole count back.
+  A wall jump is the other counted exception (Task 21 Part B): `wall jump` needs air, a wall within
+  60 cm of the capsule, and the same four side probes `me is touching wall` reads; it sets the
+  take-off strength and pushes away from the nearest wall at 220 cm/s, which a CharacterController
+  carries in the bridge's per-character motion until it lands (a dynamic body keeps it in
+  `LinearVelocity`, while a bodyless actor gets only the vertical arc). Parking a wall jump's own
+  stance or a wall-slide speed is deliberate — the push and the condition are the kit.
   The on-ground query answers from the controller's ground check when there is one, else a
   short downward probe that ignores the actor's own colliders and triggers; a world without physics
   reports grounded, so the gate never blocks a sheet in a test or a bare scene. Parked: coyote time,
-  jump buffering, variable-height jumps (releasing mid-air), wall jumps and moving-platform carry —
+  jump buffering, variable-height jumps (releasing mid-air) and moving-platform carry —
   a platform moving under a jumping actor is not rideable yet. The scripted arc writes `Position.Y`
   directly rather than through `Move`, so it is unswept: a transform-mode actor can clip a ceiling.
   A Dynamic sheet with no `RigidBody` on itself or an ancestor silently takes that same arc.

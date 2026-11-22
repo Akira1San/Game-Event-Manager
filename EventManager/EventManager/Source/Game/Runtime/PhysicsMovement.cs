@@ -424,22 +424,40 @@ namespace Game
         }
 
         /// <summary>
-        /// One tick of character motion with gravity and ground contact. Horizontal movement only
-        /// applies while grounded (no air steering); airborne ticks fall straight down. An
-        /// explicit up/down move (<paramref name="directionY"/> ≠ 0) still wins over gravity, so
-        /// elevators and flying characters keep working. The controller's collide-and-slide
-        /// <c>Move</c> then resolves walls, slopes up to its limit and step offsets.
+        /// One tick of character motion with gravity, ground contact and a little airborne
+        /// horizontal speed. Steering applies only while grounded (no air control); in the air
+        /// the actor keeps <paramref name="airVelocityX"/> / <paramref name="airVelocityZ"/> —
+        /// the push a <c>wall jump</c> leaves behind — and landing clears it, so the drift can
+        /// never survive a touch-down. An explicit up/down move (<paramref name="directionY"/> ≠ 0)
+        /// still wins over gravity, so elevators and flying characters keep working. The
+        /// controller's collide-and-slide <c>Move</c> then resolves walls, slopes up to its limit
+        /// and step offsets.
         /// </summary>
         public static void CharacterStep(
             double directionX, double directionY, double directionZ,
-            double speed, double currentFallSpeed, bool grounded,
-            double gravity, double groundStickSpeed, double deltaTime,
-            out double x, out double y, out double z, out double fallSpeed)
+            double speed, double currentFallSpeed, double airVelocityX, double airVelocityZ,
+            bool grounded, double gravity, double groundStickSpeed, double deltaTime,
+            out double x, out double y, out double z, out double fallSpeed,
+            out double newAirVelocityX, out double newAirVelocityZ)
         {
             double dt = Math.Max(0.0, deltaTime);
             double horizontal = grounded ? speed * dt : 0.0;
             x = directionX * horizontal;
             z = directionZ * horizontal;
+            if (grounded)
+            {
+                // Landing is what stops a wall jump: the horizontal speed belongs to the air,
+                // so a grounded character is steered only by `move`.
+                newAirVelocityX = 0.0;
+                newAirVelocityZ = 0.0;
+            }
+            else
+            {
+                newAirVelocityX = airVelocityX;
+                newAirVelocityZ = airVelocityZ;
+                x += airVelocityX * dt;
+                z += airVelocityZ * dt;
+            }
 
             if (directionY != 0.0)
             {
@@ -453,6 +471,84 @@ namespace Game
                 : FallSpeed(currentFallSpeed, false, gravity, dt);
             y = fallSpeed * dt;
         }
+
+        /// <summary>The shape every plain <c>move</c> call site uses: the same rules with no
+        /// airborne drift.</summary>
+        public static void CharacterStep(
+            double directionX, double directionY, double directionZ,
+            double speed, double currentFallSpeed, bool grounded,
+            double gravity, double groundStickSpeed, double deltaTime,
+            out double x, out double y, out double z, out double fallSpeed)
+        {
+            CharacterStep(directionX, directionY, directionZ, speed, currentFallSpeed, 0.0, 0.0,
+                grounded, gravity, groundStickSpeed, deltaTime,
+                out x, out y, out z, out fallSpeed, out _, out _);
+        }
+
+        /// <summary>Per-character vertical speed plus the horizontal speed an airborne actor
+        /// keeps between ticks (the push a <c>wall jump</c> leaves behind). The bridge owns one
+        /// per actor; a grounded tick zeroes the horizontal part.</summary>
+        public class CharacterMotion
+        {
+            public double FallSpeed;
+            public double AirX;
+            public double AirZ;
+        }
+
+        /// <summary>How far a <c>wall jump</c> reaches sideways for a wall (cm, measured from the
+        /// actor's axis past the capsule), so the probe finds the wall the character is brushing.</summary>
+        public const double WallProbeDistance = 60.0;
+
+        /// <summary>Horizontal speed a <c>wall jump</c> pushes away from the wall at (cm/s).</summary>
+        public const double WallJumpSpeed = 220.0;
+
+        /// <summary>One of the four side probes: how far away something solid is (0 = nothing)
+        /// and which way that probe points, flattened to the XZ plane.</summary>
+        public struct WallProbeSide
+        {
+            public double Distance;
+            public double DirX;
+            public double DirZ;
+        }
+
+        /// <summary>
+        /// The wall answer behind `me is touching wall` and `wall jump`: takes the four side
+        /// probes and reports whether any found a wall, plus the heading pointing away from the
+        /// closest one, so the two words can never disagree. Sides that are equally close (a
+        /// corner) blend into one diagonal.
+        /// </summary>
+        public static bool WallProbe(WallProbeSide[] sides, out double headingX, out double headingZ)
+        {
+            headingX = 0.0;
+            headingZ = 0.0;
+            if (sides == null)
+                return false;
+            double closest = double.MaxValue;
+            foreach (WallProbeSide side in sides)
+                if (side.Distance > 0.0 && side.Distance < closest)
+                    closest = side.Distance;
+            if (closest == double.MaxValue)
+                return false;
+
+            double sumX = 0.0, sumZ = 0.0;
+            foreach (WallProbeSide side in sides)
+                if (side.Distance > 0.0 && side.Distance <= closest + 1.0)
+                {
+                    sumX += side.DirX;
+                    sumZ += side.DirZ;
+                }
+            double length = Math.Sqrt(sumX * sumX + sumZ * sumZ);
+            if (length < 1e-6)
+                return false;
+            headingX = sumX / length;
+            headingZ = sumZ / length;
+            return true;
+        }
+
+        /// <summary>Whether a <c>wall jump</c> may run: never on the ground (that is a plain
+        /// `jump`), and only with a wall actually in reach.</summary>
+        public static bool CanWallJump(bool grounded, bool inReach)
+            => !grounded && inReach;
 
         /// <summary>
         /// One in-flight moving-platform sweep. A platform pings back and forth along a world

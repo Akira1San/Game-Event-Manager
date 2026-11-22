@@ -1857,24 +1857,33 @@ removed gate.
   restores a double jump; an enemy sheet with `my Jumps` 0 never double-jumps. *(The three
   take-offs and the landing reset are unit-covered; the crate hop itself is an editor play-check.)*
 
-### Part B — Wall jumps (C#)
+### Part B — Wall jumps (C#) `[x]`
 A wall jump needs two things the engine does not have: a sideways wall probe, and **horizontal
-motion while airborne** — `CharacterStep` currently moves straight down when not grounded, so a
-character has no air velocity to push away from the wall.
-- [ ] Store an airborne horizontal velocity per character (extend the `CharacterFallSpeeds` idea to
+motion while airborne** — `CharacterStep` used to move straight down when not grounded, so a
+character had no air velocity to push away from the wall. **Shipped 2026-11-22.**
+- [x] Store an airborne horizontal velocity per character (extend the `CharacterFallSpeeds` idea to
       a small `AirVelocity` record: X/Z plus fall speed), applied by `CharacterStep` only while
       airborne and cleared on landing. Dynamic bodies already keep `LinearVelocity`, so that path
-      is free.
-- [ ] `PhysicsMovement` helper for the wall probe result: given the actor's four side probes, the
+      is free. Shipped as `PhysicsMovement.CharacterMotion` (`FallSpeed` + `AirX` / `AirZ`) in the
+      bridge's `CharacterMotions`; `CharacterStep` gained a six-out overload whose grounded tick
+      zeroes the air speed, and the old four-out shape remains for every plain `move`.
+- [x] `PhysicsMovement` helper for the wall probe result: given the actor's four side probes, the
       away-from-wall heading and whether a wall is in reach (pure, unit-testable).
-- [ ] Word: `wall jump` (optional `strength <n>`): refused when grounded or with no wall in reach;
-      sets upward strength plus a horizontal impulse along the away heading.
-- [ ] Condition: `me is touching wall` — same probe, so a sheet can gate the take-off or a wall
-      slide without duplicating it.
-- [ ] Tests: probe heading points away from the blocked side; a grounded actor refuses; a caller
-      with no wall refuses; the air velocity is cleared on landing.
+      `PhysicsMovement.WallProbe` takes `WallProbeSide[]` and blends equally-close sides into a
+      diagonal; `CanWallJump` states the gate.
+- [x] Word: `wall jump` (optional `strength <n>`): refused when grounded or with no wall in reach;
+      sets upward strength plus a horizontal impulse along the away heading
+      (`PhysicsMovement.WallJumpSpeed`, 220 cm/s). The bridge's `TakeOff` is shared with `jump`, so
+      the clip, the body routing and the double-jump count all behave the same.
+- [x] Condition: `me is touching wall` — same probe, so a sheet can gate the take-off or a wall
+      slide without duplicating it (`IEventWorld.IsTouchingWall`, answered by `FlaxWorld`, false in
+      a bare world).
+- [x] Tests: probe heading points away from the blocked side; a grounded actor refuses; a caller
+      with no wall refuses; the air velocity is cleared on landing. 12 checks also cover both word
+      shapes, `my JumpPower`, the corner blend and the condition through the fake world.
 - Done-when: the player jumps at a crate wall and pushes off it back toward the lane; standing on
-      the ground next to the same wall does nothing.
+      the ground next to the same wall does nothing. *(The gate and the arithmetic are
+      unit-covered; the feel against a real crate wall is an editor play-check.)*
 
 ### Part C — Multi-exit ladders (events-only)
 `stop climbing` already keeps the climber's Y where it let go, so an exit at an intermediate height

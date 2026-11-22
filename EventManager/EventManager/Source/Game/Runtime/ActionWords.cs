@@ -10,6 +10,9 @@ namespace Game
         StopMoving,
         /// <summary><c>jump</c> / <c>jump strength &lt;n&gt;</c> (Task 7 G4 phase 3).</summary>
         Jump,
+        /// <summary><c>wall jump</c> / <c>wall jump strength &lt;n&gt;</c> — the airborne push
+        /// away from a wall (Task 21 Part B).</summary>
+        WallJump,
         /// <summary><c>climb &lt;thing&gt;</c> / <c>climb down &lt;thing&gt;</c> (Task 7 G4 phase 4).</summary>
         Climb,
         /// <summary><c>stop climbing</c> — let go of the ladder.</summary>
@@ -1056,6 +1059,31 @@ namespace Game
                         spec.HasNumber = true;
                     }
                     return Finish(spec, ActionVerb.Jump, words, jumpIndex);
+                }
+
+                case "wall":
+                {
+                    // `wall jump` / `wall jump strength 420`: a take-off off a wall, refused on
+                    // the ground or with no wall in reach by the bridge.
+                    if (words.Count >= 2 && words[1].Text == "jump")
+                    {
+                        int wallIndex = 2;
+                        if (words.Count >= wallIndex + 2 && words[wallIndex].Text == "strength")
+                        {
+                            spec.AmountNode = ValueNodeAt(words, wallIndex + 1, out int wallUsed);
+                            spec.HasNumber = words[wallIndex + 1].Type == TokenType.Number;
+                            if (spec.HasNumber)
+                                spec.Number = words[wallIndex + 1].Number;
+                            wallIndex += 1 + wallUsed;
+                        }
+                        if (!spec.HasNumber && spec.AmountNode == null)
+                        {
+                            spec.Number = PhysicsMovement.DefaultJumpStrength;
+                            spec.HasNumber = true;
+                        }
+                        return Finish(spec, ActionVerb.WallJump, words, wallIndex);
+                    }
+                    return Unknown(spec, words, "\u201Cwall\u201D looks like this: \u201Cwall jump\u201D or \u201Cwall jump strength 420\u201D", warn);
                 }
 
                 case "parent":

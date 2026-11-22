@@ -228,6 +228,7 @@
         <tr><td><span class="kw">me is moving</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">me is moving</span><br><span class="alt">gates a polled/continuous trigger — e.g. <code>when me touches Grass and me is moving</code></span></td></tr>
         <tr><td><span class="kw">me is climbing</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">me is climbing</span><br><span class="alt">true from <code>climb</code> until the ladder ends or <code>stop climbing</code> — e.g. <code>when me is climbing and W is released</code> · beats tracking your own flag variable</span></td></tr>
         <tr><td><span class="kw">me is on ground</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">me is on ground</span><br><span class="alt">alt: <code>me is airborne</code> is its opposite · a CharacterController answers from its own ground ray, any other actor from a short downward probe; true only once a <code>jump</code> has landed, so it is the gate that stops mid-air take-offs</span></td></tr>
+        <tr><td><span class="kw">me is touching wall</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">me is touching wall</span><br><span class="alt">the same four side probes <code>wall jump</code> uses, so a wall slide or a take-off can be gated without a second word</span></td></tr>
         <tr><td><span class="kw">me is selected</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">me is selected</span></td></tr>
         <tr><td><span class="kw">me is land</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">me is land</span><br><span class="alt">alt: <code>me is air</code> / <code>me is sea</code> · reads <code>my unit type</code>, and a unit that never wrote one is a land unit, so existing sheets keep working · a unit type is what the unit moves over: land units are blocked by water, air units ignore the ground, sea units are restricted to it · <code>my Altitude</code> (or <code>my altitude</code>) holds a flying unit's height above its ground — 0 is on the ground, and moves keep the height instead of dropping to the waypoint</span></td></tr>
         <tr><td><span class="kw">selection count is</span> <span class="placeholder">&lt;n&gt;</span></td><td><span class="badge badge-condition">condition</span></td><td><span class="example">selection count is 2</span></td></tr>
@@ -706,6 +707,12 @@
           <td>scripted arc: <code>JumpStep</code> rises off the strength and falls under gravity, landing back at the take-off height</td>
           <td><code>LinearVelocity.Y = strength</code> — gravity and the body's own collider do the rest</td>
           <td>scripted arc (a kinematic body ignores velocity, so the transform carries it)</td>
+        </tr>
+        <tr>
+          <td><span class="kw">wall jump</span> [<span class="kw">strength</span> <span class="placeholder">&lt;n&gt;</span>]</td>
+          <td>refused on the ground and with no wall within 60 cm of the capsule; the push has nowhere to go in transform mode, so only the vertical arc runs</td>
+          <td><code>LinearVelocity</code> = heading away from the wall × 220 cm/s, with the take-off strength as the vertical speed</td>
+          <td>scripted arc: a kinematic body ignores the velocity, so it rises and falls without the sideways push</td>
         </tr>
         <tr>
           <td><span class="kw">climb</span> [<span class="kw">down</span>] <span class="placeholder">&lt;thing&gt;</span> [<span class="kw">speed</span> <span class="placeholder">&lt;n&gt;</span>]</td>

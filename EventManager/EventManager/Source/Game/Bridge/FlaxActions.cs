@@ -95,9 +95,12 @@ namespace Game
         /// fires once per token, so every `play anim` / `loop anim` re-arms it — restarting the same
         /// clip, changing speed or letting it loop again does not.</summary>
         private static int AnimPlayCounter;
-        /// <summary>Vertical speed per character actor. <c>CharacterController.Move</c> carries no
-        /// velocity state, so the event runtime keeps the falling speed between ticks.</summary>
-        private static readonly Dictionary<Actor, float> CharacterFallSpeeds = new Dictionary<Actor, float>();
+        /// <summary>Per-character motion: the falling speed and, while airborne, the horizontal
+        /// speed a `wall jump` left behind. <c>CharacterController.Move</c> carries no velocity
+        /// state, so the event runtime keeps both between ticks (Task 12 Part A; the air speed is
+        /// Task 21 Part B).</summary>
+        private static readonly Dictionary<Actor, PhysicsMovement.CharacterMotion> CharacterMotions =
+            new Dictionary<Actor, PhysicsMovement.CharacterMotion>();
         /// <summary>Characters in the air because of `jump`. The floor is still right under them at
         /// take-off, so the ground probe would say "grounded"; this flag is what makes the jump
         /// read as airborne until it lands, and what refuses a second take-off mid-air.</summary>
@@ -306,7 +309,7 @@ namespace Game
             MusicWasPlaying = false;
             MusicGlobalSeen = -1;
             LiveTweens.Clear();
-            CharacterFallSpeeds.Clear();
+            CharacterMotions.Clear();
             JumpingCharacters.Clear();
             ScriptedJumps.Clear();
             JumpsSpent.Clear();
@@ -775,6 +778,10 @@ namespace Game
             {
                 case ActionVerb.Jump:
                     Jump(context, spec);
+                    break;
+
+                case ActionVerb.WallJump:
+                    WallJump(context, spec);
                     break;
 
                 case ActionVerb.Climb:
@@ -2227,19 +2234,30 @@ namespace Game
                     if (character == null)
                         break; // body vanished mid-move: leave the actor where it is
 
-                    // Grounded characters walk; airborne ones fall straight down (no air
-                    // steering). A short ray below the capsule respects the character's slope
+                    // Grounded characters walk; airborne ones keep only a wall jump's drift (no
+                    // air steering). A short ray below the capsule respects the character's slope
                     // limit, and `IsGrounded` covers contact cases the ray is too short to see.
                     bool grounded = IsCharacterGrounded(character, subject);
                     // A jump overrides ground contact for as long as the take-off speed lasts:
                     // the character is airborne even though the floor is still in reach.
                     bool jumping = JumpingCharacters.Contains(subject);
-                    CharacterFallSpeeds.TryGetValue(subject, out float fallSpeed);
+                    // One motion record per character, mutated in place: this runs every tick for
+                    // every walking character, so a fresh object per frame would just be garbage.
+                    if (!CharacterMotions.TryGetValue(subject, out PhysicsMovement.CharacterMotion motion))
+                    {
+                        motion = new PhysicsMovement.CharacterMotion();
+                        CharacterMotions[subject] = motion;
+                    }
                     PhysicsMovement.CharacterStep(
-                        direction.X, direction.Y, direction.Z, speed, fallSpeed, grounded && !jumping,
+                        direction.X, direction.Y, direction.Z, speed,
+                        motion.FallSpeed, motion.AirX, motion.AirZ,
+                        grounded && !jumping,
                         Math.Abs(Physics.Gravity.Y), PhysicsMovement.GroundStickSpeed, DeltaTime,
-                        out double cx, out double cy, out double cz, out double newFallSpeed);
-                    CharacterFallSpeeds[subject] = (float)newFallSpeed;
+                        out double cx, out double cy, out double cz, out double newFallSpeed,
+                        out double newAirX, out double newAirZ);
+                    motion.FallSpeed = newFallSpeed;
+                    motion.AirX = newAirX;
+                    motion.AirZ = newAirZ;
                     if (jumping && grounded && newFallSpeed <= 0f)
                     {
                         JumpingCharacters.Remove(subject); // landed: the next tick walks again
@@ -2531,6 +2549,52 @@ namespace Game
             return !ReferenceEquals(hitActor, actor) && !IsAncestorOrSelf(actor, hitActor);
         }
 
+        /// <summary>
+        /// The four side probes behind `wall jump` and `me is touching wall`, at chest height and
+        /// starting outside the capsule so a ray cannot hit its owner. A side that finds a wall
+        /// records its distance from the actor's axis and the way it points; the decision lives in
+        /// <see cref="PhysicsMovement.WallProbe"/> so it is unit-testable without Flax.
+        /// </summary>
+        public static bool IsTouchingWall(Actor actor)
+            => IsTouchingWall(actor, out _, out _);
+
+        public static bool IsTouchingWall(Actor actor, out double headingX, out double headingZ)
+        {
+            headingX = 0.0;
+            headingZ = 0.0;
+            if (actor == null || actor.Scene == null)
+                return false;
+
+            CharacterController character = EventSheet.FindCharacterController(actor);
+            bool walker = character != null && IsAncestorOrSelf(character, actor);
+            float radius = walker ? character.Radius : 50f;
+            bool baseOrigin = walker && character.OriginMode == CharacterController.OriginModes.Base;
+            Vector3 origin = actor.Position;
+            origin.Y += baseOrigin ? radius : (walker ? character.Height * 0.5f : radius);
+            double reach = PhysicsMovement.WallProbeDistance + radius;
+
+            var sides = new PhysicsMovement.WallProbeSide[4];
+            sides[0] = SideProbe(actor, origin, Vector3.Transform(Vector3.Forward, actor.Orientation), radius, reach);
+            sides[1] = SideProbe(actor, origin, -Vector3.Transform(Vector3.Forward, actor.Orientation), radius, reach);
+            sides[2] = SideProbe(actor, origin, Vector3.Transform(Vector3.Right, actor.Orientation), radius, reach);
+            sides[3] = SideProbe(actor, origin, -Vector3.Transform(Vector3.Right, actor.Orientation), radius, reach);
+            return PhysicsMovement.WallProbe(sides, out headingX, out headingZ);
+        }
+
+        private static PhysicsMovement.WallProbeSide SideProbe(
+            Actor actor, Vector3 origin, Vector3 direction, float radius, double reach)
+        {
+            var side = new PhysicsMovement.WallProbeSide { DirX = direction.X, DirZ = direction.Z };
+            Vector3 start = origin + direction * radius;
+            if (!Physics.RayCast(start, direction, out RayCastHit hit, (float)reach, ~0u, false))
+                return side;
+            var hitActor = hit.Collider as Actor;
+            if (hitActor != null && (ReferenceEquals(hitActor, actor) || IsAncestorOrSelf(actor, hitActor)))
+                return side;
+            side.Distance = hit.Distance + radius;
+            return side;
+        }
+
         /// <summary>Stop a physics-driven actor: brake a dynamic body's horizontal velocity
         /// (vertical speed is kept, so a fall keeps falling). A CharacterController has no
         /// settable velocity — its per-tick <c>Move</c> simply stops, so there is nothing to do.</summary>
@@ -2559,7 +2623,7 @@ namespace Game
             for (int i = Pushes.Count - 1; i >= 0; i--)
                 if (Pushes[i].Target == subject)
                     Pushes.RemoveAt(i);
-            CharacterFallSpeeds.Remove(subject);
+            CharacterMotions.Remove(subject);
             JumpingCharacters.Remove(subject);
             ScriptedJumps.Remove(subject);
             JumpsSpent.Remove(subject); // a respawn hands the actor its whole `my Jumps` back
@@ -2776,7 +2840,39 @@ namespace Game
             if (!PhysicsMovement.CanJump(grounded, spec.Again, jumpsLeft))
                 return;
             JumpsSpent[me] = jumpsSpent + 1;
+            TakeOff(context, me, PhysicsMovement.JumpVelocity(ResolveNumber(context, spec)), false, 0.0, 0.0);
+        }
+
+        /// <summary>
+        /// `wall jump` / `wall jump strength &lt;n&gt;` (Task 21 Part B): a take-off off a wall the
+        /// actor is not standing on. Refused on the ground (that is a plain `jump`) and refused
+        /// with no wall in reach. Sets the upward strength plus an airborne push along the heading
+        /// pointing away from the wall, so the character springs back into the lane it came from.
+        /// A dynamic body gets the push as velocity; a kinematic or bodyless actor runs the
+        /// scripted arc, which has no sideways motion (its transform belongs to the sheet).
+        /// </summary>
+        private static void WallJump(EventContext context, ActionSpec spec)
+        {
+            var me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Cwall jump\u201D needs to run on an actor's sheet — the global Game sheet has no body to jump with.");
+                return;
+            }
+            bool inReach = IsTouchingWall(me, out double headingX, out double headingZ);
+            if (!PhysicsMovement.CanWallJump(IsGrounded(me), inReach))
+                return;
             double strength = PhysicsMovement.JumpVelocity(ResolveNumber(context, spec));
+            TakeOff(context, me, strength, true,
+                headingX * PhysicsMovement.WallJumpSpeed, headingZ * PhysicsMovement.WallJumpSpeed);
+        }
+
+        /// <summary>Shared take-off for `jump`, `jump again` and `wall jump`: routes the strength
+        /// by body, and when <paramref name="push"/> is set leaves an airborne horizontal push
+        /// behind (the wall jump's spring away from the wall).</summary>
+        private static void TakeOff(EventContext context, Actor me, double strength, bool push,
+            double airX, double airZ)
+        {
             PhysicsMoveMode mode = ResolveMoveMode(me, context.Sheet != null && context.Sheet.UsePhysicsMovement);
 
             // A jump anim is optional: a simple mesh has no model to animate, and a project
@@ -2789,7 +2885,13 @@ namespace Game
             {
                 case PhysicsMoveMode.Character:
                     JumpingCharacters.Add(me);
-                    CharacterFallSpeeds[me] = (float)strength;
+                    CharacterMotions.TryGetValue(me, out PhysicsMovement.CharacterMotion motion);
+                    CharacterMotions[me] = new PhysicsMovement.CharacterMotion
+                    {
+                        FallSpeed = strength,
+                        AirX = push ? airX : (motion?.AirX ?? 0.0),
+                        AirZ = push ? airZ : (motion?.AirZ ?? 0.0),
+                    };
                     break;
                 case PhysicsMoveMode.Dynamic:
                 {
@@ -2869,7 +2971,7 @@ namespace Game
         {
             if (climber == null || !Climbs.Remove(climber))
                 return;
-            CharacterFallSpeeds.Remove(climber);
+            CharacterMotions.Remove(climber);
             RigidBody body = FindBody(climber);
             if (body != null && !body.IsKinematic)
                 body.LinearVelocity = Vector3.Zero;
@@ -7075,7 +7177,7 @@ namespace Game
             if (actor == null) return;
             if (actor is Actor body)
             {
-                CharacterFallSpeeds.Remove(body);
+                CharacterMotions.Remove(body);
                 JumpingCharacters.Remove(body);
                 ScriptedJumps.Remove(body);
                 Climbs.Remove(body);

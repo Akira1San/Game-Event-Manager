@@ -9413,6 +9413,83 @@ Check(PhysicsMovement.JumpsLeft(0, 0) == 0 && !PhysicsMovement.CanJump(false, tr
     "an enemy with `my Jumps` 0 never double-jumps");
 
 // ------------------------------------------------------------------
+// Task 21 Part B: wall jumps — the probe, the airborne push, `me is touching wall`
+// ------------------------------------------------------------------
+
+// The word, with and without a strength; `my JumpPower` reads a variable as `jump` does.
+var wallJumpProg = parser.Parse("when every 0 seconds\n  wall jump");
+var wallJumpSpec = ActionWords.Parse(wallJumpProg.Events[0].Body[0].Words, null);
+Check(wallJumpSpec.Verb == ActionVerb.WallJump &&
+      Math.Abs(wallJumpSpec.Number - PhysicsMovement.DefaultJumpStrength) < 1e-9,
+    "`wall jump` parses to ActionVerb.WallJump with the default take-off strength");
+
+var strongWallProg = parser.Parse("when every 0 seconds\n  wall jump strength 420");
+var strongWallSpec = ActionWords.Parse(strongWallProg.Events[0].Body[0].Words, null);
+Check(strongWallSpec.Verb == ActionVerb.WallJump && Math.Abs(strongWallSpec.Number - 420) < 1e-9,
+    "`wall jump strength 420` keeps the authored take-off strength");
+
+var variableWallProg = parser.Parse("when every 0 seconds\n  wall jump strength my JumpPower");
+var variableWallSpec = ActionWords.Parse(variableWallProg.Events[0].Body[0].Words, null);
+Check(variableWallSpec.Verb == ActionVerb.WallJump &&
+      variableWallSpec.AmountNode is VariableValue wallAmount && wallAmount.Name == "JumpPower",
+    "`wall jump strength my JumpPower` reads the amount from the actor's own variable");
+
+// The probe: the heading points away from the blocked side, a corner blends the two sides, and
+// no hit at all refuses (so `wall jump` has nothing to push off).
+var wallSides = new PhysicsMovement.WallProbeSide[4];
+wallSides[0] = new PhysicsMovement.WallProbeSide { DirX = 0, DirZ = 1, Distance = 40 };
+wallSides[1] = new PhysicsMovement.WallProbeSide { DirX = 0, DirZ = -1 };
+wallSides[2] = new PhysicsMovement.WallProbeSide { DirX = 1, DirZ = 0 };
+wallSides[3] = new PhysicsMovement.WallProbeSide { DirX = -1, DirZ = 0 };
+Check(PhysicsMovement.WallProbe(wallSides, out double wallX, out double wallZ) &&
+      Math.Abs(wallX) < 1e-9 && Math.Abs(wallZ - 1) < 1e-9,
+    "the wall probe's heading points away from the blocked side");
+
+wallSides[2].Distance = 40;
+Check(PhysicsMovement.WallProbe(wallSides, out wallX, out wallZ) &&
+      wallX > 0.7 && wallZ > 0.7 &&
+      Math.Abs(Math.Sqrt(wallX * wallX + wallZ * wallZ) - 1) < 1e-9,
+    "a corner blends the two touching sides into one diagonal heading");
+
+Check(!PhysicsMovement.WallProbe(new PhysicsMovement.WallProbeSide[4], out _, out _),
+    "no side in reach means no wall, so `wall jump` has nothing to push off");
+
+Check(!PhysicsMovement.CanWallJump(true, true) && PhysicsMovement.CanWallJump(false, true) &&
+      !PhysicsMovement.CanWallJump(false, false),
+    "`wall jump` is refused on the ground and with no wall, and allowed only off a wall in the air");
+
+// The airborne push: carried between ticks while airborne, cleared on the landing tick.
+PhysicsMovement.CharacterStep(0, 0, 0, 100, -50, 200, 0, false,
+    PhysicsMovement.DefaultGravity, 2, 0.1,
+    out double airDx, out _, out double airDz, out _, out double keptAirX, out double keptAirZ);
+Check(Math.Abs(airDx - 20) < 1e-9 && airDz == 0 &&
+      Math.Abs(keptAirX - 200) < 1e-9 && keptAirZ == 0,
+    "an airborne character carries the wall jump's sideways speed between ticks");
+
+PhysicsMovement.CharacterStep(0, 0, 0, 100, 0, 200, 0, true,
+    PhysicsMovement.DefaultGravity, 2, 0.1,
+    out double landedDx, out _, out double landedDz, out _, out double landedAirX, out double landedAirZ);
+Check(landedDx == 0 && landedDz == 0 && landedAirX == 0 && landedAirZ == 0,
+    "landing clears the wall jump's air speed, so it cannot slide on the ground");
+
+// The condition reads the same answer through the world.
+var wallProg = parser.Parse("when every 0 seconds\n  me is touching wall\n  add 1 to WallTicks");
+Check(Conditions.Parse(wallProg.Events[0].Body[0].Words).Kind == ConditionKind.TouchingWall,
+    "`me is touching wall` parses to ConditionKind.TouchingWall");
+var wallWorld = new FakeWorld();
+var wallActor = new FakeActor("Climber");
+wallWorld.AddActor(wallActor);
+var wallEngine = FreshEngine(wallWorld);
+wallEngine.AddSheet(wallActor, wallProg);
+wallEngine.Tick(0);
+Check(wallEngine.Variables.GetGlobal("WallTicks").AsNumber() == 0,
+    "`me is touching wall` is false with nothing beside the actor");
+wallWorld.SetTouchingWall(wallActor, true);
+wallEngine.Tick(1);
+Check(wallEngine.Variables.GetGlobal("WallTicks").AsNumber() == 1,
+    "`me is touching wall` is true once a wall is in reach");
+
+// ------------------------------------------------------------------
 // Task 7 G4 phase 4: `climb` / `climb down` / `stop climbing`
 // ------------------------------------------------------------------
 
@@ -15226,6 +15303,22 @@ class FakeWorld : IEventWorld
             climbing.Add(actor);
         else
             climbing.Remove(actor);
+    }
+
+    private readonly HashSet<object> touchingWall = new HashSet<object>();
+
+    public bool IsTouchingWall(object actor)
+    {
+        return touchingWall.Contains(actor);
+    }
+
+    /// <summary>Sets the wall answer behind `me is touching wall`.</summary>
+    public void SetTouchingWall(object actor, bool on)
+    {
+        if (on)
+            touchingWall.Add(actor);
+        else
+            touchingWall.Remove(actor);
     }
 
     private readonly HashSet<(object, string)> playingParticles = new HashSet<(object, string)>();

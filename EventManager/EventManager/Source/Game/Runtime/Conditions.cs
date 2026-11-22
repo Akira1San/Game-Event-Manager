@@ -21,6 +21,8 @@ namespace Game
         Airborne,
         /// <summary>`me is climbing` — on a ladder right now (Task 7 G4 phase 4).</summary>
         Climbing,
+        /// <summary>`me is touching wall` — a wall is within the side probes (Task 21 Part B).</summary>
+        TouchingWall,
         // Hearing (Task 16 Part B)
         Hears,
         // Typed enemies (Task 16 Part D)
@@ -158,6 +160,13 @@ namespace Game
             if (texts.Length == 3 && texts[0] == "me" && texts[1] == "is" && texts[2] == "climbing")
             {
                 node.Kind = ConditionKind.Climbing;
+                return node;
+            }
+            // `me is touching wall` — the same four side probes `wall jump` uses (Task 21 B).
+            if (texts.Length == 4 && texts[0] == "me" && texts[1] == "is" &&
+                texts[2] == "touching" && texts[3] == "wall")
+            {
+                node.Kind = ConditionKind.TouchingWall;
                 return node;
             }
 
@@ -865,6 +874,8 @@ namespace Game
                            !context.World.IsOnGround(context.Me);
                 case ConditionKind.Climbing:
                     return context.World.IsClimbing(context.Me);
+                case ConditionKind.TouchingWall:
+                    return context.World != null && context.World.IsTouchingWall(context.Me);
                 case ConditionKind.Hears:
                     return context.Runtime != null && context.Me != null &&
                            context.Runtime.Sounds.IsAudible(node.Thing, context.Me, context.World, node.Distance);
