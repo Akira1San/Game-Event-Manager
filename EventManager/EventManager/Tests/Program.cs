@@ -13715,6 +13715,182 @@ finally
 
 
 // ------------------------------------------------------------------
+// Task 30 Part F - the whole round trip through a slot, on a clean scene
+// ------------------------------------------------------------------
+// Parts B-E test the halves directly. This block saves a run through `SaveGames.Save`,
+// reads it back through `SaveGames.Load` into a scene that has never seen the hero, and
+// checks the pieces the done-when names together: globals, per-object values, bag,
+// equipment, the prefab hero and its weapon child, a missing saved actor beside an extra
+// scene actor, and a hot reload after the restore. The old-schema, damaged-file and
+// two-slot-isolation cases live in the Part E block above.
+{
+    string partFProject = Path.Combine(Path.GetTempPath(), "event-manager-save-f-" + Guid.NewGuid().ToString("N"));
+    try
+    {
+        var sourceWorld = new FakeWorld();
+        var sourceRuntime = FreshEngine(sourceWorld);
+        sourceRuntime.SaveProjectFolder = partFProject;
+
+        var fHero = new FakeActor("Hero");
+        var weapon = new FakeActor("Hero Sword");
+        var ghost = new FakeActor("Ghost");
+        sourceWorld.AddActor(fHero);
+        sourceWorld.AddActor(weapon);
+        sourceWorld.AddActor(ghost);
+
+        ProgramFile heroProgram = parser.Parse(
+            "when me appears\n  add 1 to Appears\nwhen game starts\n  set my Health to 10\n  set my Lives to 3");
+        ProgramFile weaponProgram = parser.Parse("when game starts\n  set my Damage to 5");
+        ProgramFile ghostProgram = parser.Parse("when game starts\n  set my Health to 1");
+        SheetInstance heroSheet = sourceRuntime.AddSheet(fHero, heroProgram, "Hero");
+        sourceRuntime.AddSheet(weapon, weaponProgram, "HeroSword");
+        sourceRuntime.AddSheet(ghost, ghostProgram, "Ghost");
+        heroSheet.CurrentState = "attack";
+
+        sourceRuntime.MarkSpawnedRoot(fHero, "Hero", SaveSpawned.KindPrefab);
+        sourceRuntime.MarkSpawned(weapon, "Hero");
+        sourceRuntime.Variables.SetLocal(fHero, "Health", ValueBox.OfNumber(80));
+        sourceRuntime.Variables.SetLocal(weapon, "Damage", ValueBox.OfNumber(12));
+        sourceRuntime.BagAdd(fHero, "Potion");
+        sourceRuntime.BagAdd(fHero, "Potion");
+        sourceRuntime.BagAdd(fHero, "Sword");
+        sourceRuntime.EquipItem(fHero, "Sword");
+
+        sourceRuntime.Variables.SetGlobal("Score", ValueBox.OfNumber(42));
+        sourceRuntime.Variables.SetGlobal("Title", ValueBox.OfText("Run 2"));
+        sourceRuntime.Variables.SetGlobal("HasKey", ValueBox.OfBoolean(true));
+        sourceRuntime.Variables.SetGlobal("Time Elapsed", ValueBox.OfNumber(12.5));
+
+        var heroPlace = new SaveTransform
+        {
+            Position = new SaveVector { X = 1, Y = 2, Z = 3 },
+            Orientation = new SaveQuaternion { X = 0.1, Y = 0.2, Z = 0.3, W = 0.9 },
+            Scale = new SaveVector { X = 2, Y = 2, Z = 2 },
+        };
+        var weaponPlace = new SaveTransform { Position = new SaveVector { X = 4 } };
+        var savedScene = new SaveScene { Name = "Level1" };
+        savedScene.Additive.Add("HUD");
+
+        SaveGames.Result partFSave = SaveGames.Save(sourceRuntime, "manual", savedScene,
+            actor => actor == fHero ? heroPlace : weaponPlace,
+            actor => actor != weapon);
+        Check(partFSave.Ok && partFSave.Outcome == SaveGames.Outcome.Saved &&
+              SaveFile.Exists(partFProject, "manual"),
+            "the whole run writes one slot file");
+
+        // The target has never seen Hero or its weapon. Bystander is the extra scene actor
+        // the save never knew, and Ghost is the saved actor this scene cannot provide.
+        var targetWorld = new FakeWorld();
+        var targetRuntime = FreshEngine(targetWorld);
+        targetRuntime.SaveProjectFolder = partFProject;
+        var bystander = new FakeActor("Bystander");
+        targetWorld.AddActor(bystander);
+        ProgramFile bystanderProgram = parser.Parse("when game starts\n  set my Health to 5");
+        targetRuntime.AddSheet(bystander, bystanderProgram, "Bystander");
+        targetRuntime.Variables.SetLocal(bystander, "Health", ValueBox.OfNumber(77));
+        targetRuntime.BagAdd(bystander, "Rations");
+        targetRuntime.EquipItem(bystander, "Stick");
+        targetRuntime.Variables.SetGlobal("Stale", ValueBox.OfNumber(99));
+
+        var actors = new Dictionary<string, object>();
+        var createdRoots = new List<string>();
+        var reloadedScenes = new List<string>();
+        var overlays = new List<string>();
+        var partFWarnings = new List<string>();
+        var appliedTransforms = new Dictionary<object, SaveTransform>();
+        var appliedActive = new Dictionary<object, bool>();
+
+        SaveGames.Result partFLoad = SaveGames.Load(targetRuntime, "manual",
+            name =>
+            {
+                reloadedScenes.Add(name);
+                return name == "Level1";
+            },
+            name => overlays.Add(name),
+            message => partFWarnings.Add(message),
+            name => actors.TryGetValue(name, out object found) ? found : null,
+            source => source == "Hero" ? heroProgram : source == "HeroSword" ? weaponProgram : null,
+            (actor, transform) => appliedTransforms[actor] = transform,
+            (actor, active) => appliedActive[actor] = active,
+            saved =>
+            {
+                var created = new FakeActor(saved.Name);
+                targetWorld.AddActor(created);
+                actors[saved.Name] = created;
+                createdRoots.Add(saved.Name);
+                if (saved.Name == "Hero")
+                {
+                    // The prefab brings its weapon child; the save only records the root.
+                    var child = new FakeActor("Hero Sword");
+                    targetWorld.AddActor(child);
+                    actors["Hero Sword"] = child;
+                }
+                return created;
+            },
+            (actor, saved) => { },
+            (actor, parent) => { });
+
+        FakeActor loadedHero = (FakeActor)actors["Hero"];
+        FakeActor loadedWeapon = (FakeActor)actors["Hero Sword"];
+        SheetInstance loadedHeroSheet = targetRuntime.FindSheetFor(loadedHero);
+        Check(partFLoad.Ok && partFLoad.Outcome == SaveGames.Outcome.Loaded &&
+              reloadedScenes.Count == 1 && reloadedScenes[0] == "Level1" &&
+              overlays.Count == 1 && overlays[0] == "HUD",
+            "a slot loads into a clean scene, reloading the level and its overlay first");
+
+        Check(createdRoots.Count == 1 && createdRoots[0] == "Hero" &&
+              targetRuntime.SpawnKindOf(loadedHero) == SaveSpawned.KindPrefab &&
+              targetRuntime.SpawnedFrom(loadedWeapon) == "Hero",
+            "the prefab hero is recreated and its weapon child comes back with it");
+
+        Check(targetRuntime.Variables.GetGlobal("Score").AsNumber() == 42 &&
+              targetRuntime.Variables.GetGlobal("Title").AsText() == "Run 2" &&
+              targetRuntime.Variables.GetGlobal("HasKey").AsBoolean() &&
+              !targetRuntime.Variables.HasGlobal("Stale"),
+            "the loaded slot replaces the scene's globals with the saved ones");
+
+        Check(targetRuntime.Variables.GetLocal(loadedHero, "Health").AsNumber() == 80 &&
+              targetRuntime.Variables.GetLocal(loadedWeapon, "Damage").AsNumber() == 12,
+            "per-object values come back on the recreated hero and its weapon child");
+        Check(targetRuntime.BagCount(loadedHero, "Potion") == 2 &&
+              targetRuntime.BagCount(loadedHero, "Sword") == 1 &&
+              targetRuntime.IsEquipped(loadedHero, "Sword"),
+            "the hero's bag and equipped sword come back from the slot");
+        Check(loadedHeroSheet != null && loadedHeroSheet.CurrentState == "attack" &&
+              appliedTransforms[loadedHero].Position.Z == 3 &&
+              !appliedActive[loadedWeapon],
+            "the loaded hero keeps its state, place and active flag");
+
+        Check(partFWarnings.Count == 1 &&
+              partFWarnings[0].Contains("Ghost", StringComparison.Ordinal),
+            "a saved actor the scene cannot provide warns once and the rest still loads");
+        Check(targetRuntime.Variables.GetLocal(bystander, "Health").AsNumber() == 77 &&
+              targetRuntime.BagCount(bystander, "Rations") == 1 &&
+              targetRuntime.IsEquipped(bystander, "Stick"),
+            "an actor the save never knew keeps the scene's own values");
+
+        targetRuntime.Tick(1);
+        Check(targetRuntime.Variables.GetGlobal("Appears").AsNumber() == 0,
+            "a loaded hero does not re-run `when me appears`");
+
+        // A hot reload swaps the tree but keeps the restored store, bag and equipment.
+        targetRuntime.SwapSheetProgram(loadedHeroSheet, parser.Parse(
+            "when me appears\n  add 1 to Appears\nwhen game starts\n  set my Health to 10\n  set my Lives to 1"));
+        Check(targetRuntime.Variables.GetLocal(loadedHero, "Health").AsNumber() == 80 &&
+              targetRuntime.BagCount(loadedHero, "Potion") == 2 &&
+              targetRuntime.IsEquipped(loadedHero, "Sword") &&
+              targetRuntime.Variables.GetGlobal("Score").AsNumber() == 42,
+            "a hot reload after a load keeps every restored global, local, bag stack and item");
+    }
+    finally
+    {
+        if (Directory.Exists(partFProject))
+            Directory.Delete(partFProject, true);
+    }
+}
+
+
+// ------------------------------------------------------------------
 // RTS Task 32 Part A: the drag rectangle is authored content
 // ------------------------------------------------------------------
 // The Marquee actor is written into the scene by hand, so a typo in the control type, a

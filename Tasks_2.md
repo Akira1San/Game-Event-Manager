@@ -455,9 +455,20 @@ when me touches Checkpoint
       `CaptureSaveScene` + the Part C/D helpers to `SaveGames.Save/Load`; `delete save` removes one
       file and reports an already-gone slot as missing. The words are in `WordRegistry` and
       `keywords.html`.
-- [ ] **Part F — Tests.** Round-trip globals, per-object values, bag and equipment; load into a
+- [x] **Part F — Tests.** Round-trip globals, per-object values, bag and equipment; load into a
       clean scene; missing actor in the save; extra actor in the scene; old schema version; corrupted
       file; two slots isolated; hot reload does not clobber restored values.
+      *Landed:* one end-to-end block drives the real slot files through `SaveGames.Save` /
+      `SaveGames.Load`. It saves a run with a prefab-spawned Hero and its weapon child, then loads
+      that slot into a scene that has never seen either actor: the spawn root and its child are
+      recreated, and the level, overlay, globals, per-object values, bag stacks, equipped sword,
+      state, transform and active flag all come back. The same scene carries an extra actor the
+      save never knew (its own values survive) and the save carries a `Ghost` the scene cannot
+      provide (one warning, the rest still loads); `when me appears` stays suppressed after the
+      restore. A `SwapSheetProgram` hot reload after the load keeps the restored globals, locals,
+      bag and equipment. The focused cases stay in Parts B–E — clean-scene ordering, missing and
+      extra actors, the old schema, the damaged file and two isolated slots — so this block tests
+      the seams between them rather than repeating each half.
 
 ### Done-when
 

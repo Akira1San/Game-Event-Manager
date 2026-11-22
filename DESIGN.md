@@ -1219,6 +1219,13 @@ window around a broken runtime.
   `Source`); a runtime without that folder says no. `delete save` removes one file and treats an
   already-gone slot as `Missing`. `save stats` / `load stats` stay the in-memory checkpoint and still
   run before action parsing, so the disk pair never changes their behaviour.
+  The test shape (Part F, decided): each part keeps its focused runtime tests, and one end-to-end
+  test drives the real slot coordinator and file — capture a run, write it, load it into a scene
+  that never saw those actors, and assert the done-when list in one place: globals, per-object
+  values, bag, equipment, the prefab root and its weapon child, the missing/extra actor split, and a
+  hot reload after the restore. Old-schema, damaged-file and two-slot-isolation checks stay with the
+  slot rules in Part E rather than being repeated; the end-to-end test is about the seams, so a
+  regression in the order (scene, globals, spawns, actors) still fails even when each half passes.
   Not saved in v1, by design: in-flight `wait` continuations, active tweens, particle
   lifetimes, queued pushes and the current path — those restart cleanly rather than resuming
   mid-air.
