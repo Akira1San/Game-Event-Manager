@@ -915,8 +915,35 @@ fill them; a later version can create controls. Either way, the event text stays
       by `show group`, so leave templates untagged. The subtree stamp was reasoned from Flax's own
       `Control.OnMouseEnter` / `OnMouseMove` source (a child control only shows its own text), but
       the visible hover behaviour is still an editor play-check.
-- [ ] **Part E — Inventory example.** A real bag window: open/close, select item, tooltip, use
+- [x] **Part E — Inventory example.** A real bag window: open/close, select item, tooltip, use
       SelectedItem on a door (chains with Task 9 D), and a vendor list if time allows.
+      *Landed:* the playable half is two authored files — no new words and no new C#:
+      `Content/scenes/UI_Bag.scene` (a `Player` carrying the `EventSheet` for `Bag`, the `BagPanel`
+      tagged `bag` with its `BagGrid` and six `BagGridSlotN` controls, a label inside each slot, a
+      `SelectedLabel` and a `BagButton`, every control `ClipChildren`) and
+      `Source/Game/GameFiles/Bag.events`. The sheet hides the window at scene start with
+      `hide group bag`, opens it on **B** with `show group bag` + `fill grid BagGrid from my bag`,
+      and each of the six slots has its own `when slot <n> of grid BagGrid is clicked` block that
+      copies `my ClickedSlot` into `my SelectedItem`, writes `SelectedLabel` and stamps
+      `set tooltip of BagGridSlot<n>` — the per-slot target matters, because a tooltip on `BagGrid`
+      itself would show the last clicked item's name over every slot. Collecting is a real world
+      click rather than a seed line: `when SwordPickup is clicked` / `when PotionPickup is clicked`
+      add the item, `hide` the pickup and refill the grid, so a slot appears the moment something
+      is picked up. The pickup actor must be the collider the camera ray hits and must not hang
+      under an actor carrying an `EventSheet` (the click resolves to the nearest sheet actor, so
+      under `Player` it would arrive as `Player`), and one sitting behind the panel's 240×200
+      screen rectangle cannot be clicked while the window is open — a UI hit consumes the click
+      before the world raycast. Its clicks also exposed two scene layout faults, fixed in the
+      scene JSON: slots 4–6 were stacked on top of each other (two at (0,100)/(110,50) and one at
+      (110,100)) with their labels offset outside the box, and one slot had no label at all.
+      Played by hand (B opens the window, a pickup adds a slot, slot 1 shows `Sword` in
+      `SelectedLabel`, the tooltip names the slot that was clicked, empty slots stay silent);
+      **2452 passed, 0 failed**, `dotnet build Source/Game.csproj -c Editor.Windows.Debug` 0 errors,
+      `Flax.Build -target=GameEditorTarget` exit 0. Limits: hover text exists only after a slot is
+      clicked (there is no cell-hover trigger), a pickup needs one authored block per actor because
+      a click trigger names one actor (no tag wildcard), the vendor list was left out, and the
+      Task 9 D door cross-link is untouched — the door already reads `my SelectedItem` and nothing
+      in it changed.
 - [x] **Part F — Tests and docs.** Each item now has a check behind it: row count (`CountOf` /
       `RowsFor`, the five-row fill and the case-insensitive `questlist`), empty values (a blank
       `add row` keeps its numbering and shows nothing; `set slot … empty` clears text and icon),

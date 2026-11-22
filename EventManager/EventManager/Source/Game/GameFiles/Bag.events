@@ -1,0 +1,54 @@
+# --- Bag.events (Task 34 Part E inventory example) ---
+#
+# The pickups are world actors the scene author places: an actor named
+# `SwordPickup` / `PotionPickup` that a click raycast can hit. Clicking one puts
+# its item in the player's bag, hides the pickup and refills the bag window, so a
+# new slot appears the moment you pick something up.
+
+when scene starts
+  hide group bag
+  fill grid BagGrid from my bag
+
+when B is pressed
+  show group bag
+  fill grid BagGrid from my bag
+
+when SwordPickup is clicked
+  add Sword to my bag
+  hide SwordPickup
+  fill grid BagGrid from my bag
+
+when PotionPickup is clicked
+  add Potion to my bag
+  hide PotionPickup
+  fill grid BagGrid from my bag
+
+when slot 1 of grid BagGrid is clicked
+  set my SelectedItem to my ClickedSlot
+  set text of SelectedLabel to my SelectedItem
+  set tooltip of BagGridSlot1 to my SelectedItem
+
+when slot 2 of grid BagGrid is clicked
+  set my SelectedItem to my ClickedSlot
+  set text of SelectedLabel to my SelectedItem
+  set tooltip of BagGridSlot2 to my SelectedItem
+
+when slot 3 of grid BagGrid is clicked
+  set my SelectedItem to my ClickedSlot
+  set text of SelectedLabel to my SelectedItem
+  set tooltip of BagGridSlot3 to my SelectedItem
+
+when slot 4 of grid BagGrid is clicked
+  set my SelectedItem to my ClickedSlot
+  set text of SelectedLabel to my SelectedItem
+  set tooltip of BagGridSlot4 to my SelectedItem
+
+when slot 5 of grid BagGrid is clicked
+  set my SelectedItem to my ClickedSlot
+  set text of SelectedLabel to my SelectedItem
+  set tooltip of BagGridSlot5 to my SelectedItem
+
+when slot 6 of grid BagGrid is clicked
+  set my SelectedItem to my ClickedSlot
+  set text of SelectedLabel to my SelectedItem
+  set tooltip of BagGridSlot6 to my SelectedItem
