@@ -255,6 +255,10 @@ namespace Game
         /// <summary>Opt-in (EventSheet "Use Physics Movement"): move through the actor's
         /// body instead of assigning Position. Off = the normal transform path.</summary>
         public bool UsePhysicsMovement;
+        /// <summary>Opt-in (EventSheet "First Person"): this actor is a first-person player —
+        /// the mouse turns it and pitches its camera child, and that camera is the one the view
+        /// uses (Task_FPS Phase 1). Off = the ordinary top-down / RTS controls.</summary>
+        public bool FirstPerson;
         /// <summary>Set by the EventSheet "Self Test" flag (or a sheet named `SelfTest`): this
         /// file is the project's self-test sheet (Task 51 Part C). Case discovery still comes
         /// from the `expect` lines, so the marker never changes how an ordinary sheet runs.</summary>
@@ -392,6 +396,10 @@ namespace Game
 
         /// <summary>True between <c>hide cursor</c> and <c>show cursor</c>.</summary>
         public bool CursorHidden;
+        /// <summary>`lock cursor` (Task_FPS Phase 1): the pointer is captured for look control —
+        /// the OS cursor is pinned to the window centre and hidden, and the drawn cursor stops
+        /// chasing it. The bridge applies it every frame; `unlock cursor` hands the pointer back.</summary>
+        public bool CursorLocked;
         /// <summary>Last tick time, so the aim timeout advances with real tick delta.</summary>
         private double lastTargetingTick;
         /// <summary>Last tick time, so a typewriter line reveals at its own speed (Task 35).</summary>
@@ -649,6 +657,7 @@ namespace Game
             CursorStack.Clear();
             CursorName = "";
             CursorHidden = false;
+            CursorLocked = false;
         }
 
         public void RemoveActorSheet(object actor)
@@ -2817,6 +2826,15 @@ namespace Game
                     break;
                 case CursorOp.Show:
                     CursorHidden = false;
+                    break;
+                case CursorOp.Lock:
+                    // Capturing the pointer is the opposite of needing a drawn one: no art, no
+                    // OS pointer, just the engine centring the mouse for look control.
+                    CursorLocked = true;
+                    CursorHidden = false;
+                    break;
+                case CursorOp.Unlock:
+                    CursorLocked = false;
                     break;
             }
         }

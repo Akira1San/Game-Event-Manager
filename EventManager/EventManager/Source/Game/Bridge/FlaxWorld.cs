@@ -482,6 +482,23 @@ namespace Game
             return null;
         }
 
+        /// <summary>
+        /// The camera that belongs to <paramref name="owner"/> — the owner itself or a camera under
+        /// it. A first-person player carries its eyes as a child, so the look rig must aim that
+        /// camera instead of whichever camera the scene happens to list first. Falls back to
+        /// <see cref="FindCamera"/> when the actor has none.
+        /// </summary>
+        public static FlaxEngine.Camera FindCameraUnder(Actor owner)
+        {
+            if (owner == null)
+                return null;
+            if (owner is FlaxEngine.Camera own && own.IsActive)
+                return own;
+            FlaxEngine.Camera fallback = null;
+            FlaxEngine.Camera found = FindCamera(owner, ref fallback);
+            return found != null ? found : FindCamera();
+        }
+
         /// <summary>A ray from the active scene camera through the mouse position. Uses the
         /// camera's own projection so the ray keeps its downward pitch (a flattened ray would
         /// run parallel to the ground and never hit it).</summary>

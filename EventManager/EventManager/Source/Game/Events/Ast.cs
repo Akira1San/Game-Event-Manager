@@ -65,9 +65,14 @@ namespace Game
         Hide,
         /// <summary><c>show cursor</c>.</summary>
         Show,
+        /// <summary><c>lock cursor</c> — capture the pointer for first-person look.</summary>
+        Lock,
+        /// <summary><c>unlock cursor</c>.</summary>
+        Unlock,
     }
 
-    /// <summary>One cursor word (Task 48 Part E): set, push, pop, hide or show.</summary>
+    /// <summary>One cursor word: set, push, pop, hide or show (Task 48 Part E), lock or unlock
+    /// (Task_FPS Phase 1).</summary>
     public class CursorNode : StatementNode
     {
         public CursorOp Op;

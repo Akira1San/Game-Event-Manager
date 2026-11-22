@@ -44,6 +44,64 @@ namespace Game
         /// <summary>The answer last applied, for debug readouts and the play-check.</summary>
         public static CursorState Current { get; private set; }
 
+        /// <summary>True while the pointer is captured for look control (`lock cursor`, Task_FPS
+        /// Phase 1). While locked, no cursor art is drawn and the OS pointer stays hidden.</summary>
+        public static bool Locked { get; private set; }
+
+        /// <summary>
+        /// `lock cursor` / `unlock cursor`: pins the OS pointer to the game window centre
+        /// (<c>Screen.CursorLock</c>) and hides it, and stops the drawn cursor chasing a pointer
+        /// that no longer moves. Unlocking hands the pointer back to the cursor rules on the next
+        /// frame; stopping play calls <see cref="Reset"/> and always releases it.
+        /// </summary>
+        public static void SetLocked(bool locked)
+        {
+            if (Locked == locked)
+                return;
+            Locked = locked;
+            // Capturing or releasing the pointer makes the engine move it (it is pinned to the
+            // window centre while locked). The frame after that carries the move as a mouse
+            // delta, which a look rig must drop or the view snaps.
+            _recenterAt = Time.UnscaledGameTime;
+            HideArt();
+            if (locked)
+            {
+                Screen.CursorLock = CursorLockMode.Locked;
+                SetPointerVisible(false);
+                return;
+            }
+            Screen.CursorLock = CursorLockMode.None;
+            // The next visible answer sets its cursor type again instead of being skipped.
+            _osApplied = false;
+            SetPointerVisible(true);
+        }
+
+        /// <summary>When the pointer was captured or released, or -1. The recentre jump shows up
+        /// in the next frame's <c>Input.MousePositionDelta</c>.</summary>
+        private static double _recenterAt = -1.0;
+
+        /// <summary>
+        /// How long after capture the recentre jump may still arrive. One frame is typical; the
+        /// window only exists so a paused or very slow frame cannot leave the flag armed forever.
+        /// </summary>
+        private const double RecenterWindow = 0.25;
+
+        /// <summary>
+        /// True once, on the frame after the pointer was captured or released: the engine recentred
+        /// the mouse on the previous frame, so this frame's <c>Input.MousePositionDelta</c> is that
+        /// jump rather than a hand movement. The look rig asks for it and drops the delta. A
+        /// request older than the window is ignored, so a scene with no first-person player can
+        /// never swallow a real mouse movement.
+        /// </summary>
+        public static bool ConsumeRecenterDelta()
+        {
+            if (_recenterAt < 0.0)
+                return false;
+            double age = Time.UnscaledGameTime - _recenterAt;
+            _recenterAt = -1.0;
+            return age > 0.0 && age <= RecenterWindow;
+        }
+
         private static UIControl _actor;
         private static string _actorName;
 
@@ -69,6 +127,13 @@ namespace Game
         public static void Apply(CursorState state, CursorCatalog catalog)
         {
             Current = state;
+            // `lock cursor`: the pointer is captured for first-person look, so no rule may draw it.
+            if (Locked)
+            {
+                HideArt();
+                SetPointerVisible(false);
+                return;
+            }
             if (state == null)
             {
                 Reset();
@@ -155,6 +220,11 @@ namespace Game
         public static void Reset()
         {
             Current = null;
+            // The pointer capture is engine-wide too: stopping play hands the mouse back.
+            Locked = false;
+            _recenterAt = -1.0;
+            if (Screen.CursorLock != CursorLockMode.None)
+                Screen.CursorLock = CursorLockMode.None;
             HideArt();
             _actor = null;
             _actorName = null;

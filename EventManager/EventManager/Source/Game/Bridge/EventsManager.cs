@@ -467,6 +467,7 @@ namespace Game
                 // (clone, scene wake).
                 existing.IsSelfTest = selfTest;
                 existing.UsePhysicsMovement = component.UsePhysicsMovement;
+                existing.FirstPerson = component.FirstPerson;
                 existing.GroundCheckDistance = component.ReadCharacterBodySettings().GroundCheckDistance;
                 SyncStepSoundMap(existing, component.StepSoundMap);
                 return;
@@ -486,6 +487,7 @@ namespace Game
             _missingShown.Remove(source);
             SheetInstance sheet = Runtime.AddSheet(actor, program.File, source, selfTest);
             sheet.UsePhysicsMovement = component.UsePhysicsMovement;
+            sheet.FirstPerson = component.FirstPerson;
             sheet.GroundCheckDistance = component.ReadCharacterBodySettings().GroundCheckDistance;
             SyncStepSoundMap(sheet, component.StepSoundMap);
         }
@@ -667,6 +669,10 @@ namespace Game
             FlaxActions.Step(delta);
             CheckForChanges();
             InputEdges();
+            // First-person look before the tick: this frame's mouse delta decides where the body
+            // faces, and `move forward/left` resolves from the body's facing — so the movement
+            // words a sheet already uses become camera-relative with no new verb (Task_FPS P1).
+            UpdateFirstPersonCamera();
             UpdateAim();
             UpdateButtons();
             UpdateTextControls();
@@ -707,6 +713,9 @@ namespace Game
         /// </summary>
         private void UpdateCursor()
         {
+            // `lock cursor` (Task_FPS Phase 1) outranks every cursor rule: the pointer is captured
+            // for look control, so nothing may draw or chase it.
+            CursorView.SetLocked(Runtime.CursorLocked);
             CursorLibrary library = Cursors.Library;
             // Nothing authored and nothing asked for: no raycast, no pointer writes.
             if (Cursors.Count <= 1 && Runtime.CursorStack.Depth == 0 &&
@@ -900,10 +909,78 @@ namespace Game
             }
         }
 
+        /// <summary>
+        /// First-person controls (Task_FPS Phase 1). The sheet with <c>First Person</c> ticked owns
+        /// the camera: this frame's mouse delta turns the actor (yaw, world Y) and tilts its camera
+        /// child (pitch, local X) through the pure <see cref="MouseLook"/> rules. Yaw on the body is
+        /// what makes the existing movement words view-relative — `move forward` walks where the
+        /// player looks and strafing never rotates the body.
+        ///
+        /// It enters and leaves the mode on its own: the tick the flag disappears (scene change, a
+        /// destroyed actor) the camera is released, and free-pan is switched off on entry so the
+        /// RTS rig cannot move the view underneath a player.
+        /// </summary>
+        private void UpdateFirstPersonCamera()
+        {
+            CameraState cam = Runtime.Camera;
+            if (cam == null)
+                return;
+
+            SheetInstance sheet = null;
+            foreach (SheetInstance candidate in Runtime.Sheets)
+            {
+                if (!candidate.FirstPerson)
+                    continue;
+                if (candidate.Actor is Actor body && body != null && body.Scene != null)
+                {
+                    sheet = candidate;
+                    break;
+                }
+            }
+            if (sheet == null)
+            {
+                cam.EndFirstPerson();
+                return;
+            }
+
+            var player = (Actor)sheet.Actor;
+            if (!ReferenceEquals(cam.FirstPersonSubject, player))
+            {
+                // Entering look mode takes the camera like any other rig: free-pan off, no
+                // follow / snap / aim, and the view starts level from the body's own facing.
+                Runtime.Variables.SetGlobal(CameraRig.FreeVariable, ValueBox.OfNumber(0));
+                cam.EnterFirstPerson(player, player.EulerAngles.Y, 0.0);
+            }
+
+            Float2 delta = Input.MousePositionDelta;
+            // The frame after capture turns on (or off) the engine recentres the pointer, and that
+            // jump arrives as a mouse delta; dropping it keeps the view from snapping.
+            if (CursorView.ConsumeRecenterDelta())
+                delta = Float2.Zero;
+            MouseLook.Step(cam.LookYaw, cam.LookPitch, delta.X, delta.Y,
+                MouseLook.SensitivityFrom(Runtime.Variables),
+                MouseLook.InvertFrom(Runtime.Variables, MouseLook.InvertXVariable),
+                MouseLook.InvertFrom(Runtime.Variables, MouseLook.InvertYVariable),
+                out double yaw, out double pitch);
+            cam.SetLook(yaw, pitch);
+
+            player.Orientation = Quaternion.Euler(0.0f, (float)yaw, 0.0f);
+
+            // The player's own camera, not whatever camera happens to be in the scene: a
+            // first-person rig aims the eyes it was given.
+            FlaxEngine.Camera camera = FlaxWorld.FindCameraUnder(player);
+            if (camera != null)
+                camera.LocalOrientation = Quaternion.Euler((float)pitch, 0.0f, 0.0f);
+        }
+
         private void UpdateCameraFollow(float delta)
         {
             var camera = FlaxWorld.FindCamera();
             if (camera == null)
+                return;
+
+            // A first-person sheet owns the camera (its own child camera); the follow rigs stay out.
+            if (Runtime.Camera != null && Runtime.Camera.IsFirstPerson)
                 return;
 
             // Free-pan mode (Task 26) owns the camera; UpdateCameraPan places it.
@@ -954,6 +1031,9 @@ namespace Game
             var player = Level.FindActor("Player") as Actor;
             var camera = FlaxWorld.FindCamera();
             if (player == null || camera == null)
+                return;
+            // The legacy look-at-cursor rule would fight a first-person rig for the body's yaw.
+            if (Runtime.Camera != null && Runtime.Camera.IsFirstPerson)
                 return;
             if (Runtime.Variables.GetGlobal("LookAtMouse").AsNumber() <= 0)
                 return;

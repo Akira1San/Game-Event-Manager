@@ -766,6 +766,13 @@ namespace Game
         {
             if (cam == null || !cam.IsShaking)
                 return;
+            // A first-person rig owns both position and rotation (a camera parented to the
+            // player), so there is no framing to wobble safely yet — parked there for now.
+            if (cam.IsFirstPerson)
+            {
+                cam.ClearShake();
+                return;
+            }
             Actor camera = FlaxWorld.FindCamera();
             if (camera == null)
             {

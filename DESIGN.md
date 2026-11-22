@@ -1501,6 +1501,30 @@ window around a broken runtime.
   name, so no player sheet owns the camera. Parked: an authored `camera follows <thing> offset
   <n>` word, and a follow that also eases rotation.
 
+- **First person is a camera mode, not a second rig (Task_FPS Phase 1):** an `EventSheet` with
+  `First Person` ticked makes its actor a first-person player. The mouse turns the body (yaw on
+  world Y) and tilts the player's own camera child (pitch on local X, clamped to ±89°); the pure
+  `MouseLook` class owns the maths so the clamp, the wrap and the invert rules are unit tested.
+  Two decisions keep it out of everything else's way. **It is a mode of `CameraState`**, beside
+  follow / at / aim / free — so it releases those rigs on entry, they release it on use, the scene
+  teardown clears it, and the free camera's `OwnsPosition` never fires while a player is looking.
+  **Yaw turns the body**, which is why the existing movement words became view-relative with no
+  new verb: `move forward` follows the view and strafing leaves the facing alone. A dedicated
+  `MoveRelativeToCamera` flag would only matter for a body that must not face where it looks, so
+  it stays parked. The eyes are found with `FlaxWorld.FindCameraUnder` — a camera under the
+  player, never "whichever camera comes first" — so a scene with a cutscene camera still aims the
+  right one. Two limits are deliberate: a shake does not wobble a first-person camera (there is
+  no framing to offset; it is cleared rather than fighting the parented rig), and the legacy
+  `LookAtMouse` rule stops while the mode is on. Feel lives in `LookSensitivity` (degrees per
+  pixel, default 0.12), `LookInvertX` / `LookInvertY`, and pointer capture is the new
+  `lock cursor` / `unlock cursor` pair: the OS mouse is centred and hidden, every cursor rule is
+  outranked, and stopping play always restores it. Capture and release both move the pointer by
+  themselves, so the look rig drops the one frame of mouse delta that follows either transition —
+  otherwise the recentre jump would snap the view (the flag is windowed to a quarter second, so a
+  stale capture can never swallow a real movement). `GameFiles/FPS_Player.events` is the shipped
+  sheet (capture, WASD, run gate, jump, Escape releases the pointer). Parked: crouch, ADS/FOV,
+  per-axis look triggers, and camera-relative movement for a body that does not turn.
+
 ## 10. The one-paragraph pitch
 
 Event Manager is a text-first game-logic system for non-programmers, inspired by Blender Game

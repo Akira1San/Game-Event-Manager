@@ -4949,6 +4949,56 @@ when 1 is pressed
     Check(Math.Abs(CameraFollow.DampingFrom(followVars) - 2.5) < 1e-9,
         "`set CameraFollowDamping to 2.5` tunes the follow");
 
+    // First person (Task_FPS Phase 1): mouse look and the camera mode that owns the view.
+    MouseLook.Step(0, 0, 100, 0, MouseLook.DefaultSensitivity, false, false,
+        out double lookYaw, out double lookPitch);
+    Check(Math.Abs(lookYaw - 12) < 1e-9 && Math.Abs(lookPitch) < 1e-9,
+        "moving the mouse right turns the view right by sensitivity × pixels");
+    MouseLook.Step(0, 0, 0, -100, MouseLook.DefaultSensitivity, false, false,
+        out lookYaw, out lookPitch);
+    Check(Math.Abs(lookYaw) < 1e-9 && lookPitch < 0,
+        "moving the mouse up looks up (pitch grows downward)");
+    MouseLook.Step(0, 0, 100, 100, MouseLook.DefaultSensitivity, true, true,
+        out lookYaw, out lookPitch);
+    Check(lookYaw < 0 && lookPitch < 0, "LookInvertX / LookInvertY flip their axis");
+    MouseLook.Step(0, 0, 0, 100000, MouseLook.DefaultSensitivity, false, false,
+        out lookYaw, out lookPitch);
+    Check(lookPitch == MouseLook.MaxPitch, "pitch stops at 89 degrees instead of flipping over");
+    MouseLook.Step(30, 10, 0, 0, MouseLook.DefaultSensitivity, false, false,
+        out lookYaw, out lookPitch);
+    Check(lookYaw == 30 && lookPitch == 10, "a still mouse never moves the view");
+    Check(Math.Abs(MouseLook.WrapYaw(190) + 170) < 1e-9 &&
+          Math.Abs(MouseLook.WrapYaw(-190) - 170) < 1e-9,
+        "yaw wraps so a long session cannot grow the angle forever");
+    Check(MouseLook.SensitivityFrom(new EventVariables()) == MouseLook.DefaultSensitivity,
+        "a sheet that never sets LookSensitivity gets the default feel");
+    var lookVars = new EventVariables();
+    lookVars.SetGlobal(MouseLook.SensitivityVariable, ValueBox.OfNumber(0.5));
+    lookVars.SetGlobal(MouseLook.InvertYVariable, ValueBox.OfNumber(1));
+    Check(Math.Abs(MouseLook.SensitivityFrom(lookVars) - 0.5) < 1e-9 &&
+          MouseLook.InvertFrom(lookVars, MouseLook.InvertYVariable) &&
+          !MouseLook.InvertFrom(lookVars, MouseLook.InvertXVariable),
+        "`set LookSensitivity to 0.5` and `set LookInvertY to 1` tune the look");
+
+    var fpsCam = new CameraState();
+    fpsCam.Follow(new object(), new CameraPoint(0, 260, -170));
+    fpsCam.EnterFirstPerson(new object(), 200, 100);
+    Check(fpsCam.PositionFor(true) == CameraState.PositionSource.FirstPerson &&
+          fpsCam.FollowTarget == null && !fpsCam.FreeOwns(true) &&
+          Math.Abs(fpsCam.LookYaw + 160) < 1e-9 && fpsCam.LookPitch == MouseLook.MaxPitch,
+        "a first-person player takes the camera (angles wrapped and clamped) and free-pan stays out");
+    fpsCam.Follow(new object(), CameraPoint.Zero);
+    Check(!fpsCam.IsFirstPerson && fpsCam.PositionFor(false) == CameraState.PositionSource.Follow,
+        "`camera follows` releases first person, so no two rigs fight");
+    object fpsPlayer = new object();
+    fpsCam.EnterFirstPerson(fpsPlayer, 30, 0);
+    fpsCam.ForgetDead(target => ReferenceEquals(target, fpsPlayer));
+    Check(!fpsCam.IsFirstPerson, "a destroyed player leaves look mode");
+    fpsCam.EnterFirstPerson(new object(), 30, 0);
+    fpsCam.Release();
+    Check(!fpsCam.IsFirstPerson && fpsCam.LookYaw == 0 && fpsCam.LookPitch == 0,
+        "`camera free` / teardown releases first person and its angles");
+
     // The TK4 sprint sheet leans on the walk/sprint branches being mutually exclusive: whether a
     // body line like `Left Shift is held` gates correctly decides if Shift does anything at all.
     var sprGateWorld = new FakeWorld();
@@ -14778,6 +14828,24 @@ Check(cursorOps.Count == 6 &&
       cursorOps[2] == CursorOp.Push && cursorNames[2] == "Hand" &&
       cursorOps[3] == CursorOp.Pop && cursorOps[4] == CursorOp.Hide && cursorOps[5] == CursorOp.Show,
     "set/push/pop/hide/show cursor parse as their own statement, and `my cursor` parses as a value");
+
+var lockWords = cursorParser.Parse("when game starts\n  lock cursor\n  unlock cursor\n");
+var lockOps = new List<CursorOp>();
+foreach (var lockLine in lockWords.Events[0].Body)
+{
+    if (lockLine.Statement is CursorNode lockNode)
+        lockOps.Add(lockNode.Op);
+}
+Check(lockOps.Count == 2 && lockOps[0] == CursorOp.Lock && lockOps[1] == CursorOp.Unlock,
+    "`lock cursor` / `unlock cursor` parse as cursor words");
+
+var lockEngine = FreshEngine(new FakeWorld());
+lockEngine.AddSheet(new GlobalHost(), cursorParser.Parse("when game starts\n  lock cursor\n"));
+lockEngine.SessionStarted();
+lockEngine.Tick(0);
+Check(lockEngine.CursorLocked, "`lock cursor` captures the pointer from a sheet");
+lockEngine.RemoveAllSheets();
+Check(!lockEngine.CursorLocked, "a new scene starts with the pointer released");
 
 var cursorEngine = FreshEngine(new FakeWorld());
 cursorEngine.AddSheet(new GlobalHost(),

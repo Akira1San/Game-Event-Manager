@@ -48,6 +48,11 @@ namespace Game
             Follow,
             /// <summary><c>camera at &lt;thing&gt;</c>.</summary>
             At,
+            /// <summary>A first-person player (an <c>EventSheet</c> with First Person ticked):
+            /// the camera is the player's own camera child and the mouse aims it. It owns the
+            /// camera like the other modes do, so the follow / snap / aim / free rigs stay quiet
+            /// while it is on.</summary>
+            FirstPerson,
             /// <summary><c>camera free</c>, steered by the panning input.</summary>
             Free,
         }
@@ -64,6 +69,15 @@ namespace Game
 
         /// <summary>Actor the camera aims at (<c>camera looks at &lt;thing&gt;</c>).</summary>
         public object LookAtTarget;
+
+        /// <summary>The first-person player, or null when no sheet drives a first-person camera.</summary>
+        public object FirstPersonSubject;
+        /// <summary>Look angles in degrees: yaw turns the body (world Y), pitch tilts the camera
+        /// child (local X). Positive yaw is to the right, positive pitch is downward.</summary>
+        public double LookYaw;
+        public double LookPitch;
+
+        public bool IsFirstPerson => FirstPersonSubject != null;
 
         /// <summary>
         /// One running <c>shake camera</c>: its strength and length, how far in it is, the seed its
@@ -108,15 +122,49 @@ namespace Game
                 return PositionSource.Follow;
             if (AtTarget != null)
                 return PositionSource.At;
+            if (FirstPersonSubject != null)
+                return PositionSource.FirstPerson;
             return freeArmed ? PositionSource.Free : PositionSource.None;
         }
 
         public bool OwnsPosition(bool freeArmed) => PositionFor(freeArmed) != PositionSource.None;
 
         /// <summary>True when free-pan mode is what places the camera: it is armed and no follow,
-        /// snap or aim target has taken the camera back.</summary>
+        /// snap, aim or first-person player has taken the camera back.</summary>
         public bool FreeOwns(bool freeArmed)
-            => freeArmed && FollowTarget == null && AtTarget == null && LookAtTarget == null;
+            => freeArmed && FollowTarget == null && AtTarget == null && LookAtTarget == null &&
+               FirstPersonSubject == null;
+
+        /// <summary>
+        /// Takes the camera for a first-person player (Task_FPS Phase 1). Like every other mode it
+        /// releases the rigs it must not fight, and it starts from the player's own facing so the
+        /// view does not jump when the mode comes on.
+        /// </summary>
+        public void EnterFirstPerson(object subject, double yaw, double pitch)
+        {
+            FollowTarget = null;
+            AtTarget = null;
+            AtOffset = CameraPoint.Zero;
+            LookAtTarget = null;
+            FirstPersonSubject = subject;
+            LookYaw = MouseLook.WrapYaw(yaw);
+            LookPitch = MouseLook.ClampPitch(pitch);
+        }
+
+        /// <summary>This frame's look answer, already wrapped and clamped by `MouseLook`.</summary>
+        public void SetLook(double yaw, double pitch)
+        {
+            LookYaw = yaw;
+            LookPitch = pitch;
+        }
+
+        /// <summary>The first-person player left the scene or the sheet stopped driving it.</summary>
+        public void EndFirstPerson()
+        {
+            FirstPersonSubject = null;
+            LookYaw = 0.0;
+            LookPitch = 0.0;
+        }
 
         /// <summary><c>camera follows &lt;thing&gt;</c>: takes the position and releases both the
         /// snap and the aim — following and aiming must not fight each tick.</summary>
@@ -127,6 +175,7 @@ namespace Game
             AtTarget = null;
             AtOffset = CameraPoint.Zero;
             LookAtTarget = null;
+            EndFirstPerson();
         }
 
         /// <summary><c>camera at &lt;thing&gt;</c>: takes the position and releases the follow, but
@@ -136,6 +185,7 @@ namespace Game
             AtTarget = target;
             AtOffset = offset;
             FollowTarget = null;
+            EndFirstPerson();
         }
 
         /// <summary><c>camera looks at &lt;thing&gt;</c>: takes the aim and releases the follow so
@@ -144,6 +194,7 @@ namespace Game
         {
             LookAtTarget = target;
             FollowTarget = null;
+            EndFirstPerson();
         }
 
         /// <summary>
@@ -160,6 +211,8 @@ namespace Game
                 AtTarget = null;
             if (LookAtTarget != null && dead(LookAtTarget))
                 LookAtTarget = null;
+            if (FirstPersonSubject != null && dead(FirstPersonSubject))
+                EndFirstPerson();
         }
 
         /// <summary><c>camera free</c> / <c>camera switch</c> / teardown: every target goes and the
@@ -171,6 +224,9 @@ namespace Game
             AtTarget = null;
             AtOffset = CameraPoint.Zero;
             LookAtTarget = null;
+            FirstPersonSubject = null;
+            LookYaw = 0.0;
+            LookPitch = 0.0;
             Shake = null;
         }
 

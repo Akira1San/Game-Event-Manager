@@ -56,6 +56,16 @@ namespace Game
         public bool UsePhysicsMovement = false;
 
         /// <summary>
+        /// Opt-in first-person controls (Task_FPS Phase 1): tick this on the player actor and the
+        /// mouse turns it — yaw on the actor's world Y, pitch on a camera child's local X — and
+        /// that child is the camera the view uses. The rest of the camera rigs (follow, at, aims,
+        /// free-pan) stay off while this is on, so a top-down sheet is completely unaffected.
+        /// The feel knobs are the globals `LookSensitivity`, `LookInvertX` and `LookInvertY`.
+        /// </summary>
+        [Tooltip("Drive this actor as a first-person player: the mouse turns the actor (yaw) and tilts its camera child (pitch). Put a Camera actor under the player as the eyes. Off = the normal top-down controls.")]
+        public bool FirstPerson = false;
+
+        /// <summary>
         /// Ticks the capsule settings below onto the actor's <c>CharacterController</c> when the
         /// sheet starts. Leave unticked to use whatever the CharacterController inspector says.
         /// </summary>

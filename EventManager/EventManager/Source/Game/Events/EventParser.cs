@@ -903,7 +903,8 @@ namespace Game
         }
 
         /// <summary>
-        /// Parses the five cursor words (Task 48 Part E) into one node: the name is the quoted or
+        /// Parses the cursor words (Task 48 Part E, plus `lock`/`unlock` from Task_FPS Phase 1)
+        /// into one node: the name is the quoted or
         /// bare word after <c>cursor</c>, and <c>to default</c> is spelled the long way so a sheet
         /// reads as English. A shape this method does not recognise answers null, which lets the
         /// ordinary `set` parser warn about it instead of silently doing nothing.
@@ -933,6 +934,16 @@ namespace Game
                 {
                     Line = line.Line,
                     Op = first == "hide" ? CursorOp.Hide : CursorOp.Show,
+                };
+            }
+            // `lock cursor` / `unlock cursor` — capture the pointer for first-person look
+            // (Task_FPS Phase 1). Same word family: the pointer is game-wide state.
+            if ((first == "lock" || first == "unlock") && words.Count == 2)
+            {
+                return new CursorNode
+                {
+                    Line = line.Line,
+                    Op = first == "lock" ? CursorOp.Lock : CursorOp.Unlock,
                 };
             }
             return null;

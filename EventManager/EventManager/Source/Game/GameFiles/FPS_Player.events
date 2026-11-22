@@ -1,0 +1,42 @@
+# FPS_Player.events — first-person player (Task_FPS Phase 1).
+#
+# Scene setup: the player actor carries this sheet's EventSheet with
+#   First Person ticked and Use Physics Movement ticked,
+# and a Camera actor is parented under it at eye height
+# (that child is the eyes: the mouse pitches it).
+#
+# The mouse turns the body, so `move forward` already walks where
+# you look and `move left`/`right` strafe without turning it.
+# Feel knobs are globals: `set LookSensitivity to 0.15`,
+# `set LookInvertY to 1`.
+
+when game starts
+  lock cursor
+  set my Pace to 240
+  set my RunSpeed to 420
+  set my Stamina to 100
+
+when W is held
+  Left Shift is held
+  my Stamina is higher than 0
+  move forward speed my RunSpeed
+
+when W is held
+  unless Left Shift is held
+  move forward speed my Pace
+
+when S is held
+  move backward speed my Pace
+
+when A is held
+  move left speed my Pace
+
+when D is held
+  move right speed my Pace
+
+when Space is pressed
+  jump
+
+# Hand the pointer back so a menu or the debugger stays usable.
+when Escape is pressed
+  unlock cursor
