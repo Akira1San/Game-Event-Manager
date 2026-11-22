@@ -184,6 +184,9 @@ namespace Game
             public int Seed;
             public long Tick;
             public Vector3 BasePosition;
+            /// <summary>The displacement this tick's maths produced. Free-pan mode rewrites the
+            /// camera from the pan focus after the shake step, so it re-adds this offset itself.</summary>
+            public Vector3 Offset;
         }
 
         /// <summary>Null when nothing is shaking. There is one shake, refreshed rather than
@@ -802,10 +805,14 @@ namespace Game
                 return;
             }
             CameraShakeState shake = Shake.Value;
-            // A follow/at rig rewrites the position absolutely every tick, so what is there now is
-            // the untouched framing. With no rig, the framing is the one captured at the start.
-            bool rigOwnsCamera = CameraFollowTarget != null || CameraAtTarget != null;
-            Vector3 basePosition = rigOwnsCamera ? camera.Position : shake.BasePosition;
+            // A rig rewrites the position absolutely every tick, so the framing underneath the
+            // wobble is the rig's, not the start's. Free-pan mode is a rig too: its framing is the
+            // pan focus plus the zoomed offsets, which `UpdateCameraPan` places later this frame.
+            var variables = EventsManager.Instance?.Runtime?.Variables;
+            bool freePan = FreeCameraOwns(variables);
+            bool rigOwnsCamera = freePan || CameraFollowTarget != null || CameraAtTarget != null;
+            Vector3 basePosition = freePan ? FreeCameraPosition(variables)
+                : rigOwnsCamera ? camera.Position : shake.BasePosition;
             shake.Elapsed += DeltaTime;
             shake.Tick++;
             double amplitude = CameraShake.Amplitude(shake.Strength, shake.Duration, shake.Elapsed);
@@ -818,7 +825,8 @@ namespace Game
             CameraShake.Offset(amplitude, shake.Seed, shake.Tick, out double ox, out double oy, out double oz);
             // The offset is added to the framing for this tick only: the camera's saved position is
             // always the rig's, so the shake can never accumulate into a drift.
-            camera.Position = basePosition + new Vector3((float)ox, (float)oy, (float)oz);
+            shake.Offset = new Vector3((float)ox, (float)oy, (float)oz);
+            camera.Position = basePosition + shake.Offset;
             Shake = shake;
         }
 
@@ -842,9 +850,14 @@ namespace Game
             double duration = spec.Duration > 0.0 ? spec.Duration : CameraShake.DefaultDuration;
             // A running shake has already displaced the camera: the framing underneath it is the
             // captured one, unless a rig owns the camera (then the rig rewrites it every tick).
-            Vector3 basePosition = CameraFollowTarget != null || CameraAtTarget != null
-                ? camera.Position
-                : Shake.HasValue ? Shake.Value.BasePosition : camera.Position;
+            // Free-pan mode's framing is never the displaced position, so it is rebuilt from the
+            // pan focus instead of being read off the camera.
+            var variables = EventsManager.Instance?.Runtime?.Variables;
+            Vector3 basePosition = FreeCameraOwns(variables)
+                ? FreeCameraPosition(variables)
+                : CameraFollowTarget != null || CameraAtTarget != null
+                    ? camera.Position
+                    : Shake.HasValue ? Shake.Value.BasePosition : camera.Position;
             if (Shake.HasValue)
             {
                 CameraShakeState running = Shake.Value;
@@ -7200,12 +7213,31 @@ namespace Game
             Actor camera = FlaxWorld.FindCamera();
             if (camera == null)
                 return;
+            // Free-pan mode is a camera rig like `camera follows` / `camera at`: it owns the
+            // framing absolutely, so a running shake is layered on top here rather than being
+            // wiped by this write (the pan step runs after the shake step each frame).
+            camera.Position = FreeCameraPosition(variables) + (Shake.HasValue ? Shake.Value.Offset : Vector3.Zero);
+        }
+
+        /// <summary>True when free-pan mode is what places the camera this tick: `camera free` was
+        /// armed and no follow / aim / snap target has taken the camera back.</summary>
+        private static bool FreeCameraOwns(EventVariables variables)
+        {
+            if (variables == null || variables.GetGlobal(CameraRig.FreeVariable).AsNumber() <= 0)
+                return false;
+            return CameraFollowTarget == null && CameraLookAtTarget == null && CameraAtTarget == null;
+        }
+
+        /// <summary>The framing free-pan mode wants: the pan focus with the zoomed height/depth
+        /// offsets, with no shake offset mixed in.</summary>
+        private static Vector3 FreeCameraPosition(EventVariables variables)
+        {
             double zoom = CameraRig.ZoomFrom(variables);
             double height = CameraRig.HeightFor(variables.GetGlobal("CameraHeight").AsNumber(), zoom);
             double depth = CameraRig.DepthFor(variables.GetGlobal("CameraDepth").AsNumber(), zoom);
             double x = variables.GetGlobal(CameraRig.PanXVariable).AsNumber();
             double z = variables.GetGlobal(CameraRig.PanZVariable).AsNumber();
-            camera.Position = new Vector3((float)x, (float)height, (float)(z + depth));
+            return new Vector3((float)x, (float)height, (float)(z + depth));
         }
 
         /// <summary>
