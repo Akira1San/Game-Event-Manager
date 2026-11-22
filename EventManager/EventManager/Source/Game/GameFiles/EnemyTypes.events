@@ -136,3 +136,16 @@ when game starts
   set GrenadeGayWeapon to "Grenade"
   set GrenadeGayHostile to true
   set GrenadeGayExplosionDeath to true
+
+  # ---- Task 21 Part D: the boss -------------------------------------------------------
+  # Boss — heavy, far-sighted and slow, with 300 hit points so the two phase gates in
+  # Boss.events (200 and 100) sit a third apart. The template actor is named `Boss`, so
+  # `enemy type my name` reads this row and `kills Boss` is its own counter.
+  # ExplosionDeath is false on purpose: the boss's sheet always spawns its own Explosion, so
+  # the flag would only be a second, unread copy of that decision.
+  set BossSpeed to 70
+  set BossSightDistance to 400
+  set BossHealth to 300
+  set BossWeapon to ""
+  set BossHostile to true
+  set BossExplosionDeath to false

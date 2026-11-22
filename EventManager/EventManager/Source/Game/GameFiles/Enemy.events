@@ -78,4 +78,8 @@ when my health becomes 0
   spawn Gib at me offset 0
   spawn Gib at me offset 12
   spawn Gib at me offset -12
+  # An `otherwise` gate holds until the next condition line, so `destroy me` written directly
+  # under it belonged to the else branch: an ExplosionDeath type (Turret) spawned its
+  # explosion and then lived on. The gate below re-opens the cleanup for both branches.
+  if my Health is lower than 1
   destroy me

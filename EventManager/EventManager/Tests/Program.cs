@@ -679,6 +679,386 @@ foreach (var ladderTallEvent in ladderTallProgram.Events)
 Check(ladderTallHeightGate,
     "the tall-ladder example picks its landing with `me is above <thing> by <n>`");
 
+// Task 21 Part D — the boss is events-only too, so its sheet is the feature. The suite loads it
+// and pins the four things that make it a boss rather than another enemy: two health edges that
+// change the attack, an attack that cannot start a second copy of itself, a retreat to an
+// authored hide point, and a screen bar built from the shipped progress-bar words.
+string bossPath = "Source/Game/GameFiles/Boss.events";
+var bossProgram = parser.Parse(File.ReadAllText(bossPath));
+var bossUnknown = new List<string>();
+int bossActions = 0;
+var bossWords = new HashSet<string>();
+bool bossBarFilled = false;
+bool bossBarShown = false;
+bool bossBarHidden = false;
+bool bossKillsCounted = false;
+int bossHealthGates = 0;
+bool bossTelegraph = false;
+bool bossRetreats = false;
+bool bossAttacksGuarded = true;
+int bossAttackBlocks = 0;
+foreach (var bossEvent in bossProgram.Events)
+{
+    bool everyBlock = bossEvent.Trigger.Count > 0 && bossEvent.Trigger[0].Text == "every";
+    bool setsBusy = false;
+    bool resetsBusy = false;
+    bool opensWithGuard = false;
+    bool telegraphHere = false;
+    bool hurtHere = false;
+    foreach (var bossLine in bossEvent.Body)
+    {
+        if (bossLine.IsCondition)
+        {
+            string bossGate = string.Join(" ", bossLine.Words.ConvertAll(word => word.Text));
+            if (string.Equals(bossGate, "my Attacking is 0", StringComparison.OrdinalIgnoreCase))
+                opensWithGuard = true;
+            continue;
+        }
+        string bossAction = string.Join(" ", bossLine.Words.ConvertAll(word => word.Text));
+        if (bossLine.Statement is SetProgressNode bossProgress && bossProgress.Thing == "BossBar")
+            bossBarFilled = true;
+        if (bossLine.Statement is AddKillNode bossKill && bossKill.TypeVariable == "Type")
+            bossKillsCounted = true;
+        if (bossAction == "set my Attacking to 1")
+            setsBusy = true;
+        if (bossAction == "set my Attacking to 0")
+            resetsBusy = true;
+        if (bossAction == "show BossBar")
+            bossBarShown = true;
+        if (bossAction == "hide BossBar")
+            bossBarHidden = true;
+        if (bossAction.StartsWith("goto random HidePoint", StringComparison.Ordinal))
+            bossRetreats = true;
+        if (bossLine.Words.Count >= 3 && bossLine.Words[0].Text == "play" &&
+            bossLine.Words[1].Text == "anim" && bossLine.Words[2].Text == "Throw")
+            telegraphHere = true;
+        if (bossAction.StartsWith("send message", StringComparison.Ordinal) ||
+            bossAction.StartsWith("spawn BossBullet", StringComparison.Ordinal))
+            hurtHere = true;
+        RawActionNode bossRaw = bossLine.Statement as RawActionNode;
+        if (bossRaw == null)
+            continue;
+        bossActions++;
+        bossWords.Add(bossRaw.Words[0].Text);
+        ActionSpec bossSpec = ActionWords.Parse(bossRaw.Words, null);
+        // `wait`, `enemy type` and `send message` are runtime statements rather than action
+        // words, so the action parser is not the thing that validates them.
+        if (bossSpec.Verb == ActionVerb.Unknown && bossRaw.Words[0].Text != "wait" &&
+            bossRaw.Words[0].Text != "enemy" && bossRaw.Words[0].Text != "send")
+            bossUnknown.Add(bossAction);
+    }
+    // `when my Health is lower than <n>` is a trigger here, so the phase gates are counted from
+    // the event header rather than from a body condition.
+    if (bossEvent.Trigger.Count >= 5 &&
+        string.Equals(bossEvent.Trigger[1].Text, "Health", StringComparison.OrdinalIgnoreCase) &&
+        bossEvent.Trigger[2].Text == "is" && bossEvent.Trigger[3].Text == "lower")
+        bossHealthGates++;
+    // A block that starts its own attack must gate itself on the flag and put it back in every
+    // branch; without that a `when every` poll starts a second telegraph on top of the first.
+    if (setsBusy)
+    {
+        bossAttackBlocks++;
+        if (!opensWithGuard || !resetsBusy)
+            bossAttacksGuarded = false;
+    }
+    if (telegraphHere && hurtHere)
+        bossTelegraph = bossTelegraph || bossEvent.Body.Exists(line =>
+            !line.IsCondition && line.Words.Count > 0 && line.Words[0].Text == "wait");
+}
+if (bossUnknown.Count > 0)
+    Console.WriteLine("  first boss line that is not a shipped word: " + bossUnknown[0]);
+Check(bossProgram.Events.Count >= 12 && bossActions > 25 && bossUnknown.Count == 0 &&
+      bossWords.Contains("spawn") && bossWords.Contains("goto") && bossWords.Contains("play") &&
+      bossWords.Contains("shake") && bossWords.Contains("show") && bossWords.Contains("hide") &&
+      bossWords.Contains("send"),
+    $"every action line in the boss example is a shipped word ({bossActions} lines)");
+Check(bossHealthGates == 2,
+    "the boss changes phase on two health thresholds (`when my Health is lower than <n>`)");
+Check(bossAttackBlocks == 2 && bossAttacksGuarded,
+    $"each attack block opens on `my Attacking is 0` and clears the flag in both branches ({bossAttackBlocks} blocks)");
+Check(bossTelegraph,
+    "each attack has a telegraph: `play anim \"Throw\"` and a `wait` before the hit lands");
+Check(bossRetreats && bossWords.Contains("goto"),
+    "after three attacks the boss walks off to an authored `HidePoint` (`goto random HidePoint`)");
+Check(bossBarShown && bossBarFilled && bossBarHidden,
+    "the boss shows a `BossBar`, fills it with `set progress of`, and hides it on death");
+Check(bossKillsCounted,
+    "the boss counts its own kill with `add 1 to kills my Type`");
+
+// Enraging must be idempotent. `when my Health is lower than 100` is a re-arming health edge, so
+// `set my Speed to my Speed * 2` would double the boss's pace again every time healing lifted it
+// back over the threshold and damage crossed it once more. The sheet derives `my EnragedSpeed`
+// once in `me appears` and assigns it at the gate; these checks read the shipped file.
+bool enrageDerivedOnce = false;
+bool enrageAssigns = false;
+bool enrageCompounds = false;
+foreach (var bossEvent in bossProgram.Events)
+{
+    bool appears = bossEvent.Trigger.Count >= 2 && bossEvent.Trigger[0].Text == "me" &&
+                   bossEvent.Trigger[1].Text == "appears";
+    bool enrage = bossEvent.Trigger.Count >= 6 &&
+                  string.Equals(bossEvent.Trigger[1].Text, "Health", StringComparison.OrdinalIgnoreCase) &&
+                  bossEvent.Trigger[3].Text == "lower" && bossEvent.Trigger[5].Text == "100";
+    foreach (var bossLine in bossEvent.Body)
+    {
+        var bossSet = bossLine.Statement as SetNode;
+        if (bossSet == null || bossSet.Target.Name != "Speed" && bossSet.Target.Name != "EnragedSpeed")
+            continue;
+        bool doubles = bossSet.Op == '*';
+        if (appears && bossSet.Target.Name == "EnragedSpeed" && doubles)
+            enrageDerivedOnce = true;
+        if (enrage && bossSet.Target.Name == "Speed")
+        {
+            if (doubles)
+                enrageCompounds = true;
+            if (bossSet.Value is VariableValue bossRead && bossRead.Name == "EnragedSpeed")
+                enrageAssigns = true;
+        }
+    }
+}
+Check(enrageDerivedOnce && enrageAssigns && !enrageCompounds,
+    "enraging assigns the once-derived `my EnragedSpeed` instead of multiplying the live speed, so a health edge that re-arms cannot compound");
+
+// The boss is read by its clips as much as by its numbers: a silent fight looks like a bug even
+// when every rule is right. The sheet carries one clip per beat — the wake-up, the walk, the
+// enraged run, the close swing, the throw, the flinch and the death — and each is an ordinary
+// `play anim` / `loop anim`, so a model missing one warns once and the block still runs.
+var bossClips = new HashSet<string>();
+foreach (var bossEvent in bossProgram.Events)
+{
+    foreach (var bossLine in bossEvent.Body)
+    {
+        if (bossLine.Words.Count < 3)
+            continue;
+        if ((bossLine.Words[0].Text == "play" || bossLine.Words[0].Text == "loop") &&
+            bossLine.Words[1].Text == "anim")
+            bossClips.Add(bossLine.Words[2].Text);
+    }
+}
+Check(bossClips.IsSupersetOf(new[] { "Roar", "Walk", "Run", "Attack", "Throw", "Flinch", "Die" }),
+    "the boss plays a clip for every beat: Roar, Walk, Run, Attack, Throw, Flinch and Die");
+
+// A close swing has to *start* before the damage lands. `play anim "Attack"` on the same line as
+// `send message "hurt"` looks like the hit comes first, because the clip only begins drawing on
+// the next tick — so both attack blocks open the swing, then wait, then hit.
+int bossSwingBlocks = 0;
+bool bossSwingOrdered = true;
+foreach (var bossEvent in bossProgram.Events)
+{
+    int swingLine = -1;
+    int swingHit = -1;
+    for (int lineIndex = 0; lineIndex < bossEvent.Body.Count; lineIndex++)
+    {
+        var swingBody = bossEvent.Body[lineIndex];
+        if (swingBody.Words.Count >= 3 && swingBody.Words[0].Text == "play" &&
+            swingBody.Words[1].Text == "anim" && swingBody.Words[2].Text == "Attack" && swingLine < 0)
+            swingLine = lineIndex;
+        if (swingBody.Words.Count >= 2 && swingBody.Words[0].Text == "send" &&
+            swingBody.Words[1].Text == "message")
+            swingHit = lineIndex;
+    }
+    if (swingLine < 0)
+        continue;
+    bossSwingBlocks++;
+    // The wait has to sit *between* the clip and the hit. Counting any wait in the block would
+    // let a later block's wait stand in for this one, which is exactly the regression to catch.
+    bool swingWaitBetween = false;
+    if (swingHit > swingLine)
+    {
+        for (int between = swingLine + 1; between < swingHit; between++)
+        {
+            var betweenBody = bossEvent.Body[between];
+            if (betweenBody.Words.Count > 0 && betweenBody.Words[0].Text == "wait")
+                swingWaitBetween = true;
+        }
+    }
+    if (!swingWaitBetween)
+        bossSwingOrdered = false;
+}
+Check(bossSwingBlocks == 2 && bossSwingOrdered,
+    "both close attacks start `play anim \"Attack\"` before the `wait` and the `send message \"hurt\"`, so the hit lands mid-swing");
+
+// Where a close attack comes from is a `goto random AttackPoint` before the swing: the points are
+// empties parented to the player, so the same two lines give a front, back or flank entrance and
+// the boss still has to walk the last stretch (`goto nearest player`) before the hit.
+int bossFlankBlocks = 0;
+bool bossFlanks = true;
+foreach (var bossEvent in bossProgram.Events)
+{
+    int bossSwing = -1;
+    for (int lineIndex = 0; lineIndex < bossEvent.Body.Count && bossSwing < 0; lineIndex++)
+    {
+        var swingLine = bossEvent.Body[lineIndex].Words;
+        if (swingLine.Count >= 3 && swingLine[0].Text == "play" && swingLine[1].Text == "anim" &&
+            swingLine[2].Text == "Attack")
+            bossSwing = lineIndex;
+    }
+    if (bossSwing < 0)
+        continue;
+    bossFlankBlocks++;
+    bool flanked = false;
+    for (int lineIndex = 0; lineIndex < bossSwing; lineIndex++)
+    {
+        var flankLine = bossEvent.Body[lineIndex].Words;
+        if (flankLine.Count >= 3 && flankLine[0].Text == "goto" && flankLine[1].Text == "random" &&
+            flankLine[2].Text == "AttackPoint")
+            flanked = true;
+    }
+    if (!flanked)
+        bossFlanks = false;
+}
+Check(bossFlankBlocks == 2 && bossFlanks,
+    "both close attacks flank: `goto random AttackPoint` (the player's own empties) comes before the swing");
+
+// Every way out of a fight clears the `my Attacking` flag: an attack run skipped by its own state
+// guard leaves the flag at 1, so the state that interrupted it has to own the reset — otherwise
+// the boss quietly stops attacking for the rest of the fight.
+var bossInterruptStates = new HashSet<string> { "retreat", "flinch", "dying" };
+var bossClearedInterrupts = new HashSet<string>();
+bool bossSummonWaitsForGap = false;
+foreach (var bossEvent in bossProgram.Events)
+{
+    // `retreat` and `flinch` are entered by `when state is <name>`; the death block is entered by
+    // `when my Health becomes 0` and switches to `dying` itself, so it answers for that state.
+    string interruptState = null;
+    if (bossEvent.Trigger.Count >= 3 && bossEvent.Trigger[0].Text == "state" &&
+        bossEvent.Trigger[1].Text == "is" && bossInterruptStates.Contains(bossEvent.Trigger[2].Text))
+        interruptState = bossEvent.Trigger[2].Text;
+    else if (bossEvent.Trigger.Count >= 3 && bossEvent.Trigger[0].Text == "my" &&
+             bossEvent.Trigger[1].Text == "Health" && bossEvent.Trigger[2].Text == "becomes")
+        interruptState = "dying";
+    bool isInterrupt = interruptState != null;
+    bool clearsFlag = bossEvent.Body.Any(clearLine =>
+        clearLine.Words.Count >= 5 && clearLine.Words[0].Text == "set" && clearLine.Words[1].Text == "my" &&
+        clearLine.Words[2].Text == "Attacking" && clearLine.Words[3].Text == "to" && clearLine.Words[4].Text == "0");
+    if (isInterrupt && clearsFlag)
+        bossClearedInterrupts.Add(interruptState);
+    // The summon timer must wait for a gap between attacks: setting the state mid-swing would
+    // fire the roar (and the add) across a close attack.
+    bool summonTimer = bossEvent.Trigger.Count > 0 && bossEvent.Trigger[0].Text == "every" &&
+                       bossEvent.Body.Any(stateLine => stateLine.Words.Count >= 3 &&
+                           stateLine.Words[0].Text == "set" && stateLine.Words[1].Text == "state" &&
+                           stateLine.Words[2].Text == "summon");
+    bool gapGuard = bossEvent.Body.Any(guardLine => guardLine.IsCondition &&
+        guardLine.Words.Count >= 4 && guardLine.Words[0].Text == "my" &&
+        guardLine.Words[1].Text == "Attacking" && guardLine.Words[3].Text == "0");
+    if (summonTimer && gapGuard)
+        bossSummonWaitsForGap = true;
+}
+Check(bossClearedInterrupts.SetEquals(bossInterruptStates),
+    "retreat, flinch and dying each clear `my Attacking`, so an interrupted swing cannot leave the boss unable to attack");
+Check(bossSummonWaitsForGap,
+    "the summon timer waits for `my Attacking is 0`, so the roar never fires across a close swing");
+
+// The enraged throw is a three-knife fan. `spawn` copies the spawn spot's orientation onto the
+// clone and a projectile flies along its own facing, so three separately rotated `Knife*` empties
+// parented to the boss are what makes the directions differ — three spawns at the SAME spot would
+// only be one knife three times. A short `wait` between them keeps it reading as a throw, and the
+// single plain throw has to survive the earlier phase, so the fan is a change and not a loss.
+var bossFanSpots = new List<string>();
+int bossFanSpawns = 0;
+int bossFanStaggers = 0;
+int bossSingleThrows = 0;
+bool bossSingleThrowAtMe = false;
+foreach (var bossEvent in bossProgram.Events)
+{
+    bool enragedRanged = bossEvent.Body.Any(phaseLine => phaseLine.IsCondition &&
+        phaseLine.Words.Count >= 4 && phaseLine.Words[0].Text == "my" &&
+        phaseLine.Words[1].Text == "Phase" && phaseLine.Words[2].Text == "is" &&
+        phaseLine.Words[3].Text == "3");
+    bool earlyRanged = bossEvent.Body.Any(phaseLine => phaseLine.IsCondition &&
+        phaseLine.Words.Count >= 5 && phaseLine.Words[0].Text == "my" &&
+        phaseLine.Words[1].Text == "Phase" && phaseLine.Words[2].Text == "is" &&
+        phaseLine.Words[3].Text == "lower");
+    if (!enragedRanged && !earlyRanged)
+        continue;
+    int firstFanSpawn = -1;
+    int lastFanSpawn = -1;
+    for (int fanLine = 0; fanLine < bossEvent.Body.Count; fanLine++)
+    {
+        var thrown = bossEvent.Body[fanLine];
+        bool isThrow = thrown.Words.Count >= 5 && thrown.Words[0].Text == "spawn" &&
+                       thrown.Words[1].Text == "BossBullet" && thrown.Words[2].Text == "at";
+        if (!isThrow)
+            continue;
+        if (enragedRanged)
+        {
+            bossFanSpawns++;
+            bossFanSpots.Add(thrown.Words[3].Text);
+            if (firstFanSpawn < 0)
+                firstFanSpawn = fanLine;
+            lastFanSpawn = fanLine;
+        }
+        else
+        {
+            bossSingleThrows++;
+            if (thrown.Words[3].Text == "me")
+                bossSingleThrowAtMe = true;
+        }
+    }
+    if (enragedRanged && firstFanSpawn >= 0)
+    {
+        for (int gapLine = firstFanSpawn; gapLine < lastFanSpawn; gapLine++)
+        {
+            if (bossEvent.Body[gapLine].Words.Count > 0 && bossEvent.Body[gapLine].Words[0].Text == "wait")
+                bossFanStaggers++;
+        }
+    }
+}
+Check(bossFanSpawns == 3 && bossFanSpots.Distinct(StringComparer.Ordinal).Count() == 3 &&
+      bossFanSpots.All(fanSpot => fanSpot == "KnifeCenter" || fanSpot == "KnifeLeft" || fanSpot == "KnifeRight") &&
+      bossFanStaggers == 2,
+    "the enraged throw is a three-knife fan from three separate `Knife*` points, staggered so it reads as a throw");
+Check(bossSingleThrows == 1 && bossSingleThrowAtMe,
+    "the earlier phase still throws one plain knife, so the fan is an escalation rather than a replacement");
+
+// Summoning is a chance ladder over lane types, paced by a polled timer and capped by a counter.
+// A random *type* has no word of its own — `spawn` takes one template — so this pins the ladder,
+// its three types and the cap that keeps a long fight from filling the room.
+var bossSummonTypes = new HashSet<string>(StringComparer.Ordinal);
+bool bossSummonCapped = false;
+foreach (var bossEvent in bossProgram.Events)
+{
+    bool isSummon = bossEvent.Body.Any(summonLine =>
+        summonLine.Words.Count >= 5 && summonLine.Words[0].Text == "add" &&
+        summonLine.Words[3].Text == "my" && summonLine.Words[4].Text == "Summons");
+    foreach (var summonLine in bossEvent.Body)
+    {
+        var summonWords = summonLine.Words;
+        if (isSummon && summonWords.Count >= 2 && summonWords[0].Text == "spawn")
+            bossSummonTypes.Add(summonWords[1].Text);
+        if (summonWords.Count >= 6 && summonWords[0].Text == "my" && summonWords[1].Text == "Summons" &&
+            summonWords[3].Text == "lower" && summonWords[4].Text == "than" && summonWords[5].Text == "4")
+            bossSummonCapped = true;
+    }
+}
+Check(bossSummonCapped && bossSummonTypes.SetEquals(new[] { "Pistolboy", "UziRebel", "ShotgunManiac" }),
+    "the boss summons a random lane type (Pistolboy / UziRebel / ShotgunManiac) and stops at four adds");
+
+// The death block in Enemy.events used to end with `destroy me` under an `otherwise`, and that
+// gate holds until the next condition line — so an ExplosionDeath type (the Turret) spawned its
+// explosion and was never destroyed. The gate before the destroy is the fix, pinned here so it
+// cannot quietly fall out again.
+var bossEnemyProgram = parser.Parse(File.ReadAllText("Source/Game/GameFiles/Enemy.events"));
+bool enemyDestroyGuarded = false;
+foreach (var bossEnemyEvent in bossEnemyProgram.Events)
+{
+    if (bossEnemyEvent.Trigger.Count < 4 ||
+        !string.Equals(bossEnemyEvent.Trigger[1].Text, "Health", StringComparison.OrdinalIgnoreCase) ||
+        bossEnemyEvent.Trigger[2].Text != "becomes")
+        continue;
+    for (int lineIndex = 1; lineIndex < bossEnemyEvent.Body.Count; lineIndex++)
+    {
+        var destroyLine = bossEnemyEvent.Body[lineIndex];
+        if (destroyLine.IsCondition || destroyLine.Words.Count == 0 || destroyLine.Words[0].Text != "destroy")
+            continue;
+        if (bossEnemyEvent.Body[lineIndex - 1].IsCondition)
+            enemyDestroyGuarded = true;
+    }
+}
+Check(enemyDestroyGuarded,
+    "the enemy death block re-opens its gate before `destroy me`, so an exploding type is still destroyed");
+
 // The checkpoint block gates itself. `when me touches <actor>` is enter-edge, but a body that steps
 // out of the marker and back in — or respawns right onto it — would save the same pose and print
 // again, so the example keeps `my CheckpointSaved` beside the pose. These checks read the shipped

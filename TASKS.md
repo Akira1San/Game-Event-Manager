@@ -1919,18 +1919,63 @@ marker. Only snapping X/Z onto a named ledge would need C#, and that is optional
 - Optional C# polish (skip unless authoring proves painful): `exit ladder at <thing>` snapping the
       climber's X/Z onto the ledge before letting go.
 
-### Part D — Boss patterns (events-only core, optional C# shapes)
+### Part D — Boss patterns (events-only core, optional C# shapes) `[x]`
 Everything a boss needs to *sequence* exists: phase gates (`when my Health is lower than 60`),
 `when every <n> seconds` cadence, telegraph anims (`play anim` + `wait`), spawns (`spawn` at
 `player` / `me offset <n>`), knockdown/combo reuse, and per-actor variables.
-- [ ] Ship `Boss.events`: three phases by health, a telegraphed attack per phase, a summoned add
-      via `spawn`, and an enrage gate at the last phase. Reuse the arcade lane's knockdown/combo
-      chain rather than inventing a second hit system.
-- [ ] Ship the scene hooks: a `Boss` template named like the lane templates so `kills Boss` counts
-      separately.
-- [ ] Document the pattern (phase gate + telegraph + cooldown) in `DESIGN.md §9` and `keywords.html`.
+**Shipped 2026-11-22** as `GameFiles/Boss.events` plus a `Boss` row in `EnemyTypes.events`; no
+engine change. The shape is the requested scripted fight, not a three-phase attack list: it wakes
+(roar + `shake camera`), then attacks **close or ranged at random** (`chance` + `otherwise`), and
+after **three attacks** it breaks off, `goto random HidePoint`, waits, and walks back in — forever,
+with the health changing the pace rather than swapping in a different sheet.
+- [x] Ship `Boss.events`: two health edges (`when my Health is lower than 200` / `< 100`, the
+      `HealthLow` triggers), a summoned add via `spawn Knife at me offset 90` at phase 2, and an
+      enrage at phase 3 (`set my Phase to 3` + `set my Speed to my EnragedSpeed`, which turns the
+      same `goto` into a dash and a second, faster attack block on). The enraged speed is derived
+      once in `me appears` (`set my EnragedSpeed to my Speed * 2`) rather than multiplied at the
+      gate, because that health edge re-arms: healing back over 100 and crossing again would
+      otherwise double the pace every time. The suite pins the assign-not-multiply shape. Reuses the arcade lane's chain:
+      `add -10 to my Health` + `destroy other` + `add 1 to Combo` on `me touches Bullet`, and the
+      same `state` switch (`wake` / `fight` / `retreat` / `flinch`) instead of a second hit system —
+      the flinch is gated on `my Attacking is 0` so a burst cannot stun-lock the boss out of its
+      attack. Every attack block opens on `my Attacking is 0` and clears the flag in both branches,
+      because `when every` re-polls and `wait` only suspends its own run; the counter and the flag
+      sit **before** the `chance` branch so the `otherwise` gate cannot swallow them.
+- [x] Ship the scene hooks: the `Boss` template is named after its type like the lane templates, so
+      `enemy type my name` reads `BossSpeed` / `BossHealth` / `BossSightDistance` / `BossWeapon` /
+      `BossHostile` / `BossExplosionDeath` from `EnemyTypes.events` and `kills Boss` counts
+      separately. The hide points are empty actors all named `HidePoint` (`random <thing>` needs one
+      shared name), and the screen bar is a `BossBar` UIControl whose control is a `ProgressBar` —
+      `show BossBar`, `set progress of BossBar to my HealthPct` on `when my Health changes`,
+      `hide BossBar` on death. No C#: the bar is the Task 34 progress-bar words.
+- [x] Document the pattern (phase gate + telegraph + cooldown) in `DESIGN.md §9` and `keywords.html`
+      (gotchas: `otherwise` holds until the next condition line, `when every` has no busy guard,
+      boss fights are a schedule; plus the `set progress of` note that it takes a number).
+- [x] Animate every beat: `Roar` (wake), `Walk` (chase and walk back), `Run` (retreat and the
+      enraged chase), `Attack` (the close swing, started before its `wait` so the hit lands
+      partway through the clip rather than on the tick it begins), `Throw` (the ranged telegraph,
+      also played before its `wait` so the clip *is* the tell), `Flinch` (a hit) and `Die`.
+      The death block switches to a `dying` state first — one state closes every fight block, so
+      no late swing lands — then plays `Die` and waits 0.8 s before `destroy me`, which would
+      otherwise cut the clip off in the same tick. `goto … facing forward` turns the body onto the
+      walk, so the clip and the heading agree. A model missing a clip warns once and the block still
+      runs; no new words, no C#.
+- [x] Attack from a direction, and call the room in: three or more `AttackPoint` empties
+      **parented to the player** (front, back, flanks) and `goto random AttackPoint` before the
+      swing in both close blocks — empties, not maths, because `goto` only walks to named things
+      and follows the floor, so an empty above a player would be flattened (an aerial entrance
+      wants `jump`). Below 200 HP a polled timer enters a `summon` state: a `chance` ladder picks
+      Pistolboy / UziRebel / ShotgunManiac (`spawn` takes one template, so a random type is a
+      ladder, not a word), `random 110 to 170` rolls the arrival distance, and `my Summons` caps
+      it at four. A scene without `AttackPoint` warns and the boss still walks in and swings. Every way out of `fight` clears `my Attacking` — `retreat`, `flinch` and `dying` — because an attack run skipped by its own `my state is "fight"` guard would otherwise leave the flag at 1 and the boss would never attack again; and the summon timer carries `my Attacking is 0`, so the roar never fires across a close swing. The enraged throw is a three-knife fan: one knife from `KnifeCenter` and two from the rotated `KnifeLeft` / `KnifeRight` empties, all parented to the boss, with a 0.08 s stagger between them and a state guard after each gap so a hit stops the rest of the throw. `spawn` copies the spot's orientation and a projectile flies along its own facing, so the fan lives entirely in the empties' rotation — no aiming code. The earlier phase keeps its single plain throw.
 - Done-when: the boss visibly changes attack when its health crosses a threshold, and nothing in
-      the sheet needs code.
+      the sheet needs code. *(The suite parses the sheet, requires every action line to be a
+      shipped word, and pins the two health gates, the guarded/telegraphed attack blocks, the
+      retreat to `HidePoint`, the `BossBar` pair, `kills my Type` and one clip per beat. The fight itself — the roar,
+      the random close/ranged choice, the retreat and the bar filling — is an editor play-check.)*
+- Follow-up on the same pass: `Enemy.events`' death block put `destroy me` under an `otherwise`, so
+      an `ExplosionDeath` type (the Turret) spawned its Explosion and was never destroyed. The
+      destroy now sits under its own `if my Health is lower than 1`, pinned by a suite check.
 - Optional C# (only if the event version is unreadable): `spawn <thing> in a ring of <n> around me`
       / `... in a fan of <n> toward player` for bullet patterns whose angles cannot be authored as
       static offsets.

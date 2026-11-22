@@ -1,0 +1,273 @@
+# ---------------- Boss.events (Task 21 Part D) ----------------
+# A scripted boss with no C#: it wakes, then attacks close or ranged at random, and every third
+# attack it breaks off, runs to one of the authored hide points, and comes back. A close attack
+# comes in from one of the player's own attack points, so the swing can arrive from the front,
+# the back or a flank. Its health picks the phase: at 200 it summons an add and starts calling
+# in a random lane enemy every few seconds (up to four), and at 100 it enrages — its throw turns
+# into a three-knife fan.
+#
+# The whole fight is the arcade lane's grammar — `set state` / `when state is`, `chance` +
+# `otherwise`, `wait` as a telegraph, `goto` to move, `spawn` to summon — plus the two Task 34
+# progress-bar words for the bar at the top of the screen. Nothing below needs code.
+#
+# SETUP (editor), one scene:
+#   1. `Boss` template: an inactive actor named `Boss` with an EventSheet (Event File = Boss)
+#      and a BoxCollider. The name is the type — `enemy type my name` reads it, so
+#      `kills Boss` counts separately from `kills Zombie`. Its stats come from
+#      EnemyTypes.events (`BossSpeed`, `BossHealth`, ...). Spawn it with
+#      `spawn Boss at BossSpawn` from the arena's own sheet when the fight should start.
+#   2. Hide points: two or more EMPTY actors, each named exactly `HidePoint`, spread across the
+#      floor (Flax allows duplicate names). `goto random HidePoint` picks one per retreat —
+#      `random <thing>` needs the shared name, so `HidePoint1`/`HidePoint2` would not work.
+#   2b. Attack points: three or more EMPTY actors named exactly `AttackPoint`, PARENTED to the
+#      player actor and placed around it — one in front, one behind, one to each side, a couple of
+#      metres out and level with the floor. `goto random AttackPoint` picks one per close attack,
+#      so the boss comes at you from a different side each time. Ground level matters: `goto`
+#      walks the floor, so a point floating above the player is flattened onto the ground plane —
+#      an aerial entrance needs `jump`, not an empty. Missing points only warn (the boss still
+#      walks in and swings), so a bare test scene keeps working.
+#   3. BossBar: a UIControl actor named `BossBar` whose Control is a ProgressBar, placed where
+#      the bar should sit, inactive at scene start. `show BossBar` reveals it, `hide BossBar`
+#      drops it on death, and `set progress of BossBar to ...` fills it.
+#   4. BossBullet: the ranged attack's projectile, a template like `Bullet` (dynamic body, no
+#      gravity, CCD, a trigger collider) with its own sheet that flies along ITS OWN facing —
+#      `move forward speed my BulletSpeed`, the way TK_Bullet does — and sends `"hurt"` on
+#      contact. It is never told where the player is. That is what makes aiming possible at all:
+#      `spawn` copies the spawn spot's orientation onto the clone, so the knife goes wherever the
+#      spot it was spawned at is pointed. Spawned straight at `me`, it leaves along the boss's own
+#      facing (a throw aimed by which way the boss faces); spawned at the rotated `Knife*` empties
+#      in 4b, the same sheet gives the fan. The boss sheet only spawns it — a BossBullet sheet that
+#      homed on the player would collapse the fan back into one direction and break 4b.
+#   4b. Knife fan points: three EMPTY actors named EXACTLY `KnifeCenter`, `KnifeLeft` and
+#      `KnifeRight`, PARENTED to the boss and placed a little in front of it, level with the
+#      floor. Rotate the two outer ones ~15-20 degrees out from the centre line. This is the
+#      whole fan: because the clone inherits the spot's orientation and flies along its own
+#      facing (4), three rotated empties throw one knife straight ahead and two off to the sides.
+#      Their forward axis also follows the boss (it turns to face the player), so the fan always
+#      points where the boss is aiming. `spawn ... at KnifeLeft` with no such
+#      empty in the scene only warns and that knife never appears, so a bare test scene falls
+#      back to one or two knives instead of breaking the fight.
+#   5. Optional clips on the Boss model: Roar (wake-up), Walk (chasing and returning),
+#      Run (the retreat), Attack (the close swing), Throw (the ranged telegraph), Flinch (a hit)
+#      and Die (the death). A name the model does not have warns once and the rest of the block
+#      still runs, so a placeholder mesh can play the whole fight.
+#
+# NO BUSY GUARD IN `when every`: a polled event re-fires every tick while its conditions hold,
+# and a `wait` suspends only that one run, so the attack blocks open with `my Attacking is 0`,
+# set it to 1, and put it back to 0 at the end of BOTH branches. Without the flag the boss would
+# start a second attack every 1.5 s while the first is still waiting.
+
+when me appears
+  enemy type my name                  # Boss: speed/sight/health come from EnemyTypes.events
+  set my MaxHealth to my Health        # so `add -10 to my Health` clamps at 300
+  set my EnragedSpeed to my Speed * 2  # worked out once, so enraging twice cannot compound
+  set my Phase to 1
+  set my Attacks to 0
+  set my Attacking to 0
+  set progress of BossBar to 100
+  show BossBar
+  set state wake
+  print "Boss: awake"
+
+# ---- waking up: one roar, one shake, then the fight ------------------------------------
+when state is wake
+  play anim "Roar"
+  shake camera strength 12 for 0.8 seconds
+  wait 1.2 seconds
+  my state is "wake"                  # not deleted or reset mid-roar? start fighting
+  set state fight
+
+# ---- the bar follows the health ---------------------------------------------------------
+# `set progress of` takes a number, not a sum, so the percentage is worked out on the line above
+# it: 300 HP is 100%, and the `+ 1` keeps the number above 1 even at 1 HP — the bridge reads any
+# value over 1 as a percentage, so a bare 1 would paint a full bar. A `bind` cannot do this job:
+# it hands the bar `my Health` itself (300).
+when my Health changes
+  set my HealthPct to my Health * 100 / 300 + 1
+  set progress of BossBar to my HealthPct
+
+# ---- phases: each threshold is crossed once, from above ---------------------------------
+# `when my Health is lower than <n>` is the health edge, not a level test: it fires on the tick
+# health crosses the number from above and re-arms if healing takes it back over.
+when my Health is lower than 200
+  set my Phase to 2
+  set state retreat
+  spawn Knife at me offset 90         # the add: a lane Knife joins the fight
+  shake camera strength 8
+  print "Boss: phase 2 — summoning help"
+
+when my Health is lower than 100
+  set my Phase to 3
+  # Assign, never multiply: this health edge re-arms if healing lifts the boss back over 100,
+  # so `set my Speed to my Speed * 2` would double the speed again on the next crossing.
+  # `my EnragedSpeed` was derived from the type's own pace in `me appears`.
+  set my Speed to my EnragedSpeed
+  set state retreat
+  shake camera strength 14 for 0.6 seconds
+  print "Boss: enraged"
+
+# ---- phase 1-2 attack: close or ranged, at random ---------------------------------------
+# `chance` re-rolls on every poll, so the roll sits inside a block that the `my Attacking` flag
+# lets run once per attack. The counters and the flag go BEFORE the branch on purpose: an
+# `otherwise` body runs only when its condition failed and its gate holds until the next
+# condition line, so shared cleanup written after the branch would be swallowed by the else.
+when every 1.5 seconds
+  my state is "fight"
+  my Phase is lower than 3
+  my Attacking is 0
+  set my Attacking to 1
+  add 1 to my Attacks
+  chance 50%
+  # close: sidestep to one of the player's attack points first, then close and swing — the swing
+  # starts before its wait, so the hit lands partway through the clip instead of on the tick the
+  # clip begins. The second `goto` matters: a point can be far enough out that the swing would
+  # otherwise whiff.
+  goto random AttackPoint speed my Speed facing forward
+  loop anim "Walk"
+  wait 0.3 seconds
+  my state is "fight"                # a health gate broke us off mid-stride? no swing
+  goto nearest player speed my Speed facing forward
+  play anim "Attack"
+  wait 0.4 seconds
+  send message "hurt" to nearest player
+  set my Attacking to 0
+  otherwise
+  # ranged: stop, telegraph the throw, then fire
+  stop moving
+  play anim "Throw"
+  wait 0.5 seconds
+  my state is "fight"                # broke off during the wind-up? no shot
+  spawn BossBullet at me offset 40
+  set my Attacking to 0
+
+# ---- phase 3: the same two attacks, faster and doubled ----------------------------------
+when every 0.8 seconds
+  my state is "fight"
+  my Phase is 3
+  my Attacking is 0
+  set my Attacking to 1
+  add 1 to my Attacks
+  chance 60%
+  # the same flank, run at the enraged speed
+  goto random AttackPoint speed my Speed facing forward
+  loop anim "Run"
+  wait 0.25 seconds
+  my state is "fight"                # as above, at the enraged pace
+  goto nearest player speed my Speed facing forward
+  play anim "Attack"
+  wait 0.3 seconds
+  send message "hurt" to nearest player
+  set my Attacking to 0
+  otherwise
+  stop moving
+  play anim "Throw"
+  wait 0.35 seconds
+  my state is "fight"                # as above, for the whole fan
+  # the fan: one knife ahead and two off the sides, from the three rotated empties. The short
+  # stagger makes it read as a thrown fan instead of a volley fired from one point — and a hit
+  # that lands between them cancels the rest, because each `wait` is followed by the state guard.
+  spawn BossBullet at KnifeCenter offset 40
+  wait 0.08 seconds
+  my state is "fight"
+  spawn BossBullet at KnifeLeft offset 40
+  wait 0.08 seconds
+  my state is "fight"
+  spawn BossBullet at KnifeRight offset 40
+  set my Attacking to 0
+
+# ---- adds: once the health is down, the room joins in -----------------------------------
+# A random *type* cannot be written as one word: `random <name>` picks among actors that share a
+# name, and `spawn` takes a single template. So the sheet rolls with a chance ladder — a failed
+# `chance` hands over to the branch under it, and each `otherwise` re-points the gate at the next
+# roll. The standing distance is a value, so it rolls too (`random 110 to 170`) and two adds never
+# land on the same tile. `my Summons` caps the help at four: a long fight must not fill the room.
+# The state guard sits after the ladder on purpose: statements behind a failed `otherwise` are
+# skipped until the next condition line, and the guard is one.
+when every 5 seconds
+  my state is "fight"
+  my Attacking is 0                  # never cut a swing short: the roar waits for a gap
+  my Health is lower than 200
+  my Summons is lower than 4
+  set state summon
+
+when state is summon
+  add 1 to my Summons
+  set my Reach to random 110 to 170
+  play anim "Roar"                    # the roar is the add's entrance cue
+  shake camera strength 7
+  print "Boss: summoned help"
+  chance 34%
+  spawn Pistolboy at me offset my Reach
+  otherwise
+  chance 50%
+  spawn UziRebel at me offset my Reach
+  otherwise
+  spawn ShotgunManiac at me offset my Reach
+  my state is "summon"                # killed mid-summon? the adds stay, the boss does not move on
+  set state fight
+
+# ---- after three attacks: break off -----------------------------------------------------
+when every 0.25 seconds
+  my state is "fight"
+  my Attacks is 3
+  my Attacking is 0
+  set state retreat
+
+# ---- the retreat itself ----------------------------------------------------------------
+# Walk to a hide point, wait there (the boss is untouchable behind its own timing, not by a new
+# rule), then walk back in. Phase 3 needs no branch here: the enrage gate doubled my Speed, so
+# the same `goto` is a dash. A `wait` never cancels another event, hence the state re-check
+# after each one — a phase change or a death mid-retreat must not walk the boss back to life.
+when state is retreat
+  set my Attacks to 0
+  # An attack run that a health gate interrupted is skipped by its own `my state is "fight"`
+  # guard, so the flag it set would stay at 1 and no attack would ever start again. The state
+  # that took over owns the reset.
+  set my Attacking to 0
+  stop moving
+  goto random HidePoint speed my Speed facing forward
+  loop anim "Run"
+  wait 1.5 seconds
+  my state is "retreat"
+  goto nearest player speed my Speed facing forward
+  loop anim "Walk"
+  wait 0.2 seconds
+  my state is "retreat"
+  set state fight
+
+# ---- taking a hit ----------------------------------------------------------------------
+# The lane's own hit shape, reused rather than a second system: damage always lands, and the
+# flinch is gated so a burst cannot stun-lock the boss out of its attack.
+when me touches Bullet
+  add -10 to my Health
+  destroy other
+  add 1 to Combo
+  my Attacking is 0
+  my state is "fight"
+  set state flinch
+
+when message "hurt" arrives
+  add -10 to my Health
+  add 1 to Combo
+
+when state is flinch
+  set my Attacking to 0                 # a hit that cancelled a swing owns the flag reset too
+  stop moving
+  play anim "Flinch"
+  wait 0.25 seconds
+  my state is "flinch"                # not hit again during the flinch? straight back in
+  set state fight
+
+# ---- death ----------------------------------------------------------------------------
+# `kills my Type` counts Boss in its own bucket, so a level's `kills Boss is 1` never mixes
+# with the lane's counters.
+when my Health becomes 0
+  hide BossBar
+  set state dying                    # one state closes every fight block, so no late swing lands
+  set my Attacking to 0
+  add 1 to kills my Type
+  play anim "Die"
+  wait 0.8 seconds                   # let the clip play before the body goes
+  spawn Explosion at me
+  destroy me
+  print "Boss: down"

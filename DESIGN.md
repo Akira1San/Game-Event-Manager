@@ -1438,6 +1438,50 @@ window around a broken runtime.
   run found two real sheet bugs (an edge that also fires on a downward crossing; an assertion
   against an actor the resolver cannot see).
 
+- **A boss is a schedule, not a hit system (Task 21 Part D):** `GameFiles/Boss.events` runs the
+  whole fight from the words the arcade lane already uses, and the one new-looking part — the bar
+  at the top of the screen — is the Task 34 progress-bar pair, not a HUD feature. The shape is
+  deliberate at three points. **Phases are health edges, not level tests:**
+  `when my Health is lower than 200` / `< 100` are the `HealthLow` triggers, so each fires on the
+  downward crossing and re-arms if healing lifts the boss back over it, and the sheet keeps
+  `my Phase` for everything that needs to *read* the phase (the gated attack blocks). Phase 3 is
+  two lines — `set my Phase to 3` and `set my Speed to my EnragedSpeed` — which is why the enraged
+  boss needs no second movement or retreat block: the same `goto` becomes a dash. The enraged
+  speed is *derived once*, in `me appears` (`set my EnragedSpeed to my Speed * 2`), rather than
+  multiplying the live speed at the gate: a health edge that re-arms when healing lifts the boss
+  back over the threshold would otherwise double its pace again on every later crossing. **The attack is
+  a guarded roll:** `chance 50%` + `otherwise` picks close or ranged, but a `when every` event
+  re-fires every tick and a `wait` suspends only its own run, so the block opens on
+  `my Attacking is 0`, sets it, and clears it at the end of *both* branches — and the counter and
+  the flag come **before** the roll, because an `otherwise` body runs only when its condition
+  failed and its gate holds until the next condition line, so cleanup written under the branch
+  would be swallowed by the else. **The retreat is a timer plus authored empties:** a 0.25 s poll
+  sees `my Attacks is 3`, `set state retreat` runs once on the state entry, and
+  `goto random HidePoint` walks to whichever hide empty is picked — `random <thing>` needs the
+  shared name, so every hide point is called `HidePoint` (Flax allows duplicate names). The
+  teleport idea cannot be authored yet (`teleport me to random HidePoint` is not a thing the
+  teleport parser reads), which is why the enraged boss doubles its speed instead of blinking
+  across the arena. The type is data, as with every other enemy: `Boss` is a template name and
+  `BossSpeed` / `BossHealth` / `BossSightDistance` / `BossWeapon` / `BossHostile` /
+  `BossExplosionDeath` live in `EnemyTypes.events`, so `kills Boss` is its own counter and the
+  sheet never hard-codes a number. The bar is `show BossBar` + `set progress of BossBar to
+  my HealthPct`, with the percentage worked out on the line above it because
+  `set progress of` takes a number and not a sum, and `+ 1` keeps the number above 1 (the bridge
+  reads anything over 1 as a percentage, so a bare 1 would paint a full bar); `hide BossBar` drops
+  it on death. A `bind progress of BossBar to my Health` would hand the bar 300, which is why the
+  example polls the health edge instead. The same pass fixed the one real sheet bug the audit
+  found: `Enemy.events`' death block ended `destroy me` under an `otherwise`, and that gate holds
+  until the next condition line, so an `ExplosionDeath` type (the Turret) spawned its explosion
+  and lived on — the destroy now sits under its own `if my Health is lower than 1`. Parked: a
+  boss health bar that needs no authored `BossBar` actor, ring/fan bullet patterns, and
+  `teleport <thing> to random <name>`. **Every beat is a clip, not a pose:** `Roar` on waking,
+  `Walk` while it chases and walks back, `Run` for the retreat and the enraged chase, `Attack`
+  started *before* the close attack's wait so the hit lands partway through the swing, `Throw` as
+  the ranged telegraph (also played before its wait, so the clip is the tell), `Flinch` on a hit and `Die` on death — the last one because `destroy me` used to cut
+  the death off in the same tick, so the death block switches to a `dying` state (which closes
+  every fight block at once), plays `Die`, waits 0.8 s and only then destroys. A model without
+  one of those clips warns once and the block still runs, so a placeholder mesh plays the fight. **Where it attacks from is data too:** three or more empty actors named `AttackPoint`, parented to the player, give the front/back/flank entrance — `goto random AttackPoint` picks one, then `goto nearest player` closes the last stretch before the swing. No offset maths and no new word: the sheet can only walk to *named things*, and `goto` walks the floor, so a point floating above the player is flattened onto the ground plane (an aerial entrance needs `jump`, not an empty). Once health is below 200 the boss also calls in help: a polled timer sets a `summon` state, a `chance` ladder picks Pistolboy / UziRebel / ShotgunManiac (a random *type* has no word — `spawn` takes one template), `set my Reach to random 110 to 170` spreads the arrival, and `my Summons` caps the help at four so a long fight cannot fill the room. Every way out of `fight` clears `my Attacking` — `retreat`, `flinch` and `dying` — because an attack run skipped by its own `my state is "fight"` guard would otherwise leave the flag at 1 and the boss would never attack again; and the summon timer carries `my Attacking is 0`, so the roar never fires across a close swing. The enraged throw is a three-knife fan: one knife from `KnifeCenter` and two from the rotated `KnifeLeft` / `KnifeRight` empties, all parented to the boss, with a 0.08 s stagger between them and a state guard after each gap so a hit stops the rest of the throw. `spawn` copies the spot's orientation and a projectile flies along its own facing, so the fan lives entirely in the empties' rotation — no aiming code. The earlier phase keeps its single plain throw.
+
 ## 10. The one-paragraph pitch
 
 Event Manager is a text-first game-logic system for non-programmers, inspired by Blender Game
