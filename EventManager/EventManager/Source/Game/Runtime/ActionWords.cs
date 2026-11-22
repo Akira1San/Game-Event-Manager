@@ -75,6 +75,9 @@ namespace Game
         // RTS camera controls (Task 26)
         ZoomCamera,
         PanCamera,
+        /// <summary><c>shake camera strength &lt;n&gt; for &lt;s&gt;</c> — a decaying wobble on the
+        /// active camera (Task 21 Part E).</summary>
+        ShakeCamera,
         Hide,
         Show,
         // Whole panels by tag (Task 34 Part D)
@@ -912,6 +915,32 @@ namespace Game
                         return Finish(spec, ActionVerb.PanCamera, words, panIndex);
                     }
                     return Unknown(spec, words, "\u201Cpan\u201D goes left, right, forward or backward, like \u201Cpan camera left by 100\u201D", warn);
+                }
+
+                case "shake":
+                {
+                    // `shake camera strength 8 for 0.3 seconds` (Task 21 Part E). Both numbers are
+                    // optional, so a bare `shake camera` adds a small kick at the defaults.
+                    if (words.Count < 2 || words[1].Text != "camera")
+                        return Unknown(spec, words, "\u201Cshake\u201D looks like \u201Cshake camera strength 8 for 0.3 seconds\u201D", warn);
+                    int shakeIndex = 2;
+                    if (shakeIndex + 1 < words.Count && words[shakeIndex].Text == "strength")
+                    {
+                        spec.AmountNode = ValueNodeAt(words, shakeIndex + 1, out int shakeUsed);
+                        spec.HasNumber = words[shakeIndex + 1].Type == TokenType.Number;
+                        if (spec.HasNumber)
+                            spec.Number = words[shakeIndex + 1].Number;
+                        shakeIndex += 1 + shakeUsed;
+                    }
+                    if (shakeIndex + 2 < words.Count && words[shakeIndex].Text == "for" &&
+                        words[shakeIndex + 1].Type == TokenType.Number)
+                    {
+                        spec.Duration = Math.Max(0, words[shakeIndex + 1].Number);
+                        shakeIndex += 2;
+                        if (shakeIndex < words.Count && words[shakeIndex].Text == "seconds")
+                            shakeIndex++;
+                    }
+                    return Finish(spec, ActionVerb.ShakeCamera, words, shakeIndex);
                 }
 
                 case "camera":

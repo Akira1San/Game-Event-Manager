@@ -237,6 +237,7 @@ namespace Game
             new WordEntry { Kind = "action", Word = "camera", Example = "camera looks at Chest" },
             new WordEntry { Kind = "action", Word = "camera", Example = "camera follows Player" },
             new WordEntry { Kind = "action", Word = "camera", Example = "camera free", AltShape = "free-pan mode: wheel zoom, mouse-edge panning and arrow/WASD panning turn on" },
+            new WordEntry { Kind = "action", Word = "shake", Example = "shake camera strength 8 for 0.3 seconds", AltShape = "a decaying wobble on the active camera: strength in centimetres (default 6) and time (default 0.3 s), refreshed rather than stacked on a second call" },
             new WordEntry { Kind = "action", Word = "zoom", Example = "zoom camera by -0.1", AltShape = "`camera zoom in`, `camera zoom out`; positive zooms in, clamped so the camera never reaches the floor" },
             new WordEntry { Kind = "action", Word = "pan", Example = "pan camera left by 100", AltShape = "`pan camera forward`; left, right, forward, backward" },
             new WordEntry { Kind = "value", Word = "my camera zoom", Example = "set text of ZoomLabel to my camera zoom" },

@@ -1935,20 +1935,32 @@ Everything a boss needs to *sequence* exists: phase gates (`when my Health is lo
       / `... in a fan of <n> toward player` for bullet patterns whose angles cannot be authored as
       static offsets.
 
-### Part E — Screen shake (C#)
-No shake exists anywhere in the bridge, and a per-tick camera offset must not fight `camera follow`.
-- [ ] Pure decay math (unit-testable): given amplitude and time left, the next offset and amplitude
-      — e.g. `PhysicsMovement.ShakeStep(...)` returning a decaying amplitude and a pseudo-random
-      offset (deterministic from a seed so tests are stable).
-- [ ] Word: `shake camera strength <n> for <s>` — adds (or refreshes to the stronger of two) a shake
-      on the active camera; the bridge applies the offset after `camera follow` / `camera at` write
-      the transform each tick, and removes it when the time runs out.
-- [ ] Offset is applied to the camera's local position only (never the camera actor's saved
-      Position), so stopping shake leaves the framing exactly where it was.
-- [ ] Tests: amplitude decays to zero in the authored time; a second call refreshes rather than
-      stacking forever; offset is zero once the shake ends.
+### Part E — Screen shake (C#) `[x]`
+No shake existed anywhere in the bridge, and a per-tick camera offset must not fight `camera follow`.
+**Shipped 2026-11-22.**
+- [x] Pure decay math (`Runtime/CameraShake.cs`, engine-free): `Amplitude(strength, duration, elapsed)`
+      falls linearly from the strength to exactly zero at the end of the time, `Offset(amplitude,
+      seed, tick, out x, out y, out z)` gives a deterministic pseudo-random point inside that
+      amplitude (same seed and tick ⇒ same wobble, so the tests need no luck), and `Merge(...)` is
+      the "second call refreshes" rule.
+- [x] Word: `shake camera strength <n> for <s> seconds`, both numbers optional so a bare
+      `shake camera` kicks at the defaults (6 cm, 0.3 s). Registered under the first word (`shake`)
+      because the parser gates on that token — the same trap `wall jump` hit.
+- [x] Bridge: `FlaxActions.Shake` holds one running shake; `StepCameraShake` runs **after** the
+      follow / at writes, so the offset sits on top of the rig's framing for that tick and the rig
+      keeps working. A second call keeps the stronger strength and the longer remaining time, so a
+      burst of slams lengthens the wobble instead of stacking amplitudes. The offset is added to the
+      camera's position for that tick only — the saved position is always the rig's — and the last
+      tick writes the captured framing back exactly. The shake is cleared on scene reset,
+      `camera free` and `camera switch`.
+- [x] Tests: full strength at the start, half halfway, exactly zero at the end and afterwards, a
+      zero duration is over at once, a negative strength reads as its size; the offset stays inside
+      the amplitude, repeats for the same seed and tick, changes on the next tick, and is exactly
+      zero once the amplitude is; both `Merge` outcomes (weaker keeps strength and the longer time,
+      stronger takes over); and both word shapes parse.
 - Done-when: a boss slam / explosion shakes the view and the camera returns to its exact framing;
-      two overlapping `shake camera` calls do not make the view drift.
+      two overlapping `shake camera` calls do not make the view drift. *(The maths and the merge
+      rule are unit-covered; the felt wobble in a scene is an editor play-check.)*
 
 ---
 

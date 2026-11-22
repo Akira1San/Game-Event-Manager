@@ -172,6 +172,24 @@ namespace Game
         /// <summary>Default top-down offset applied when snapping via <c>camera at</c>, so
         /// framing/zoom stays consistent with the player camera.</summary>
         internal static Vector3 CameraAtOffset;
+
+        /// <summary>One running <c>shake camera</c> (Task 21 Part E): its strength and length, how
+        /// far in it is, the seed its wobble comes from, and the framing it started over — so the
+        /// shake is always an offset on top of the rig, never a new saved position.</summary>
+        internal struct CameraShakeState
+        {
+            public double Strength;
+            public double Duration;
+            public double Elapsed;
+            public int Seed;
+            public long Tick;
+            public Vector3 BasePosition;
+        }
+
+        /// <summary>Null when nothing is shaking. There is one shake, refreshed rather than
+        /// stacked, so two slams in a row cannot make the view drift.</summary>
+        internal static CameraShakeState? Shake;
+        private static int ShakeSeed;
         /// <summary>World position of the last mouse click on bare ground — the <c>goto there</c> target.</summary>
         public static Vector3? LastClickPosition;
 
@@ -322,6 +340,7 @@ namespace Game
             CameraLookAtTarget = null;
             CameraAtTarget = null;
             CameraAtOffset = Vector3.Zero;
+            Shake = null;
             foreach (AnimState state in AnimStates.Values)
             {
                 if (state.Graph != null)
@@ -761,6 +780,91 @@ namespace Game
                 if (camera != null)
                     camera.Position = CameraAtTarget.Position + CameraAtOffset;
             }
+
+            // `shake camera ...` (Task 21 Part E): applied last, on top of whatever the rig wrote
+            // this tick, so following, snapping and aiming all keep working while the view wobbles.
+            StepCameraShake();
+        }
+
+        /// <summary>
+        /// One tick of a running shake: decay the amplitude, add the tick's offset to the framing
+        /// the rig just wrote (or to the framing captured when the shake began, when no rig owns
+        /// the camera), and put the camera exactly back where it was once the time runs out.
+        /// </summary>
+        private static void StepCameraShake()
+        {
+            if (!Shake.HasValue)
+                return;
+            Actor camera = FlaxWorld.FindCamera();
+            if (camera == null)
+            {
+                Shake = null;
+                return;
+            }
+            CameraShakeState shake = Shake.Value;
+            // A follow/at rig rewrites the position absolutely every tick, so what is there now is
+            // the untouched framing. With no rig, the framing is the one captured at the start.
+            bool rigOwnsCamera = CameraFollowTarget != null || CameraAtTarget != null;
+            Vector3 basePosition = rigOwnsCamera ? camera.Position : shake.BasePosition;
+            shake.Elapsed += DeltaTime;
+            shake.Tick++;
+            double amplitude = CameraShake.Amplitude(shake.Strength, shake.Duration, shake.Elapsed);
+            if (amplitude <= 0.0)
+            {
+                camera.Position = basePosition; // exact framing back, not an offset of zero
+                Shake = null;
+                return;
+            }
+            CameraShake.Offset(amplitude, shake.Seed, shake.Tick, out double ox, out double oy, out double oz);
+            // The offset is added to the framing for this tick only: the camera's saved position is
+            // always the rig's, so the shake can never accumulate into a drift.
+            camera.Position = basePosition + new Vector3((float)ox, (float)oy, (float)oz);
+            Shake = shake;
+        }
+
+        /// <summary>
+        /// <c>shake camera strength &lt;n&gt; for &lt;s&gt;</c>: start a shake, or refresh the running
+        /// one. The stronger strength wins and the timer keeps the longer of the two, so a burst of
+        /// slams lengthens the wobble instead of stacking amplitudes forever. The camera is put
+        /// back at <see cref="CameraShakeState.BasePosition"/> when the time runs out.
+        /// </summary>
+        private static void StartCameraShake(EventContext context, ActionSpec spec)
+        {
+            Actor camera = FlaxWorld.FindCamera();
+            if (camera == null)
+            {
+                WarnOnce("\u201Cshake camera\u201D needs a Camera actor in the scene.");
+                return;
+            }
+            double strength = spec.AmountNode != null || spec.HasNumber ? Math.Abs(ResolveNumber(context, spec)) : 0.0;
+            if (strength < 0.01)
+                strength = CameraShake.DefaultStrength;
+            double duration = spec.Duration > 0.0 ? spec.Duration : CameraShake.DefaultDuration;
+            // A running shake has already displaced the camera: the framing underneath it is the
+            // captured one, unless a rig owns the camera (then the rig rewrites it every tick).
+            Vector3 basePosition = CameraFollowTarget != null || CameraAtTarget != null
+                ? camera.Position
+                : Shake.HasValue ? Shake.Value.BasePosition : camera.Position;
+            if (Shake.HasValue)
+            {
+                CameraShakeState running = Shake.Value;
+                CameraShake.Merge(running.Strength, running.Elapsed, running.Duration, strength, duration,
+                    out double mergedStrength, out double mergedDuration);
+                running.Strength = mergedStrength;
+                running.Duration = running.Elapsed + mergedDuration;
+                running.BasePosition = basePosition;
+                Shake = running;
+                return;
+            }
+            Shake = new CameraShakeState
+            {
+                Strength = strength,
+                Duration = duration,
+                Elapsed = 0.0,
+                Seed = ++ShakeSeed,
+                Tick = 0,
+                BasePosition = basePosition,
+            };
         }
 
         public static void Execute(EventContext context, ActionSpec spec)
@@ -1417,6 +1521,10 @@ namespace Game
                     break;
                 case ActionVerb.CameraFollow:
                     StartCameraFollow(context, spec);
+                    break;
+
+                case ActionVerb.ShakeCamera:
+                    StartCameraShake(context, spec);
                     break;
                 case ActionVerb.CameraLooksAt:
                     StartCameraLookAt(context, spec);
@@ -2927,7 +3035,9 @@ namespace Game
                         break;
                     }
                     Vector3 velocity = body.LinearVelocity;
-                    body.LinearVelocity = new Vector3(velocity.X, (float)strength, velocity.Z);
+                    body.LinearVelocity = new Vector3(
+                        push ? (float)airX : velocity.X, (float)strength,
+                        push ? (float)airZ : velocity.Z);
                     break;
                 }
                 default:
@@ -6871,6 +6981,7 @@ namespace Game
             CameraLookAtTarget = null; // free the camera entirely
             CameraAtTarget = null; // free the camera entirely
             CameraAtOffset = Vector3.Zero;
+            Shake = null; // a freed camera does not wobble
         }
 
         /// <summary>
@@ -6961,6 +7072,7 @@ namespace Game
             CameraLookAtTarget = null;
             CameraAtTarget = null;
             CameraAtOffset = Vector3.Zero;
+            Shake = null; // the new camera starts from its own framing
         }
 
         /// <summary>Leaves free-pan mode: a follow/snap/aim/switch owns the camera again.</summary>

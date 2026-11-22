@@ -6962,6 +6962,50 @@ var panSpec = ActionWords.Parse(((RawActionNode)panEvent.Events[0].Body[0].State
 Check(panSpec.Verb == ActionVerb.PanCamera && panSpec.Dir == "left" && panSpec.Number == 100,
       "`pan camera left by 100` parses to PanCamera");
 
+// Task 21 Part E — `shake camera`: the word, and the engine-free decay maths behind it.
+var shakeEvent = parser.Parse("when me appears\n  shake camera strength 8 for 0.3 seconds\n");
+var shakeSpec = ActionWords.Parse(((RawActionNode)shakeEvent.Events[0].Body[0].Statement!).Words, _ => { });
+Check(shakeSpec.Verb == ActionVerb.ShakeCamera && shakeSpec.HasNumber &&
+      Math.Abs(shakeSpec.Number - 8) < 0.000001 && Math.Abs(shakeSpec.Duration - 0.3) < 0.000001,
+      "`shake camera strength 8 for 0.3 seconds` parses to ShakeCamera with its strength and time");
+
+var bareShakeEvent = parser.Parse("when me appears\n  shake camera\n");
+var bareShakeSpec = ActionWords.Parse(((RawActionNode)bareShakeEvent.Events[0].Body[0].Statement!).Words, _ => { });
+Check(bareShakeSpec.Verb == ActionVerb.ShakeCamera && !bareShakeSpec.HasNumber && bareShakeSpec.Duration == 0,
+      "a bare `shake camera` parses with no numbers, so the bridge uses its defaults");
+
+Check(Math.Abs(CameraShake.Amplitude(8, 0.3, 0) - 8) < 0.000001,
+      "a shake starts at its full strength");
+Check(Math.Abs(CameraShake.Amplitude(8, 0.3, 0.15) - 4) < 0.000001,
+      "a shake's amplitude halves halfway through its time");
+Check(CameraShake.Amplitude(8, 0.3, 0.3) == 0 && CameraShake.Amplitude(8, 0.3, 5) == 0,
+      "a shake's amplitude is exactly zero once its time is up, and stays there");
+Check(CameraShake.Amplitude(8, 0, 0) == 0 && Math.Abs(CameraShake.Amplitude(-6, 0.3, 0) - 6) < 0.000001,
+      "a shake with no duration is already over, and a negative strength is read as its size");
+
+CameraShake.Offset(6, 7, 3, out double shakeX, out double shakeY, out double shakeZ);
+CameraShake.Offset(6, 7, 3, out double repeatX, out double repeatY, out double repeatZ);
+Check(shakeX == repeatX && shakeY == repeatY && shakeZ == repeatZ,
+      "the same seed and tick always give the same camera offset");
+Check(Math.Abs(shakeX) <= 6 && Math.Abs(shakeY) <= 6 && Math.Abs(shakeZ) <= 6,
+      "every offset stays inside the current amplitude");
+Check(Math.Abs(shakeX) + Math.Abs(shakeY) + Math.Abs(shakeZ) > 0.001,
+      "a running shake actually moves the camera");
+CameraShake.Offset(6, 7, 4, out double nextX, out _, out _);
+Check(nextX != shakeX, "the next tick is a fresh wobble, so the view does not sit still");
+CameraShake.Offset(0, 7, 3, out double endedX, out double endedY, out double endedZ);
+Check(endedX == 0 && endedY == 0 && endedZ == 0,
+      "a finished shake contributes no offset at all, so the framing is exact");
+
+CameraShake.Merge(8, 0.1, 0.3, 3, 0.2,
+    out double weakerMergedStrength, out double weakerMergedDuration);
+Check(weakerMergedStrength == 8 && Math.Abs(weakerMergedDuration - 0.2) < 0.000001,
+      "a weaker second shake keeps the stronger strength and the longer remaining time");
+CameraShake.Merge(4, 0.05, 0.3, 9, 0.1,
+    out double strongerMergedStrength, out double strongerMergedDuration);
+Check(strongerMergedStrength == 9 && Math.Abs(strongerMergedDuration - 0.25) < 0.000001,
+      "a stronger second shake takes over and still runs to the longer end");
+
 var zoomCondition = parser.Parse("when game starts\n  if my camera zoom is 2\n  set Zoomed to 1\n");
 Check(zoomCondition.Events.Count == 1,
       "`if my camera zoom is 2` joins the multiword camera variable");

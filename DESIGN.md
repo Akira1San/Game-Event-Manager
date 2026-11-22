@@ -1262,6 +1262,16 @@ window around a broken runtime.
   global flag (`HasKey`) set on pickup instead of checking `Player's bag`. A cross-actor bag
   condition and `remove ... from <actor>'s bag` are parked for a later era.
 
+- **Screen shake is one offset, never a saved position (Task 21 Part E):** `shake camera strength
+  <n> for <s> seconds` starts a wobble on the active camera, and `Runtime/CameraShake.cs` owns the
+  maths — a linear decay to zero plus a deterministic pseudo-random offset per (seed, tick), so a
+  shake always settles and always wobbles the same way. The bridge applies it *after* the follow /
+  snap writes each tick, on top of whatever framing the rig chose, and keeps the captured framing
+  so the last tick restores it exactly; the camera's own position is never the shaken one, which is
+  what stops two overlapping calls from drifting. A second call is a refresh, not a stack: the
+  stronger strength wins and the longer remaining time is kept. `camera free` and `camera switch`
+  drop a running shake with the rest of the rig.
+
 - **Ladders as one ownership handoff, not a physics mode:** G4 phase 4 adds `climb <thing>`,
   `climb down <thing>` (optional `speed <n>` / `my ClimbSpeed`) and `stop climbing`, and the climb
   simply owns the body for as long as it lasts: X/Z lock to the ladder actor's axis, `ClimbStep`
