@@ -198,18 +198,40 @@
       <code>my Weapon</code>, and <code>spawn Bullet</code> then clones that weapon's bullet &mdash; once per pellet, fanned across
       its spread, with its damage, speed, life and knockback stamped on each copy. Ammo lives in <code>my &lt;Weapon&gt;Ammo</code>,
       and <code>ammo my Weapon</code> means "whatever I am holding", so one fire block serves every gun.</p>
+
       <div class="syntax-box">
-        <span class="alt"># WeaponData.events &mdash; one block per weapon (Pistol, Shotgun, Uzi, Rocket, Grenade, Flamer)</span><br>
-        <span class="kw">set ShotgunBullet to "ShotgunPellet"</span><br>
-        <span class="kw">set ShotgunDamage to 6</span><br>
-        <span class="kw">set ShotgunFireRate to 0.8</span><br>
-        <span class="kw">set ShotgunSpread to 12</span> &nbsp;<span class="alt"># six pellets fanned over 12 degrees</span><br>
-        <span class="kw">set ShotgunMultiplier to 6</span><br>
-        <span class="kw">set ShotgunReload to 2</span><br>
-        <span class="kw">set ShotgunAmmo to 8</span><br>
-        <span class="kw">set ShotgunKnockback to 80</span><br>
-        <span class="kw">set ShotgunLife to 0.8</span> &nbsp;<span class="alt"># short legs &mdash; a shotgun, not a rifle</span><br>
-        <span class="kw">set ShotgunExplosive to false</span>
+        <span class="alt"># WeaponData.events &mdash; one block per weapon</span><br>
+        <span class="alt"># Built-ins (Pistol, Shotgun, Uzi, Rocket, Grenade) have code defaults.</span><br>
+        <span class="alt"># Anything set here overrides them. Add a brand-new weapon with just its fields.</span><br>
+        <br>
+        <span class="alt"># --- Pistol: TK4's starting sidearm ---</span><br>
+        <span class="kw">set PistolBullet to "Bullet"</span><br>
+        <span class="kw">set PistolDamage to 10</span><br>
+        <span class="kw">set PistolFireRate to 0.25</span><br>
+        <span class="kw">set PistolSpread to 0</span><br>
+        <span class="kw">set PistolMultiplier to 1</span><br>
+        <span class="kw">set PistolReload to 1.2</span><br>
+        <span class="kw">set PistolSound to "gunshot"</span><br>
+        <span class="kw">set PistolSmoke to "muzzle"</span><br>
+        <span class="kw">set PistolAmmoPerShot to 1</span><br>
+        <span class="kw">set PistolAmmo to 25</span><br>
+        <span class="kw">set PistolSpeed to 400</span><br>
+        <span class="kw">set PistolKnockback to 100</span><br>
+        <span class="kw">set PistolLife to 3</span><br>
+        <span class="kw">set PistolBlast to 0</span><br>
+        <span class="kw">set PistolBounce to false</span><br>
+        <span class="kw">set PistolExplosive to false</span><br>
+        <span class="kw">set PistolPierce to false</span><br>
+        <br>
+        <span class="alt"># --- Flamer: a brand-new weapon with no C# builtin ---</span><br>
+        <span class="kw">set FlamerBullet to "Bullet"</span><br>
+        <span class="kw">set FlamerDamage to 4</span><br>
+        <span class="kw">set FlamerFireRate to 0.1</span><br>
+        <span class="kw">set FlamerSpread to 20</span> &nbsp;<span class="alt"># wide cone</span><br>
+        <span class="kw">set FlamerMultiplier to 4</span> &nbsp;<span class="alt"># four pellets per shot</span><br>
+        <span class="kw">set FlamerReload to 1.8</span><br>
+        <span class="kw">set FlamerAmmo to 60</span><br>
+        <span class="kw">set FlamerLife to 0.5</span>
       </div>
 
       <div class="syntax-box">
@@ -239,9 +261,62 @@
         <span class="kw">when reload completes</span><br>
         &nbsp;&nbsp;<span class="kw">print "reload done"</span>
       </div>
-      <p class="alt">Pickups cannot write another actor's <code>my</code> variables, so the pickup sends a message and the player
-      owns every change: <code>when message "pickup_shotgun" arrives &#8594; set my HasShotgun to true &#8594; add 8 to ammo Shotgun
-      &#8594; set weapon to "Shotgun"</code>. Reload time and the magazine size stay in the data file; the sheet only asks.</p>
+
+      <table>
+        <thead>
+          <tr><th>Field</th><th>Type</th><th>What it does</th><th>Example</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>&lt;Weapon&gt;Bullet</code></td><td>text</td><td>Actor template <code>spawn Bullet</code> clones while this weapon is held.</td><td><code>set PistolBullet to "Bullet"</code></td></tr>
+          <tr><td><code>&lt;Weapon&gt;Damage</code></td><td>number</td><td>Damage per hit, stamped on each bullet as <code>my damage</code>.</td><td><code>set ShotgunDamage to 6</code></td></tr>
+          <tr><td><code>&lt;Weapon&gt;FireRate</code></td><td>number</td><td>Seconds between shots. Enforced by the fire block.</td><td><code>set UziFireRate to 0.08</code></td></tr>
+          <tr><td><code>&lt;Weapon&gt;Spread</code></td><td>number</td><td>Pellet spread angle in degrees, fanned across <code>&lt;Weapon&gt;Multiplier</code> pellets.</td><td><code>set ShotgunSpread to 12</code></td></tr>
+          <tr><td><code>&lt;Weapon&gt;Multiplier</code></td><td>number</td><td>Pellets per shot (shotgun = 6, pistol = 1).</td><td><code>set ShotgunMultiplier to 6</code></td></tr>
+          <tr><td><code>&lt;Weapon&gt;Reload</code></td><td>number</td><td>Seconds a <code>reload</code> takes.</td><td><code>set RocketReload to 2.5</code></td></tr>
+          <tr><td><code>&lt;Weapon&gt;Sound</code></td><td>text</td><td>Sound played when the weapon fires (one per shot, not per pellet).</td><td><code>set RocketSound to "rocket"</code></td></tr>
+          <tr><td><code>&lt;Weapon&gt;Smoke</code></td><td>text</td><td>Particle played at the muzzle.</td><td><code>set ShotgunSmoke to "muzzle"</code></td></tr>
+          <tr><td><code>&lt;Weapon&gt;AmmoPerShot</code></td><td>number</td><td>Ammo one shot spends.</td><td><code>set ShotgunAmmoPerShot to 1</code></td></tr>
+          <tr><td><code>&lt;Weapon&gt;Ammo</code></td><td>number</td><td>Starting ammo count for a fresh actor.</td><td><code>set PistolAmmo to 25</code></td></tr>
+          <tr><td><code>&lt;Weapon&gt;Speed</code></td><td>number</td><td>Projectile speed in cm/s.</td><td><code>set PistolSpeed to 400</code></td></tr>
+          <tr><td><code>&lt;Weapon&gt;Knockback</code></td><td>number</td><td>Push strength applied to a victim.</td><td><code>set RocketKnockback to 200</code></td></tr>
+          <tr><td><code>&lt;Weapon&gt;Life</code></td><td>number</td><td>Projectile lifetime in seconds (0 = sheet default).</td><td><code>set GrenadeLife to 6</code></td></tr>
+          <tr><td><code>&lt;Weapon&gt;Blast</code></td><td>number</td><td>Explosion radius in cm (only with <code>&lt;Weapon&gt;Explosive</code>).</td><td><code>set GrenadeBlast to 400</code></td></tr>
+          <tr><td><code>&lt;Weapon&gt;Bounce</code></td><td>true/false</td><td>Projectile reflects off walls instead of dying.</td><td><code>set PistolBounce to false</code></td></tr>
+          <tr><td><code>&lt;Weapon&gt;Explosive</code></td><td>true/false</td><td>Projectile explodes where it stops (wall or victim).</td><td><code>set RocketExplosive to true</code></td></tr>
+          <tr><td><code>&lt;Weapon&gt;Pierce</code></td><td>true/false</td><td>Projectile passes through a victim instead of stopping.</td><td><code>set PistolPierce to false</code></td></tr>
+        </tbody>
+      </table>
+
+      <h4>Ammo is per-actor</h4>
+      <p>Ammo lives on the actor as <code>my &lt;Weapon&gt;Ammo</code>, so two players holding the same
+      pistol keep separate counts: <code>set ammo Pistol to 25</code> / <code>add -1 to ammo Pistol</code>.
+      <code>my Ammo</code> (no weapon name) reads the held weapon's count &mdash; useful for HUD labels:
+      <code>bind WeaponLabel to my Weapon and my Ammo format "Weapon: {0} Ammo: {1}"</code>.
+      An actor that has never set a count starts from the data's <code>&lt;Weapon&gt;Ammo</code>.</p>
+
+      <h4>Per-player weapon upgrades (Task 27 Part B)</h4>
+      <p>A player can buff their own guns without touching <code>WeaponData.events</code>. Two
+      globals per weapon field stack on top of the shared base:</p>
+      <table>
+        <thead>
+          <tr><th>Global</th><th>Meaning</th><th>Example</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>&lt;Player&gt; &lt;Weapon&gt;&lt;Field&gt;</code></td><td>Flat bonus added to the base value.</td><td><code>set Player2 PistolDamage to 5</code> adds +5 damage.</td></tr>
+          <tr><td><code>&lt;Player&gt; &lt;Weapon&gt;&lt;Field&gt;BonusMultiplier</code></td><td>Multiplier applied before the bonus.</td><td><code>set Player2 PistolDamageBonusMultiplier to 1.5</code> multiplies by 1.5.</td></tr>
+        </tbody>
+      </table>
+      <p>Formula: <code>base × multiplier + bonus</code>. With Pistol base damage 10,
+      <code>Player2 PistolDamageBonusMultiplier = 1.5</code> and <code>Player2 PistolDamage = 5</code>
+      gives <code>10 × 1.5 + 5 = 20</code>. Works on all numeric fields (Damage, FireRate, Spread,
+      Multiplier, Reload, AmmoPerShot, Ammo, Speed, Knockback, Life, Blast). Text and flag fields
+      take a plain override instead (<code>set Player2 PistolBullet to "PlasmaBolt"</code>).</p>
+
+      <p class="alt">Pickups cannot write another actor's <code>my</code> variables, so the pickup
+      sends a message and the player owns every change:
+      <code>when message "pickup_shotgun" arrives &#8594; set my HasShotgun to true &#8594;
+      add 8 to ammo Shotgun &#8594; set weapon to "Shotgun"</code>. Reload time and magazine size stay
+      in the data file; the sheet only asks.</p>
     </div>
   </section>
 
