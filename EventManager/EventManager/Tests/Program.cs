@@ -4949,6 +4949,74 @@ when 1 is pressed
     Check(Math.Abs(CameraFollow.DampingFrom(followVars) - 2.5) < 1e-9,
         "`set CameraFollowDamping to 2.5` tunes the follow");
 
+    // Stance and camera-relative movement (Task_FPS Phase 2).
+    var stanceParser = new EventParser();
+    var crouchSheet = stanceParser.Parse("when Left Ctrl is pressed\n  crouch\n");
+    var crouchSpec = ActionWords.Parse(((RawActionNode)crouchSheet.Events[0].Body[0].Statement!).Words, _ => { });
+    var standSheet = stanceParser.Parse("when Left Ctrl is released\n  stand\n");
+    var standSpec = ActionWords.Parse(((RawActionNode)standSheet.Events[0].Body[0].Statement!).Words, _ => { });
+    var toggleSheet = stanceParser.Parse("when Left Alt is pressed\n  toggle crouch\n");
+    var toggleSpec = ActionWords.Parse(((RawActionNode)toggleSheet.Events[0].Body[0].Statement!).Words, _ => { });
+    Check(crouchSpec.Verb == ActionVerb.Crouch && standSpec.Verb == ActionVerb.Stand &&
+          toggleSpec.Verb == ActionVerb.ToggleCrouch,
+        "`crouch` / `stand` / `toggle crouch` parse as stance words");
+    Check(Stance.TryParse(" Crouch ", out BodyStance parsedCrouch) && parsedCrouch == BodyStance.Crouch &&
+          Stance.TryParse("stand", out BodyStance parsedStand) && parsedStand == BodyStance.Stand &&
+          !Stance.TryParse("prone", out BodyStance unknownStance) && unknownStance == BodyStance.Stand,
+        "stance names round-trip, ignore padding and case, and an unknown name is not silently crouching");
+    Check(Stance.NameOf(BodyStance.Crouch) == "crouch" && Stance.NameOf(BodyStance.Stand) == "stand",
+        "`my Stance` reads back the authored name");
+    Check(Stance.Toggle(BodyStance.Stand) == BodyStance.Crouch &&
+          Stance.Toggle(BodyStance.Crouch) == BodyStance.Stand,
+        "toggle crouch alternates either way");
+    Check(Stance.SpeedFactor(BodyStance.Crouch) == 0.5 && Stance.SpeedFactor(BodyStance.Stand) == 1,
+        "crouch halves the authored pace and standing restores it");
+    var standCapsule = new CharacterBodySettings { Radius = 50f, Height = 150f, StepOffset = 30f, SlopeLimit = 45f };
+    var crouchCapsule = Stance.Capsule(standCapsule, BodyStance.Crouch);
+    Check(Math.Abs(crouchCapsule.Height - 82.5f) < 1e-3 && crouchCapsule.Radius == 50f &&
+          crouchCapsule.StepOffset == 30f &&
+          Stance.Capsule(standCapsule, BodyStance.Stand).Height == 150f,
+        "crouch shortens the capsule to 55% of its height and standing gives the authored body back");
+    var tinyCapsule = Stance.Capsule(new CharacterBodySettings { Height = 20f, StepOffset = 30f }, BodyStance.Crouch);
+    Check(tinyCapsule.Height >= Stance.MinCrouchHeight && tinyCapsule.StepOffset <= tinyCapsule.Height,
+        "a tiny crouch capsule never collapses below the floor or keeps a step taller than itself");
+    Check(Math.Abs(Stance.Sink(150f, 82.5f) - 33.75) < 1e-3 && Stance.Sink(82.5f, 150f) == 0,
+        "crouch sinks the actor by half the lost height, so the feet stay on the floor");
+    Check(CameraRelative.TryResolve("forward", 0, 1, out double relX, out double relZ) &&
+          Math.Abs(relX) < 1e-9 && Math.Abs(relZ - 1) < 1e-9,
+        "camera-relative forward walks where the view looks");
+    Check(CameraRelative.TryResolve("right", 0, 1, out relX, out relZ) &&
+          Math.Abs(relX - 1) < 1e-9 && Math.Abs(relZ) < 1e-9,
+        "camera-relative right strafes to the viewer's right");
+    Check(CameraRelative.TryResolve("left", 0, 1, out relX, out relZ) &&
+          Math.Abs(relX + 1) < 1e-9 && Math.Abs(relZ) < 1e-9,
+        "camera-relative left strafes the other way");
+    Check(!CameraRelative.TryResolve("up", 0, 1, out _, out _) &&
+          !CameraRelative.TryResolve("toward", 0, 1, out _, out _),
+        "vertical and target moves keep the actor-relative answer");
+    // A condition line under an event is how a sheet reads it (`when W is held` / `my Stance is
+    // "crouch"` / `move forward`), which is exactly what the runtime parses and evaluates.
+    var stanceEvent = stanceParser.Parse(
+        "when W is held\n  my Stance is \"crouch\"\n  move forward speed 5\n").Events[0];
+    Check(stanceEvent.Body[0].IsCondition, "`my Stance is \"crouch\"` is a condition line");
+    var stanceCondition = Conditions.Parse(stanceEvent.Body[0].Words);
+    Check(stanceCondition.Kind == ConditionKind.Equal && stanceCondition.Owner == "my" &&
+          stanceCondition.Name == "Stance" &&
+          stanceCondition.Right is TextValue stanceText && stanceText.Text == "crouch",
+        "`my Stance is \"crouch\"` parses as a text comparison on my Stance");
+    var stanceVars = new EventVariables();
+    object stanceHost = new object();
+    stanceVars.SetLocal(stanceHost, Stance.Variable, ValueBox.OfText(Stance.NameOf(BodyStance.Crouch)));
+    Check(Conditions.CompareEqual(stanceVars.GetLocal(stanceHost, Stance.Variable),
+              ValueBox.OfText(((TextValue)stanceCondition.Right).Text)) &&
+          !Conditions.CompareEqual(stanceVars.GetLocal(stanceHost, Stance.Variable),
+              ValueBox.OfText(Stance.StandName)),
+        "the stance text the bridge writes satisfies `my Stance is \"crouch\"` and fails `is \"stand\"`");
+    Check(CameraRelative.TryHeading(3, 5, 4, out double headX, out double headZ) &&
+          Math.Abs(headX - 0.6) < 1e-9 && Math.Abs(headZ - 0.8) < 1e-9 &&
+          !CameraRelative.TryHeading(0, 1, 0, out _, out _),
+        "the view heading flattens onto the ground plane, and looking straight up has none");
+
     // First person (Task_FPS Phase 1): mouse look and the camera mode that owns the view.
     MouseLook.Step(0, 0, 100, 0, MouseLook.DefaultSensitivity, false, false,
         out double lookYaw, out double lookPitch);

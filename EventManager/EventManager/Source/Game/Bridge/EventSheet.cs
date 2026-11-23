@@ -66,6 +66,15 @@ namespace Game
         public bool FirstPerson = false;
 
         /// <summary>
+        /// Opt-in (Task_FPS Phase 2): resolve `move forward/back/left/right` from the camera's view
+        /// direction instead of the actor's own facing. That is what lets a first-person player
+        /// strafe without turning, and it also keeps a body facing one way while its view looks
+        /// another. Off by default, so every top-down sheet keeps today's actor-relative movement.
+        /// </summary>
+        [Tooltip("Resolve move forward/back/left/right from the camera's view direction instead of the actor's facing. Off = movement follows the body.")]
+        public bool MoveRelativeToCamera = false;
+
+        /// <summary>
         /// Ticks the capsule settings below onto the actor's <c>CharacterController</c> when the
         /// sheet starts. Leave unticked to use whatever the CharacterController inspector says.
         /// </summary>

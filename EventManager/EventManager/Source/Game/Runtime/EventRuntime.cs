@@ -259,6 +259,14 @@ namespace Game
         /// the mouse turns it and pitches its camera child, and that camera is the one the view
         /// uses (Task_FPS Phase 1). Off = the ordinary top-down / RTS controls.</summary>
         public bool FirstPerson;
+        /// <summary>Opt-in (EventSheet "Move Relative To Camera"): <c>move forward/back/left/right</c>
+        /// resolves from the camera's view direction instead of the actor's own facing, so a
+        /// strafe never turns the body (Task_FPS Phase 2). Off = the historical actor-relative
+        /// answer, which every top-down sheet still gets.</summary>
+        public bool MoveRelativeToCamera;
+        /// <summary>Posture from <c>crouch</c> / <c>stand</c> / <c>toggle crouch</c>; also mirrored
+        /// into the readable <c>my Stance</c> variable (Task_FPS Phase 2).</summary>
+        public BodyStance Stance = BodyStance.Stand;
         /// <summary>Set by the EventSheet "Self Test" flag (or a sheet named `SelfTest`): this
         /// file is the project's self-test sheet (Task 51 Part C). Case discovery still comes
         /// from the `expect` lines, so the marker never changes how an ordinary sheet runs.</summary>

@@ -308,6 +308,9 @@ namespace Game
             ScriptedJumps.Clear();
             JumpsSpent.Clear();
             Climbs.Clear();
+            // Stance bookkeeping is keyed by actor, and a new scene's actors are new objects.
+            StandBodies.Clear();
+            StanceSink.Clear();
             SoundIndexCache = null;
             AnimIndexCache = null;
             AnimFullNames = null;
@@ -885,6 +888,18 @@ namespace Game
                     StopClimb(context.Me as Actor);
                     break;
 
+                case ActionVerb.Crouch:
+                    SetStance(context, BodyStance.Crouch);
+                    break;
+
+                case ActionVerb.Stand:
+                    SetStance(context, BodyStance.Stand);
+                    break;
+
+                case ActionVerb.ToggleCrouch:
+                    SetStance(context, Stance.Toggle(StanceOf(context)));
+                    break;
+
                 case ActionVerb.Move:
                 {
                     var me = context.Me as Actor;
@@ -902,7 +917,7 @@ namespace Game
                         var target = ResolveThing(context, spec.Thing) as Actor;
                         if (target != null)
                         {
-                            double speed = ResolveNumber(context, spec);
+                            double speed = ResolveNumber(context, spec) * Stance.SpeedFactor(StanceOf(context));
                             Vector3 heading;
                             if (spec.AroundWalls)
                             {
@@ -942,7 +957,13 @@ namespace Game
                         break;
                     }
                     context.Runtime.Steering.Clear(me);
-                    MoveSubject(me, DirectionOf(me, spec.Dir), ResolveNumber(context, spec), mode);
+                    Vector3 moveHeading = DirectionOf(me, spec.Dir);
+                    // `Move Relative To Camera` (Task_FPS Phase 2): forward is where the view
+                    // looks, so A/D strafe without ever turning the body.
+                    if (context.Sheet != null && context.Sheet.MoveRelativeToCamera)
+                        moveHeading = CameraRelativeDirection(me, spec.Dir, moveHeading);
+                    // A crouched actor keeps its pace words and walks at half speed.
+                    MoveSubject(me, moveHeading, ResolveNumber(context, spec) * Stance.SpeedFactor(StanceOf(context)), mode);
                     break;
                 }
                 case ActionVerb.StopMoving:
@@ -2750,6 +2771,10 @@ namespace Game
             ScriptedJumps.Remove(subject);
             JumpsSpent.Remove(subject); // a respawn hands the actor its whole `my Jumps` back
             Climbs.Remove(subject);
+            // A crouch sink is a Position offset, and this call is about to write the position:
+            // keeping the offset would leave the body half a capsule into the floor, and a later
+            // `stand` would add it back somewhere else.
+            ForgetStance(subject);
 
             RigidBody body = FindBody(subject);
             if (body != null && !body.IsKinematic)
@@ -2909,6 +2934,139 @@ namespace Game
                 if (ReferenceEquals(parent, candidate))
                     return true;
             return false;
+        }
+
+        /// <summary>The capsule each actor had before its first crouch, so toggling always comes
+        /// back to the authored height. Cleared when the actor stands up.</summary>
+        private static readonly Dictionary<Actor, CharacterBodySettings> StandBodies =
+            new Dictionary<Actor, CharacterBodySettings>();
+
+        /// <summary>How far each crouched actor was sunk so its feet stayed on the floor.</summary>
+        private static readonly Dictionary<Actor, double> StanceSink = new Dictionary<Actor, double>();
+
+        /// <summary>The posture the acting sheet is in (a sheet-less run reads its actor's own
+        /// sheet, and anything unknown stands).</summary>
+        private static BodyStance StanceOf(EventContext context)
+        {
+            if (context.Sheet != null)
+                return context.Sheet.Stance;
+            SheetInstance sheet = EventsManager.Instance?.Runtime?.FindSheetFor(context.Me);
+            return sheet != null ? sheet.Stance : BodyStance.Stand;
+        }
+
+        /// <summary>
+        /// `crouch` / `stand` / `toggle crouch` (Task_FPS Phase 2): shorten the actor's
+        /// CharacterController capsule and sink the actor by half the lost height, which puts the
+        /// feet back on the floor and lowers a first-person camera child with the head. The stance
+        /// is mirrored into `my Stance` and the move words halve their speed while crouched. An
+        /// actor with no CharacterController still crouches — there is no capsule to resize, but
+        /// the lower head reads correctly (transform-mode bodies).
+        /// </summary>
+        private static void SetStance(EventContext context, BodyStance stance)
+        {
+            var me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Ccrouch\u201D / \u201Cstand\u201D need to run on an actor's sheet \u2014 the global Game sheet has no body to posture.");
+                return;
+            }
+            SheetInstance sheet = context.Sheet ?? EventsManager.Instance?.Runtime?.FindSheetFor(me);
+            if (sheet == null || sheet.Stance == stance)
+                return;
+
+            CharacterController controller = EventSheet.FindCharacterController(me);
+            if (!StandBodies.TryGetValue(me, out CharacterBodySettings standBody))
+            {
+                standBody = controller != null
+                    ? new CharacterBodySettings
+                    {
+                        Radius = controller.Radius,
+                        Height = controller.Height,
+                        StepOffset = controller.StepOffset,
+                        SlopeLimit = controller.SlopeLimit,
+                        GroundCheckDistance = sheet.GroundCheckDistance,
+                    }.Sanitized()
+                    : new CharacterBodySettings();
+                StandBodies[me] = standBody;
+            }
+
+            CharacterBodySettings body = Stance.Capsule(standBody, stance);
+            if (controller != null)
+            {
+                controller.Height = body.Height;
+                controller.Radius = body.Radius;
+                controller.StepOffset = body.StepOffset;
+            }
+
+            if (stance == BodyStance.Crouch)
+            {
+                double drop = Stance.Sink(standBody.Height, body.Height);
+                if (drop > 0.0)
+                {
+                    me.Position = me.Position - new Vector3(0f, (float)drop, 0f);
+                    StanceSink[me] = drop;
+                }
+            }
+            else if (StanceSink.TryGetValue(me, out double sunk) && sunk > 0.0)
+            {
+                me.Position = me.Position + new Vector3(0f, (float)sunk, 0f);
+                StanceSink.Remove(me);
+            }
+
+            sheet.Stance = stance;
+            context.Runtime?.Variables.SetLocal(me, Stance.Variable, ValueBox.OfText(Stance.NameOf(stance)));
+        }
+
+        /// <summary>
+        /// Drops a crouch without moving the actor: the authored capsule comes back and the sheet
+        /// is standing again, because the caller has just placed the body itself (teleport /
+        /// respawn) or is discarding the scene. Never adds the sink back — that offset belonged to
+        /// the old position.
+        /// </summary>
+        private static void ForgetStance(Actor subject)
+        {
+            if (subject == null)
+                return;
+            StanceSink.Remove(subject);
+            if (StandBodies.TryGetValue(subject, out CharacterBodySettings standBody))
+            {
+                StandBodies.Remove(subject);
+                CharacterController controller = EventSheet.FindCharacterController(subject);
+                if (controller != null)
+                {
+                    CharacterBodySettings body = Stance.Capsule(standBody, BodyStance.Stand);
+                    controller.Height = body.Height;
+                    controller.Radius = body.Radius;
+                    controller.StepOffset = body.StepOffset;
+                }
+            }
+            SheetInstance sheet = EventsManager.Instance?.Runtime?.FindSheetFor(subject);
+            if (sheet == null)
+                return;
+            sheet.Stance = BodyStance.Stand;
+            EventsManager.Instance?.Runtime?.Variables.SetLocal(
+                subject, Stance.Variable, ValueBox.OfText(Stance.StandName));
+        }
+
+        /// <summary>
+        /// `move` when the acting sheet ticked Move Relative To Camera: the four planar words
+        /// resolve against the player's camera heading instead of the body's facing, so A/D
+        /// strafe and the actor keeps its rotation. Anything else (up/down, a target move) and a
+        /// player with no camera child keep the actor-relative heading; the missing camera is
+        /// reported once per actor rather than silently ignored.
+        /// </summary>
+        private static Vector3 CameraRelativeDirection(Actor me, string dir, Vector3 fallback)
+        {
+            if (!FlaxWorld.TryFindCameraUnder(me, out FlaxEngine.Camera camera))
+            {
+                WarnOnce($"Event sheet: \u201C{me.Name}\u201D moves relative to the camera but has no active Camera actor under it, so movement follows its own facing. Add a Camera child at eye height, or untick Move Relative To Camera.");
+                return fallback;
+            }
+            Vector3 forward = Vector3.Transform(Vector3.Forward, camera.Orientation);
+            if (!CameraRelative.TryHeading(forward.X, forward.Y, forward.Z, out double forwardX, out double forwardZ) ||
+                !CameraRelative.TryResolve(dir, forwardX, forwardZ, out double x, out double z))
+                return fallback;
+            return new Vector3((float)x, 0f, (float)z);
         }
 
         private static Vector3 DirectionOf(Actor actor, string dir)

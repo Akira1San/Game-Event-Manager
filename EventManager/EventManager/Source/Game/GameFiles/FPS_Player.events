@@ -1,12 +1,14 @@
-# FPS_Player.events — first-person player (Task_FPS Phase 1).
+# FPS_Player.events — first-person player (Task_FPS Phases 1–2).
 #
 # Scene setup: the player actor carries this sheet's EventSheet with
-#   First Person ticked and Use Physics Movement ticked,
+#   First Person, Use Physics Movement and Move Relative To Camera ticked,
 # and a Camera actor is parented under it at eye height
 # (that child is the eyes: the mouse pitches it).
 #
-# The mouse turns the body, so `move forward` already walks where
-# you look and `move left`/`right` strafe without turning it.
+# The mouse turns the body, so `move forward` walks where you look, and
+# `move left`/`right` strafe from the camera without turning it
+# (Move Relative To Camera is what guarantees that even if the body ever
+# faces somewhere else — aiming does exactly that in Phase 4).
 # Feel knobs are globals: `set LookSensitivity to 0.15`,
 # `set LookInvertY to 1`.
 
@@ -33,6 +35,14 @@ when A is held
 
 when D is held
   move right speed my Pace
+
+# Hold Ctrl to duck. The bridge shortens the capsule, sinks the body (so the
+# camera child comes down with it) and halves whatever speed the moves ask for.
+when Left Ctrl is pressed
+  crouch
+
+when Left Ctrl is released
+  stand
 
 when Space is pressed
   jump

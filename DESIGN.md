@@ -475,6 +475,25 @@ moving` brakes the horizontal velocity; `goto` brakes on arrival.
 - `move forward/back/left/right` is always resolved in the actor's **local axes** (the facing
   rotates the direction), then handed to whichever mode is active — the same vector drives a
   transform step, a body's velocity, a swept move or a character's collide-and-slide.
+- **Camera-relative movement is opt-in** (`Move Relative To Camera` on the `EventSheet`, Task_FPS
+  Phase 2): the four planar words resolve against the camera's view heading flattened onto the
+  ground instead of the body's facing, so a strafe slides along the screen without rotating the
+  actor. A player with a camera child gets the same vector either way while the yaw rides the
+  body, but the flag is what keeps strafing a strafe once the body faces somewhere else (aiming,
+  a turret, a locked-on target). Without a camera child it warns once per actor and falls back to
+  the facing; `up`/`down`, `move toward`, `face` and `look at` are untouched by the flag.
+- **Stance** (`crouch` / `stand` / `toggle crouch`, Task_FPS Phase 2) shrinks the actor's
+  `CharacterController` capsule to 55% of the authored height (floor 20 cm, step offset re-clamped)
+  and sinks the actor by half the lost height, because Flax keeps the actor origin at the capsule
+  centre: the feet return to the floor and the head (plus a camera child) drops. Every `move` while
+  crouched runs at half the authored speed, so pace variables stay in the sheet, and the stance is
+  mirrored into `my Stance` for conditions. Reaching the same stance twice is a no-op, so a held
+  key cannot sink the actor further; an actor without a controller still crouches (head only).
+  The sink is a **position offset**, so `teleport` / `respawn` drop it before writing the new
+  position (the authored capsule comes back and `my Stance` reads `"stand"` — the crouch belonged
+  to the old spot), and a new scene forgets all stance bookkeeping because its actors are new
+  objects. Without that, a respawned crouched body would land half a capsule underground and a
+  later `stand` would lift it into the air.
 - `turn left/right degrees <n>` is rotation-only and instant. In Flax a positive Y yaw turns
   local forward (+Z) toward +X, i.e. to the actor's **right**, so left is a negative yaw and right
   is positive. Any other direction word is rejected with a warning instead of silently turning

@@ -17,6 +17,12 @@ namespace Game
         Climb,
         /// <summary><c>stop climbing</c> — let go of the ladder.</summary>
         StopClimbing,
+        /// <summary><c>crouch</c> — shorten the body and half the pace (Task_FPS Phase 2).</summary>
+        Crouch,
+        /// <summary><c>stand</c> — back to full height and pace.</summary>
+        Stand,
+        /// <summary><c>toggle crouch</c> — the same two, alternating.</summary>
+        ToggleCrouch,
         Turn,
         LookAt,
         Face,
@@ -1560,10 +1566,23 @@ namespace Game
                     if (words.Count >= 2 && words[1].Text == "light")
                         return Finish(spec, ActionVerb.DisableLight, words, 2);
                     return Unknown(spec, words, "\u201Cdisable\u201D looks like this: \u201Cdisable light\u201D", warn);
+                case "crouch":
+                    // `crouch` / `stand`: stance changes, no argument (Task_FPS Phase 2).
+                    if (words.Count == 1)
+                        return Finish(spec, ActionVerb.Crouch, words, 1);
+                    return Unknown(spec, words, "\u201Ccrouch\u201D stands alone \u2014 the stance is the whole word", warn);
+
+                case "stand":
+                    if (words.Count == 1)
+                        return Finish(spec, ActionVerb.Stand, words, 1);
+                    return Unknown(spec, words, "\u201Cstand\u201D stands alone \u2014 the stance is the whole word", warn);
+
                 case "toggle":
+                    if (words.Count >= 2 && words[1].Text == "crouch")
+                        return Finish(spec, ActionVerb.ToggleCrouch, words, 2);
                     if (words.Count >= 2 && words[1].Text == "light")
                         return Finish(spec, ActionVerb.ToggleLight, words, 2);
-                    return Unknown(spec, words, "\u201Ctoggle\u201D looks like this: \u201Ctoggle light\u201D", warn);
+                    return Unknown(spec, words, "\u201Ctoggle\u201D looks like this: \u201Ctoggle light\u201D or \u201Ctoggle crouch\u201D", warn);
             }
 
             if (words.Count >= 3 && words[0].Text == "play" && words[1].Text == "sound" && words[2].Type == TokenType.Str)

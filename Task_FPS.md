@@ -13,8 +13,12 @@ event language; the bridge supplies the FPS-specific C# that existing words cann
 
 ## Status
 - [x] Phase 1 shipped: mouse look, first-person camera mode, `lock cursor`, `FPS_Player.events`
-  and 15 unit checks. Still open from Phase 1: the editor play-check, and Phase 2–5 (stance,
-  sprint stamina, ADS/FOV, gunplay, the acceptance scene).
+  and 15 unit checks.
+- [x] Phase 2 shipped: `Move Relative To Camera`, `crouch` / `stand` / `toggle crouch` with the
+  capsule + pace rules and `my Stance`, plus 13 more checks. `FPS_Temp.scene` prepared for the
+  play-check (camera parented under the player, controller added, rig flags ticked).
+- [ ] Still open: both editor play-checks, and Phase 3–5 (sprint stamina, jump polish, ADS/FOV,
+  gunplay, the acceptance scene).
 
 ## Context / reuse (already in repo)
 - [ ] `Runtime/PhysicsMovement.cs` (Task 12): `MoveSubject`, body modes (Transform/Dynamic/Kinematic/CharacterController), `MaxStepPerTick`, `MoveStep`, ground check, fall-speed decaying — reusable for the FPS body.
@@ -54,8 +58,8 @@ These are the *new* trigger/action/condition words this task introduces. Everyth
 
 - [x] `Runtime/MouseLook.cs` (pure): yaw/pitch accumulation from mouse delta, pitch clamp (±89°), yaw wrap, sensitivity/invert applied, per tick. Unit tested. (Shipped under this name instead of `FPSLook.cs`.)
 - [x] `EventsManager.UpdateFirstPersonCamera()`: reads `Input.MousePositionDelta` each tick, applies yaw to `me.Orientation` (world Y only) and pitch to the player's own camera child (`LocalOrientation`, local X). The mode lives in `CameraState` (`FirstPerson`), so it releases/absorbs the other camera rigs like they do; the child camera is found with `FlaxWorld.FindCameraUnder`. Enabled by the `First Person` tick box on the player's `EventSheet` (not a per-sheet instance field in FlaxActions).
-- [ ] `Bridge/FlaxActions.MoveSubject` direction override: when the actor is the FPS player and `MoveRelativeToCamera` is set on the sheet, resolve `forward/back/left/right` from the *camera view direction* (flattened to XZ), not the actor's facing. `face`/`look at` stay actor-relative (unchanged).
-- [ ] `Bridge/FlaxActions.Crouch/Stand/ToggleCrouch()`: adjusts `CharacterController` height/radius (or scales the actor transform in transform mode), writes `my Stance`, clamps speed.
+- [x] `Bridge/FlaxActions` direction override: with `MoveRelativeToCamera` on the sheet, `move forward/back/left/right` resolve from the player's camera heading flattened to XZ (`Runtime/CameraRelative.cs`), not the actor's facing; `up`/`down`, `move toward`, `face` and `look at` stay actor-relative. A player with no camera child warns once and falls back to the facing.
+- [x] `crouch` / `stand` / `toggle crouch` in `Bridge/FlaxActions`: `Runtime/Stance.cs` keeps the rules (55% capsule height with a 20 cm floor, 0.5× pace, half-the-lost-height sink), the bridge resizes the `CharacterController`, sinks the actor so the feet and the camera child move correctly, writes `my Stance` and leaves the sheet's speed words untouched. An actor with no controller still crouches (head only).
 - [ ] `Bridge/FlaxActions.Sprint/Walk()`: speed multiplier read from `my SprintSpeed` (default 2×), drains `my Stamina` each tick while held (5 per 0.1 s), regenerates when released (4 per 0.25 s), falls back to walk at 0.
 - [ ] `Bridge/FlaxActions.Jump(strength)`: vertical impulse per body mode (CharacterController fall-speed write / dynamic `LinearVelocity.Y` / kinematic `JumpStep` arc); refused while airborne; default 350 cm/s.
 - [ ] `Bridge/FlaxActions.AimDownSights()` / `StopAiming()`: writes `my Aiming`, narrows camera FOV (or moves camera closer) and reduces weapon spread while active.
@@ -67,7 +71,8 @@ These are the *new* trigger/action/condition words this task introduces. Everyth
 - [x] `Source/Game/Runtime/MouseLook.cs` (pure) + unit tests (paths corrected: there is no `Events/Runtime`).
 - [x] `Source/Game/Runtime/CameraState.cs` — first-person mode beside follow / at / aim / free.
 - [x] `Source/Game/Bridge/EventsManager.cs` — the per-tick look rig; `Source/Game/Bridge/FlaxWorld.cs` — the player's own camera lookup.
-- [ ] `Crouch/Stand`, `Sprint/Walk`, `AimDownSights` branches (Phases 2–4).
+- [x] `Crouch/Stand` (Phase 2: `Runtime/Stance.cs` + the bridge handler).
+- [ ] `Sprint/Walk`, `AimDownSights` branches (Phases 3–4).
 - [ ] `WordRegistry.cs` — register the new trigger/action/condition entries with examples.
 - [ ] `EventParser.cs` — accept the new verb shapes + `set look sensitivity` / `set look invert`.
 - [ ] `keywords.html` — add rows for new words.
@@ -81,11 +86,11 @@ These are the *new* trigger/action/condition words this task introduces. Everyth
 - [ ] Editor check: look around with the mouse, cursor locked, pitch clamped. (Needs a camera parented under the player with `First Person` ticked.)
 
 ### Phase 2 — Camera-relative movement + stance
-- [ ] `MoveRelativeToCamera` opt-in flag on `SheetInstance` (like `UsePhysicsMovement`); no new word.
-- [ ] `FlaxActions.MoveSubject`: resolve move dir from camera forward/right when flag set; actor rotation unaffected by strafe.
-- [ ] `crouch` / `stand` / `toggle crouch` actions + `my Stance` condition; `CharacterController` height/radius shrink + speed clamp.
-- [ ] `FPS_Player.events`: W/A/S/D → `move ... speed my Pace`; `Left Ctrl` → crouch; `Left Shift` → sprint.
-- [ ] Editor check: WASD moves relative to where you're looking; crouch lowers the camera/collider.
+- [x] `MoveRelativeToCamera` opt-in flag on `SheetInstance` (like `UsePhysicsMovement`), ticked by a new `EventSheet` box; no new word.
+- [x] Move direction resolves from the camera forward/right when the flag is set; strafing never touches the actor's rotation.
+- [x] `crouch` / `stand` / `toggle crouch` actions + `my Stance` (text) condition; capsule height shrink, actor sink and 0.5× speed clamp.
+- [x] `FPS_Player.events`: W/A/S/D → `move ... speed my Pace`; `Left Ctrl` held → `crouch` / `stand`; `Left Shift` → sprint.
+- [ ] Editor check: WASD moves relative to where you're looking; crouch lowers the camera/collider. (Run `Content/scenes/FPS_Temp.scene`: it now has the camera parented under the player at eye height, a `CharacterController` on the player, and `First Person` / `Use Physics Movement` / `Move Relative To Camera` ticked.)
 
 ### Phase 3 — Sprint/stamina + jump
 - [ ] `sprint` / `walk` actions; stamina drain/regenerate loop; `my Stamina` gate blocks sprint at 0.

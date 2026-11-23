@@ -468,6 +468,7 @@ namespace Game
                 existing.IsSelfTest = selfTest;
                 existing.UsePhysicsMovement = component.UsePhysicsMovement;
                 existing.FirstPerson = component.FirstPerson;
+                existing.MoveRelativeToCamera = component.MoveRelativeToCamera;
                 existing.GroundCheckDistance = component.ReadCharacterBodySettings().GroundCheckDistance;
                 SyncStepSoundMap(existing, component.StepSoundMap);
                 return;
@@ -488,6 +489,7 @@ namespace Game
             SheetInstance sheet = Runtime.AddSheet(actor, program.File, source, selfTest);
             sheet.UsePhysicsMovement = component.UsePhysicsMovement;
             sheet.FirstPerson = component.FirstPerson;
+            sheet.MoveRelativeToCamera = component.MoveRelativeToCamera;
             sheet.GroundCheckDistance = component.ReadCharacterBodySettings().GroundCheckDistance;
             SyncStepSoundMap(sheet, component.StepSoundMap);
         }
