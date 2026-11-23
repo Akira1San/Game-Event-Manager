@@ -47,6 +47,12 @@ namespace Game
         Scale,
         Destroy,
         Spawn,
+        /// <summary><c>spawn item from "&lt;table&gt;" at &lt;spot&gt;</c> — a weighted loot drop
+        /// (Task 9 F6).</summary>
+        SpawnItem,
+        /// <summary><c>roll "&lt;rarity&gt;" from "&lt;table&gt;"</c> — a loot drop of a named
+        /// rarity at the acting actor (Task 9 F6).</summary>
+        RollLoot,
         /// <summary><c>cast "&lt;spell&gt;"</c> / <c>cast "&lt;spell&gt;" at &lt;thing&gt;</c> (Task 9 E3).</summary>
         Cast,
         PlaySound,
@@ -1295,6 +1301,19 @@ namespace Game
                     }
                     return Unknown(spec, words, "\u201Ccast\u201D needs a spell name in quotes, like \u201Ccast \"Fireball\"\u201D", warn);
                 }
+                case "roll":
+                    if (words.Count >= 4 && words[1].Type == TokenType.Str &&
+                        words[2].Text == "from" && words[3].Type == TokenType.Str)
+                    {
+                        // `roll "Rare" from "Loot"` — a table row, a named rarity, at me
+                        // (Task 9 F6). The name is quoted like a spell, so a two-word rarity
+                        // stays one name.
+                        spec.Rarity = words[1].Text;
+                        spec.HasRarity = true;
+                        spec.Thing = words[3].Text;
+                        return Finish(spec, ActionVerb.RollLoot, words, 4);
+                    }
+                    return Unknown(spec, words, "\u201Croll\u201D looks like this: \u201Croll \"Rare\" from \"Loot\"\u201D", warn);
                 case "spawn":
                     if (words.Count >= 2 && words[1].Text == "prefab")
                     {
@@ -1325,6 +1344,19 @@ namespace Game
                             }
                         }
                         return Unknown(spec, words, "\u201Cspawn scene\u201D looks like this: \u201Cspawn scene \"HeroScene\" at SpawnPoint\u201D", warn);
+                    }
+                    if (words.Count >= 6 && words[1].Text == "item" && words[2].Text == "from" &&
+                        words[3].Type == TokenType.Str && words[4].Text == "at")
+                    {
+                        // `spawn item from "Loot" at me` — a weighted loot drop (Task 9 F6).
+                        string lootSpot = TargetAt(words, 5, out int lootSpotUsed);
+                        if (lootSpot != null)
+                        {
+                            spec.Thing = words[3].Text;
+                            spec.To = lootSpot;
+                            return Finish(spec, ActionVerb.SpawnItem, words, 5 + lootSpotUsed);
+                        }
+                        return Unknown(spec, words, "\u201Cspawn item from\u201D looks like this: \u201Cspawn item from \"Loot\" at me\u201D", warn);
                     }
                     if (words.Count >= 4 && IsThing(words[1]) && words[2].Text == "at")
                     {
@@ -1370,7 +1402,7 @@ namespace Game
                             return Finish(spec, ActionVerb.Spawn, words, consumed);
                         }
                     }
-                    return Unknown(spec, words, "\u201Cspawn\u201D looks like this: \u201Cspawn Bullet at me\u201D, \u201Cspawn Bullet at me offset 30\u201D, \u201Cspawn Ring at me rarity \"Rare\" level 12\u201D, \u201Cspawn prefab \"Hero\" at SpawnPoint\u201D or \u201Cspawn scene \"HeroScene\" at SpawnPoint\u201D", warn);
+                    return Unknown(spec, words, "\u201Cspawn\u201D looks like this: \u201Cspawn Bullet at me\u201D, \u201Cspawn Bullet at me offset 30\u201D, \u201Cspawn Ring at me rarity \"Rare\" level 12\u201D, \u201Cspawn item from \"Loot\" at me\u201D, \u201Cspawn prefab \"Hero\" at SpawnPoint\u201D or \u201Cspawn scene \"HeroScene\" at SpawnPoint\u201D", warn);
                 case "put":
                 {
                     // `put "stim" on cooldown for 10 seconds` — start a named per-actor timer.

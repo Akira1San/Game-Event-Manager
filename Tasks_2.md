@@ -1518,7 +1518,7 @@ when message "fire" arrives
       cursor value (Task 39 Part B); the rules are the 34 unit checks. The three table rows above (`damage area`, `aim`/`cancel aim`,
       `when aim picks a target`) all ship — except that a spot written as `Mouse` in the example
       resolves only if a scene actor is named `Mouse`; a cursor-position value is Task 39 Part B.
-- [ ] **Part E — Loot tables and affixes.** Weighted table data in `.events`; `spawn item from` and
+- [x] **Part E — Loot tables and affixes.** Weighted table data in `.events`; `spawn item from` and
       `roll` read it; the affix generator (Task 9 E7) composes item stats from base + N affixes.
       *Half landed:* the generator shipped as Task 9 E7 — `ItemGenerator.Roll` (base + rarity + item
       level, 1–4 affixes by rarity, values rolling in range and growing 5% per level, no duplicate
@@ -1530,6 +1530,23 @@ when message "fire" arrives
       "Loot"`, and an `EnemyTypes` `Level` so a death passes its own level. F6 must call
       `ItemGenerator.Roll` rather than reimplement the roll, and should reuse the shared table loader
       (**F10**, §The follow-up queue) instead of adding a seventh copy.
+      *Landed 2026-11-23 (F6):* `GameFiles/Loot.events` is rows of four fields — `<Row>Table`,
+      `<Row>Base`, `<Row>Weight` and an optional `<Row>Rarity` — loaded through the F10
+      `DataTable`, so a table is data plus the one shared reader. `spawn item from "Loot" at me`
+      picks a row by weight, spawns its base and stamps the roll exactly the way
+      `spawn Ring … rarity` does (`Runtime/Loot.cs`: `LootEntry`, `LootOutcome`, `Entries`, `Pick`,
+      `TryRoll`, `LevelFor`); `roll "Rare" from "Loot"` is the same drop at the acting actor with a
+      named rarity. The word's rarity wins, then the row's, then `Magic`. Both call
+      `ItemGenerator.Roll`, never a second roll path. The item level is the dropper's own
+      `my Level` — `EnemyTypes` gained `Level`, written by `enemy type` — with the `ItemLevel`
+      global and then 1 as fallbacks, so an enemy death is `spawn item from "Loot" at me` with no
+      numbers in the sheet. The shipped file defines `Loot` (Ring 50 / Amulet 30 / Sword 20) and
+      `BossLoot` (always a rare ring), and every shipped type now has a level (Zombie 1,
+      Commando 8, Punisher 10, Boss 15, …). 21 new checks cover both word shapes, the weighted pick
+      in file order and at its boundaries, the unknown table/rarity outcomes, the level source, and
+      the level gate in both directions (a level-1 drop never rolls the level-10 `Foxy` affix; a
+      level-12 drop rolls at item level 12 and does) -> **2634 passed, 0 failed**;
+      `dotnet build Source/Game.csproj -c Editor.Windows.Debug` 0 errors.
 - [ ] **Part F — Tests and example.** Stack/refresh/ignore, expiry restores base, cooldown readiness,
       fire vs fire-resist, AoE hits exactly once, aim cancel/timeout, loot table distribution and
       an equipped +5 sword still working.
@@ -1543,8 +1560,8 @@ when message "fire" arrives
       is content and belongs in `GameFiles/` with a headless play in `Tests`, the way `Marine.events`
       and `Bag.events` are pinned today. **Typed damage and typed splash are now green too**
       (**F2**, 12 checks: fire vs `FireResist 50`, `steel` ignoring it, each splash victim meeting
-      its own resist, `999` as immunity), so what Part F still owes is the loot-table distribution
-      (F6) and that one combined sheet.
+      its own resist, `999` as immunity), and the loot-table distribution is green with F6 (21
+      checks, both words + the level gate), so what Part F still owes is that one combined sheet.
 
 ### The D2 loop: bag, equip, acceptance (moved from `TASKS.md` Task 8)
 
@@ -1801,12 +1818,16 @@ brackets.
       `when "<spell>" is ready` and keep `my "<spell>" cooldown` as the readout. Done-when: a HUD
       icon flips on the ready edge; `reload` and `cast` share one storage; an existing sheet's
       behaviour is unchanged.
-- [ ] **F6 — Loot tables (C# + data, medium) [E7, Part E].** A weighted table file
+- [x] **F6 — Loot tables (C# + data, medium) [E7, Part E].** A weighted table file
       (`Loot.events`) resolved by `spawn item from "Loot" at <spot>` (and `roll "<rarity>" from
       "Loot"`), choosing base + rarity + item level and then calling `ItemGenerator.Roll` — never
       reimplementing the roll. `EnemyTypes` gains a `Level` stat so a death can pass its own level.
       Done-when: a level-12 zombie drops a level-appropriate ring from a table, no drop numbers in
       any enemy sheet, and `Foxy` (level 10+) actually appears in play.
+      *As shipped 2026-11-23:* landed as Part E — its note has the detail. `Runtime/Loot.cs`,
+      `GameFiles/Loot.events`, the `spawn item from` / `roll` words, `EnemyTypes`' `Level` stat (a
+      row per shipped type) and 21 suite checks -> **2634 passed, 0 failed**. The editor play-check
+      is the one in Part F: a table drop from a real enemy death.
 - [ ] **F7 — Cast feedback + HUD check (C#, small) [E3].** `cast` refuses silently on mana or
       cooldown (right for play, wrong for feedback). Push `when cast fails "<spell>"` (or a
       `"cast failed <Spell>"` message) so a sheet can flash a bar. Verify `bind <label> to my
@@ -1868,7 +1889,7 @@ storage, F2 gave Part C its word, F6 gives Part E its generator, and Part A (buf
 "apply exactly / remove exactly" bookkeeping from `ItemAffixes` (F1 is the prerequisite).
 
 **Reviewed 2026-11-23, F2 landed:** Parts A, B and D shipped under Task 27 (C, E, A) and F2
-shipped the same day, so **F6 and the one combined play-run are what remain** — do not reopen
+shipped the same day and F6 landed with them, so **only the one combined play-run remains** — do not reopen
 this as a fresh design. `damage area` took the same `<type>` as the direct hit, and F2’s
 engine-side `<Type>Resist` subtraction superseded E4’s three sheet lines instead of living
 beside them.
@@ -1885,8 +1906,8 @@ beside them.
   Part C; the tick itself is the sheet's (`when buff "burn" starts` + a `when every` block on the
   victim), and `my "burn" time left` is there if the sheet prefers to gate on the timer.
 - A dropped rare ring rolls 1–3 affixes and its `my` stats reflect them. **Met** by E7/F1 (§The
-  phase plan) through `spawn Ring … rarity "Rare" level <n>`; only the table-driven drop is missing
-  (Part E / F6).
+  phase plan) through `spawn Ring … rarity "Rare" level <n>`, and now by the table-driven drop too:
+  `spawn item from "Loot" at me` rolls the same generator at the dropper's `my Level` (F6).
 
 ### Edge cases / parks
 

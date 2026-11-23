@@ -25,6 +25,8 @@ namespace Game
         public static readonly string[] StatNames =
         {
             "Speed", "SightDistance", "Health", "Weapon", "Hostile", "ExplosionDeath",
+            // Task 9 F6: the level a loot drop rolls at (`my Level`).
+            "Level",
         };
 
         /// <summary>One built-in type: TK4's base stats, before any data file overrides them.</summary>
@@ -36,6 +38,8 @@ namespace Game
             public string Weapon = "";
             public bool Hostile;
             public bool ExplosionDeath;
+            /// <summary>The level a loot drop rolls at (Task 9 F6); 1 when a type never says.</summary>
+            public double Level = 1;
 
             public bool TryGet(string stat, out ValueBox value)
             {
@@ -47,6 +51,7 @@ namespace Game
                     case "Weapon": value = ValueBox.OfText(Weapon); return true;
                     case "Hostile": value = ValueBox.OfBoolean(Hostile); return true;
                     case "ExplosionDeath": value = ValueBox.OfBoolean(ExplosionDeath); return true;
+                    case "Level": value = ValueBox.OfNumber(Level); return true;
                     default: value = new ValueBox(); return false;
                 }
             }

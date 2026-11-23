@@ -1603,6 +1603,16 @@ window around a broken runtime.
   Adding `Loot.events` or `Buffs.events` is a `DataTable`, a field array and the switch that writes the stats —
   no loader code.
 
+- **Loot tables are rows of four fields (Task 9 F6):** `Loot.events` holds `<Row>Table`,
+  `<Row>Base`, `<Row>Weight` and an optional `<Row>Rarity`, loaded through the same `DataTable`
+  as every other data file. `spawn item from "<table>" at <spot>` picks a row by weight, spawns
+  its base and stamps the roll; `roll "<rarity>" from "<table>"` is the same drop at the acting
+  actor with a named rarity. The word's rarity wins over the row's, which wins over `Magic`;
+  weights are relative and the pick walks the rows in file order, so a seed replays a drop. The
+  roll is `ItemGenerator.Roll`, never a second generator, and the item level is the dropper's own
+  `my Level` (written by `enemy type`, with the `ItemLevel` global and then 1 as fallbacks) —
+  which is what lets an enemy sheet say `spawn item from "Loot" at me` and nothing else.
+
 ## 10. The one-paragraph pitch
 
 Event Manager is a text-first game-logic system for non-programmers, inspired by Blender Game

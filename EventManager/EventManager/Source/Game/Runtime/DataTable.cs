@@ -31,6 +31,10 @@ namespace Game
         private readonly Dictionary<string, Dictionary<string, ValueBox>> rows =
             new Dictionary<string, Dictionary<string, ValueBox>>(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>The rows in the order the file wrote them, so a weighted table's tie-breaks
+        /// and a test's "first entry" are the same on every run.</summary>
+        private readonly List<string> order = new List<string>();
+
         /// <param name="fileName">The data file's name, e.g. <c>WeaponData</c> for
         /// <c>WeaponData.events</c>; kept for error messages and for a table that loads itself.</param>
         /// <param name="fields">Every field a row has, in matching order (longest first where one
@@ -51,7 +55,7 @@ namespace Game
         public int RowCount => rows.Count;
 
         /// <summary>Every row the loaded file defines, in file order.</summary>
-        public IEnumerable<string> RowNames => rows.Keys;
+        public IEnumerable<string> RowNames => order;
 
         /// <summary>
         /// Reads <c>&lt;Row&gt;&lt;Field&gt;</c> assignments out of a data file, e.g.
@@ -61,6 +65,7 @@ namespace Game
         public void LoadData(ProgramFile file)
         {
             rows.Clear();
+            order.Clear();
             DataFile.ForEachLiteral(file, (name, value) =>
             {
                 if (!TrySplit(name, out string row, out string field))
@@ -69,6 +74,7 @@ namespace Game
                 {
                     fields = new Dictionary<string, ValueBox>(StringComparer.OrdinalIgnoreCase);
                     rows[row] = fields;
+                    order.Add(row);
                 }
                 fields[field] = value;
             });
@@ -78,6 +84,7 @@ namespace Game
         public void Clear()
         {
             rows.Clear();
+            order.Clear();
         }
 
         /// <summary>Splits <c>PistolReload</c> into the row <c>Pistol</c> and the field <c>Reload</c>.</summary>

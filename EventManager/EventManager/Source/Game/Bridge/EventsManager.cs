@@ -281,6 +281,9 @@ namespace Game
             SpellData.LoadData(ProgramNamed(SpellData.FileName)?.File);
             ItemData.LoadData(ProgramNamed(ItemData.FileName)?.File);
             AffixData.LoadData(ProgramNamed(AffixData.FileName)?.File);
+            // Weighted loot tables (Task 9 F6), so `spawn item from "Loot"` has its rows on
+            // the first death and a data edit takes effect on the next reload.
+            Loot.LoadData(ProgramNamed(Loot.FileName)?.File);
             // Attack matchups come from their own data file, so `me can attack other` is settled
             // before the first shot (Task 23 Part B).
             Matchups.LoadData(ProgramNamed(Matchups.FileName)?.File);
@@ -378,6 +381,7 @@ namespace Game
             SpellData.LoadData(ProgramNamed(SpellData.FileName)?.File);
             ItemData.LoadData(ProgramNamed(ItemData.FileName)?.File);
             AffixData.LoadData(ProgramNamed(AffixData.FileName)?.File);
+            Loot.LoadData(ProgramNamed(Loot.FileName)?.File);
             Matchups.LoadData(ProgramNamed(Matchups.FileName)?.File);
             Upgrades.LoadData(ProgramNamed(Upgrades.FileName)?.File);
             _missingShown.Clear();

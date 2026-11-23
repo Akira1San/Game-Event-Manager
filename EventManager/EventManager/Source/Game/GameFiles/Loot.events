@@ -1,0 +1,42 @@
+# ---------------- Loot.events (Task 9 F6: weighted loot tables) ----------------
+# Weighted drop tables. `spawn item from "Loot" at me` picks a row and spawns that item;
+# `roll "Rare" from "BossLoot"` does the same at the acting actor with a named rarity. The roll
+# itself is ItemGenerator's (ItemData + AffixData), so a table drop and a hand-written
+# `spawn Ring at me rarity "Rare" level 12` produce exactly the same item.
+#
+# HOW IT LOADS: read by name — Loot.events — when events load and on hot reload, before any
+# actor's `me appears`, exactly like ItemData.events. Attaching it to a sheet is optional.
+#
+# FIELDS (per row, one variable each — the row name plus the field):
+#   <Row>Table     which table the row belongs to ("Loot")
+#   <Row>Base      the item base it drops — a name ItemData.events defines (Ring, Amulet, Sword)
+#   <Row>Weight    the row's share of its table; a row at 0 (or with no weight) never drops
+#   <Row>Rarity    optional: the rarity this row always drops ("Rare"). Absent, a drop uses the
+#                  word's rarity, else Magic.
+#
+# THE ITEM LEVEL comes from the dropper's own `my Level` — an `enemy type` writes it — so an
+# enemy sheet says `spawn item from "Loot" at me` and nothing else. With no level on the actor,
+# the `ItemLevel` global is used, then 1. Weights are relative: 50/30/20 is a 50%/30%/20% split.
+
+when game starts
+  # ---- the ordinary drop table ---------------------------------------------------------------
+  set TrinketTable to "Loot"
+  set TrinketBase to "Ring"
+  set TrinketWeight to 50
+  set TrinketRarity to "Magic"
+
+  set CharmTable to "Loot"
+  set CharmBase to "Amulet"
+  set CharmWeight to 30
+  set CharmRarity to "Magic"
+
+  set BladeTable to "Loot"
+  set BladeBase to "Sword"
+  set BladeWeight to 20
+  set BladeRarity to "Magic"
+
+  # ---- a boss table: one row, always a rare ring ---------------------------------------------
+  set BossRingTable to "BossLoot"
+  set BossRingBase to "Ring"
+  set BossRingWeight to 1
+  set BossRingRarity to "Rare"

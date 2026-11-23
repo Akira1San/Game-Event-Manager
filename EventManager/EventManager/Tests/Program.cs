@@ -10581,6 +10581,105 @@ Check(AffixData.All(null).Count == 11, "the shipped AffixData.events defines ele
 Check(AffixData.RarityFor(null, "Rare").MaxAffixes == 3 && AffixData.RarityFor(null, "Common").MaxAffixes == 0,
     "the shipped rarities read Common 0 / Rare 1-3");
 
+// ------------------------------------------------------------------
+// Task 9 F6: weighted loot tables, and the level a drop rolls at
+// ------------------------------------------------------------------
+
+var lootSpawnProg = parser.Parse("when me appears\n  spawn item from \"Loot\" at me\n");
+var lootSpawnSpec = ActionWords.Parse(lootSpawnProg.Events[0].Body[0].Words, null);
+Check(lootSpawnSpec.Verb == ActionVerb.SpawnItem && lootSpawnSpec.Thing == "Loot" &&
+      lootSpawnSpec.To == "me",
+    "`spawn item from \"Loot\" at me` parses the table and the spot");
+
+var lootRollProg = parser.Parse("when me appears\n  roll \"Rare\" from \"BossLoot\"\n");
+var lootRollSpec = ActionWords.Parse(lootRollProg.Events[0].Body[0].Words, null);
+Check(lootRollSpec.Verb == ActionVerb.RollLoot && lootRollSpec.Rarity == "Rare" &&
+      lootRollSpec.HasRarity && lootRollSpec.Thing == "BossLoot",
+    "`roll \"Rare\" from \"BossLoot\"` parses the rarity and the table");
+
+var lootDataEvents = itemParser.Parse(File.ReadAllText("Source/Game/GameFiles/Loot.events"));
+Loot.LoadData(lootDataEvents);
+Check(lootDataEvents.Events.Count == 1, "Loot.events parses");
+CheckStrings("BossLoot, Loot", string.Join(", ", Loot.TableNames()),
+    "the shipped Loot.events defines both tables");
+var lootEntries = Loot.Entries(null, "Loot");
+Check(lootEntries.Count == 3, $"the Loot table has three rows (got {lootEntries.Count})");
+double lootWeight = 0;
+foreach (LootEntry shippedLootEntry in lootEntries)
+    lootWeight += shippedLootEntry.Weight;
+Check(Math.Abs(lootWeight - 100) < 1e-9, $"the Loot table's weights add up (got {lootWeight})");
+Check(lootEntries[0].Base == "Ring" && lootEntries[0].Rarity == "Magic",
+    "a row reads its base and rarity from the shipped file");
+Check(Loot.Pick(lootEntries, 0) == lootEntries[0] && Loot.Pick(lootEntries, 0.99) == lootEntries[2],
+    "a weighted pick walks the rows in file order");
+Check(Loot.Pick(lootEntries, 0.6) == lootEntries[1],
+    "the middle of the weights lands on the second row");
+Check(Loot.Pick(new List<LootEntry> { new LootEntry { Weight = 0 } }, 0.5) == null,
+    "a table with no weight in it picks nothing");
+
+Check(Loot.TryRoll(null, "Nope", "", 1, out _, out _) == LootOutcome.UnknownTable,
+    "an unknown table is reported, not invented");
+Check(Loot.TryRoll(null, "Loot", "Legendary", 1, out _, out _) == LootOutcome.UnknownRarity,
+    "an unknown rarity is reported");
+Check(Loot.TryRoll(null, "Loot", "Rare", 12, out LootEntry pickedEntry, out ItemRoll tableRoll) == LootOutcome.Rolled &&
+      pickedEntry != null && tableRoll != null && tableRoll.Base == pickedEntry.Base,
+    "a table roll spawns the winning row's own base");
+
+// The item level a drop rolls at: the dropper's `my Level`, then the ItemLevel global, then 1.
+var lootLevelVariables = new EventVariables();
+var lootDropper = new FakeActor("Zombie");
+lootLevelVariables.SetLocal(lootDropper, "Level", Game.ValueBox.OfNumber(12));
+Check(Math.Abs(Loot.LevelFor(lootLevelVariables, lootDropper) - 12) < 1e-9,
+    "a drop reads the enemy's own `my Level`");
+Check(Math.Abs(Loot.LevelFor(lootLevelVariables, new FakeActor("NoLevel")) - 1) < 1e-9,
+    "a sheet with no level drops level-1 loot");
+lootLevelVariables.SetGlobal("ItemLevel", Game.ValueBox.OfNumber(7));
+Check(Math.Abs(Loot.LevelFor(lootLevelVariables, new FakeActor("NoLevel")) - 7) < 1e-9,
+    "...unless the ItemLevel global says otherwise");
+
+// The level gate: a level-1 drop never rolls a level-10 affix, a level-12 drop can.
+Rng.Seed(5);
+bool lowDropFoxy = false;
+bool lowDropWrongLevel = false;
+for (int i = 0; i < 200; i++)
+{
+    if (Loot.TryRoll(null, "BossLoot", "", 1, out _, out ItemRoll lowDrop) != LootOutcome.Rolled)
+        continue;
+    if (lowDrop.ItemLevel != 1)
+        lowDropWrongLevel = true;
+    if (lowDrop.AffixNames.Contains("Foxy"))
+        lowDropFoxy = true;
+}
+Check(!lowDropFoxy, "a level-1 drop never rolls a level-10 affix");
+Check(!lowDropWrongLevel, "a level-1 drop is rolled at item level 1");
+
+Rng.Seed(9);
+bool highDropFoxy = false;
+bool highDropWrongLevel = false;
+int highDropCount = 0;
+for (int i = 0; i < 200; i++)
+{
+    if (Loot.TryRoll(null, "BossLoot", "", 12, out _, out ItemRoll highDrop) != LootOutcome.Rolled)
+        continue;
+    highDropCount++;
+    if (highDrop.ItemLevel != 12)
+        highDropWrongLevel = true;
+    if (highDrop.AffixNames.Contains("Foxy"))
+        highDropFoxy = true;
+}
+Check(highDropCount == 200 && !highDropWrongLevel, "a level-12 drop is rolled at item level 12");
+Check(highDropFoxy, "the level-10 affix does appear in level-12 drops");
+
+// `enemy type` now carries a Level, so a death can pass its own level.
+EnemyTypes.LoadData(itemParser.Parse(File.ReadAllText("Source/Game/GameFiles/EnemyTypes.events")));
+var levelRuntime = FreshEngine(new FakeWorld());
+var levelZombie = new FakeActor("Zombie");
+levelRuntime.AddSheet(levelZombie, arcadeEnemyProgram);
+levelRuntime.Tick(0);
+Check(Math.Abs(levelRuntime.Variables.GetLocal(levelZombie, "Level").AsNumber() - 1) < 1e-9,
+    "`enemy type` writes the type's Level as `my Level`");
+EnemyTypes.LoadData(null);
+
 Rng.Seed(7);
 ItemRoll rareRoll = ItemGenerator.Roll(null, "Ring", "Rare", 12);
 Check(rareRoll != null && rareRoll.AffixNames.Count >= 1 && rareRoll.AffixNames.Count <= 3,

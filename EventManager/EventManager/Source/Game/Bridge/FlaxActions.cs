@@ -1377,6 +1377,12 @@ namespace Game
                 case ActionVerb.Spawn:
                     Spawn(context, spec);
                     break;
+                case ActionVerb.SpawnItem:
+                    SpawnLootItem(context, spec, spec.To, spec.Rarity);
+                    break;
+                case ActionVerb.RollLoot:
+                    SpawnLootItem(context, spec, "me", spec.Rarity);
+                    break;
                 case ActionVerb.Cast:
                     CastSpell(context, spec);
                     break;
@@ -3522,6 +3528,30 @@ namespace Game
         }
 
         /// <summary>
+        /// <c>spawn item from "&lt;table&gt;" at &lt;spot&gt;</c> / <c>roll "&lt;rarity&gt;" from
+        /// "&lt;table&gt;"</c> (Task 9 F6): a weighted row decides the base and the rarity, the
+        /// dropper's own <c>my Level</c> decides the item level, and <see cref="ItemGenerator.Roll"/>
+        /// does the roll — the same generator `spawn Ring … rarity "Rare" level 12` uses.
+        /// </summary>
+        private static void SpawnLootItem(EventContext context, ActionSpec spec, string spot, string rarity)
+        {
+            EventVariables variables = context.Runtime != null ? context.Runtime.Variables : null;
+            double level = Loot.LevelFor(variables, context.Me);
+            LootOutcome outcome = Loot.TryRoll(variables, spec.Thing, rarity, level,
+                out LootEntry entry, out ItemRoll roll);
+            if (outcome != LootOutcome.Rolled)
+            {
+                WarnOnce(Loot.Message(outcome, variables, spec.Thing, rarity, entry?.Base ?? ""));
+                return;
+            }
+            Actor clone = SpawnClone(context, roll.Base, string.IsNullOrEmpty(spot) ? "me" : spot, 0);
+            if (clone == null)
+                return;
+            ApplyRollToClone(context, clone, roll);
+            EventsManager.Instance?.AttachSpawnedActor(clone);
+        }
+
+        /// <summary>
         /// <c>cast "&lt;spell&gt;"</c> / <c>cast "&lt;spell&gt;" at &lt;thing&gt;</c> (Task 9 E3): the one
         /// action word of the spell system.
         ///
@@ -3621,6 +3651,20 @@ namespace Game
                     : $"I don't know the item \u201C{spec.Thing}\u201D. Add its base to ItemData.events — it has: {ItemData.KnownNames()}.");
                 return;
             }
+            ApplyRollToClone(context, clone, roll);
+        }
+
+        /// <summary>
+        /// Writes a resolved item roll onto its item actor (Task 9 E7/F6): each stat as the
+        /// item's own <c>my</c> variable, plus <c>my Rarity</c>, <c>my ItemName</c> and
+        /// <c>my ItemLevel</c>, and records it so <c>equip</c> applies exactly these numbers and
+        /// <c>unequip</c>/<c>drop</c> takes them back.
+        /// </summary>
+        private static void ApplyRollToClone(EventContext context, Actor clone, ItemRoll roll)
+        {
+            EventVariables variables = context.Runtime != null ? context.Runtime.Variables : null;
+            if (variables == null || roll == null)
+                return;
             foreach (ItemStat stat in roll.Stats)
                 variables.SetLocal(clone, stat.Stat, ValueBox.OfNumber(stat.Value));
             variables.SetLocal(clone, "Rarity", ValueBox.OfText(roll.Rarity));

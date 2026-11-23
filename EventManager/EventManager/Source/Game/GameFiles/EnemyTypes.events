@@ -1,7 +1,7 @@
 # ---------------- EnemyTypes.events (Task 16 Part D: typed enemy data) ----------------
 # Typed enemy definitions, data-driven. `enemy type "Zombie"` copies a type's stats onto the
 # enemy's own variables (my Speed, my SightDistance, my Health, my Weapon, my Hostile,
-# my ExplosionDeath, my Type), so an enemy sheet never hard-codes them.
+# my ExplosionDeath, my Level, my Type), so an enemy sheet never hard-codes them.
 #
 # HOW IT LOADS: the file is read when the game loads events (and on hot reload), by name —
 # EnemyTypes.events — before any actor's `when me appears` runs, so a type is complete on the
@@ -20,6 +20,7 @@ when game starts
   set ZombieWeapon to "Claws"
   set ZombieHostile to true
   set ZombieExplosionDeath to false
+  set ZombieLevel to 1
 
   set TurretSpeed to 0
   set TurretSightDistance to 15
@@ -27,6 +28,7 @@ when game starts
   set TurretWeapon to "Cannon"
   set TurretHostile to true
   set TurretExplosionDeath to true
+  set TurretLevel to 4
 
   # ---- Part I: the rest of TK4's cast ----------------------------------------------------
   # Every type is six rows of data — speed (cm/s), sight (cm), health, weapon, hostile and
@@ -43,6 +45,7 @@ when game starts
   set PistolboyWeapon to "Pistol"
   set PistolboyHostile to true
   set PistolboyExplosionDeath to false
+  set PistolboyLevel to 3
 
   # ShotgunManiac — rushes in and lets the spread do the work: short sight, more health.
   set ShotgunManiacSpeed to 80
@@ -51,6 +54,7 @@ when game starts
   set ShotgunManiacWeapon to "Shotgun"
   set ShotgunManiacHostile to true
   set ShotgunManiacExplosionDeath to false
+  set ShotgunManiacLevel to 4
 
   # UziRebel — fast and light, sprays on the move.
   set UziRebelSpeed to 90
@@ -59,6 +63,7 @@ when game starts
   set UziRebelWeapon to "Uzi"
   set UziRebelHostile to true
   set UziRebelExplosionDeath to false
+  set UziRebelLevel to 5
 
   # Commando — the soldier of the bunch: quickest, furthest sight, hardest to drop.
   set CommandoSpeed to 100
@@ -67,6 +72,7 @@ when game starts
   set CommandoWeapon to "Uzi"
   set CommandoHostile to true
   set CommandoExplosionDeath to false
+  set CommandoLevel to 8
 
   # BazookaBoy — slow, spots you from far away, and the rocket in his hands goes off with him.
   set BazookaBoySpeed to 45
@@ -75,6 +81,7 @@ when game starts
   set BazookaBoyWeapon to "Rocket"
   set BazookaBoyHostile to true
   set BazookaBoyExplosionDeath to true
+  set BazookaBoyLevel to 7
 
   # Civilian — non-hostile, unarmed bystander. They run when shot (Civilian.events).
   set CivilianSpeed to 70
@@ -83,6 +90,7 @@ when game starts
   set CivilianWeapon to ""
   set CivilianHostile to false
   set CivilianExplosionDeath to false
+  set CivilianLevel to 1
 
   # Punisher — the heavy: slowest of the walkers, twice a zombie's health, tough on purpose.
   set PunisherSpeed to 55
@@ -91,6 +99,7 @@ when game starts
   set PunisherWeapon to "Shotgun"
   set PunisherHostile to true
   set PunisherExplosionDeath to true
+  set PunisherLevel to 10
 
   # Flamer — short sight, short-range flames, volatile when killed.
   set FlamerSpeed to 65
@@ -99,6 +108,7 @@ when game starts
   set FlamerWeapon to "Flamer"
   set FlamerHostile to true
   set FlamerExplosionDeath to true
+  set FlamerLevel to 6
 
   # Punk — weak and short-sighted, dangerous only up close.
   set PunkSpeed to 85
@@ -107,6 +117,7 @@ when game starts
   set PunkWeapon to "Pistol"
   set PunkHostile to true
   set PunkExplosionDeath to false
+  set PunkLevel to 2
 
   # ---- Task 7 G4 phase 2: arcade lane types -------------------------------------------
   # The lane templates are named after their type, so one shared sheet reads the type from the
@@ -120,6 +131,7 @@ when game starts
   set KnifeWeapon to ""
   set KnifeHostile to true
   set KnifeExplosionDeath to false
+  set KnifeLevel to 1
 
   # Brute — slow and heavy: walks the lane at a stump's pace, takes twelve hits.
   set BruteSpeed to 40
@@ -128,6 +140,7 @@ when game starts
   set BruteWeapon to ""
   set BruteHostile to true
   set BruteExplosionDeath to false
+  set BruteLevel to 2
 
   # GrenadeGay — lobs grenades from a distance; the bandolier goes up with him.
   set GrenadeGaySpeed to 60
@@ -136,6 +149,7 @@ when game starts
   set GrenadeGayWeapon to "Grenade"
   set GrenadeGayHostile to true
   set GrenadeGayExplosionDeath to true
+  set GrenadeGayLevel to 5
 
   # ---- Task 21 Part D: the boss -------------------------------------------------------
   # Boss — heavy, far-sighted and slow, with 300 hit points so the two phase gates in
@@ -149,3 +163,4 @@ when game starts
   set BossWeapon to ""
   set BossHostile to true
   set BossExplosionDeath to false
+  set BossLevel to 15
