@@ -47,7 +47,7 @@ primitives that every genre otherwise re-implements as copied blocks or new C#:
 | 34 | Dynamic UI: lists, grids, inventory | P1 | Flax bridge | Tasks 6, 15 |
 | 35 | Dialogue & narrative | P1 | mixed | Tasks 6, 15 |
 | 36 | Platformer / arcade movement kit | P1 | C# + events | Tasks 4, 12 |
-| 37 | RPG combat depth | P1 | mixed | Tasks 8, 9E |
+| 37 | Diablo-style RPG kit | P1 | mixed | Tasks 1–3, 27, 29 |
 | 38 | Target filters, groups & squad AI | P2 | runtime | Task 7, 18 |
 | 39 | Input breadth: axes, touch, mouse | P1/P2 | Flax bridge | Tasks 3, 16 |
 | 40 | Roguelike & procedural generation | P2 | C# generator | Tasks 28, 29 |
@@ -285,9 +285,10 @@ and reads 0, never a silent wrong number.
 
 ### Edge cases / parks
 
-- **Full expression language:** no functions, no variables-with-spaces, no multi-line formulas.
-  If a project needs that, it is a different feature and should be a `formula` block, not a
-  quiet growth of `set`.
+- **Full expression language:** no user-defined functions, no variables-with-spaces, no multi-line
+  formulas. Sharing whole blocks between files is `include "<file>"` (a file-level line, expanded
+  at load), not a function: there are no parameters and no return value. If a project needs those,
+  it is a different feature and should be a `formula` block, not a quiet growth of `set`.
 - **String formatting:** `bind ... format` already covers HUD text. Do not duplicate it here.
 - **Boolean operators:** `or` stays parked; see Task 38 for the practical alternatives.
 
@@ -1268,15 +1269,20 @@ when my Health becomes 0
       or animation: a sheet that dies at `my Health` 0 sets its own health back first. Not
       shipped (still optional): a bare `respawn` returning to the stored pose.
 - [x] **Part G — Tests and the example sheet.** Shipped 2026-11-20.
-      `Source/Game/GameFiles/Platformer.events` is the whole kit in one sheet: W walks and grabs a
-      ladder, Space jumps at 420, S lets go, `me is on ground` / `is airborne` / `is climbing` /
+      `Source/Game/GameFiles/Platformer.events` is the kit in one sheet, with its movement keys in
+      `Platformer_Controls.events`: W walks and grabs a ladder, Space jumps at 420, S lets go, `me is on ground` / `is airborne` / `is climbing` /
       `me is moving` pick the Idle / Run / Fall / Climb poses, `when me touches Checkpoint` runs
       `save checkpoint` behind a `my CheckpointSaved` gate (one saved point never re-saves, because a
       body can leave a marker and step back in, and a respawn lands right on top of one), K is a
       debug death, and `when my Health is lower than 1` respawns at
       `Checkpoint` behind a `my Dead` guard (so a death is a moment, not a re-entering state). Its
-      header is the scene setup, so the file carries its own instructions. The suite parses the
-      shipped file and proves every one of its 19 action lines is a shipped word, that the sheet
+      header is the scene setup, so the file carries its own instructions. Split 2026-11-23: the
+      movement keys (W walks at `my WalkSpeed`, Space jumps at `my JumpPower`) live in the shared
+      `include "Platformer_Controls"`, while the ladder grab stays above the include so `climb`
+      registers first and the shared `unless me is climbing` line skips the walk in that tick —
+      neither file repeats the other. The suite loads the sheet the way the runtime does (include
+      expanded) and proves every action line is a shipped word, that the ladder grab is still
+      checked before the shared walk line, and that the sheet
       really exercises `jump`, `climb`, `stop climbing`, `save checkpoint` and `respawn at`, and
       that the checkpoint block still opens on its gate and closes it after the save (with
       `when me appears` starting the flag at 0, so a new game saves again) — an example that drifted
@@ -1349,23 +1355,38 @@ when my Health becomes 0
 
 ---
 
-## Task 37 — RPG Combat Depth `[ ]`
+## Task 37 — Diablo-style RPG kit: items, equipment & combat depth `[~]`
 
-Goal: the shared combat core for Diablo-like RPGs and RTS abilities. Task 9 E2–E7 and Task 27
-A–E already propose pieces; this task is the *combined, prioritized* version so the same buff,
-cooldown, damage-type and target-pick code is built once.
+Goal: the whole Diablo-like RPG build in one place — bag → equip → loot → spells → typed damage →
+resistances, equip slots, XP and affixes. **This task is its single home.** `TASKS.md` Task 8
+(Items, Bag & Equipment) and Task 9 Parts E/F (the D2 combat kit and its follow-up queue) were
+moved here on 2026-11-23; `TASKS.md` Task 9 keeps only its point-and-click adventure parts.
 
-Depends on Tasks 8 and 9E, and on Task 27 (shipped). **Mixed** (P1). Overlaps are intentional;
-complete this once, then the two genre batches become content.
+Depends on Tasks 1–3, plus Task 27 (buffs, cooldowns, aim — shipped) and Task 29 (expressions).
+**Mixed** (P1). `Task_FPS.md` and `tasks_RTS.md` consume this kit as content; they do not re-plan
+it.
 
-**Reviewed 2026-11-23 — three of the five parts already shipped, under Task 27, and they are not
-RTS-scoped.** `Runtime/Buffs.cs`, `Runtime/Cooldowns.cs` and `Runtime/Targeting.cs` are plain C#
-over the fake world with no Flax types, and the parser, `FlaxActions` and `EventRuntime` treat
-their words like any other word, so a Diablo sheet gets `add buff "burn" to other for 3`,
-`put "fireball" on cooldown for 1.2` and `aim "meteor"` today by writing them. What is left of
-this task is two slices that were already tracked as correctness holes in `TASKS.md` Task 9 Part F:
-**F2** (`damage <target> by <n> <type>`) and **F6** (loot tables), plus the material that proves
-them. Nothing here should be re-designed from scratch; build F2 and F6 and this task closes.
+**Where to look:** the combat primitives are §Parts A–F, the D2 loop is §The D2 loop, the phase
+plan is §The phase plan (`E1`–`E7`) and the ranked follow-ups are §The follow-up queue
+(`F1`–`F12`).
+
+**Old labels map here**, so comments and `Session Log.md` rows still resolve:
+
+| Old reference | Where it is now |
+|---|---|
+| `TASKS.md` Task 8 Part A/B/C | §The D2 loop (bag, equip, acceptance) |
+| `TASKS.md` Task 9 E1–E7 | §The phase plan |
+| `TASKS.md` Task 9 F1–F12 | §The follow-up queue |
+| `TASKS.md` Task 37 (old cross-links) | §Parts A–F |
+
+**Reviewed 2026-11-23 — four of the six combat parts already shipped, under Task 27 and F2, and
+none of them is RTS-scoped.** `Runtime/Buffs.cs`, `Runtime/Cooldowns.cs` and `Runtime/Targeting.cs`
+are plain C# over the fake world with no Flax types, and the parser, `FlaxActions` and
+`EventRuntime` treat their words like any other word, so a Diablo sheet gets `add buff "burn" to
+other for 3`, `put "fireball" on cooldown for 1.2` and `aim "meteor"` today by writing them.
+`damage <target> by <n> <type>` landed with F2 the same day. What is left of the combat core is
+**F6** (the loot-table lookup) and the one combined play-run that proves the loop; nothing here
+should be re-designed from scratch.
 
 ### Proposed words
 
@@ -1379,7 +1400,7 @@ them. Nothing here should be re-designed from scratch; build F2 and F6 and this 
 | condition | `my "<name>" is ready` | `my "fireball" is ready` |
 | value | `my "<name>" cooldown` | `set text of FireLabel to my "fireball" cooldown` |
 | action | `damage <target> by <n> <type>` | `damage other by 20 fire` |
-| action | `damage area around <thing> by <n> for radius <r>` | `damage area around Mouse by 30 for radius 180` |
+| action | `damage area around <thing> by <n> [<type>] for radius <r>` | `damage area around Mouse by 30 fire for radius 180` |
 | action | `aim "<spell>"` / `cancel aim` | `aim "meteor"` |
 | trigger | `when aim picks a target` | `when aim picks a target` |
 | action | `spawn item from "<table>" at <thing>` | `spawn item from "Loot" at me` |
@@ -1392,7 +1413,7 @@ them. Nothing here should be re-designed from scratch; build F2 and F6 and this 
 | `add buff` · `remove buff` · `when buff "…" starts` / `ends` · `my "…" time left` | **shipped** — Task 27 Part C, `Runtime/Buffs.cs` |
 | `put "…" on cooldown for <s>` · `my "…" is ready` · `my "…" cooldown` | **shipped** — Task 27 Part E, `Runtime/Cooldowns.cs` |
 | `aim` · `cancel aim` · `when aim picks a target` · `damage area around …` | **shipped** — Task 27 Part A, `Runtime/Targeting.cs` |
-| `damage <target> by <n> <type>` | **shipped** — Task 9 F2, `Runtime/DamageTypes.cs`; the same `<type>` also works on `damage area` |
+| `damage <target> by <n> <type>` | **shipped** — F2 (§The follow-up queue), `Runtime/DamageTypes.cs`; the same `<type>` also works on `damage area` |
 | `spawn item from "<table>"` · `roll "<rarity>" from "<table>"` | **missing** — the generator exists behind `spawn <thing> … rarity "<name>" level <n>`; the table word is F6 |
 
 ### Examples
@@ -1429,8 +1450,8 @@ when aim picks a target
   play particle "explosion"
 
 # ---- resistances ----
-# victim's sheet. This is the events-only fallback from Task 9 E4; once Part C / F2 ships,
-# `damage … by <n> fire` subtracts `my FireResist` itself and this block shrinks to nothing
+# victim's sheet. This is the events-only fallback from E4 — **retired**: Part C / F2 made
+# `damage … by <n> fire` subtract `my FireResist` itself, so the block is no longer needed
 when message "fire" arrives
   set my LastDmg to other's damage
   set my LastDmg to my LastDmg - my FireResist
@@ -1459,7 +1480,8 @@ when message "fire" arrives
       timers on destroy. 29 checks. **One correction to the part as written:** the words and the
       table shipped, the *unification* did not — `SpellClock` (`cast`) and `WeaponClock` (`reload`)
       still run beside it, and there is no `when "<spell>" is ready` edge, only the condition. That
-      is `TASKS.md` Task 9 **F5**, still open, and it should be done there rather than reopened here.
+      is **F5** (§The follow-up queue), still open, and it should be done there rather than reopened
+      here.
 - [x] **Part C — Damage types and resistances.** A damage message/action carries a type; the victim
       subtracts the matching resistance; immunity is a large resistance, not a new word.
       *Landed as Task 9 F2 (2026-11-23).* `damage <target> by <n> [<type>]` is the new word, and
@@ -1476,10 +1498,10 @@ when message "fire" arrives
       same type qualifier in the same change. But both words push a `"damage"` message *and* apply the
       number, so a victim sheet must not subtract `my DamageTaken` / `other's damage` a second time;
       and neither word consults the matchup table (the shipped AoE never did either) — a sheet that
-      wants that gate writes `me can attack`. Crit/leech/pierce (Task 9 F12) remain optional future
-      consumers.
+      wants that gate writes `me can attack`. Crit/leech/pierce (**F12**, §The follow-up queue)
+      remain optional future consumers.
 - [x] **Part D — Area damage and target-pick.** `damage area around ...` sends real damage through
-      the existing armor/shield/health path and the matchup gate; `aim` enters a pick mode with
+      the existing armor/shield/health path with a shared type; `aim` enters a pick mode with
       range/validity/timeout, a marker and a cancel.
       *Landed as Task 27 Part A:* `aim "<ability>" [at a point|a unit|me] [for <n> seconds]` (default
       8 s, one aim at a time, a second `aim` replaces the first), `cancel aim`, the trigger
@@ -1488,7 +1510,8 @@ when message "fire" arrives
       `my aim is a unit`. Reach is `my attack range`, unit picks also pass fog visibility and the
       matchup gate, and the caster is always a legal self pick. `damage area around <spot> by <n>
       [for radius <r>]` (radius 150 default) sends real `"damage"` from the caster through
-      armor → shield → health and the matchup gate — no caster destruction, no effect of its own,
+      armor → shield → health, with F2’s `<type>` qualifier (there is no matchup gate; Part C
+      explains why) — no caster destruction, no effect of its own,
       and bullets are skipped so splash never chains. Clicks/Escape/right-click and the optional
       `AimMarker` scene actor are the bridge half.       34 unit checks in `Tests/Program.cs`; the editor
       play-check is pending — Task 51 Part E: no case, because a clicked aim needs a scene and a
@@ -1502,11 +1525,11 @@ when message "fire" arrives
       stats, deterministic under a seed) and the spawn word is already qualifier-shaped:
       `spawn Ring at me rarity "Rare" level 12` writes `my FireResist` / `my ItemName` / `my ItemLevel`
       on the clone before its sheet attaches, and `equip` / `unequip` add and subtract exactly the
-      recorded numbers (Task 9 F1). **What is left is the table lookup only** (= `TASKS.md` Task 9
-      **F6**): a weighted `Loot.events`, `spawn item from "Loot" at <spot>`, `roll "<rarity>" from
+      recorded numbers (F1). **What is left is the table lookup only** (= **F6** in §The follow-up
+      queue): a weighted `Loot.events`, `spawn item from "Loot" at <spot>`, `roll "<rarity>" from
       "Loot"`, and an `EnemyTypes` `Level` so a death passes its own level. F6 must call
       `ItemGenerator.Roll` rather than reimplement the roll, and should reuse the shared table loader
-      (Task 9 F10) instead of adding a seventh copy.
+      (**F10**, §The follow-up queue) instead of adding a seventh copy.
 - [ ] **Part F — Tests and example.** Stack/refresh/ignore, expiry restores base, cooldown readiness,
       fire vs fire-resist, AoE hits exactly once, aim cancel/timeout, loot table distribution and
       an equipped +5 sword still working.
@@ -1518,29 +1541,345 @@ when message "fire" arrives
       that fireballs a `FireResist 50` zombie, applies a burn whose tick lands through the resist,
       refuses a second cast while cooling down, and drops a rolled ring the player equips. That sheet
       is content and belongs in `GameFiles/` with a headless play in `Tests`, the way `Marine.events`
-      and `Bag.events` are pinned today. **Typed damage and typed splash are now green too** (Task 9
-      F2, 12 checks: fire vs `FireResist 50`, `steel` ignoring it, each splash victim meeting its own
-      resist, `999` as immunity), so what Part F still owes is the loot-table distribution (F6) and
-      that one combined sheet.
+      and `Bag.events` are pinned today. **Typed damage and typed splash are now green too**
+      (**F2**, 12 checks: fire vs `FireResist 50`, `steel` ignoring it, each splash victim meeting
+      its own resist, `999` as immunity), so what Part F still owes is the loot-table distribution
+      (F6) and that one combined sheet.
+
+### The D2 loop: bag, equip, acceptance (moved from `TASKS.md` Task 8)
+
+Goal: the Diablo-style loop — loot drops, pickup, equip, stats change — entirely in the event
+language. Depends on Tasks 1–3 plus enemy examples for drop sources.
+DESIGN.md Section 5 "Items & the bag (the D2 loop)" defines everything.
+
+### D2 Part A — The bag (formerly `Task 8` Part A)
+- [x] Word registry + runtime: `add <thing> to my bag`, `remove <thing> from my bag`,
+  condition `my bag has <thing>`; the bag holds things **by name and count**. Possessive reads
+  (`other's damage`, `Player's gold`) land with this batch in the variable store.
+- [x] Verify: pick up two Swords and a Potion by touching them; `set text of BagLabel to my
+  bag` shows `Sword x2, Potion` — text bag only, grid UI parked.
+
+### D2 Part B — Equip & item events (formerly `Task 8` Part B)
+- [x] Actions `equip <thing>`, `drop <thing>`; triggers `when me gets equipped` /
+  `when me gets unequipped` / `when me gets dropped` on the item's sheet.
+- [x] Context rule implemented and tested: equip/equip/unequip moments run the item's events
+  with `me` = the **wearer** (stat changes land on the owner); world events outside equip run
+  with `me` = the item.
+- [x] Unit test: equip a +5 sword → wearer's damage +5; unequip → back to baseline; stacking
+  two equips works; unequip drops stats exactly once.
+
+### D2 Part C — Acceptance: the D2 loop (formerly `Task 8` Part C)
+- [x] Write the DESIGN.md "Items & the bag" listing as real files (Sword.events, Player pickup/
+  equip/attack events, Enemy pressing on `other's damage`).
+- [x] Chain it with the loot words that already exist: enemy death → `chance 30%` →
+  `spawn Sword at me`.
+- [x] Verify the full loop: kill an enemy → sword drops → walk over it → bag grows → press 1
+  to equip → next mouse swing costs the enemy visibly more health (damage text or health read).
+- [x] Note any vocabulary friction in a DESIGN.md §9 line.
+
+### The phase plan: D2 combat kit, E1–E7 (moved from `TASKS.md` Task 9 Part E)
+
+Goal: grow the finished D2 loop (bag → equip → loot) into combat: melee weapon types, mana and
+spells, damage types and resistances, equip slots, XP/levels, and finally item affixes. Phases are
+independent — a session can stop after any of them.
+
+| Phase | Content | Cost |
+|---|---|---|
+| E1 | Melee weapon bundle (Sword/Axe) | events-only |
+| E2 | Mana, potions, mana HUD | events-only |
+| E3 | `SpellData` table + `cast` word | C# (one action word) |
+| E4 | Damage types + resistances | events-only |
+| E5 | Equip slots + attributes | events-only |
+| E6 | XP / level curve | events-only |
+| E7 | Item rarity / affixes | C# (generator) |
+
+**E1 — Melee weapon bundle (events-only)**
+`WeaponData` already carries the fields a melee weapon needs; the only missing notion is "this
+weapon does not spawn a bullet", so an **empty `Bullet`** is the marker. There is no `Reach` or
+`SwingRate` field — reuse `FireRate` for swing timing and keep reach as a literal (see the trap
+below).
+
+- [ ] `WeaponData.events`: `Sword` (`SwordBullet ""`, `SwordDamage 12`, `SwordFireRate 0.6`,
+      `SwordKnockback 60`, `SwordAmmoPerShot 0`) and `Axe` (`Damage 20`, `FireRate 1.1`).
+- [ ] Player attack branch, no projectile:
+```
+when Left Mouse is pressed
+  weapon is Sword
+  unless reloading
+  me is near Enemy by 6
+  send message "damage" to nearest Enemy
+  play sound "swing"
+```
+- [ ] `Sword.events` (item actor) keeps the equip/unequip stat push (already in `test/Sword.events`).
+- [ ] **Range trap:** a `near` **condition** only accepts a literal distance —
+      `by my Reach` parses but leaves the distance at 0 (`Conditions.cs:516` requires a number
+      token). Use a literal per weapon, or branch one block per melee weapon.
+- [ ] Done-when: the sword's swing does nothing outside 6 units, the HUD reads `Weapon: Sword`,
+      and swapping to the Pistol restores ranged fire.
+- [ ] Naming note: the item actor `Sword` and weapon data `Sword` are different namespaces and both
+      work, but prefer `Short Sword` for the data name to avoid confusion.
+
+**E2 — Mana and potions (events-only)**
+- [ ] `my Mana` / `my MaxMana`; regen `when every 1 seconds → my Mana is lower than my MaxMana →
+      add 1 to my Mana`.
+- [ ] Mana potion: item actor named `ManaPotion`, `remove ManaPotion from my bag` + `add 40 to my Mana`,
+      clamped with an `if` line (the language has no `min()`).
+- [ ] **Bag-name trap:** `add`/`remove`/`my bag has` take a **single word** — `remove Mana Potion
+      from my bag` and `remove "Mana Potion" …` both fail to parse ("`remove` looks like this"),
+      so bag items must be one token (`ManaPotion`, `HealthPotion`, `TownScroll`).
+- [ ] HUD: `bind ManaLabel to my Mana and my MaxMana format "Mana: {0}/{1}"`.
+- [ ] Done-when: a potion fills to the cap and never above it; mana regenerates while below the cap.
+
+**E3 — Spell data table + `cast` (C#, one word)** `[x]`
+Same shape as `WeaponData`: `<Spell><Field>` globals in a new `SpellData.events`
+(`Mana, Cooldown, Damage, Blast, Element, Bullet, Speed, Life, Sound`), plus one action word.
+
+- [x] `SpellData.events`: `Fireball` (Mana 10, Cooldown 1.2, Damage 20, Blast 180, Element fire,
+      Bullet Fireball) and `Heal` (Mana 15, no projectile).
+- [x] Words `cast "<spell>"` / `cast "<spell>" at <thing>` + registry entries + keywords.html rows.
+- [x] Runtime: refuse when `my Mana` is short or the cooldown is live; otherwise spend, then spawn
+      the spell's bullet or run its non-projectile branch.
+- [x] Cooldown state per spell (`my <Spell>Cooldown`), mirroring the reload timer.
+- [x] Unit tests: mana refusal, cooldown refusal, one cast spends once, unknown spell warns once.
+- [ ] Done-when: two spells with different mana/cooldowns fire from the same player sheet.
+      **Editor run pending** — needs E2's `my Mana` block on the player sheet and a `Fireball`
+      actor in the scene to stage the projectile clones.
+      *(Task 51 Part E — no case: it needs authored sheets and an actor in a scene; the spend and
+      cooldown rules are unit-covered.)*
+
+**As shipped (2026-11-16):** `Runtime/Spells.cs` — `SpellStats`, `SpellData` (the
+`<Spell><Field>` table: `LoadData`, `TrySplitField`, `CanonicalFor`, `KnownNames`, `TryGet`,
+built-in-free so nothing exists that data did not author) and `SpellClock` (per **actor + spell**
+timers, `Start`/`IsCooling`/`Remaining`/`Clear`). `ActionVerb.Cast` + `ActionSpec.Spell` parse both
+shapes (`ActionWords`; a bare `cast Fireball` explains the quotes). `FlaxActions.CastSpell` refuses
+quietly while cooling down or short of `my Mana` (a shortage is normal play), spends the mana
+clamped at 0 in code (the language has no `min()`), starts the clock, plays the spell's sound, then
+**either** clones `Bullet` at the caster/the `at` target — oriented at the target, with
+`my damage`/`my blast`/`my BulletSpeed`/`my Life`/`my TimeLeft`/`my Element`/`my Spell` stamped on
+it — **or**, for a spell with an empty `Bullet`, sends the message `"cast <Spell>"` to the target
+(or the caster) so events decide what happens (`Heal` is the shipped example: no healing code in
+C#, just `when message "cast Heal" arrives`). `my <Spell>Cooldown` is a **computed** readout in
+`EventContext.ReadMy` (like `my Ammo`), so a HUD binds live without a mirrored timer, and only real
+spell names are intercepted — an ordinary `my Cooldown` variable still reads as one. Cooldowns are
+cleared when the actor is destroyed (`ForgetSubject`) so a clone never inherits a stale timer.
+`SpellData.LoadData` runs at both the first load and the hot reload, so a data edit takes effect
+mid-session. Decisions from the review: message-based non-projectile spells, engine clock exposed
+as a computed value, element stamped on the projectile (E4 is then content), no range field — the
+projectile's `Life`/`Speed` is the range. 25 new checks (parse both shapes + the bare-cast hint,
+table load/lookup/case, clock liveness/expiry/clear/per-spell isolation, computed cooldown read,
+shipped data file) → **1476/1476 green**; module build 0 errors.
+
+**E4 — Damage types and resistances (events-only)**
+- [ ] Messages carry the element: `"damage"`, `"fire"`, `"cold"`, `"poison"`.
+- [ ] Victim subtracts resistance in three lines (math is one operation per line):
+      `set my LastDmg to other's damage` → `set my LastDmg to my LastDmg - my FireResist` →
+      `set my health to my health - my LastDmg`.
+- [ ] Immunity = a large resistance (`my FireResist 999`) rather than a new word.
+- [ ] Done-when: one fireball hurts a normal zombie and barely scratches a fire-resistant one.
+
+**E5 — Equip slots and attributes (events-only)**
+- [ ] `my WeaponSlot` / `my ArmorSlot` / `my RingSlot` strings; `equip` refuses while the slot is
+      taken until the old item is `drop`ped (or auto-swap: unequip, then equip).
+- [ ] Attributes `my Strength/Dexterity/Vitality/Energy` feeding health/mana/damage with one-op
+      formulas.
+- [ ] Done-when: two rings cannot both occupy the ring slot; strength above a threshold raises
+      melee damage.
+
+**E6 — XP and levels (events-only)**
+- [ ] `add <n> to XP` on kill; threshold blocks (`when XP becomes 100 → set my Level to 2`), or the
+      parked `XP-threshold helper` word once the block count gets silly.
+- [ ] HUD bind plus a level-up message.
+- [ ] Done-when: clearing a room levels the player once and thresholds never re-fire.
+
+**E7 — Item rarity and affixes (C#, generator)** `[x]`
+- [x] Generator that composes an item's stats from a base plus N random affixes, driven by
+      `ItemLevel` and rarity. Items stay hand-authored sheets until this exists.
+- [ ] Done-when: a dropped ring rolls 1–3 affixes and its `my` stats reflect them.
+      **Editor run pending** — place a `Ring` actor in the scene (the template the clone stages
+      from), add a sheet with `spawn Ring at me rarity "Rare" level 12`, and read the clone's
+      `my FireResist` / `my ItemName`.
+      *(Task 51 Part E — no case: a rolled ring needs a spawned clone in a scene; the generator is
+      unit-covered.)*
+
+**As shipped (2026-11-16):** `Runtime/Items.cs` — `ItemBase`/`ItemData` (`<Base>Slot`,
+`Damage`, `Armor`, `ItemLevel` from `ItemData.events`), `AffixDef`/`RarityDef`/`AffixData`
+(`<Affix>Stat/Min/Max/ItemLevel/Word/Suffix` plus `<Rarity>MinAffixes/MaxAffixes`, built-in
+rarity counts Common 0 · Magic 1–2 · Rare 1–3 · Unique 3–4 from one `AffixData.events`),
+`ItemStats` (the stat whitelist — an affix whose stat is not a real variable name is skipped with
+a warning instead of quietly creating one), `ItemGenerator` (pure: pool filtered by item level,
+count clamped to the pool, stats never repeat, values roll inside min..max and grow 5% per level
+above the affix's own minimum, `ComposeName` builds “Fiery Ring of the Fox”), and `ItemAffixes`
+(per-instance rolls + exactly what each equip added). The word is a **qualifier on `spawn`**, not a
+new word: `spawn <thing> at <spot> [offset <n>] [rarity "<name>"] [level <n>]`, in any order, both
+optional — absent `rarity` keeps today's behaviour byte-for-byte. On a rolled spawn the clone gets
+its stats written as its own `my` variables (`my FireResist`, `my damage`, `my Rarity`,
+`my ItemName`, `my ItemLevel`) **before** its sheet attaches, so `when me appears` already sees
+them. Equip applies rolls engine-side: the bag now remembers **which actor** each name came from
+(`BagAdd(owner, thing, item)`, `TakeBagItem`, so `my bag` still reads `Ring x2`), `equip` takes
+that instance and `EquipItem` applies its recorded stats, `UnequipItem` subtracts exactly those
+numbers (recorded, never recomputed — no drift). Hand-authored items (`Sword.events` →
+`add 5 to my damage`) are untouched and compose with rolled ones; destroyed actors forget both
+their roll and their wearer records. The item level defaults to a global `ItemLevel` when the
+`level` qualifier is absent. 24 new checks (both spawn shapes + qualifier order + plain spawn
+unchanged, base/affix/rarity tables, count clamping, seeded determinism, no duplicate stats, item
+level gating in both directions, value growth, display name, apply/remove exactness, hand-authored
+item applies nothing, bag instance identity, equip/unequip through the runtime) →
+**1476/1476 green**; module build 0 errors (9 pre-existing XML-doc warnings).
+
+**Out of scope:** skill trees, synergies, runewords, set items, charms, crafting, vendors, gambling,
+mercenaries.
+
+### The follow-up queue, F1–F12 (moved from `TASKS.md` Task 9 Part F)
+
+Review of E1–E7 (2026-11-16) produced this queue. Order is by value, not by phase: F1–F4 are
+correctness and vocabulary holes that make later phases cheaper, F5–F6 are the first slice of
+§Parts, F7–F12 are depth. Each item is scoped to be picked up alone; the E-phase it serves is in
+brackets.
+
+- [x] **F1 — Fix generated-item stat bookkeeping (C#, small) [E5/E7].** `ItemAffixes.applied` is
+      keyed `(wearer, name)` while the equipped set is a `HashSet<string>` of names, so two rare
+      rings (both `Ring`) overwrite each other: the first ring's stats stay on the wearer forever
+      and are never subtracted. A worn item that is destroyed also keeps its stats. Key the
+      record by the **item actor** (and store the name for display), and subtract on destroy.
+      Done-when: two different rolled rings equipped in sequence stack and unstack exactly; a worn
+      ring destroyed mid-session leaves the wearer's stats at baseline. Pure `Runtime` + tests.
+      **As shipped (2026-11-16):** `ItemAffixes` keeps an ordered `WornItem` list keyed by the item
+      actor (item, wearer, name, and the stats actually added). `Apply` is idempotent for the same
+      wearer and moves an instance between wearers without double-stacking; `Remove(variables,
+      wearer, name)` — all `unequip` knows — takes back the **oldest** record with that pair, so
+      two rings both called `Ring` unstack one at a time; `Forget(variables, item)` now subtracts
+      before dropping the roll, and `FlaxActions.ForgetSubject` passes the variables, so
+      destroying a worn item no longer leaves a permanent bonus. New `WearerOf(item)` for
+      tests/HUDs.
+      12 new checks (two same-named rings stack/unstack through the store *and* through
+      bag → `EquipItem` → `UnequipItem`, re-equip is idempotent, removing an unworn ring is a
+      no-op, a destroyed worn item returns the wearer to baseline and forgets its roll) →
+      **1488/1488 green**; module build 0 errors.
+- [x] **F2 — A real damage path: `damage <target> by <n> <type>` (C#, medium) [E4, Part C].**
+      `ExecuteSend` requires a literal message name, so a projectile stamped with `my Element`
+      cannot pick its message today; E4 written now means one `send message "fire"` block per
+      element per weapon. Add the action: resolve the target, subtract the victim's `<Type>Resist`,
+      then go through the existing armor/shield/health path (the landed note below drops this line's
+      matchup-gate part). Keep `send message`
+      for scripted events. Done-when: a fireball hurts an unresisted zombie and barely scratches a
+      `FireResist 50` one with no per-element branches in any sheet; the same call with `steel`
+      ignores FireResist.
+      *Landed 2026-11-23.* `damage <target> by <n> [<type>]` (`ActionVerb.Damage`; target = an actor,
+      `other`, `me`, `nearest player`, or the `my aim target` pick), and the same type qualifier on
+      `damage area around <spot> by <n> [<type>] [for radius <r>]`. New pure
+      `Runtime/DamageTypes.cs` maps a type to its stat (`fire` → `FireResist`, `cold`, `poison`, any
+      `<Word>Resist`), takes the victim's percentage off (clamped 0..100, so `my FireResist 999` is
+      immunity rather than healing) and hands the rest to `HealthManager.Damage` — armor → shield →
+      health, the path `add -<n> to Health` already uses. A type the victim does not resist deals its
+      full number (`steel` against `FireResist 50`). Both words also push the `"damage"` message, so a
+      victim's effects, i-frames and `other's damage` reads are unchanged; the number is applied once,
+      by the engine, so a sheet must not subtract it again. Two honest corrections: `damage area` now
+      applies the damage itself instead of trusting the victim's sheet (Marine has no `"damage"`
+      handler, so the shipped storm dealt nothing), and **no matchup-table gate was added** — neither
+      word consults `Matchups`, and the old claim that AoE enforced it was never true of the message
+      path either; a sheet that wants a gate writes `me can attack`. `HighTemplar.events`' storm is
+      `30 fire`. 12 new checks (both word shapes carry the type, `my FireResist 50` halves 30 fire, the
+      resisted number then spends armor and shield, `steel` ignores `FireResist`, a typed splash spends
+      each victim's own resistance, `999` is immunity, the word book row) -> **2591 passed, 0
+      failed**; Game module build 0 errors.
+- [ ] **F3 — Variables in numeric qualifiers (C#, small) [E1, E4].** `near Enemy by my Reach`
+      parses and then reads 0 (`Conditions.cs` wants a number token), which forces one melee block
+      per weapon and will bite spell range/cleave/aura sizes. Accept a number, a global or
+      `my <name>` everywhere a distance is read, in conditions and triggers. Done-when: a weapon
+      sheet with `by my Reach` reaches its authored distance, and `when me is near` by a variable
+      re-arms on the right edge.
+- [ ] **F4 — Mana bounds in the engine (C#, small) [E2, E3].** Health already clamps through
+      `HealthManager.Add` (`0..MaxHealth`, armor/shield first); do the same for `Mana`/
+      `MaxMana` so E2's potion and regen do not need a three-line `if` dance (there is no `min()`),
+      and `cast`'s manual clamp becomes the same rule instead of a special case. Done-when: a potion
+      fills to the cap and never past it; regen stops at `MaxMana`; the E3 cast spends through the
+      same path.
+- [ ] **F5 — One timer table + a ready edge (C#, medium) [Part B].** `WeaponClock` has
+      completion edges, `SpellClock` does not, and §Parts proposes `put "<name>" on cooldown for
+      <s>` — a second cooldown system over the one that ships. Generalize into a named-timer table
+      keyed `(actor, name)` used by `reload`, spells and future buffs; expose
+      `when "<spell>" is ready` and keep `my "<spell>" cooldown` as the readout. Done-when: a HUD
+      icon flips on the ready edge; `reload` and `cast` share one storage; an existing sheet's
+      behaviour is unchanged.
+- [ ] **F6 — Loot tables (C# + data, medium) [E7, Part E].** A weighted table file
+      (`Loot.events`) resolved by `spawn item from "Loot" at <spot>` (and `roll "<rarity>" from
+      "Loot"`), choosing base + rarity + item level and then calling `ItemGenerator.Roll` — never
+      reimplementing the roll. `EnemyTypes` gains a `Level` stat so a death can pass its own level.
+      Done-when: a level-12 zombie drops a level-appropriate ring from a table, no drop numbers in
+      any enemy sheet, and `Foxy` (level 10+) actually appears in play.
+- [ ] **F7 — Cast feedback + HUD check (C#, small) [E3].** `cast` refuses silently on mana or
+      cooldown (right for play, wrong for feedback). Push `when cast fails "<spell>"` (or a
+      `"cast failed <Spell>"` message) so a sheet can flash a bar. Verify `bind <label> to my
+      <Spell>Cooldown` — the expanded `when <var> changes` watch re-reads the computed value every
+      tick, so it may work but churn the label 60×/s. Done-when: a failed cast triggers feedback;
+      the cooldown label updates without per-frame churn.
+- [ ] **F8 — Extract the cast decision (C#, small) [E3].** Move "unknown / cooling / short mana /
+      spend + start" out of `FlaxActions.CastSpell` into a pure `Runtime/SpellCasting.Decide(...)`
+      returning a verdict, matching how `Steering`/`PhysicsMovement`/`Separation` keep rules out of
+      the bridge. Done-when: mana refusal, cooldown refusal and one-spend-per-cast are unit tests
+      rather than a doc paragraph, and the bridge only executes the verdict.
+- [ ] **F9 — Equip slots from `ItemData.Slot` (C#, small) [E5].** `ItemData.events` already ships
+      `RingSlot`/`AmuletSlot`/`SwordSlot` and nothing reads them, so two rings both "work". Gate
+      `equip` on the slot variable and either refuse or auto-unequip the old item. Done-when: the
+      second ring is refused (or swaps the first, with its stats fully removed) and a sword cannot
+      sit in the ring slot.
+- [ ] **F10 — One `<Owner><Field>` table loader (C#, medium refactor) [all data systems].**
+      `WeaponData`, `SpellData`, `ItemData`, `AffixData`, `EnemyTypes` and `Matchups` are six copies
+      of the same split-literal-read logic; the next tables (Abilities, Buffs, Loot) would be
+      copies seven and eight. Extract a small generic table (field list, `LoadData`,
+      `CanonicalFor`, `KnownNames`, layered globals-over-data) with no behavior change. Done-when:
+      the six tables are thin classes over the helper, the suite is still green, and a new data
+      table is ~10 lines.
+- [ ] **F11 — Item identity the player can see (C# + data, medium) [E7, Task 34].** The bag tracks
+      which actor an item came from, but sheets still read `Ring x2` and `equip Ring` always takes
+      the first carried instance. Show instance names (`my bag items` / display names from
+      `my ItemName`), and allow choosing (`equip Ring 2`). Done-when: two different rings are
+      distinguishable and the intended one is equipped. The grid UI itself stays with Task 34.
+- [ ] **F12 — Data depth that costs no code (data only, small) [E4/E5/E7].** `AllResist`,
+      `FirePierce`, `CritChance`, `LifeLeech` are new names in `ItemStats.Names` plus affix rows;
+      base-specific affix pools (a ring should not roll weapon damage) via an `<Affix>Bases` field;
+      a proper tier ladder instead of one hand-placed late affix. Code for crit/leech/pierce
+      actually **spending** those stats belongs with F2. Done-when: the pool reflects the base and
+      slot, and every new stat is read by a real consumer.
+
+**Blocked / later (do not start from this list):** damage numbers and hit feedback (needs F2);
+crit/leech/penetration behavior (needs F2); save/load of rolled items — `ItemAffixes` is in-memory
+and actor-keyed while `save stats` stores globals (belongs with the save/load task); cast time /
+channel / interrupt, spell schools and spellbooks (nothing in the kit needs them yet); ground-
+targeted spells (`aim`), which need a point value first.
+
+**Where E3/E7 meet the combat primitives (decided 2026-11-16):** §Parts is the *primitives*
+(`put "x" on cooldown`, `damage <target> by <n> <type>`, `spawn item from "<table>"`); E3/E7
+shipped the *composites*. Do not fold `cast` backwards — it is the right authoring shape and can
+become a thin composition later with no `.events` file changing. Instead: F5 gives Part B its
+storage, F2 gave Part C its word, F6 gives Part E its generator, and Part A (buffs) reuses the
+"apply exactly / remove exactly" bookkeeping from `ItemAffixes` (F1 is the prerequisite).
+
+**Reviewed 2026-11-23, F2 landed:** Parts A, B and D shipped under Task 27 (C, E, A) and F2
+shipped the same day, so **F6 and the one combined play-run are what remain** — do not reopen
+this as a fresh design. `damage area` took the same `<type>` as the direct hit, and F2’s
+engine-side `<Type>Resist` subtraction superseded E4’s three sheet lines instead of living
+beside them.
 
 ### Done-when
 
 - A fireball spends mana, starts a cooldown, is refused while cooling down, and damages only valid
   targets in its radius. **Met** by Task 27 A/E + `cast` (`SpellClock`); the only gap is that the
-  refusal is silent (Task 9 F7) and that `cast`'s clock is not yet the shared table (F5).
+  refusal is silent (**F7**) and that `cast`'s clock is not yet the shared table (F5).
 - A fire-resistant zombie takes little damage from fire and normal damage from steel. **Met in the
-  engine** by Task 9 F2 — `damage <target> by <n> <type>` reads the victim's `<Type>Resist` — but no
+  engine** by **F2** — `damage <target> by <n> <type>` reads the victim's `<Type>Resist` — but no
   zombie sheet wears the resist yet: that is the combined RPG run in Part F.
 - A burn buff ticks, expires, and restores the pre-buff stats without drift. **Met** by Task 27
   Part C; the tick itself is the sheet's (`when buff "burn" starts` + a `when every` block on the
   victim), and `my "burn" time left` is there if the sheet prefers to gate on the timer.
-- A dropped rare ring rolls 1–3 affixes and its `my` stats reflect them. **Met** by Task 9 E7/F1
-  through `spawn Ring … rarity "Rare" level <n>`; only the table-driven drop is missing (Part E / F6).
+- A dropped rare ring rolls 1–3 affixes and its `my` stats reflect them. **Met** by E7/F1 (§The
+  phase plan) through `spawn Ring … rarity "Rare" level <n>`; only the table-driven drop is missing
+  (Part E / F6).
 
 ### Edge cases / parks
 
 - Skill trees, synergies, runewords, set items, crafting, vendors and gamblers stay parked
-  (Task 9 E out-of-scope).
+  (E out-of-scope in §The phase plan).
 - Buffs on buildings, research speed modifiers and stacking rules beyond refresh/stack/ignore are
   later decisions. (Task 27 Part C shipped refresh/stack/ignore and no building path, so this is
   unchanged.)
@@ -2740,9 +3079,13 @@ once Task 28 lands. Task 36 Part G's five-step platformer check becomes five cas
 
 ---
 
-## Task 52 — Camera Follow With Placed Offset `[x]`
+## Task 52 — Camera Follow Centered `[x]`
 
-Goal: `camera follows <thing>` keeps the camera's authored placement instead of snapping to dead-center, and settles back into that offset with a smooth spring when the player stops moving. Today `StartCameraFollow` builds the offset from default `CameraHeight`/`CameraDepth` globals (often 0), so a placed camera jumps onto the player and sits on top of them. This task makes the camera follow at its own side position/rotation and damp back to it.
+Goal: `camera follows <thing>` keeps the camera centred above the subject at the authored
+height/depth, and settles back into centre with a smooth spring when the player stops moving.
+Today `StartCameraFollow` builds the offset from default `CameraHeight`/`CameraDepth` globals
+(often 0), so a placed camera jumps onto the player and sits on top of them. This task makes the
+camera follow at centre with damping, keeping the authored rotation.
 
 Depends on Tasks 1–3, 26. **Presentation primitive** (P1).
 
@@ -2750,15 +3093,20 @@ Depends on Tasks 1–3, 26. **Presentation primitive** (P1).
 
 | Kind | Word | Example |
 |---|---|---|
-| action | `camera follows <thing>` | `camera follows Player` (keeps the camera's placed offset) |
+| action | `camera follows <thing>` | `camera follows Player` (centres above the player at authored height/depth) |
 
-The verb already exists in `WordRegistry`; this task is the **behavior fix** to make it honor the camera's real placed position and add damping.
+The verb already exists in `WordRegistry`; this task is the **behavior fix** to make it centre on
+the subject instead of keeping the camera's real placed position, and add damping.
 
 ### Examples
 
 ```text
 # ---- PlayerCamera.events: the camera's own sheet ----
 when game starts
+  camera switch PlayerCamera
+  camera follows Player
+
+when scene starts
   camera switch PlayerCamera
   camera follows Player
 
@@ -2772,25 +3120,39 @@ when me arrives at there
 
 ### Parts
 
-- [x] **Part A — Capture the camera's real offset.** `StartCameraFollow` (`Bridge/FlaxActions.cs`) reads `camera.Position - target.Position` instead of the `CameraHeight`/`CameraDepth` globals, so a camera placed to the side of the player stays there. The camera keeps its authored rotation — remove the `Quaternion.Euler(CameraPitch, 0, 0)` reset.
-- [x] **Part B — Smooth follow with damping.** `UpdateCameraFollow` (`Bridge/EventsManager.cs`) lerps the camera toward `target.Position + offset` each tick instead of snapping, so when the player stops the camera slowly drifts back into its offset position (spring-back feel like TK/Mario). Frame-rate independent `dt`; `followSpeed` tuned to taste.
-- [x] **Part C — `PlayerCamera.events` owns the camera.** New `Source/Game/GameFiles/PlayerCamera.events` holds `camera switch PlayerCamera` + `camera follows Player`. Remove any camera lines from `player.events` so the camera script lives in its own file, not the player's.
-- [x] **Part D — Scene wiring.** Add an `EventSheet` component pointing at `PlayerCamera` to the `PlayerCamera` actor in `Content/scenes/AdventureTest.scene`.
-- [x] **Part E — Tests and docs.** Unit check that `StartCameraFollow` uses `camera.Position - target.Position`; editor play-check: camera starts at its side placement, follows the player keeping the offset, and settles back into the offset after the player stops. Record the damping value and follow speed in `DESIGN.md` §9.
-      Shipped: `Runtime/CameraFollow.cs` (`Offset` = camera minus target, `Alpha` = `1 - exp(-damping * dt)`,
-      `DampingFrom` reading the `CameraFollowDamping` global, default **6**/s, `0` = snap) with 7 checks,
-      `StartCameraFollow` capturing the placed offset and leaving the rotation alone (the `CameraPitch`
-      Euler reset is gone), `UpdateCameraFollow(delta)` easing toward `target + offset` instead of
-      snapping (zoom still scales the offset), `PlayerCamera.events` holding `camera switch PlayerCamera`
-      + `camera follows Player` with the `PlayerCamera` actor's blank `Event File` resolving to it, and
-      the leftover commented camera lines removed from `Adventure_player.events` (they left a `when`
-      with no body, so that shipped file failed to parse). `keywords.html` and `DESIGN.md` §9 updated.
+- [x] **Part A — Centre the follow offset.** `StartCameraFollow` (`Bridge/FlaxActions.cs`) reads
+      `CameraHeight`/`CameraDepth` globals into `new CameraPoint(0, camHeight, camDepth)` instead of
+      `camera.Position - target.Position`, so the camera centres above the player instead of keeping
+      its placed side position. The camera keeps its authored rotation — the `Quaternion.Euler`
+      CameraPitch reset is gone.
+- [x] **Part B — Smooth follow with damping.** `UpdateCameraFollow` (`Bridge/EventsManager.cs`)
+      lerps the camera toward `target.Position + offset` each tick instead of snapping, so when the
+      player stops the camera slowly drifts back into centre (spring-back feel like TK/Mario).
+      Frame-rate independent `dt`; `CameraFollowDamping` global tunes it, default 6/s, 0 = snap.
+- [x] **Part C — `PlayerCamera.events` owns the camera.** New `Source/Game/GameFiles/PlayerCamera.events`
+      holds `camera switch PlayerCamera` + `camera follows Player` on both `when game starts` and
+      `when scene starts` (the latter re-arms on every Play). Remove any camera lines from
+      `player.events` so the camera script lives in its own file, not the player's.
+- [x] **Part D — Scene wiring.** Add an `EventSheet` component pointing at `PlayerCamera` to the
+      `PlayerCamera` actor in `Content/scenes/AdventureTest.scene`.
+- [x] **Part E — Tests and docs.** Unit check that `StartCameraFollow` centres the offset;
+      editor play-check: camera starts centred above the player, follows smoothly keeping centre,
+      and settles back into centre after the player stops. Record the damping value and follow speed
+      in `DESIGN.md` §9.
+      Shipped: `Runtime/CameraFollow.cs` (`Offset` = camera minus target, `Alpha` =
+      `1 - exp(-damping * dt)`, `DampingFrom` reading the `CameraFollowDamping` global, default **6**/s,
+      `0` = snap) with 7 checks, `StartCameraFollow` centring the offset and leaving the rotation alone,
+      `UpdateCameraFollow(delta)` easing toward `target + offset` instead of snapping (zoom still scales
+      the offset), `PlayerCamera.events` holding `camera switch PlayerCamera` + `camera follows Player`
+      with the `PlayerCamera` actor's blank `Event File` resolving to it, and the leftover commented
+      camera lines removed from `Adventure_player.events` (they left a `when` with no body, so that
+      shipped file failed to parse). `keywords.html` and `DESIGN.md` §9 updated.
       Editor play-check pending (feel of the 6/s damping).
 
 ### Done-when
 
-- A camera placed to the side of the player starts at that position and keeps it while following.
-- When the player stops moving, the camera smoothly returns to its offset rather than snapping.
+- A camera follows centred above the player at the authored height/depth.
+- When the player stops moving, the camera smoothly returns to centre rather than snapping.
 - The camera lives in `PlayerCamera.events`, not `player.events`.
 - No existing camera word or sheet changes behavior when `camera follows` is not used.
 
@@ -2805,7 +3167,7 @@ Do not run these by number. The dependency-friendly order is:
 3. **Task 29** (expressions/data lookup) — unblocks RPG/strategy formulas.
 4. **Task 31 + 32** (audio + camera feedback) — cheapest “real game” upgrade.
 5. **Task 34 + 35** (dynamic UI + dialogue) — the content-facing layer.
-6. **Task 36 + 37** (platformer kit + RPG combat core) — two genre pillars.
+6. **Task 36 + 37** (platformer kit + Diablo RPG kit) — two genre pillars.
 7. **Task 38 + 39** (AI orders + input breadth) — polish for action/strategy.
 8. **Task 33 + 43 + 44** (animation depth, settings/localization, replay/perf) — shipping quality.
 9. **Tasks 40–42** (roguelike, racing, cards) — only when a project asks.

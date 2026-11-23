@@ -76,8 +76,36 @@
 		"World": {
 			"$type": "Game.DefaultEventWorld, Game.CSharp"
 		},
-		"Selection": {}
-	}
+		"Selection": {},
+		"Camera": {},
+		"Construction": {},
+		"Production": {},
+		"Research": {},
+		"LiftOff": {},
+		"Orders": {},
+		"Fog": {},
+		"Buffs": {},
+		"Cooldowns": {},
+		"Terrain": {},
+		"Wander": {},
+		"Steering": {},
+		"Input": {},
+		"Sounds": {},
+		"Audio": {},
+		"Weapons": {},
+		"Spells": {},
+		"Targeting": {},
+		"Typing": {},
+		"Choices": {},
+		"Dialogue": {},
+		"Backlog": {},
+		"Lists": {},
+		"Grids": {},
+		"CursorStack": {},
+		"Affixes": {},
+		"Levels": {}
+	},
+	"Cursors": {}
 }
 		},
 		{
@@ -365,9 +393,9 @@
 			"Name": "PlayerCamera",
 			"Transform": {
 				"Translation": {
-					"X": 95.81269836425781,
-					"Y": 220.46279907226563,
-					"Z": -204.121337890625
+					"X": 240.38555908203125,
+					"Y": 266.4476623535156,
+					"Z": -158.13650512695313
 				},
 				"Orientation": {
 					"X": 0.3826834559440613,
@@ -376,6 +404,12 @@
 					"W": 0.9238795042037964
 				}
 			}
+		},
+		{
+			"ID": "285728504ae469fb596a9cbb11e57f76",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "18bacf39467df8a40f4e8eb5a3341add",
+			"V": {}
 		},
 		{
 			"ID": "768323534938bf1aeb0d3b907676e80c",
@@ -885,6 +919,30 @@
 			"V": {
 	"EventFile": "ChoiceB"
 }
+		},
+		{
+			"ID": "5857f21d43fed215bddacba80d537a63",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "f18ae1b44189bbf8d4fa0e9081de59fc",
+			"Name": "Player 0",
+			"Transform": {
+				"Translation": {
+					"X": 315.5359802246094,
+					"Y": 10.57733154296875,
+					"Z": 46.67822265625
+				}
+			},
+			"Model": "3f82e57744f57c28285150b646ad2198",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "00000000000000000000000000000000",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
 		}
 	]
 }

@@ -1,7 +1,7 @@
 {
 	"ID": "34b824cb4c8437e7acf00c9e92ddb2ab",
 	"TypeName": "FlaxEngine.SceneAsset",
-	"EngineBuild": 7012,
+	"EngineBuild": 7014,
 	"Data": [
 		{
 			"ID": "34b824cb4c8437e7acf00c9e92ddb2ab",
@@ -94,15 +94,15 @@
 			"Name": "Camera",
 			"Transform": {
 				"Translation": {
-					"X": 272.7989501953125,
-					"Y": 150.0,
-					"Z": -408.6126403808594
+					"X": 481.4361572265625,
+					"Y": 177.30377197265625,
+					"Z": 188.4369354248047
 				},
 				"Orientation": {
 					"X": 0.0,
-					"Y": -0.3826834559440613,
+					"Y": -0.8235815763473511,
 					"Z": 0.0,
-					"W": 0.9238795042037964
+					"W": 0.5671979188919067
 				}
 			}
 		},
@@ -153,8 +153,34 @@
 		},
 		"World": {
 			"$type": "Game.DefaultEventWorld, Game.CSharp"
-		}
-	}
+		},
+		"Selection": {},
+		"Construction": {},
+		"Production": {},
+		"Research": {},
+		"LiftOff": {},
+		"Orders": {},
+		"Fog": {},
+		"Buffs": {},
+		"Cooldowns": {},
+		"Terrain": {},
+		"Wander": {},
+		"Steering": {},
+		"Input": {},
+		"Sounds": {},
+		"Audio": {},
+		"Weapons": {},
+		"Spells": {},
+		"Targeting": {},
+		"Typing": {},
+		"Choices": {},
+		"Dialogue": {},
+		"Backlog": {},
+		"CursorStack": {},
+		"Affixes": {},
+		"Levels": {}
+	},
+	"Cursors": {}
 }
 		},
 		{

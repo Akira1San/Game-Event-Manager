@@ -159,8 +159,12 @@ An `.events` file reaches an actor one of two ways — **explicit first, name fa
 - **Reuse across files: `include "<file>"`.** A sheet can pull another GameFiles `.events` file
   in whole, at the line where the include sits: `include "FPS_Controls"` (quotes, bare name and a
   trailing `.events` all read the same). That is how the first-person input wiring is written once
-  — `GameFiles/FPS_Controls.events` holds W/A/S/D, Shift sprint, Ctrl crouch, Space jump and the
-  cursor toggle, and a player sheet is three feel lines plus the include. Resolution happens after
+  —   `GameFiles/FPS_Controls.events` holds W/A/S/D, Shift sprint, Ctrl crouch, Space jump and the
+  cursor toggle, `GameFiles/Platformer_Controls.events` holds the walk and the jump, and a player
+  sheet is a few feel lines plus the include. A sheet that wants a key for itself (the platformer's
+  ladder grab) puts its event **above** the include: events run top to bottom, `climb` registers
+  the climb immediately, and the shared line's `unless me is climbing` then skips the walk in the
+  same tick. Resolution happens after
   every file parses (`Events/ProgramIncludes.cs`, called by `EventFiles.LoadAll`), so a library may
   name another library; each name is included once per sheet, so writing the include twice cannot
   double-fire a block, and a missing file (with a "did you mean …?"), a loop, or a chain deeper than

@@ -51,11 +51,16 @@
   <a href="#setup">Actor setup</a>
   <a href="#movement">Movement</a>
   <a href="#combat">Combat</a>
+  <a href="#weapons">Weapons &amp; ammo</a>
   <a href="#collisions">Collisions</a>
   <a href="#variables">Variables</a>
   <a href="#items">Items & bag</a>
   <a href="#ui">UI & menus</a>
+  <a href="#cursors">Cursors</a>
   <a href="#animation">Animation</a>
+  <a href="#enemies">Enemy types</a>
+  <a href="#levels">Levels &amp; stats</a>
+  <a href="#multiplayer">Two-player</a>
 </nav>
 
 <div class="container">
@@ -182,6 +187,61 @@
         &nbsp;&nbsp;<span class="kw">show me</span><br>
         &nbsp;&nbsp;<span class="kw">set my Invulnerable to false</span>
       </div>
+    </div>
+  </section>
+
+  <section id="weapons">
+    <div class="card">
+      <h3>Weapons &amp; ammo: one held weapon, per-weapon rounds (Player)</h3>
+      <p>A weapon is data, like an enemy type: seventeen <code>&lt;Weapon&gt;&lt;Field&gt;</code> globals in
+      <code>WeaponData.events</code>, read before any sheet runs. <code>set weapon to "Shotgun"</code> stores the name in
+      <code>my Weapon</code>, and <code>spawn Bullet</code> then clones that weapon's bullet &mdash; once per pellet, fanned across
+      its spread, with its damage, speed, life and knockback stamped on each copy. Ammo lives in <code>my &lt;Weapon&gt;Ammo</code>,
+      and <code>ammo my Weapon</code> means "whatever I am holding", so one fire block serves every gun.</p>
+      <div class="syntax-box">
+        <span class="alt"># WeaponData.events &mdash; one block per weapon (Pistol, Shotgun, Uzi, Rocket, Grenade, Flamer)</span><br>
+        <span class="kw">set ShotgunBullet to "ShotgunPellet"</span><br>
+        <span class="kw">set ShotgunDamage to 6</span><br>
+        <span class="kw">set ShotgunFireRate to 0.8</span><br>
+        <span class="kw">set ShotgunSpread to 12</span> &nbsp;<span class="alt"># six pellets fanned over 12 degrees</span><br>
+        <span class="kw">set ShotgunMultiplier to 6</span><br>
+        <span class="kw">set ShotgunReload to 2</span><br>
+        <span class="kw">set ShotgunAmmo to 8</span><br>
+        <span class="kw">set ShotgunKnockback to 80</span><br>
+        <span class="kw">set ShotgunLife to 0.8</span> &nbsp;<span class="alt"># short legs &mdash; a shotgun, not a rifle</span><br>
+        <span class="kw">set ShotgunExplosive to false</span>
+      </div>
+
+      <div class="syntax-box">
+        <span class="alt"># Player.events &mdash; carry it, spend it, reload it, show it</span><br>
+        <span class="kw">bind WeaponLabel to my Weapon and my Ammo format "Weapon: {0}   Ammo: {1}"</span><br>
+        <br>
+        <span class="kw">when me appears</span><br>
+        &nbsp;&nbsp;<span class="kw">set weapon to "Pistol"</span><br>
+        &nbsp;&nbsp;<span class="kw">set ammo Pistol to 25</span><br>
+        &nbsp;&nbsp;<span class="kw">set ammo Shotgun to 0</span><br>
+        <br>
+        <span class="kw">when 2 is pressed</span><br>
+        &nbsp;&nbsp;<span class="kw">my HasShotgun is true</span><br>
+        &nbsp;&nbsp;<span class="kw">set weapon to "Shotgun"</span><br>
+        <br>
+        <span class="kw">when Space is pressed</span><br>
+        &nbsp;&nbsp;<span class="kw">unless reloading</span><br>
+        &nbsp;&nbsp;<span class="kw">unless ammo my Weapon is 0</span><br>
+        &nbsp;&nbsp;<span class="kw">spawn Bullet at me offset 30</span><br>
+        &nbsp;&nbsp;<span class="kw">add -1 to ammo my Weapon</span><br>
+        &nbsp;&nbsp;<span class="kw">play sound "shot"</span><br>
+        <br>
+        <span class="kw">when R is pressed</span><br>
+        &nbsp;&nbsp;<span class="kw">unless reloading</span><br>
+        &nbsp;&nbsp;<span class="kw">reload</span><br>
+        <br>
+        <span class="kw">when reload completes</span><br>
+        &nbsp;&nbsp;<span class="kw">print "reload done"</span>
+      </div>
+      <p class="alt">Pickups cannot write another actor's <code>my</code> variables, so the pickup sends a message and the player
+      owns every change: <code>when message "pickup_shotgun" arrives &#8594; set my HasShotgun to true &#8594; add 8 to ammo Shotgun
+      &#8594; set weapon to "Shotgun"</code>. Reload time and the magazine size stay in the data file; the sheet only asks.</p>
     </div>
   </section>
 
@@ -358,6 +418,76 @@
     </div>
   </section>
 
+  <section id="cursors">
+    <div class="card">
+      <h3>Animated cursors: the pointer is scene content</h3>
+      <p>There is no cursor importer and no C# to write. A cursor is a <code>UIControl</code> actor named
+      <code>Cursor_&lt;Name&gt;</code>, and the name after the prefix is what the words look up
+      (case-insensitively, so <code>Cursor_Attack</code> answers <code>set cursor "attack"</code>).</p>
+
+      <div class="syntax-box">
+        <span class="alt"># Editor setup, once per cursor — this part is not a .events file</span><br>
+        <span class="kw">1.</span> Under a <code>UI Canvas</code>, add a <code>UIControl</code> actor named
+        <code>Cursor_Attack</code>.<br>
+        <span class="kw">2.</span> Set its UI Control type to <code>Image</code> and give that Image a
+        <strong>Brush</strong> — the sprite or texture that points. A sprite-atlas slot works: the brush is
+        copied by reference out of the scene, not looked up by asset name.<br>
+        <span class="kw">3.</span> For an animated cursor, add <strong>child UI actors</strong> under it, each with an
+        <code>Image</code> control. The direct children <em>are</em> the frames, in child order; the parent's own
+        Image is the still frame.<br>
+        <span class="kw">4.</span> Leave them all inactive. The view switches the drawer on only while it draws, and the
+        catalog rescans five times a second, so a brush assigned during play appears within 0.2 s.
+      </div>
+
+      <div class="syntax-box">
+        <span class="alt"># Cursor_Attack.events — the cursor's own sheet</span><br>
+        <span class="kw">when scene starts</span><br>
+        &nbsp;&nbsp;<span class="kw">set my Cursor fps to 12</span><br>
+        &nbsp;&nbsp;<span class="kw">set my Cursor hotspot to "4, 4"</span><br>
+        &nbsp;&nbsp;<span class="kw">set my Cursor fallback to "cross"</span>
+      </div>
+      <p class="alt">These four variables are actor-local, so they live on the cursor's own sheet.
+      <code>Cursor fps</code>: unset means 12 for a 2+ frame strip, and 0 holds the first frame still.
+      <code>Cursor hotspot</code>: pixels from the pointer to the art's top-left corner — <strong>it must be
+      quoted</strong>, because a comma inside a bare value is a word break.
+      <code>Cursor fallback</code>: <code>default</code>, <code>hand</code>, <code>cross</code>, <code>no</code>,
+      <code>hidden</code> or <code>image</code> — the OS pointer used when the cursor has no art, so a cursor
+      with no frames never hides the pointer.
+      <code>Cursor image</code>: the file for <code>image</code>, like
+      <code>set my Cursor image to "Content/Cursors/arrow.cur"</code>; Flax loads it through
+      <code>Window.LoadCursorImage</code> (Windows reads <code>.cur</code>/<code>.ani</code>), and a platform that
+      refuses the file keeps the default arrow.</p>
+
+      <div class="syntax-box">
+        <span class="alt"># Game.events — using the cursor (the mode words live with the game logic)</span><br>
+        <span class="kw">when Q is pressed</span><br>
+        &nbsp;&nbsp;<span class="kw">push cursor "Attack"</span><br>
+        &nbsp;&nbsp;<span class="kw">aim attack</span><br>
+        <br>
+        <span class="kw">when aim is done</span><br>
+        &nbsp;&nbsp;<span class="kw">pop cursor</span><br>
+        <br>
+        <span class="kw">when me is hovered</span><br>
+        &nbsp;&nbsp;<span class="kw">set cursor "Hand"</span><br>
+        <br>
+        <span class="kw">when me loses hover</span><br>
+        &nbsp;&nbsp;<span class="kw">set cursor to default</span><br>
+        <br>
+        <span class="kw">hide cursor</span> &nbsp;/&nbsp; <span class="kw">show cursor</span> &nbsp;— no pointer and no art, for a cutscene
+      </div>
+      <p class="alt">The pointer comes back by itself when a mode ends, and popping past the bottom keeps
+      <code>default</code>, so a sheet that forgets its pop cannot strand the game on the combat cursor.
+      The automatic sources need no words at all: once a scene authors <code>Cursor_Hand</code>,
+      <code>Cursor_Attack</code> and <code>Cursor_Cross</code>, hovering a unit, hovering a visible enemy and
+      dragging a selection box answer those cursors on their own — <code>set Cursor auto to 0</code> switches
+      that off, and <code>set Cursor hand to "Point"</code> repoints one rule. Read the answer with
+      <code>my cursor</code>, and react to it with <code>when cursor changes</code>.</p>
+      <p class="alt">A pure OS pointer needs no art at all: name the actor <code>Cursor_Hand</code>, give it no
+      Image, set <code>my Cursor fallback</code> to <code>"hand"</code>, and <code>push cursor "Hand"</code> shows
+      the platform hand with nothing drawn or hidden.</p>
+    </div>
+  </section>
+
   <section id="animation">
     <div class="card">
       <h3>Armature character: walk, shoot, return to idle</h3>
@@ -378,6 +508,201 @@
         <span class="kw">when anim "dragon_fire" ends</span><br>
         &nbsp;&nbsp;<span class="kw">loop anim "animation idle pose"</span>
       </div>
+    </div>
+  </section>
+
+  <section id="enemies">
+    <div class="card">
+      <h3>Typed enemies: one data table, one gunner sheet (TK4)</h3>
+      <p>An enemy type is six numbers and a name, and they live in data. <code>enemy type "&lt;name&gt;"</code> copies them
+      onto the actor as its own <code>my</code> variables, so a sheet reads <code>my Speed</code>, <code>my SightDistance</code>,
+      <code>my Health</code>, <code>my Weapon</code>, <code>my Hostile</code> and <code>my ExplosionDeath</code> instead of
+      repeating numbers. Adding a type is six more lines in <code>EnemyTypes.events</code> — no C#.</p>
+      <div class="syntax-box">
+        <span class="alt"># EnemyTypes.events — the table (one block per type; Zombie and Turret ship too)</span><br>
+        <span class="kw">set PistolboySpeed to 70</span><br>
+        <span class="kw">set PistolboySightDistance to 250</span><br>
+        <span class="kw">set PistolboyHealth to 45</span><br>
+        <span class="kw">set PistolboyWeapon to "Pistol"</span><br>
+        <span class="kw">set PistolboyHostile to true</span><br>
+        <span class="kw">set PistolboyExplosionDeath to false</span><br>
+        <br>
+        <span class="alt"># and a bystander: no weapon, and `my Hostile false` keeps it out of `when all enemies dead`</span><br>
+        <span class="kw">set CivilianSpeed to 70</span><br>
+        <span class="kw">set CivilianWeapon to ""</span><br>
+        <span class="kw">set CivilianHostile to false</span>
+      </div>
+
+      <div class="syntax-box">
+        <span class="alt"># TK_Gunner.events — one sheet for every armed type; `my name` is the actor's own name</span><br>
+        <span class="kw">when me appears</span><br>
+        &nbsp;&nbsp;<span class="kw">enemy type my name</span> &nbsp;<span class="alt"># actor named "Pistolboy" → the Pistolboy row</span><br>
+        &nbsp;&nbsp;<span class="kw">set my mode to "patrol"</span><br>
+        &nbsp;&nbsp;<span class="kw">goto random Waypoint speed my Speed</span><br>
+        <br>
+        <span class="kw">when me sees player by my SightDistance</span><br>
+        &nbsp;&nbsp;<span class="kw">my Hostile is true</span><br>
+        &nbsp;&nbsp;<span class="kw">set my mode to "chase"</span><br>
+        &nbsp;&nbsp;<span class="kw">goto nearest player speed my Speed</span><br>
+        <br>
+        <span class="kw">when every 0.75 seconds</span><br>
+        &nbsp;&nbsp;<span class="kw">my mode is "chase"</span><br>
+        &nbsp;&nbsp;<span class="kw">my Armed is true</span> &nbsp;<span class="alt"># set from `my Weapon` in the appear block</span><br>
+        &nbsp;&nbsp;<span class="kw">face nearest player</span><br>
+        &nbsp;&nbsp;<span class="kw">spawn Bullet at me offset 30</span> &nbsp;<span class="alt"># fires the held weapon — rocket for BazookaBoy</span><br>
+        <br>
+        <span class="kw">when my Health becomes 0</span><br>
+        &nbsp;&nbsp;<span class="kw">add 1 to kills my Type</span><br>
+        &nbsp;&nbsp;<span class="kw">if my ExplosionDeath is true</span><br>
+        &nbsp;&nbsp;<span class="kw">spawn Explosion at me</span><br>
+        &nbsp;&nbsp;<span class="kw">otherwise</span><br>
+        &nbsp;&nbsp;<span class="kw">spawn Gib at me offset 0</span><br>
+        &nbsp;&nbsp;<span class="kw">destroy me</span>
+      </div>
+
+      <div class="syntax-box">
+        <span class="alt"># Civilian.events — a non-hostile type that bolts when shot</span><br>
+        <span class="kw">when me appears</span><br>
+        &nbsp;&nbsp;<span class="kw">enemy type "Civilian"</span><br>
+        &nbsp;&nbsp;<span class="kw">set my FleeSpeed to my Speed + 70</span><br>
+        &nbsp;&nbsp;<span class="kw">wander speed my Speed</span><br>
+        <br>
+        <span class="kw">when message "damage" arrives</span><br>
+        &nbsp;&nbsp;<span class="kw">spawn Blood at me</span><br>
+        &nbsp;&nbsp;<span class="kw">set my LastDmg to other's damage</span><br>
+        &nbsp;&nbsp;<span class="kw">set my Health to my Health - my LastDmg</span><br>
+        &nbsp;&nbsp;<span class="kw">face other</span><br>
+        &nbsp;&nbsp;<span class="kw">wander speed my FleeSpeed</span>
+      </div>
+
+      <p class="alt">Setup: <code>EventSheet</code> on the enemy, Event File = <code>TK_Gunner</code>, and name the actor after its type
+      (Flax allows several actors with the same name; a spawned copy like <code>Pistolboy 2</code> still matches). A name that is not a
+      type warns once and lists the real ones. Types, weapons and every number: <code>EnemyTypes.events</code> and
+      <code>WeaponData.events</code>.</p>
+    </div>
+  </section>
+
+  <section id="levels">
+    <div class="card">
+      <h3>Levels &amp; statistics: clear the room, advance, keep the score</h3>
+      <p>A level is a scene. Every enemy tags itself with <code>my Type</code>, so <code>when all enemies dead</code> fires
+      once when the last one is gone (a non-hostile type is ignored). <code>next level</code> raises
+      <code>when level completes</code> and then loads the next scene <em>at the end of the tick</em>, so the events queued with
+      the signal still run. The run's numbers are ordinary globals &mdash; <code>Kills Total</code>, <code>Kills &lt;type&gt;</code>,
+      <code>Shots</code>, <code>Hits</code>, <code>Accuracy</code>, <code>Time Elapsed</code>, <code>LevelName</code>,
+      <code>LevelNumber</code> &mdash; so any label can bind one or print one.</p>
+      <div class="syntax-box">
+        <span class="alt"># Game.events &mdash; the level flow</span><br>
+        <span class="kw">when level starts</span><br>
+        &nbsp;&nbsp;<span class="kw">print "Level started"</span><br>
+        <br>
+        <span class="kw">when all enemies dead</span><br>
+        &nbsp;&nbsp;<span class="kw">show text "Level complete!"</span><br>
+        &nbsp;&nbsp;<span class="kw">wait 2</span><br>
+        &nbsp;&nbsp;<span class="kw">next level</span><br>
+        <br>
+        <span class="kw">when level completes</span><br>
+        &nbsp;&nbsp;<span class="kw">save stats</span>
+      </div>
+
+      <div class="syntax-box">
+        <span class="alt"># HUD lines and per-level rules</span><br>
+        <span class="kw">bind KillLabel to kills total format "Kills: {0}"</span><br>
+        <span class="kw">bind TimeLabel to time elapsed format "Time: {0}s"</span><br>
+        <span class="kw">bind LevelLabel to level number format "Level {0}"</span><br>
+        <br>
+        <span class="kw">when every 5 seconds</span><br>
+        &nbsp;&nbsp;<span class="kw">kills Zombie is higher than 10</span><br>
+        &nbsp;&nbsp;<span class="kw">accuracy is lower than 50</span><br>
+        &nbsp;&nbsp;<span class="kw">show text "Sloppy &mdash; ammo is not free"</span><br>
+        <br>
+        <span class="alt"># jumping straight to a level, and the run lifecycle</span><br>
+        <span class="kw">when F5 is pressed</span><br>
+        &nbsp;&nbsp;<span class="kw">set level to 2</span><br>
+        <br>
+        <span class="kw">when F9 is pressed</span><br>
+        &nbsp;&nbsp;<span class="kw">load stats</span><br>
+        <br>
+        <span class="kw">when F10 is pressed</span><br>
+        &nbsp;&nbsp;<span class="kw">wipe game variables</span>
+      </div>
+
+      <div class="syntax-box">
+        <span class="alt"># Enemy.events &mdash; the death that feeds all of it</span><br>
+        <span class="kw">when my Health becomes 0</span><br>
+        &nbsp;&nbsp;<span class="kw">add 1 to kills my Type</span> &nbsp;<span class="alt"># counts the type and Kills Total</span><br>
+        &nbsp;&nbsp;<span class="kw">spawn Gib at me offset 0</span><br>
+        &nbsp;&nbsp;<span class="kw">destroy me</span>
+      </div>
+      <p class="alt"><code>Shots</code> counts a player sheet's <code>spawn Bullet</code> and <code>Hits</code> a landed
+      <code>"damage"</code> on an enemy; <code>Accuracy</code> refreshes once a tick. <code>save stats</code> /
+      <code>load stats</code> are a per-session checkpoint of every global, and <code>wipe game variables</code> forgets them all
+      and re-seeds the level (a new run).</p>
+    </div>
+  </section>
+
+  <section id="multiplayer">
+    <div class="card">
+      <h3>Two players on one keyboard (local co-op / deathmatch)</h3>
+      <p>One sheet drives both players: on a player's sheet <code>when Shoot is pressed</code> means <em>that player's</em>
+      shoot button, and <code>when Left Arrow is held</code> means that player's turn-left key. Key signals carry their owner, so
+      P1's keys never reach P2's sheet. Defaults: P1 = arrows / Space / Left Shift / R / 1-3, P2 = WASD / Left Ctrl / Left Alt /
+      Q / 4-6, and gamepad 0 / 1 raise the same actions.</p>
+      <div class="syntax-box">
+        <span class="alt"># Player1.events &mdash; the same file runs on Player2 (each actor gets its own `my` variables)</span><br>
+        <span class="kw">when Shoot is held</span><br>
+        &nbsp;&nbsp;<span class="kw">unless reloading</span><br>
+        &nbsp;&nbsp;<span class="kw">unless ammo my Weapon is 0</span><br>
+        &nbsp;&nbsp;<span class="kw">spawn Bullet at me offset 30</span><br>
+        &nbsp;&nbsp;<span class="kw">add -1 to ammo my Weapon</span><br>
+        <br>
+        <span class="kw">when Sprint is held</span><br>
+        &nbsp;&nbsp;<span class="kw">move forward speed 200</span><br>
+        <br>
+        <span class="kw">when Reload is pressed</span><br>
+        &nbsp;&nbsp;<span class="kw">reload</span><br>
+        <br>
+        <span class="kw">when Weapon 2 is pressed</span><br>
+        &nbsp;&nbsp;<span class="kw">set weapon to "Shotgun"</span>
+      </div>
+
+      <div class="syntax-box">
+        <span class="alt"># Game.events &mdash; player slots, co-op lives, deathmatch scoring</span><br>
+        <span class="kw">when player 1 joins</span><br>
+        &nbsp;&nbsp;<span class="kw">print "Player 1 joined"</span><br>
+        <br>
+        <span class="kw">when player 1 dies</span><br>
+        &nbsp;&nbsp;<span class="kw">add -1 to Player1 Lives</span><br>
+        <br>
+        <span class="kw">when player 1 kills player 2</span><br>
+        &nbsp;&nbsp;<span class="kw">add 1 to Player1 Kills</span><br>
+        &nbsp;&nbsp;<span class="kw">add 1 to Player1 Score</span><br>
+        <br>
+        <span class="kw">when all players dead</span><br>
+        &nbsp;&nbsp;<span class="kw">set state gameover</span><br>
+        <br>
+        <span class="alt"># an enemy hunting whichever player is closest</span><br>
+        <span class="kw">bind TargetLabel to my TargetPlayer format "Hunting: {0}"</span>
+      </div>
+
+      <div class="syntax-box">
+        <span class="alt"># Options screen: rebind an action, then keep it</span><br>
+        <span class="kw">bind P2ShootKey to Player2 ShootKey</span><br>
+        <br>
+        <span class="kw">when P2Shoot is clicked</span><br>
+        &nbsp;&nbsp;<span class="kw">rebind player 2 Shoot</span><br>
+        <br>
+        <span class="kw">when binding changes</span><br>
+        &nbsp;&nbsp;<span class="kw">set text of StatusLabel to my LastBoundKey</span><br>
+        <br>
+        <span class="kw">when scene starts</span><br>
+        &nbsp;&nbsp;<span class="kw">load bindings</span><br>
+        &nbsp;&nbsp;<span class="kw">save bindings</span>
+      </div>
+      <p class="alt">Bindings are saved as ordinary globals (<code>Player1 ShootKey</code>, <code>Player2 ShootKey</code>, and so
+      on), so <code>save bindings</code> / <code>load bindings</code> carry them across scenes. Two actors sharing one file is the
+      whole trick: give <code>Player1</code> and <code>Player2</code> the same <code>EventSheet</code> and every <code>my</code>
+      variable stays per-actor.</p>
     </div>
   </section>
 

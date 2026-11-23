@@ -1,0 +1,14 @@
+# Build artifacts
+bin/
+obj/
+Cache/
+
+# Audio and binary assets
+*.wav
+*.flax
+*.mp3
+*.fbx
+
+# Kilo and tool folders
+.kilo/
+.freebuff/

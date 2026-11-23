@@ -3,6 +3,7 @@
 # Driven entirely by set state / when state is / state gates.
 
 when game starts
+  #camera free
   set Score to 0
   set Lives to 3
   # Per-player counters (Task 16 Part F): a two-word global, `Player<n> Score/Lives/Kills`.
@@ -15,6 +16,10 @@ when game starts
   set time scale to 1
   print "Game started"
   set state menu
+  #for rts minimap - enable for rts test demo
+  #set MinimapExtent to 400
+  #set MinimapSize to 128
+  #set MinimapGrid to 0
 
 when state is menu
   print "State: menu"

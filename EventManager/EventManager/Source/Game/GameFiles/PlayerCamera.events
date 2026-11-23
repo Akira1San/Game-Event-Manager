@@ -1,3 +1,7 @@
 when game starts
   camera switch PlayerCamera
   camera follows Player
+
+when scene starts
+  camera switch PlayerCamera
+  camera follows Player

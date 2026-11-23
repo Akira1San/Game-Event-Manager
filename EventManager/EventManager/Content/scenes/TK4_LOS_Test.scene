@@ -134,8 +134,8 @@
 			"TypeName": "Game.EventSheet",
 			"ParentID": "ddcea8759e624ecca474ba9c98fd6078",
 			"V": {
-				"EventFile": "TK_Player"
-			}
+	"EventFile": "TK_Player"
+}
 		},
 		{
 			"ID": "22ca783cb3e44caeb9365cb2b3559e7b",
@@ -144,9 +144,9 @@
 			"Name": "Enemy_LOS",
 			"Transform": {
 				"Translation": {
-					"X": 0.0,
+					"X": -160.8206787109375,
 					"Y": 4.04949951171875,
-					"Z": -150.0
+					"Z": -175.38961791992188
 				}
 			},
 			"Model": "efb6d881436796e7b8fb8496dcfe8808",
@@ -166,7 +166,23 @@
 			"TypeName": "Game.EventSheet",
 			"ParentID": "22ca783cb3e44caeb9365cb2b3559e7b",
 			"V": {
-				"EventFile": "Enemy_LOS"
+	"EventFile": "Enemy_LOS"
+}
+		},
+		{
+			"ID": "1b47d68546e97d1a62795f8a8de813c8",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "22ca783cb3e44caeb9365cb2b3559e7b",
+			"Name": "BoxCollider",
+			"Center": {
+				"X": -0.0000019073486328125,
+				"Y": 19.999998092651367,
+				"Z": 0.0
+			},
+			"Size": {
+				"X": 54.6875,
+				"Y": 39.375,
+				"Z": 34.0625
 			}
 		},
 		{
@@ -241,12 +257,7 @@
 			"ID": "4c646be2c19448b383faaba56c873ebd",
 			"TypeName": "FlaxEngine.BoxCollider",
 			"ParentID": "cbd082447e1847f8b45e619605fa2675",
-			"Name": "BoxCollider",
-			"Size": {
-				"X": 100.0,
-				"Y": 100.0,
-				"Z": 100.0
-			}
+			"Name": "BoxCollider"
 		},
 		{
 			"ID": "21c5d0cbaa134542af739c7e8722b6bb",
@@ -281,12 +292,7 @@
 			"ID": "413b87826a1c4af4a2445ab6f64c7747",
 			"TypeName": "FlaxEngine.BoxCollider",
 			"ParentID": "21c5d0cbaa134542af739c7e8722b6bb",
-			"Name": "BoxCollider",
-			"Size": {
-				"X": 100.0,
-				"Y": 100.0,
-				"Z": 100.0
-			}
+			"Name": "BoxCollider"
 		},
 		{
 			"ID": "a94b7103974041398cc530c8abd27c1a",
@@ -299,20 +305,27 @@
 			"TypeName": "Game.EventsManager",
 			"ParentID": "a94b7103974041398cc530c8abd27c1a",
 			"V": {
-				"Runtime": {
-					"Variables": {
-						"OnWarning": {}
-					},
-					"World": {
-						"$type": "Game.DefaultEventWorld, Game.CSharp"
-					},
-					"Selection": {},
-					"Construction": {},
-					"Wander": {},
-					"Sounds": {},
-					"Weapons": {}
-				}
-			}
+	"Runtime": {
+		"Variables": {
+			"OnWarning": {}
+		},
+		"World": {
+			"$type": "Game.DefaultEventWorld, Game.CSharp"
+		},
+		"Selection": {},
+		"Construction": {},
+		"Production": {},
+		"Orders": {},
+		"Fog": {},
+		"Terrain": {},
+		"Wander": {},
+		"Steering": {},
+		"Input": {},
+		"Sounds": {},
+		"Weapons": {},
+		"Levels": {}
+	}
+}
 		},
 		{
 			"ID": "e573cd2d6de34052a2f6d196894310d8",
@@ -325,6 +338,7 @@
 			"TypeName": "FlaxEngine.NavMesh",
 			"ParentID": "7e20d547c9824a3086d42e03fdc71ed2",
 			"Name": "NavMesh.Default",
+			"DataAsset": "99d16c9841a841431ea6dfae412cc6ba",
 			"Properties": {
 				"Name": "Default"
 			}
@@ -346,6 +360,54 @@
 					"Z": 0.3826834559440613,
 					"W": 1.3766874751297564e-8
 				}
+			}
+		},
+		{
+			"ID": "8a5c08b9458d1b20b937528bf49dc381",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "7e20d547c9824a3086d42e03fdc71ed2",
+			"Name": "Enemy_LOS 0",
+			"Transform": {
+				"Translation": {
+					"X": 131.7790069580078,
+					"Y": 4.04949951171875,
+					"Z": -150.0
+				}
+			},
+			"Model": "efb6d881436796e7b8fb8496dcfe8808",
+			"Buffer": {
+				"Entries": [
+					{
+						"Material": "b107e8044a0db728cb8176a397d68aa6",
+						"ShadowsMode": 3,
+						"Visible": true,
+						"ReceiveDecals": true
+					}
+				]
+			}
+		},
+		{
+			"ID": "393da0724da2cdd36fc7209e8cc19973",
+			"TypeName": "Game.EventSheet",
+			"ParentID": "8a5c08b9458d1b20b937528bf49dc381",
+			"V": {
+	"EventFile": "Enemy_Walls"
+}
+		},
+		{
+			"ID": "90a2f49546d2f43598b5868d292f320c",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "8a5c08b9458d1b20b937528bf49dc381",
+			"Name": "BoxCollider",
+			"Center": {
+				"X": 0.0,
+				"Y": 19.999998092651367,
+				"Z": 0.0
+			},
+			"Size": {
+				"X": 54.6875,
+				"Y": 39.375,
+				"Z": 34.0625
 			}
 		}
 	]

@@ -27,6 +27,24 @@ when me appears
   set my Mana to 100
   set my StimCost to 25
 
+# ---- selection feedback ---------------------------------------------------------------
+when me is selected
+  print "Marine selected"
+  #camera free
+
+when me is deselected
+  print "Marine deselected"
+
+# ---- order feedback (diagnostics) -------------------------------------------------------
+when queued order starts
+  print "Marine: order started"
+
+when path blocked
+  print "Marine: path blocked"
+
+when order completes
+  print "Marine: order complete"
+
 # ---- stim pack (Q) -------------------------------------------------------------------
 # Both conditions gate every line below them, so a cooling or tired marine spends nothing.
 when Q is pressed

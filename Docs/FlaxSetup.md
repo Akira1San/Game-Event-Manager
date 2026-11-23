@@ -11,7 +11,7 @@
 ## API documentation
 
 - **Online:** https://docs.flaxengine.com/
-- **Offline (recommended):** clone https://github.com/FlaxEngine/FlaxDocs and build/view locally.
+Flax C# API - https://docs.flaxengine.com/api/index.html
 
 ## Notes
 

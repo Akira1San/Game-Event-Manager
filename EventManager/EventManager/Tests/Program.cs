@@ -602,7 +602,14 @@ Check(setLineCount > 400 && setLineFailures.Count == 0,
 // example that drifted into a word the engine does not know would otherwise only surface in the
 // editor. `wait` is excluded on purpose — it is a runtime statement, not an action word.
 string platformerPath = "Source/Game/GameFiles/Platformer.events";
-var platformerProgram = parser.Parse(File.ReadAllText(platformerPath));
+// The sheet includes the shared movement controller, so it is read the way the runtime reads it:
+// parsing the file alone would only see the include placeholder and miss the walk/jump lines this
+// check is about.
+var platformerBox = EventFiles.LoadAll(Path.GetDirectoryName(platformerPath));
+EventFileResult platformerEntry = platformerBox.Find(entry => entry.Name == "Platformer");
+var platformerProgram = platformerEntry == null ? new ProgramFile() : platformerEntry.File;
+Check(platformerEntry != null && platformerEntry.Error.Length == 0,
+    "the platformer example loads whole, with its include expanded");
 var platformerUnknown = new List<string>();
 int platformerActions = 0;
 var platformerWords = new HashSet<string>();
@@ -630,6 +637,22 @@ Check(platformerWords.Contains("save") && platformerWords.Contains("respawn") &&
       platformerWords.Contains("jump") && platformerWords.Contains("climb") &&
       platformerWords.Contains("stop"),
     "the platformer example exercises jump, climb, save checkpoint and respawn at");
+// The ladder grab and the shared walk line both answer W in the same tick, so the order the file
+// puts them in (plus `unless me is climbing`) is what keeps a climb and a walk from running
+// together. The include sits below the grab for exactly that reason.
+Check(File.ReadAllText(platformerPath).Contains("include \"Platformer_Controls\"") &&
+      File.Exists(Path.Combine(Path.GetDirectoryName(platformerPath), "Platformer_Controls.events")),
+    "the platformer's movement keys come from the shared Platformer_Controls file");
+int platformerClimbAt = platformerProgram.Events.FindIndex(node => node.Body.Exists(line =>
+    line.Statement is RawActionNode raw && raw.Words.Count > 0 && raw.Words[0].Text == "climb"));
+int platformerWalkAt = platformerProgram.Events.FindIndex(node => node.Body.Exists(line =>
+    line.Statement is RawActionNode raw && raw.Words.Count > 0 && raw.Words[0].Text == "move"));
+Check(platformerClimbAt >= 0 && platformerWalkAt > platformerClimbAt,
+    "the ladder grab is checked before the shared controller's walk line, so W never climbs and walks in one tick");
+int platformerJumpAt = platformerProgram.Events.FindIndex(node => node.Body.Exists(line =>
+    line.Statement is RawActionNode raw && raw.Words.Count > 0 && raw.Words[0].Text == "jump"));
+Check(platformerJumpAt >= 0 && platformerWords.Contains("move") && platformerWords.Contains("jump"),
+    "the shared controller's walk and jump reach the platformer's event list");
 
 // Task 21 Part C — the tall ladder is events-only, so its example sheet is the whole feature. The
 // suite loads it like the platformer: every action line must be a shipped word, and the exits

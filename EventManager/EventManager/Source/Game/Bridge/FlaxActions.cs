@@ -7275,10 +7275,9 @@ namespace Game
         }
 
         /// <summary>
-        /// <c>camera follows &lt;thing&gt;</c> (Task 52): keep the camera where the scene *placed*
-        /// it relative to the subject — position minus target position — so a camera authored to
-        /// the side of the player stays to the side instead of jumping on top of them. The
-        /// authored rotation is kept too: a follow never re-aims the shot.
+        /// <c>camera follows &lt;thing&gt;</c> (Task 52): keep the camera centred above the
+        /// subject at the authored height and depth, easing smoothly into place. The authored
+        /// rotation is kept too: a follow never re-aims the shot.
         /// </summary>
         private static void StartCameraFollow(EventContext context, ActionSpec spec)
         {
@@ -7295,10 +7294,11 @@ namespace Game
                 return;
             }
 
-            // The placed framing is the offset: where the camera sits now, relative to the
-            // subject it is about to follow (CameraFollow.Offset).
-            CameraPoint offset = CameraFollow.Offset(
-                ToPoint(camera.Position), ToPoint(target.Position));
+            // Centre the camera above the subject at the authored height/depth. The damping in
+            // UpdateCameraFollow smooths the lag-and-return-to-centre feel.
+            float camHeight = (float)context.Runtime.Variables.GetGlobal("CameraHeight").AsNumber();
+            float camDepth = (float)context.Runtime.Variables.GetGlobal("CameraDepth").AsNumber();
+            CameraPoint offset = new CameraPoint(0.0, camHeight, camDepth);
             // Following releases both the snap and the aim (CameraState.Follow).
             context.Runtime.Camera.Follow(target, offset);
             context.Runtime.Variables.SetGlobal(CameraRig.FreeVariable, ValueBox.OfNumber(0));
