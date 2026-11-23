@@ -1,0 +1,35 @@
+# Platformer_Controls.events — the reusable platformer movement keys (Task 36 Part G).
+#
+# The input half of the platformer controller, written once and pulled into a sheet with
+# `include "Platformer_Controls"` — the same split `FPS_Controls.events` makes. What stays in the
+# including sheet is what belongs to a game's design rather than to a controller: the ladder grab,
+# the poses, the checkpoint and the death/respawn. (Gravity, collide-and-slide walking and the
+# ground probe already live in shared C#: `PhysicsMovement`, `CharacterStep`.)
+#
+# What the including sheet provides:
+#   · `my WalkSpeed` — walk speed in cm/s. Unset means every move runs at 0, so set it on start.
+#   · `my JumpPower` — take-off speed in cm/s (the default `jump` is 350 when the sheet says
+#     nothing, which is why this line names the variable).
+#   · its ladder grab on W ABOVE the include line if it has one: events run top to bottom, and
+#     `climb` registers the climb immediately, so this file's `unless me is climbing` sees it in
+#     the same tick and the walk does not fight the ascent.
+#
+# Setup (editor): a CharacterController on the actor, its EventSheet ticked *Use Physics Movement*
+# (and *Configure Character Body* for the shipped capsule). The ground probe uses the sheet's
+# Ground Check Distance — 10 cm by default — and a sheet at 0 always reads airborne.
+#
+# Keys: W walks, Space jumps when grounded.
+
+# --- walking ------------------------------------------------------------------------------
+# `unless me is climbing` is what lets a sheet own W for a ladder (or any other mode) without the
+# walk running underneath it.
+when W is held
+  unless me is climbing
+  move forward speed my WalkSpeed
+
+# --- jumping ------------------------------------------------------------------------------
+# `jump` refuses a mid-air take-off on its own; the gate makes that visible, and it is also what
+# keeps a sheet's `Jump` clip from restarting on every held tick.
+when Space is pressed
+  unless me is airborne
+  jump strength my JumpPower

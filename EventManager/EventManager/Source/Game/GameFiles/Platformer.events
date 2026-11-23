@@ -1,0 +1,125 @@
+# ---------------- Platformer.events (Task 36 Part G) ----------------
+# The platformer's own half of the kit: the ladder, the poses, the checkpoint and the death that
+# puts the character back at it. The movement keys are not here — `include "Platformer_Controls"`
+# pulls the shared controller's W (walk) and Space (jump) in, the same split FPS_Player uses. What
+# a sheet adds itself goes ABOVE the include when it has to win the same key in the same tick (the
+# ladder grab does), because events run top to bottom.
+#
+# SETUP (editor) — one scene, e.g. "PlatformerTest":
+#   1. Player: a CharacterController + an EventSheet whose Event File is `Platformer`, standing on
+#      a floor. Tick the EventSheet's "Configure Character Body" for the shipped capsule; the
+#      ground probe uses `GroundCheckDistance` (10 cm by default), and a sheet at 0 always reads
+#      airborne.
+#   2. Ladder: a thin, tall BoxCollider standing against the platform it serves. The climb gate is
+#      40 cm, so a character standing on the landing does not re-grab it; if yours does, move the
+#      ladder 30 cm further out or lower the distance in the ladder block.
+#   3. Checkpoint: any actor (an empty actor is fine) where a death should put the player back.
+#   4. Optional poses: animations called Idle / Run / Jump / Fall / Climb / Death on the model.
+#      Without them `anim` warns once per name and the controller still runs.
+#   5. A UICanvas holding `CheckpointLabel`, so check 5 of the play-check list reads without the
+#      debugger.
+#
+# Keys: W walks (and grabs the ladder), S lets go of the ladder, Space jumps, K kills you on
+# purpose so the respawn checks need no spike or pit actor.
+#
+# The shared controller's speed knobs — `my WalkSpeed` 220 cm/s and `my JumpPower` 420 cm/s (a
+# little over one 60 cm crate at the default gravity) — are set in `when me appears` below.
+
+# --- the ladder: W grabs it when one is in reach ------------------------------------------
+# The span ends the climb at the top, and W then walks the character off the ladder onto the
+# landing. This block is above the include on purpose: `climb` registers the climb immediately, so
+# the shared controller's `unless me is climbing` walk line sees it in the same tick and the climb
+# and the walk never run together. Holding S (`stop climbing`) lets go.
+when W is held
+  unless me is climbing
+  if me is on ground and me is near Ladder by 40
+  climb Ladder
+
+include "Platformer_Controls"
+
+# --- the jump clip -------------------------------------------------------------------------
+# The shared controller does the take-off (gated on `me is airborne`); this sheet only picks the
+# pose, so a model without a Jump clip still jumps.
+when Space is pressed
+  unless me is airborne
+  play anim "Jump" once
+
+# --- letting go of the ladder -------------------------------------------------------------
+# `stop climbing` keeps the height it let go at, so this is also the mid-ladder exit.
+when S is pressed
+  me is climbing
+  stop climbing
+
+# --- poses: ground, air, ladder -----------------------------------------------------------
+# There is no `when me lands` trigger yet, so the ground states are polls: `me is on ground` and
+# `me is airborne` are conditions, and `me is moving` separates a walk from standing still.
+when every 0.1 seconds
+  my Dead is 0
+  me is climbing
+  loop anim "Climb"
+
+when every 0.1 seconds
+  my Dead is 0
+  me is airborne
+  loop anim "Fall"
+
+when every 0.1 seconds
+  my Dead is 0
+  me is on ground
+  me is moving
+  loop anim "Run"
+
+when every 0.1 seconds
+  my Dead is 0
+  me is on ground
+  unless me is moving
+  loop anim "Idle"
+
+# --- the checkpoint -----------------------------------------------------------------------
+# `save checkpoint` writes this actor's own `CheckpointX` / `CheckpointY` / `CheckpointZ` /
+# `CheckpointYaw`. They are ordinary per-actor variables, so a save file (Task 30) carries them and
+# nothing clears them on death — only a new game, with a fresh actor, starts without one.
+# `when me touches <actor>` is enter-edge, not per-tick, but a body can step out of the marker and
+# back in — and a respawn puts it down right on top of one — so a bare `save checkpoint` would keep
+# rewriting the same pose and printing. `my CheckpointSaved` makes the save a once-per-checkpoint
+# event: set beside the pose, never cleared on death, and started at 0 by `when me appears`.
+# A second marker therefore needs its own `respawn at` line and its own reset of the flag.
+when me touches Checkpoint
+  my CheckpointSaved is 0
+  save checkpoint
+  set my CheckpointSaved to 1
+  print "Platformer: checkpoint saved"
+
+# --- dying, and coming back ---------------------------------------------------------------
+# K is the debug death, so the respawn checks need no hazard actor.
+when K is pressed
+  set my Health to 0
+
+# `my Dead` makes the death a moment rather than a state: without the guard the block would start
+# again while the wait is still running. `respawn at Checkpoint` warps through the same reset
+# `teleport` uses, so moves, pushes, fall speed, the jump flags and any climb are cleared before
+# the body is placed — the character comes back at rest instead of carrying its old momentum.
+when my Health is lower than 1
+  my Dead is 0
+  set my Dead to 1
+  loop anim "Death"
+  wait 0.8 seconds
+  respawn at Checkpoint
+  set my Health to 100
+  set my Dead to 0
+  loop anim "Idle"
+  print "Platformer: respawned at Checkpoint"
+
+when me appears
+  set my Health to 100
+  set my MaxHealth to 100
+  set my Dead to 0
+  set my CheckpointSaved to 0
+  # The shared controller reads both on every move, so they are set before the first tick.
+  set my WalkSpeed to 220
+  set my JumpPower to 420
+  print "Platformer: W walks, Space jumps, S lets go of the ladder, K kills you"
+
+# The checkpoint read-out for check 5: 0 before the first touch, the marker's X after it, and the
+# same number again after a death and respawn.
+bind CheckpointLabel to my CheckpointX format "Checkpoint X: {0}"
