@@ -267,6 +267,18 @@ namespace Game
         /// <summary>Posture from <c>crouch</c> / <c>stand</c> / <c>toggle crouch</c>; also mirrored
         /// into the readable <c>my Stance</c> variable (Task_FPS Phase 2).</summary>
         public BodyStance Stance = BodyStance.Stand;
+        /// <summary>Pace from <c>sprint</c> / <c>walk</c> / <c>toggle sprint</c>; multiplies every
+        /// <c>move</c> speed and drains <c>my Stamina</c> while moving (Task_FPS Phase 3). Mirrored
+        /// into the readable <c>my Sprinting</c> variable.</summary>
+        public BodyPace Pace = BodyPace.Walk;
+        /// <summary>Set by the first <c>sprint</c> / <c>walk</c> / <c>toggle sprint</c> this sheet runs:
+        /// the bridge only spends and refills a stamina pool it was asked to manage, so a sheet with
+        /// its own <c>my Stamina</c> counter (TK4) is never topped up behind its back (Task_FPS
+        /// Phase 3).</summary>
+        public bool UsesPace;
+        /// <summary>Opt-in (EventSheet "Sprint Stamina"): manage <c>my Stamina</c> even for a sheet
+        /// whose events never say a pace word, e.g. one that calls the pool by hand.</summary>
+        public bool SprintStamina;
         /// <summary>Set by the EventSheet "Self Test" flag (or a sheet named `SelfTest`): this
         /// file is the project's self-test sheet (Task 51 Part C). Case discovery still comes
         /// from the `expect` lines, so the marker never changes how an ordinary sheet runs.</summary>

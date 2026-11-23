@@ -311,6 +311,7 @@ namespace Game
             // Stance bookkeeping is keyed by actor, and a new scene's actors are new objects.
             StandBodies.Clear();
             StanceSink.Clear();
+            SprintMarks.Clear();
             SoundIndexCache = null;
             AnimIndexCache = null;
             AnimFullNames = null;
@@ -434,6 +435,7 @@ namespace Game
             DeltaTime = deltaTime;
             MovedThisTick.Clear();
             StepAltitude();
+            StepSprint(deltaTime);
             StepAudio(deltaTime);
             for (int i = ActiveSounds.Count - 1; i >= 0; i--)
                 if (ActiveSounds[i].Source == null)
@@ -900,6 +902,18 @@ namespace Game
                     SetStance(context, Stance.Toggle(StanceOf(context)));
                     break;
 
+                case ActionVerb.Sprint:
+                    SetPace(context, BodyPace.Sprint);
+                    break;
+
+                case ActionVerb.Walk:
+                    SetPace(context, BodyPace.Walk);
+                    break;
+
+                case ActionVerb.ToggleSprint:
+                    SetPace(context, Sprint.Toggle(PaceOf(context)));
+                    break;
+
                 case ActionVerb.Move:
                 {
                     var me = context.Me as Actor;
@@ -917,7 +931,7 @@ namespace Game
                         var target = ResolveThing(context, spec.Thing) as Actor;
                         if (target != null)
                         {
-                            double speed = ResolveNumber(context, spec) * Stance.SpeedFactor(StanceOf(context));
+                            double speed = ResolveNumber(context, spec) * PaceSpeedFactor(context);
                             Vector3 heading;
                             if (spec.AroundWalls)
                             {
@@ -962,8 +976,9 @@ namespace Game
                     // looks, so A/D strafe without ever turning the body.
                     if (context.Sheet != null && context.Sheet.MoveRelativeToCamera)
                         moveHeading = CameraRelativeDirection(me, spec.Dir, moveHeading);
-                    // A crouched actor keeps its pace words and walks at half speed.
-                    MoveSubject(me, moveHeading, ResolveNumber(context, spec) * Stance.SpeedFactor(StanceOf(context)), mode);
+                    // A crouched actor keeps its pace words and walks at half speed; a sprinting
+                    // one keeps them too and multiplies what it asked for.
+                    MoveSubject(me, moveHeading, ResolveNumber(context, spec) * PaceSpeedFactor(context), mode);
                     break;
                 }
                 case ActionVerb.StopMoving:
@@ -2947,6 +2962,10 @@ namespace Game
         /// <summary>How far each crouched actor was sunk so its feet stayed on the floor.</summary>
         private static readonly Dictionary<Actor, double> StanceSink = new Dictionary<Actor, double>();
 
+        /// <summary>Where each actor was last tick, so a sprint only pays for stamina when the
+        /// body actually moved (standing still while holding Shift is free).</summary>
+        private static readonly Dictionary<Actor, Vector3> SprintMarks = new Dictionary<Actor, Vector3>();
+
         /// <summary>The posture the acting sheet is in (a sheet-less run reads its actor's own
         /// sheet, and anything unknown stands).</summary>
         private static BodyStance StanceOf(EventContext context)
@@ -3049,6 +3068,109 @@ namespace Game
             sheet.Stance = BodyStance.Stand;
             EventsManager.Instance?.Runtime?.Variables.SetLocal(
                 subject, Stance.Variable, ValueBox.OfText(Stance.StandName));
+        }
+
+        /// <summary>The pace the acting sheet is in (a sheet-less run reads its actor's own
+        /// sheet, and anything unknown walks).</summary>
+        private static BodyPace PaceOf(EventContext context)
+        {
+            if (context.Sheet != null)
+                return context.Sheet.Pace;
+            SheetInstance sheet = EventsManager.Instance?.Runtime?.FindSheetFor(context.Me);
+            return sheet != null ? sheet.Pace : BodyPace.Walk;
+        }
+
+        /// <summary>The actor's own <c>my SprintSpeed</c>, or the default multiplier when the
+        /// sheet never set one.</summary>
+        private static double SprintSpeedOf(EventContext context)
+        {
+            EventVariables variables = context.Variables;
+            object me = context.Me;
+            if (variables == null || me == null || !variables.HasLocal(me, Sprint.SpeedVariable))
+                return Sprint.DefaultSpeedFactor;
+            return variables.GetLocal(me, Sprint.SpeedVariable).AsNumber();
+        }
+
+        /// <summary>Everything that scales a <c>move</c> speed: the stance (a crouch halves it)
+        /// and the pace (a sprint multiplies it). A crouched sprint is 1x, so neither word can be
+        /// used to cheat the other.</summary>
+        private static double PaceSpeedFactor(EventContext context)
+            => Stance.SpeedFactor(StanceOf(context)) *
+               Sprint.SpeedFactor(PaceOf(context), SprintSpeedOf(context));
+
+        /// <summary>
+        /// <c>sprint</c> / <c>walk</c> / <c>toggle sprint</c> (Task_FPS Phase 3): a pace, not a
+        /// move — every <c>move</c> the sheet already writes simply runs faster or slower.
+        /// <c>sprint</c> is refused while the actor's <c>my Stamina</c> is empty, so holding the key
+        /// through an exhaustion does not restart it the moment a trickle comes back.
+        /// </summary>
+        private static void SetPace(EventContext context, BodyPace pace)
+        {
+            var me = context.Me as Actor;
+            if (me == null)
+            {
+                WarnOnce("\u201Csprint\u201D / \u201Cwalk\u201D need to run on an actor's sheet \u2014 the global Game sheet has no body to pace.");
+                return;
+            }
+            SheetInstance sheet = context.Sheet ?? EventsManager.Instance?.Runtime?.FindSheetFor(me);
+            if (sheet == null)
+                return;
+            // From here on the sheet is using the pace words, so the bridge may manage its pool.
+            sheet.UsesPace = true;
+            EventVariables variables = context.Variables ?? EventsManager.Instance?.Runtime?.Variables;
+            if (pace == BodyPace.Sprint && variables != null && variables.HasLocal(me, Sprint.StaminaVariable) &&
+                !Sprint.CanSprint(variables.GetLocal(me, Sprint.StaminaVariable).AsNumber()))
+                return;
+            SetPace(sheet, variables, me, pace);
+        }
+
+        private static void SetPace(SheetInstance sheet, EventVariables variables, Actor actor, BodyPace pace)
+        {
+            if (sheet.Pace == pace)
+                return;
+            sheet.Pace = pace;
+            variables?.SetLocal(actor, Sprint.Variable, ValueBox.OfNumber(pace == BodyPace.Sprint ? 1.0 : 0.0));
+        }
+
+        /// <summary>
+        /// One tick of the stamina pool for every sheet that uses the pace words (or ticked
+        /// Sprint Stamina) and declared <c>my Stamina</c>: sprinting while the body actually moves
+        /// drains it, everything else refills it, and reaching 0 drops the actor back to <c>walk</c>
+        /// instead of leaving a sprint its sheet thinks is still on. A sheet is left alone when it
+        /// never used a pace word and did not opt in — TK_Player keeps its own <c>my Stamina</c>
+        /// counter with `add` lines, and topping that up to 100 every tick would silently rewrite
+        /// its hand-written sprint — and also when it has no pool at all (its sprint is free), so
+        /// this never invents variables on NPCs that happen to use the pace words.
+        /// </summary>
+        private static void StepSprint(float deltaTime)
+        {
+            var runtime = EventsManager.Instance?.Runtime;
+            if (runtime == null)
+                return;
+            EventVariables variables = runtime.Variables;
+            var seen = new HashSet<Actor>();
+            foreach (SheetInstance sheet in runtime.Sheets)
+            {
+                Actor actor = sheet.Actor as Actor;
+                if (actor == null || actor.Scene == null || !seen.Add(actor))
+                    continue;
+                if (!Sprint.ManagesStamina(sheet.UsesPace, sheet.SprintStamina))
+                    continue;
+                bool moved = SprintMarks.TryGetValue(actor, out Vector3 last) &&
+                             (actor.Position - last).Length > (float)Sprint.MovedEpsilon;
+                SprintMarks[actor] = actor.Position;
+                if (!variables.HasLocal(actor, Sprint.StaminaVariable))
+                    continue;
+                double stamina = variables.GetLocal(actor, Sprint.StaminaVariable).AsNumber();
+                double max = variables.HasLocal(actor, Sprint.MaxStaminaVariable)
+                    ? variables.GetLocal(actor, Sprint.MaxStaminaVariable).AsNumber()
+                    : Sprint.DefaultStamina;
+                double next = Sprint.Tick(stamina, sheet.Pace, moved, max, deltaTime);
+                if (Math.Abs(next - stamina) > 1e-9)
+                    variables.SetLocal(actor, Sprint.StaminaVariable, ValueBox.OfNumber(next));
+                if (sheet.Pace == BodyPace.Sprint && next <= 0.0)
+                    SetPace(sheet, variables, actor, BodyPace.Walk);
+            }
         }
 
         /// <summary>

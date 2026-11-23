@@ -10,6 +10,11 @@ namespace Game
     public class EventNode
     {
         public int Line;
+        /// <summary>Set by an <c>include "&lt;file&gt;"</c> line: the event is a placeholder, and
+        /// <see cref="ProgramIncludes.Expand"/> replaces it with the included file's events in place,
+        /// so the order the author wrote survives (a controller library included at the top runs its
+        /// blocks first). Empty on a real event.</summary>
+        public string IncludeName = "";
         public List<Token> Trigger = new List<Token>();
         public List<BodyLineNode> Body = new List<BodyLineNode>();
         /// <summary>When set, this event only fires while the sheet's CurrentState matches.</summary>

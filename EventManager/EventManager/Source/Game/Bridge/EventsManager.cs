@@ -483,6 +483,7 @@ namespace Game
                 existing.UsePhysicsMovement = component.UsePhysicsMovement;
                 existing.FirstPerson = component.FirstPerson;
                 existing.MoveRelativeToCamera = component.MoveRelativeToCamera;
+                existing.SprintStamina = component.SprintStamina;
                 existing.GroundCheckDistance = component.ReadCharacterBodySettings().GroundCheckDistance;
                 SyncStepSoundMap(existing, component.StepSoundMap);
                 return;
@@ -504,6 +505,7 @@ namespace Game
             sheet.UsePhysicsMovement = component.UsePhysicsMovement;
             sheet.FirstPerson = component.FirstPerson;
             sheet.MoveRelativeToCamera = component.MoveRelativeToCamera;
+            sheet.SprintStamina = component.SprintStamina;
             sheet.GroundCheckDistance = component.ReadCharacterBodySettings().GroundCheckDistance;
             SyncStepSoundMap(sheet, component.StepSoundMap);
         }

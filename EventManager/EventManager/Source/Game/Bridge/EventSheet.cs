@@ -75,6 +75,16 @@ namespace Game
         public bool MoveRelativeToCamera = false;
 
         /// <summary>
+        /// Opt-in (Task_FPS Phase 3): let the bridge own this sheet's <c>my Stamina</c> — spend it
+        /// at 50/s while sprinting and moving, refill it at 16/s otherwise, and force <c>walk</c>
+        /// when it reaches 0. A sheet that uses <c>sprint</c> / <c>walk</c> / <c>toggle sprint</c>
+        /// is managed automatically; tick this for one whose events keep their own pool by hand.
+        /// Unticked, a sheet that never says a pace word keeps every number its lines wrote.
+        /// </summary>
+        [Tooltip("Let the event runner spend and refill this sheet's `my Stamina`. Automatic for a sheet that uses `sprint` / `walk`; tick this for one that manages stamina with its own lines.")]
+        public bool SprintStamina = false;
+
+        /// <summary>
         /// Ticks the capsule settings below onto the actor's <c>CharacterController</c> when the
         /// sheet starts. Leave unticked to use whatever the CharacterController inspector says.
         /// </summary>

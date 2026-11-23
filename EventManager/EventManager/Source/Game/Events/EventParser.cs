@@ -36,6 +36,13 @@ namespace Game
                     file.Events.Add(ParseEvent());
                     continue;
                 }
+                if (t.Type == TokenType.Word && t.Text == "include")
+                {
+                    // `include "Controls"` leaves a placeholder here; the included file's events
+                    // are spliced in at this position once every file has parsed (ProgramIncludes).
+                    file.Events.Add(new EventNode { Line = t.Line, IncludeName = ParseInclude() });
+                    continue;
+                }
                 if (t.Type == TokenType.Word && t.Text == "bind")
                 {
                     // `bind` is sugar: it expands into ordinary `when <var> changes` events here.
@@ -242,6 +249,38 @@ namespace Game
                 ? "events stack one after another — a `when` never sits inside another event"
                 : "this line is indented too deep — every line under a `when` starts at the same 2 spaces";
             return new ParseException(message, indentToken.Line);
+        }
+
+        /// <summary>
+        /// <c>include "FPS_Controls"</c> (controller reuse): the name of another GameFiles
+        /// <c>.events</c> file, without the extension. Quotes are optional, so <c>include
+        /// FPS_Controls</c> and <c>include "FPS_Controls.events"</c> read the same. Nothing is
+        /// indented under the line — it is a file-level directive, like `bind` standing alone.
+        /// </summary>
+        private string ParseInclude()
+        {
+            var includeToken = tokens[pos];
+            pos++;
+            var words = new List<Token>();
+            while (pos < tokens.Count &&
+                   (tokens[pos].Type == TokenType.Word || tokens[pos].Type == TokenType.Number || tokens[pos].Type == TokenType.Str))
+                words.Add(tokens[pos++]);
+            if (pos < tokens.Count && tokens[pos].Type == TokenType.NewLine)
+                pos++;
+            if (pos < tokens.Count && tokens[pos].Type == TokenType.Indent)
+                throw new ParseException("`include` stands on its own line — nothing is indented under it", includeToken.Line);
+            if (words.Count == 0)
+                throw new ParseException("`include` needs the event file to pull in — `include \"FPS_Controls\"` names a .events file in GameFiles without the extension", includeToken.Line);
+            if (words[0].Type != TokenType.Word && words[0].Type != TokenType.Str)
+                throw new ParseException("`include` takes a file name — the .events file's name without the extension, like `include \"FPS_Controls\"`", includeToken.Line);
+            string name = words[0].Text;
+            if (name.EndsWith(".events", StringComparison.OrdinalIgnoreCase))
+                name = name.Substring(0, name.Length - ".events".Length);
+            if (name.Length == 0)
+                throw new ParseException("`include` needs a name before `.events` — `include \"FPS_Controls\"`", includeToken.Line);
+            if (words.Count > 1)
+                throw new ParseException($"`include` takes one file name — \"{words[1].Text}\" comes after it, and an included file is pulled in whole", words[1].Line);
+            return name;
         }
 
         /// <summary>

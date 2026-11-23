@@ -1,53 +1,23 @@
-# FPS_Player.events — first-person player (Task_FPS Phases 1–2).
+# FPS_Player.events — the first-person player's feel and setup (Task_FPS Phases 1–3).
+#
+# The keys themselves are not here: `include "FPS_Controls"` pulls in the shared controller
+# (W/A/S/D, Shift sprint, Ctrl crouch, Space jump, Escape cursor lock). This file only holds
+# what is specific to this player — the speed numbers, the stamina bar and the capture on
+# start — so a second first-person character is a copy of these three lines plus the include.
 #
 # Scene setup: the player actor carries this sheet's EventSheet with
 #   First Person, Use Physics Movement and Move Relative To Camera ticked,
 # and a Camera actor is parented under it at eye height
 # (that child is the eyes: the mouse pitches it).
 #
-# The mouse turns the body, so `move forward` walks where you look, and
-# `move left`/`right` strafe from the camera without turning it
-# (Move Relative To Camera is what guarantees that even if the body ever
-# faces somewhere else — aiming does exactly that in Phase 4).
-# Feel knobs are globals: `set LookSensitivity to 0.15`,
-# `set LookInvertY to 1`.
+# Feel knobs are globals: `set LookSensitivity to 0.15`, `set LookInvertY to 1`.
 
 when game starts
   lock cursor
+  # Every `move` in FPS_Controls asks for `my Pace`, so this one number is the walk speed;
+  # 240 × 1.75 = 420 while sprinting.
   set my Pace to 240
-  set my RunSpeed to 420
+  set my SprintSpeed to 1.75
   set my Stamina to 100
 
-when W is held
-  Left Shift is held
-  my Stamina is higher than 0
-  move forward speed my RunSpeed
-
-when W is held
-  unless Left Shift is held
-  move forward speed my Pace
-
-when S is held
-  move backward speed my Pace
-
-when A is held
-  move left speed my Pace
-
-when D is held
-  move right speed my Pace
-
-# Hold Ctrl to duck. The bridge shortens the capsule, sinks the body (so the
-# camera child comes down with it) and halves whatever speed the moves ask for.
-when Left Ctrl is pressed
-  crouch
-
-when Left Ctrl is released
-  stand
-
-when Space is pressed
-  jump
-
-# Hand the pointer back so a menu or the debugger stays usable, and take it again on the
-# next press: one key flips capture.
-when Escape is pressed
-  toggle cursor lock
+include "FPS_Controls"

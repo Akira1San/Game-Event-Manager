@@ -156,6 +156,19 @@ An `.events` file reaches an actor one of two ways — **explicit first, name fa
   Put the one manager on a **permanent scene-root actor** — never on an actor the game
   hides or spawns: `IsActive = false` (from `hide me`) also disables the manager's
   `OnUpdate`, so pending waits could never resume.
+- **Reuse across files: `include "<file>"`.** A sheet can pull another GameFiles `.events` file
+  in whole, at the line where the include sits: `include "FPS_Controls"` (quotes, bare name and a
+  trailing `.events` all read the same). That is how the first-person input wiring is written once
+  — `GameFiles/FPS_Controls.events` holds W/A/S/D, Shift sprint, Ctrl crouch, Space jump and the
+  cursor toggle, and a player sheet is three feel lines plus the include. Resolution happens after
+  every file parses (`Events/ProgramIncludes.cs`, called by `EventFiles.LoadAll`), so a library may
+  name another library; each name is included once per sheet, so writing the include twice cannot
+  double-fire a block, and a missing file (with a "did you mean …?"), a loop, or a chain deeper than
+  eight files is a friendly error on the including file. Included blocks keep their own line numbers in diagnostics and `my` still
+  means the including actor — nothing is copied at runtime, and the included file is not a special
+  kind of sheet: attach it to an actor directly and it behaves like any other. The words themselves
+  stay in the sheet language; `include` only decides which file they live in, so behaviour is never
+  hidden in C#.
 
 Inside a sheet, **`me`** means that actor, and **`other`** means the actor involved in the
 trigger (the one touching, the one hit, the one which sent a message).
@@ -494,6 +507,26 @@ moving` brakes the horizontal velocity; `goto` brakes on arrival.
   to the old spot), and a new scene forgets all stance bookkeeping because its actors are new
   objects. Without that, a respawned crouched body would land half a capsule underground and a
   later `stand` would lift it into the air.
+- **Pace** (`sprint` / `walk` / `toggle sprint`, Task_FPS Phase 3) is the stance treatment applied
+  to speed: the word changes a multiplier, never the sheet's speed numbers, so `move forward
+  speed my Pace` stays the one place the pace lives and Shift does not need a second copy of every
+  line. The multiplier is `my SprintSpeed` (default 2, floored at 1) and it **multiplies** the
+  stance factor, so a crouched sprint is 1× — crouching cannot be used to cancel a sprint and
+  sprinting cannot be used to cancel a crouch.
+- **Stamina is a pool the bridge spends, not a counter a sheet decrements.** `my Stamina` is
+  drained at 50/s only while a sprinting actor is actually moving (measured from its position, so
+  timing never depends on whether the event tick ran before the bridge tick), refilled at 16/s
+  otherwise up to `my MaxStamina` (default 100), and the first tick at 0 forces `walk` and mirrors
+  `my Sprinting` back to 0. `sprint` is refused while the pool is empty, so holding the key through
+  an exhaustion cannot restart the sprint the moment a trickle comes back. Per-second numbers
+  rather than per-tick ones keep the feel identical at 30 and 144 fps, and a sheet that never
+  declares `my Stamina` sprints for free — the bridge will not invent a pool on an NPC that merely
+  uses the pace words (the same reason stance bookkeeping is keyed by actor). Ownership of the pool
+  is explicit: the drain/refill only runs on a sheet that actually used a pace word (its first
+  `sprint` / `walk` / `toggle sprint` claims the pool) or whose `EventSheet` ticked **Sprint
+  Stamina**. `TK_Player` keeps its own `my Stamina` with `add` lines for the TK4 sprint, so before
+  that gate every tick quietly topped it back up to 100 and rewrote a hand-written bar; a sheet's
+  own counter is now left exactly as its events wrote it.
 - `turn left/right degrees <n>` is rotation-only and instant. In Flax a positive Y yaw turns
   local forward (+Z) toward +X, i.e. to the actor's **right**, so left is a negative yaw and right
   is positive. Any other direction word is rejected with a warning instead of silently turning

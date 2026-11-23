@@ -104,7 +104,38 @@ namespace Game
                 }
                 results.Add(result);
             }
+            ExpandIncludes(results);
             return results;
+        }
+
+        /// <summary>
+        /// Splices every <c>include "&lt;file&gt;"</c> in once all files are parsed (controller reuse).
+        /// The included blocks keep their own line numbers, so a warning inside a library names the
+        /// library's line; a file that includes a missing name or a loop is reported like any other
+        /// broken sheet, with the message on the including file.
+        /// </summary>
+        private static void ExpandIncludes(List<EventFileResult> results)
+        {
+            var byName = new Dictionary<string, ProgramFile>(StringComparer.OrdinalIgnoreCase);
+            var names = new List<string>();
+            foreach (EventFileResult result in results)
+            {
+                if (result.File == null || !string.IsNullOrEmpty(result.Error))
+                    continue;
+                byName[result.Name] = result.File;
+                names.Add(result.Name);
+            }
+            foreach (EventFileResult result in results)
+            {
+                if (result.File == null || !string.IsNullOrEmpty(result.Error))
+                    continue;
+                if (ProgramIncludes.Expand(result.File,
+                        name => byName.TryGetValue(name, out ProgramFile found) ? found : null,
+                        out string error, wanted => SuggestFileName(wanted, names)))
+                    continue;
+                result.File = new ProgramFile();
+                result.Error = error;
+            }
         }
 
         /// <summary>

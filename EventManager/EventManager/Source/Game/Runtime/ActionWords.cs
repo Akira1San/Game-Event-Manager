@@ -23,6 +23,13 @@ namespace Game
         Stand,
         /// <summary><c>toggle crouch</c> — the same two, alternating.</summary>
         ToggleCrouch,
+        /// <summary><c>sprint</c> — multiply every move speed and pay for it out of
+        /// <c>my Stamina</c> (Task_FPS Phase 3).</summary>
+        Sprint,
+        /// <summary><c>walk</c> — back to the authored pace.</summary>
+        Walk,
+        /// <summary><c>toggle sprint</c> — the same two, alternating.</summary>
+        ToggleSprint,
         Turn,
         LookAt,
         Face,
@@ -1627,12 +1634,25 @@ namespace Game
                         return Finish(spec, ActionVerb.Stand, words, 1);
                     return Unknown(spec, words, "\u201Cstand\u201D stands alone \u2014 the stance is the whole word", warn);
 
+                case "sprint":
+                    // `sprint` / `walk`: pace changes, no argument (Task_FPS Phase 3).
+                    if (words.Count == 1)
+                        return Finish(spec, ActionVerb.Sprint, words, 1);
+                    return Unknown(spec, words, "\u201Csprint\u201D stands alone \u2014 the pace is the whole word \u2014 and its multiplier is `my SprintSpeed`", warn);
+
+                case "walk":
+                    if (words.Count == 1)
+                        return Finish(spec, ActionVerb.Walk, words, 1);
+                    return Unknown(spec, words, "\u201Cwalk\u201D stands alone \u2014 the pace is the whole word", warn);
+
                 case "toggle":
                     if (words.Count >= 2 && words[1].Text == "crouch")
                         return Finish(spec, ActionVerb.ToggleCrouch, words, 2);
                     if (words.Count >= 2 && words[1].Text == "light")
                         return Finish(spec, ActionVerb.ToggleLight, words, 2);
-                    return Unknown(spec, words, "\u201Ctoggle\u201D looks like this: \u201Ctoggle light\u201D, \u201Ctoggle crouch\u201D or \u201Ctoggle cursor lock\u201D", warn);
+                    if (words.Count >= 2 && words[1].Text == "sprint")
+                        return Finish(spec, ActionVerb.ToggleSprint, words, 2);
+                    return Unknown(spec, words, "\u201Ctoggle\u201D looks like this: \u201Ctoggle light\u201D, \u201Ctoggle crouch\u201D, \u201Ctoggle sprint\u201D or \u201Ctoggle cursor lock\u201D", warn);
             }
 
             if (words.Count >= 3 && words[0].Text == "play" && words[1].Text == "sound" && words[2].Type == TokenType.Str)

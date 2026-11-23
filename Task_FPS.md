@@ -17,8 +17,11 @@ event language; the bridge supplies the FPS-specific C# that existing words cann
 - [x] Phase 2 shipped: `Move Relative To Camera`, `crouch` / `stand` / `toggle crouch` with the
   capsule + pace rules and `my Stance`, plus 13 more checks. `FPS_Temp.scene` prepared for the
   play-check (camera parented under the player, controller added, rig flags ticked).
-- [ ] Still open: both editor play-checks, and Phase 3–5 (sprint stamina, jump polish, ADS/FOV,
-  gunplay, the acceptance scene).
+- [x] Phase 3 shipped: `sprint` / `walk` / `toggle sprint` with the `my Stamina` drain/refill and
+  the `my Sprinting` mirror (`Runtime/Sprint.cs` + 7 checks). `jump` / `jump strength` / `jump
+  again` and `me is on ground` / `me is airborne` were already shipped by Task 7 G4 phase 3, so the
+  sheet now gates Space instead of adding a word.
+- [ ] Still open: the editor play-checks, and Phases 4–5 (ADS/FOV, gunplay, the acceptance scene).
 
 ## Context / reuse (already in repo)
 - [ ] `Runtime/PhysicsMovement.cs` (Task 12): `MoveSubject`, body modes (Transform/Dynamic/Kinematic/CharacterController), `MaxStepPerTick`, `MoveStep`, ground check, fall-speed decaying — reusable for the FPS body.
@@ -39,13 +42,13 @@ These are the *new* trigger/action/condition words this task introduces. Everyth
 ### Triggers
 - [ ] `when <axis> is moved` — continuous mouse/analog look input (pitch/yaw delta each tick).
 - [ ] `when <key> is pressed / held / released` — already exist; FPS uses W/A/S/D + Shift + Ctrl + Space + mouse buttons.
-- [ ] `when me is on ground` / `when me is airborne` — stance/gating query (exposes existing ground check).
+- [x] `when me is on ground` / `when me is airborne` — shipped earlier (Task 7 G4 phase 3) and reused unchanged; `FPS_Player.events` now gates Space on `me is on ground`.
 
 ### Actions
 - [ ] `set look sensitivity to <n>` / `set look invert <axis> to true` — camera feel knobs (writes globals `LookSensitivity` / `LookInvertX` / `LookInvertY`).
 - [ ] `crouch` / `stand` / `toggle crouch` — stance change; shrinks CharacterController height/radius, slows speed.
-- [ ] `sprint` / `walk` — pace toggle; reads/drains `my Stamina`.
-- [ ] `jump [strength <n>]` — vertical impulse (reuses Task 7 G4 phase 3 ground query).
+- [x] `sprint` / `walk` / `toggle sprint` — pace multiplier (`my SprintSpeed`, default 2, floor 1); drains `my Stamina` while moving, refills it walking, falls back to `walk` at 0. An actor with no `my Stamina` sprints for free, and the pool is only managed on a sheet that used a pace word (or ticked `Sprint Stamina`), so a sheet's own stamina counter stays untouched.
+- [x] `jump [strength <n>]` / `jump again` — already shipped (Task 7 G4 phase 3, Task 21 Part A); the FPS sheet only needed the ground gate.
 - [ ] `aim down sights` / `stop aiming` — FOV zoom + accuracy (writes `my Aiming` flag).
 - [ ] `hide cursor` / `show cursor` / `lock cursor` — FPS mouse capture.
 
@@ -60,8 +63,9 @@ These are the *new* trigger/action/condition words this task introduces. Everyth
 - [x] `EventsManager.UpdateFirstPersonCamera()`: reads this frame's mouse movement each tick — `Input.MousePositionDelta` while the pointer is free, `Input.MouseMoveRelative` while it is captured (Flax zeroes the absolute delta by recentring the mouse, so the relative channel is the one that still carries the hand), with the `Mouse X`/`Mouse Y` axes as the fallback — applies yaw to `me.Orientation` (world Y only) and pitch to the player's own camera child (`LocalOrientation`, local X). The mode lives in `CameraState` (`FirstPerson`), so it releases/absorbs the other camera rigs like they do; the child camera is found with `FlaxWorld.FindCameraUnder`. Enabled by the `First Person` tick box on the player's `EventSheet` (not a per-sheet instance field in FlaxActions).
 - [x] `Bridge/FlaxActions` direction override: with `MoveRelativeToCamera` on the sheet, `move forward/back/left/right` resolve from the player's camera heading flattened to XZ (`Runtime/CameraRelative.cs`), not the actor's facing; `up`/`down`, `move toward`, `face` and `look at` stay actor-relative. A player with no camera child warns once and falls back to the facing.
 - [x] `crouch` / `stand` / `toggle crouch` in `Bridge/FlaxActions`: `Runtime/Stance.cs` keeps the rules (55% capsule height with a 20 cm floor, 0.5× pace, half-the-lost-height sink), the bridge resizes the `CharacterController`, sinks the actor so the feet and the camera child move correctly, writes `my Stance` and leaves the sheet's speed words untouched. An actor with no controller still crouches (head only).
-- [ ] `Bridge/FlaxActions.Sprint/Walk()`: speed multiplier read from `my SprintSpeed` (default 2×), drains `my Stamina` each tick while held (5 per 0.1 s), regenerates when released (4 per 0.25 s), falls back to walk at 0.
-- [ ] `Bridge/FlaxActions.Jump(strength)`: vertical impulse per body mode (CharacterController fall-speed write / dynamic `LinearVelocity.Y` / kinematic `JumpStep` arc); refused while airborne; default 350 cm/s.
+- [x] `Bridge/FlaxActions.Sprint/Walk()`: `SetPace` flips `SheetInstance.Pace` and mirrors `my Sprinting`; `PaceSpeedFactor` applies it next to the crouch factor, so a crouched sprint is 1×. `StepSprint` runs once per tick over every sheet: 50/s drained while sprinting **and** moving (position delta, so tick order cannot skew it), 16/s refilled otherwise up to `my MaxStamina` (default 100), forced back to `walk` at 0. A sheet is skipped unless its first pace word claimed the pool (`SheetInstance.UsesPace`) or its `EventSheet` ticked `Sprint Stamina` — TK_Player's hand-written `my Stamina` is left alone — and a sheet with no `my Stamina` is skipped as well.
+- [x] Reuse (controller half): `GameFiles/FPS_Controls.events` is the input half written once — W/A/S/D at `my Pace`, Shift `sprint`/`walk`, Ctrl `crouch`/`stand`, Space `jump` behind `me is on ground`, Escape `toggle cursor lock` — and `FPS_Player.events` is now its own feel (`my Pace`, `my SprintSpeed`, `my Stamina`, `lock cursor`) plus `include "FPS_Controls"`. The new `include` line splices a GameFiles sheet's events in at that position (`Events/ProgramIncludes.cs`, expanded once every file parses), so a second first-person character needs three setup lines and the include instead of a copy of the controller; tests cover ordering, double includes, loops and a missing file.
+- [x] `Bridge/FlaxActions.Jump(strength)`: shipped earlier exactly as described here — CharacterController fall-speed write, dynamic `LinearVelocity.Y`, scripted `JumpStep` arc for a bodyless actor; refused while airborne except `jump again`; default 350 cm/s.
 - [ ] `Bridge/FlaxActions.AimDownSights()` / `StopAiming()`: writes `my Aiming`, narrows camera FOV (or moves camera closer) and reduces weapon spread while active.
 
 ## Files to create / edit
@@ -72,7 +76,8 @@ These are the *new* trigger/action/condition words this task introduces. Everyth
 - [x] `Source/Game/Runtime/CameraState.cs` — first-person mode beside follow / at / aim / free.
 - [x] `Source/Game/Bridge/EventsManager.cs` — the per-tick look rig; `Source/Game/Bridge/FlaxWorld.cs` — the player's own camera lookup.
 - [x] `Crouch/Stand` (Phase 2: `Runtime/Stance.cs` + the bridge handler).
-- [ ] `Sprint/Walk`, `AimDownSights` branches (Phases 3–4).
+- [x] `Source/Game/Runtime/Sprint.cs` (pure) + the `Sprint/Walk` bridge branch (Phase 3).
+- [ ] `AimDownSights` branch (Phase 4).
 - [ ] `WordRegistry.cs` — register the new trigger/action/condition entries with examples.
 - [ ] `EventParser.cs` — accept the new verb shapes + `set look sensitivity` / `set look invert`.
 - [ ] `keywords.html` — add rows for new words.
@@ -93,9 +98,15 @@ These are the *new* trigger/action/condition words this task introduces. Everyth
 - [ ] Editor check: WASD moves relative to where you're looking; crouch lowers the camera/collider. (Run `Content/scenes/FPS_Temp.scene`: it now has the camera parented under the player at eye height, a `CharacterController` on the player, and `First Person` / `Use Physics Movement` / `Move Relative To Camera` ticked.)
 
 ### Phase 3 — Sprint/stamina + jump
-- [ ] `sprint` / `walk` actions; stamina drain/regenerate loop; `my Stamina` gate blocks sprint at 0.
-- [ ] `jump [strength <n>]` action + `me is on ground` / `me is airborne` conditions (expose existing ground check).
-- [ ] `FPS_Player.events`: Space → jump (gated on on-ground); stamina HUD labels via `bind`.
+- [x] `sprint` / `walk` actions; stamina drain/regenerate loop; `my Stamina` gate blocks sprint at 0.
+  The drain is per second and only while moving, and the bridge forces `walk` at 0 rather than
+  leaving a sprint the sheet believes is still on.
+- [x] `jump [strength <n>]` action + `me is on ground` / `me is airborne` conditions: both already
+  shipped, so this phase reuses them; `FPS_Player.events` gates Space on `me is on ground`.
+- [x] `FPS_Player.events`: Shift → `sprint` / `walk`, one `my Pace` for every move word,
+  `my SprintSpeed 1.75` (240 → 420, the feel the old `RunSpeed` block had), Space gated on the
+  ground. HUD binds are deliberately not in the sheet: `FPS_Temp.scene` has no UI, and a `bind`
+  to a missing label would warn on every load.
 - [ ] Editor check: sprint drains stamina, jump only when grounded, no double jump.
 
 ### Phase 4 — Aim down sights + gunplay
@@ -301,7 +312,7 @@ Depends on Phase 1 + Phase 2 (hacking aug reduces detection).
 Goal: grid/Tetris inventory, weapon slots, ammo types, consumables, credits, buy/sell vendors,
 crafting. The existing `my bag` (name+count) is reused as the text fallback; grid UI is new.
 
-Depends on Phase 1 + Task 8 (items & bag).
+Depends on Phase 1 + `Tasks_2.md` Task 37 (items, bag & equipment).
 
 ### New words
 - [ ] `add <thing> to my inventory at <x>,<y>` — grid slot placement.
@@ -378,7 +389,7 @@ Depends on Phase 1 + Phase 2 (Praxis awards).
 # Phase 8 — Save / Load & Checkpoints
 
 Goal: full persistent state (globals, per-object vars, inventory, aug levels, quest flags, NPC
-states, positions), named checkpoints, quicksave/load. Extends Task 8 Part E (`save game`/`load game`
+states, positions), named checkpoints, quicksave/load. Extends `save stats`/`load stats` (`save game`/`load game`
 design already recorded in DESIGN §9).
 
 Depends on Phase 1 + Phase 6 (inventory) + Phase 7 (quest flags).

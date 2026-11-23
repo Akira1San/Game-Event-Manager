@@ -5017,6 +5017,112 @@ when 1 is pressed
           !CameraRelative.TryHeading(0, 1, 0, out _, out _),
         "the view heading flattens onto the ground plane, and looking straight up has none");
 
+    // Sprint and stamina (Task_FPS Phase 3): the pace words, the multiplier and the drain.
+    var paceSprintSheet = stanceParser.Parse("when Left Shift is pressed\n  sprint\n");
+    var paceSprintSpec =
+        ActionWords.Parse(((RawActionNode)paceSprintSheet.Events[0].Body[0].Statement!).Words, _ => { });
+    var paceWalkSheet = stanceParser.Parse("when Left Shift is released\n  walk\n");
+    var paceWalkSpec =
+        ActionWords.Parse(((RawActionNode)paceWalkSheet.Events[0].Body[0].Statement!).Words, _ => { });
+    var paceToggleSheet = stanceParser.Parse("when Left Alt is pressed\n  toggle sprint\n");
+    var paceToggleSpec =
+        ActionWords.Parse(((RawActionNode)paceToggleSheet.Events[0].Body[0].Statement!).Words, _ => { });
+    Check(paceSprintSpec.Verb == ActionVerb.Sprint && paceWalkSpec.Verb == ActionVerb.Walk &&
+          paceToggleSpec.Verb == ActionVerb.ToggleSprint,
+        "`sprint` / `walk` / `toggle sprint` parse as pace words");
+    Check(Sprint.Toggle(BodyPace.Walk) == BodyPace.Sprint && Sprint.Toggle(BodyPace.Sprint) == BodyPace.Walk,
+        "toggle sprint alternates either way");
+    Check(Sprint.SpeedFactor(BodyPace.Sprint, 0) == Sprint.DefaultSpeedFactor &&
+          Sprint.SpeedFactor(BodyPace.Sprint, 1.75) == 1.75 && Sprint.SpeedFactor(BodyPace.Walk, 2) == 1 &&
+          Sprint.SpeedFactor(BodyPace.Sprint, 0.5) == Sprint.MinSpeedFactor,
+        "sprint doubles by default, reads `my SprintSpeed`, and never runs slower than a walk");
+    Check(Sprint.CanSprint(1) && !Sprint.CanSprint(0) && !Sprint.CanSprint(-5),
+        "an empty stamina bar refuses `sprint` instead of running on empty");
+    Check(Math.Abs(Sprint.Tick(100, BodyPace.Sprint, true, 100, 0.1) - 95) < 1e-9 &&
+          Math.Abs(Sprint.Tick(100, BodyPace.Sprint, false, 100, 0.1) - 100) < 1e-9,
+        "sprinting costs 5 stamina per 0.1 s while the body moves, and standing still costs nothing");
+    Check(Math.Abs(Sprint.Tick(50, BodyPace.Walk, true, 100, 0.25) - 54) < 1e-9 &&
+          Math.Abs(Sprint.Tick(99, BodyPace.Walk, true, 100, 1.0) - 100) < 1e-9,
+        "walking refills 4 stamina per 0.25 s and stops at the maximum");
+    Check(Sprint.Tick(2, BodyPace.Sprint, true, 100, 0.2) == 0,
+        "a sprint that runs out of stamina lands on 0, never below it");
+    Check(Sprint.ManagesStamina(true, false) && Sprint.ManagesStamina(false, true) &&
+          !Sprint.ManagesStamina(false, false),
+        "the bridge only spends a `my Stamina` pool on a sheet that used a pace word or ticked Sprint Stamina, so TK_Player's hand-written stamina is never refilled to 100 behind its back");
+
+    // `include` (controller reuse): a sheet pulls a shared controller file in where the line sits.
+    var incLibrary = new EventParser().Parse("when W is held\n  move forward speed 5\n");
+    var incMain = new EventParser().Parse("when game starts\n  set my Pace to 240\ninclude \"FPS_Controls\"\n");
+    Check(incMain.Events.Count == 2 && incMain.Events[1].IncludeName == "FPS_Controls",
+        "`include \"FPS_Controls\"` is a placeholder event, so the order the sheet was written in survives");
+    var incFiles = new Dictionary<string, ProgramFile>(StringComparer.OrdinalIgnoreCase) { { "FPS_Controls", incLibrary } };
+    Check(ProgramIncludes.Expand(incMain, name => incFiles.TryGetValue(name, out ProgramFile incFound) ? incFound : null,
+              out string incError) && incError.Length == 0,
+        "include expansion resolves a library by name without touching the file system");
+    Check(incMain.Events.Count == 2 && incMain.Events[0].Trigger[0].Text == "game" &&
+          incMain.Events[1].Trigger[0].Text == "W",
+        "the library's blocks land where the include line was, after the sheet's own setup");
+    var incTwice = new EventParser().Parse("include FPS_Controls\ninclude \"FPS_Controls.events\"\n");
+    ProgramIncludes.Expand(incTwice, name => incFiles.TryGetValue(name, out ProgramFile incTwiceFile) ? incTwiceFile : null, out _);
+    Check(incTwice.Events.Count == 1 && incTwice.Events[0].Trigger[0].Text == "W",
+        "including the same library twice — bare, quoted or with `.events` — runs its blocks once");
+    var incLoopA = new EventParser().Parse("include LoopB\n");
+    var incLoopB = new EventParser().Parse("include LoopA\n");
+    var incLoops = new Dictionary<string, ProgramFile>(StringComparer.OrdinalIgnoreCase)
+        { { "LoopA", incLoopA }, { "LoopB", incLoopB } };
+    bool incLoopExpanded = ProgramIncludes.Expand(incLoopA,
+        name => incLoops.TryGetValue(name, out ProgramFile incLoopFile) ? incLoopFile : null, out string incLoopError);
+    Check(!incLoopExpanded && incLoopError.Contains("forever") && incLoopError.Contains("include"),
+        "two files including each other is reported as a loop instead of recursing forever");
+    // A chain that never repeats a name has no loop to find, so the depth limit is what stops it.
+    var incChainFiles = new Dictionary<string, ProgramFile>(StringComparer.OrdinalIgnoreCase);
+    for (int incChainIndex = 0; incChainIndex <= 8; incChainIndex++)
+        incChainFiles["Chain" + incChainIndex] = new EventParser().Parse(incChainIndex < 8
+            ? "include Chain" + (incChainIndex + 1) + "\n"
+            : "when game starts\n  print \"bottom\"\n");
+    Check(ProgramIncludes.Expand(incChainFiles["Chain0"],
+              name => incChainFiles.TryGetValue(name, out ProgramFile incChainFile) ? incChainFile : null,
+              out string incChainError) && incChainError.Length == 0,
+        "a chain of " + ProgramIncludes.MaxDepth + " included files is still followed");
+    var incDeepFiles = new Dictionary<string, ProgramFile>(StringComparer.OrdinalIgnoreCase);
+    for (int incDeepIndex = 0; incDeepIndex <= 9; incDeepIndex++)
+        incDeepFiles["Deep" + incDeepIndex] = new EventParser().Parse(incDeepIndex < 9
+            ? "include Deep" + (incDeepIndex + 1) + "\n"
+            : "when game starts\n  print \"bottom\"\n");
+    bool incDeepExpanded = ProgramIncludes.Expand(incDeepFiles["Deep0"],
+        name => incDeepFiles.TryGetValue(name, out ProgramFile incDeepFile) ? incDeepFile : null, out string incDeepError);
+    Check(!incDeepExpanded && incDeepError.Contains("nests") &&
+          incDeepError.Contains(ProgramIncludes.MaxDepth.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+        "an include chain longer than " + ProgramIncludes.MaxDepth + " files is refused with a friendly error instead of recursing");
+    var incMissing = new EventParser().Parse("include \"FPS_Contolls\"\n");
+    bool incMissingExpanded = ProgramIncludes.Expand(incMissing,
+        name => incFiles.TryGetValue(name, out ProgramFile incMissingFile) ? incMissingFile : null,
+        out string incMissingError, wanted => EventFiles.SuggestFileName(wanted, incFiles.Keys));
+    Check(!incMissingExpanded && incMissingError.Contains("FPS_Contolls") && incMissingError.Contains("FPS_Controls"),
+        "a misspelled include says which file is missing and which one it probably meant");
+
+    // The shipped player sheet is now three feel lines plus the shared controller, so the include
+    // has to reach the runtime expanded — a placeholder left behind would never fire.
+    EventFileResult fpsSheetFile = shippedPrograms.Find(program => program.Name == "FPS_Player");
+    EventFileResult fpsControlsFile = shippedPrograms.Find(program => program.Name == "FPS_Controls");
+    Check(fpsSheetFile != null && fpsSheetFile.Error.Length == 0 && fpsControlsFile != null &&
+          fpsControlsFile.Error.Length == 0 &&
+          fpsSheetFile.File.Events.Exists(node => node.Trigger.Count > 2 && node.Trigger[0].Text == "W" &&
+                                                  node.Trigger[1].Text == "is") &&
+          fpsSheetFile.File.Events.Exists(node => node.Trigger.Count > 2 && node.Trigger[0].Text == "Left" &&
+                                                  node.Trigger[1].Text == "Shift"),
+        "`FPS_Player` includes `FPS_Controls`, so W and Shift arrive from the shared controller");
+    bool incNoLeftovers = true;
+    foreach (EventFileResult incShipped in shippedPrograms)
+    {
+        if (incShipped.File == null)
+            continue;
+        foreach (EventNode incNode in incShipped.File.Events)
+            if (incNode.IncludeName.Length > 0)
+                incNoLeftovers = false;
+    }
+    Check(incNoLeftovers, "no shipped sheet reaches the runtime with an unresolved `include` placeholder");
+
     // First person (Task_FPS Phase 1): mouse look and the camera mode that owns the view.
     MouseLook.Step(0, 0, 100, 0, MouseLook.DefaultSensitivity, false, false,
         out double lookYaw, out double lookPitch);

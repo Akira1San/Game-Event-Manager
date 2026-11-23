@@ -1,0 +1,62 @@
+# FPS_Controls.events — the reusable first-person controller (Task_FPS Phases 1–3).
+#
+# Nothing in here is specific to one scene: it is the input half of the controller, written
+# once and pulled into a player sheet with a single `include "FPS_Controls"` line. The other
+# half already lives in C# and is shared the same way — physics mode and ground probe
+# (`PhysicsMovement`, `CharacterStep`), stance (`Stance`), pace/stamina (`Sprint`), look
+# (`MouseLook`) and the camera rig (`CameraState`) — so a new first-person character needs a
+# Camera child, the EventSheet tick boxes (First Person, Use Physics Movement, Move Relative
+# To Camera) and a sheet that includes this file.
+#
+# What the including sheet is expected to provide:
+#   · `my Pace`  — the speed every move asks for. If it is never set, every move runs at 0.
+#   · optionally `my SprintSpeed` (default 2), `my MaxStamina` (default 100) and
+#     `my Stamina` (set it to `my MaxStamina` on start to have a bar at all; with no
+#     `my Stamina` a sprint is free).
+#   · its own `when game starts` block with `lock cursor` if it wants the pointer captured —
+#     capture belongs to the game's menu policy, not to the movement library.
+#
+# Keys: W/A/S/D move, Left Shift sprints, Left Ctrl ducks, Space jumps when grounded,
+# Escape hands the pointer back and takes it again on the next press.
+
+# Every move asks for `my Pace`; sprint is a multiplier on top (see Sprint.cs), so the speed
+# lives in one place and Shift never needs its own copy of the W line. Move Relative To Camera
+# is what makes A/D a strafe instead of a turn.
+when W is held
+  move forward speed my Pace
+
+when S is held
+  move backward speed my Pace
+
+when A is held
+  move left speed my Pace
+
+when D is held
+  move right speed my Pace
+
+# Pace: `my Pace` × `my SprintSpeed`. The bridge spends `my Stamina` (50/s moving) and refills
+# it walking (16/s); an empty bar drops back to walk, and `sprint` refuses to restart until
+# some has come back.
+when Left Shift is pressed
+  sprint
+
+when Left Shift is released
+  walk
+
+# Hold Ctrl to duck. The bridge shortens the capsule, sinks the body (so the camera child
+# comes down with it) and halves whatever speed the moves ask for.
+when Left Ctrl is pressed
+  crouch
+
+when Left Ctrl is released
+  stand
+
+# `jump` already refuses a mid-air take-off; the gate says so out loud, so a future
+# `jump again` (double jump) stays a deliberate exception.
+when Space is pressed
+  me is on ground
+  jump
+
+# One key flips capture, so a menu or the debugger stays usable.
+when Escape is pressed
+  toggle cursor lock
