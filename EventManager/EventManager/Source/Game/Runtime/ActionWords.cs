@@ -155,6 +155,9 @@ namespace Game
         Aim,
         CancelAim,
         DamageArea,
+        /// <summary><c>damage &lt;target&gt; by &lt;n&gt; [&lt;type&gt;]</c> — one typed hit on one
+        /// actor (Task 9 F2).</summary>
+        Damage,
         // Buffs and debuffs (Task 27 Part C)
         AddBuff,
         RemoveBuff,
@@ -256,6 +259,11 @@ namespace Game
         /// the blast radius, as a literal (<see cref="Radius"/>) or a value.</summary>
         public double Radius;
         public ValueNode RadiusNode;
+        /// <summary><c>damage other by 20 fire</c> / <c>damage area around … by 30 fire</c>
+        /// (Task 9 F2): the damage type, as written and lowercased, or empty for an untyped
+        /// hit. <see cref="DamageTypes.ResistStat"/> turns it into the victim's resistance.</summary>
+        public string Type = "";
+        public bool HasType;
         /// <summary><c>add buff "&lt;name&gt;"</c> / <c>remove buff "&lt;name&gt;"</c> (Task 27 Part C).</summary>
         public string BuffName = "";
         /// <summary>What a second copy of that buff does; refresh unless the line says otherwise.</summary>
@@ -620,6 +628,15 @@ namespace Game
                                 if (spec.HasNumber)
                                     spec.Number = words[damageIndex + 1].Number;
                                 damageIndex += 1 + damageUsed;
+                                // `... by 30 fire` (Task 9 F2): the type splash must take too,
+                                // written before the `for radius` qualifier.
+                                if (words.Count >= damageIndex + 1 && words[damageIndex].Type == TokenType.Word &&
+                                    words[damageIndex].Text != "for")
+                                {
+                                    spec.Type = words[damageIndex].Text.ToLowerInvariant();
+                                    spec.HasType = true;
+                                    damageIndex++;
+                                }
                                 if (words.Count >= damageIndex + 3 && words[damageIndex].Text == "for" &&
                                     words[damageIndex + 1].Text == "radius")
                                 {
@@ -632,7 +649,40 @@ namespace Game
                             }
                         }
                     }
-                    return Unknown(spec, words, "\u201Cdamage area\u201D looks like \u201Cdamage area around Mouse by 30 for radius 180\u201D", warn);
+                    // `damage <target> by <n> [<type>]` (Task 9 F2): one actor, one typed hit,
+                    // so a fireball never needs one `send message` block per element.
+                    if (words.Count >= 4)
+                    {
+                        string target;
+                        int targetUsed;
+                        if (words[1].Text == "my" && words[2].Text == "aim" && words[3].Text == "target")
+                        {
+                            target = "my aim target";
+                            targetUsed = 3;
+                        }
+                        else
+                        {
+                            target = TargetAt(words, 1, out targetUsed);
+                        }
+                        int hitIndex = 1 + targetUsed;
+                        if (target != null && hitIndex + 1 < words.Count && words[hitIndex].Text == "by")
+                        {
+                            spec.Thing = target;
+                            spec.AmountNode = ValueNodeAt(words, hitIndex + 1, out int hitUsed);
+                            spec.HasNumber = words[hitIndex + 1].Type == TokenType.Number;
+                            if (spec.HasNumber)
+                                spec.Number = words[hitIndex + 1].Number;
+                            hitIndex += 1 + hitUsed;
+                            if (hitIndex < words.Count && words[hitIndex].Type == TokenType.Word)
+                            {
+                                spec.Type = words[hitIndex].Text.ToLowerInvariant();
+                                spec.HasType = true;
+                                hitIndex++;
+                            }
+                            return Finish(spec, ActionVerb.Damage, words, hitIndex);
+                        }
+                    }
+                    return Unknown(spec, words, "\u201Cdamage\u201D looks like \u201Cdamage other by 20 fire\u201D or \u201Cdamage area around Mouse by 30 fire for radius 180\u201D", warn);
                 }
 
                 case "explode":

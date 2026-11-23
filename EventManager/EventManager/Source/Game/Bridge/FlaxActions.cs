@@ -1347,6 +1347,9 @@ namespace Game
                 case ActionVerb.CancelAim:
                     CancelAim(context);
                     break;
+                case ActionVerb.Damage:
+                    DamageTarget(context, spec);
+                    break;
                 case ActionVerb.DamageArea:
                     DamageArea(context, spec);
                     break;
@@ -3654,13 +3657,14 @@ namespace Game
         }
 
         /// <summary>
-        /// <c>damage area around &lt;spot&gt; by &lt;n&gt; for radius &lt;r&gt;</c> (Task 27
-        /// Part A): the AoE primitive point abilities need, since <c>explode</c> belongs to a
-        /// projectile and destroys the caster. Every other actor inside the radius takes a
-        /// <c>"damage"</c> message from the caster, so the usual armour \u2192 shield \u2192 health
-        /// pipeline and the Task 23 matchup gate apply unchanged; the caster is not destroyed
-        /// and is not spared (a storm hits its own side too). No visual or sound of its own \u2014
-        /// the sheet plays those, so one primitive serves every kind of blast.
+        /// <c>damage area around &lt;spot&gt; by &lt;n&gt; [&lt;type&gt;] [for radius &lt;r&gt;]</c>
+        /// (Task 27 Part A; typed by Task 9 F2): the AoE primitive point abilities need, since
+        /// <c>explode</c> belongs to a projectile and destroys the caster. Every actor inside the
+        /// radius takes the hit from the caster \u2014 its own &lt;Type&gt;Resist first when the line
+        /// named a type, then armour \u2192 shield \u2192 health \u2014 plus a <c>"damage"</c>
+        /// message so the victim's own effects and "damage" handlers still run. The caster is not
+        /// destroyed and is not spared (a storm hits its own side too). No visual or sound of its
+        /// own \u2014 the sheet plays those, so one primitive serves every kind of blast.
         /// </summary>
         private static void DamageArea(EventContext context, ActionSpec spec)
         {
@@ -3677,6 +3681,7 @@ namespace Game
                 return;
 
             object sender = context.Me;
+            EventVariables variables = runtime.Variables;
             foreach (object other in context.World.Actors())
             {
                 if (other == null)
@@ -3688,6 +3693,11 @@ namespace Game
                     continue;
                 if (context.World.DistanceToPoint(other, x, z) > radius)
                     continue;
+                // Splash takes the same type as the direct hit (Task 9 F2), so each victim's own
+                // resistance is spent before its armor and a fire storm is weaker on a fire-
+                // resistant unit.
+                if (variables != null)
+                    DamageTypes.Apply(variables, other, amount, spec.Type);
                 runtime.RaisePush(other, new PushSignal
                 {
                     Kind = TriggerKind.Message,
@@ -3695,6 +3705,67 @@ namespace Game
                     Other = sender,
                 });
             }
+        }
+
+        /// <summary>
+        /// <c>damage &lt;target&gt; by &lt;n&gt; [&lt;type&gt;]</c> (Task 9 F2): one actor takes one
+        /// typed hit. The victim's <c>&lt;Type&gt;Resist</c> takes its percentage off first, then the
+        /// number runs the usual armour \u2192 shield \u2192 health pipeline
+        /// (<see cref="DamageTypes.Apply"/>), so a fireball, a sword and a poison tick need no
+        /// sheet-side arithmetic. A <c>"damage"</c> message still reaches the victim afterwards,
+        /// so its effects, i-frames and <c>other's damage</c> reads behave exactly as they do for a
+        /// projectile hit. There is no matchup-table gate here, the same as the splash
+        /// <c>damage area</c> has always had \u2014 a sheet that wants one writes `me can attack`.
+        /// </summary>
+        private static void DamageTarget(EventContext context, ActionSpec spec)
+        {
+            EventRuntime runtime = context.Runtime;
+            if (runtime == null)
+                return;
+            object victim = ResolveDamageVictim(context, spec.Thing);
+            if (victim == null)
+                return;
+            ApplyTypedDamage(context, victim, ResolveNumber(context, spec), spec.Type);
+        }
+
+        /// <summary>Resolves a <c>damage</c> target: an actor name, <c>other</c>, <c>me</c>,
+        /// <c>nearest player</c>, or the unit an <c>aim</c> picked (<c>my aim target</c>).</summary>
+        private static object ResolveDamageVictim(EventContext context, string target)
+        {
+            if (target == "my aim target" || target == "my aim" || target == "aim")
+            {
+                TargetingSession session = context.Runtime?.Targeting.SessionOf(context.Me)
+                    ?? context.Runtime?.Targeting.Current;
+                if (session == null || !session.HasPick || session.PickActor == null)
+                {
+                    WarnOnce("\u201Cdamage my aim target\u201D needs an `aim` pick on a unit first \u2014 click a target while aiming.");
+                    return null;
+                }
+                return session.PickActor;
+            }
+            object found = ResolveThing(context, target);
+            if (found == null || found is GlobalHost)
+            {
+                WarnOnce($"I couldn't find \u201C{target}\u201D to damage.");
+                return null;
+            }
+            return found;
+        }
+
+        /// <summary>One victim's typed hit: resistance, then armour/shield/health, then the
+        /// <c>"damage"</c> message both primitives send.</summary>
+        private static void ApplyTypedDamage(EventContext context, object victim, double amount, string type)
+        {
+            EventRuntime runtime = context.Runtime;
+            if (runtime == null || amount <= 0)
+                return;
+            DamageTypes.Apply(runtime.Variables, victim, amount, type);
+            runtime.RaisePush(victim, new PushSignal
+            {
+                Kind = TriggerKind.Message,
+                Name = "damage",
+                Other = context.Me,
+            });
         }
 
         /// <summary>The spot a <c>damage area</c> is centred on: an actor, <c>there</c>, or the

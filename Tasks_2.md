@@ -1355,8 +1355,17 @@ Goal: the shared combat core for Diablo-like RPGs and RTS abilities. Task 9 E2�
 A–E already propose pieces; this task is the *combined, prioritized* version so the same buff,
 cooldown, damage-type and target-pick code is built once.
 
-Depends on Tasks 8, 9E, 27. **Mixed** (P1). Overlaps are intentional; complete this once, then
-the two genre batches become content.
+Depends on Tasks 8 and 9E, and on Task 27 (shipped). **Mixed** (P1). Overlaps are intentional;
+complete this once, then the two genre batches become content.
+
+**Reviewed 2026-11-23 — three of the five parts already shipped, under Task 27, and they are not
+RTS-scoped.** `Runtime/Buffs.cs`, `Runtime/Cooldowns.cs` and `Runtime/Targeting.cs` are plain C#
+over the fake world with no Flax types, and the parser, `FlaxActions` and `EventRuntime` treat
+their words like any other word, so a Diablo sheet gets `add buff "burn" to other for 3`,
+`put "fireball" on cooldown for 1.2` and `aim "meteor"` today by writing them. What is left of
+this task is two slices that were already tracked as correctness holes in `TASKS.md` Task 9 Part F:
+**F2** (`damage <target> by <n> <type>`) and **F6** (loot tables), plus the material that proves
+them. Nothing here should be re-designed from scratch; build F2 and F6 and this task closes.
 
 ### Proposed words
 
@@ -1376,14 +1385,28 @@ the two genre batches become content.
 | action | `spawn item from "<table>" at <thing>` | `spawn item from "Loot" at me` |
 | action | `roll "<rarity>" from "<table>"` | `roll "Rare" from "Loot"` |
 
+**Where each row stands today** (word shapes as shipped, checked against `WordRegistry`):
+
+| Rows | State |
+|---|---|
+| `add buff` · `remove buff` · `when buff "…" starts` / `ends` · `my "…" time left` | **shipped** — Task 27 Part C, `Runtime/Buffs.cs` |
+| `put "…" on cooldown for <s>` · `my "…" is ready` · `my "…" cooldown` | **shipped** — Task 27 Part E, `Runtime/Cooldowns.cs` |
+| `aim` · `cancel aim` · `when aim picks a target` · `damage area around …` | **shipped** — Task 27 Part A, `Runtime/Targeting.cs` |
+| `damage <target> by <n> <type>` | **shipped** — Task 9 F2, `Runtime/DamageTypes.cs`; the same `<type>` also works on `damage area` |
+| `spawn item from "<table>"` · `roll "<rarity>" from "<table>"` | **missing** — the generator exists behind `spawn <thing> … rarity "<name>" level <n>`; the table word is F6 |
+
 ### Examples
 
 ```text
 # ---- burning damage over time ----
+# attacker's sheet: hit first, then hand the burn to the victim
 when message "fire" arrives
-  add buff "burn" to other for 3
   damage other by 10 fire
+  add buff "burn" to other for 3
 
+# victim's sheet: `when buff "burn" starts` is pushed to the *buffed* actor (and
+# `my "burn" time left` is read there too), so the ticking block belongs here, not
+# on the attacker — on the attacker's sheet it would burn the attacker
 when buff "burn" starts
   set my BurnTicks to 3
 
@@ -1393,6 +1416,7 @@ when every 1 seconds
   add -1 to my BurnTicks
 
 # ---- a spell with mana and a cooldown ----
+# caster's sheet; `my "fireball" is ready` and `my "fireball" cooldown` are Task 27 Part E
 when Q is pressed
   my "fireball" is ready
   my Mana is higher than 9
@@ -1405,6 +1429,8 @@ when aim picks a target
   play particle "explosion"
 
 # ---- resistances ----
+# victim's sheet. This is the events-only fallback from Task 9 E4; once Part C / F2 ships,
+# `damage … by <n> fire` subtracts `my FireResist` itself and this block shrinks to nothing
 when message "fire" arrives
   set my LastDmg to other's damage
   set my LastDmg to my LastDmg - my FireResist
@@ -1413,13 +1439,45 @@ when message "fire" arrives
 
 ### Parts
 
-- [ ] **Part A — Buff/debuff core.** Name, duration, stack rule (`refresh` / `stack` / `ignore`),
+- [x] **Part A — Buff/debuff core.** Name, duration, stack rule (`refresh` / `stack` / `ignore`),
       modifiers, expiry, and base-value capture so overlapping buffs restore correctly. Pure
       `Runtime/Buffs.cs`, tested with the FakeWorld.
-- [ ] **Part B — Cooldowns.** Per-actor named timers, one tick loop, `ready`/`time left` reads, clear
+      *Landed as Task 27 Part C.* `BuffRule` (`Refresh` default / `Stack` / `Ignore`),
+      `BuffInstance` (name, duration, remaining, rule, source, modifiers), `BuffModifier`
+      (`Stat` + amount or multiplier), one `Tick(dt)` in `EventRuntime.Tick`, base capture through
+      `my Base<Stat>` with the aggregate written back and the base restored when the last buff on
+      that stat ends, `Clear` on death and `Reset` on scene start. Words as listed above, plus
+      `multiplying my <stat> by 1.5` / `adding <value> to my <stat>` clauses. 33 checks in
+      `Tests/Program.cs`; no new work is needed for the RPG — a Diablo sheet and a Marine sheet use
+      the same manager. Still parked, exactly as written below: buffs on buildings and research
+      speed modifiers.
+- [x] **Part B — Cooldowns.** Per-actor named timers, one tick loop, `ready`/`time left` reads, clear
       on death, and no polling trigger per unit.
-- [ ] **Part C — Damage types and resistances.** A damage message/action carries a type; the victim
+      *Landed as Task 27 Part E.* `Runtime/Cooldowns.cs` keys seconds-remaining by `(actor, name)`
+      (case-insensitive), `Start` refreshes, `Tick(dt)` walks the table once with the same one-second
+      hitch clamp the buffs use, `Ready` is `Remaining <= 0`, and `ForgetSubject` clears an actor's
+      timers on destroy. 29 checks. **One correction to the part as written:** the words and the
+      table shipped, the *unification* did not — `SpellClock` (`cast`) and `WeaponClock` (`reload`)
+      still run beside it, and there is no `when "<spell>" is ready` edge, only the condition. That
+      is `TASKS.md` Task 9 **F5**, still open, and it should be done there rather than reopened here.
+- [x] **Part C — Damage types and resistances.** A damage message/action carries a type; the victim
       subtracts the matching resistance; immunity is a large resistance, not a new word.
+      *Landed as Task 9 F2 (2026-11-23).* `damage <target> by <n> [<type>]` is the new word, and
+      `damage area around <spot> by <n> [<type>] [for radius <r>]` takes the same type, so splash no
+      longer bypasses a resistance the direct hit respects. `Runtime/DamageTypes.cs` (pure) maps a
+      type to `<Word>Resist`, takes that percentage off (clamped 0..100, so `my FireResist 999` is
+      immunity) and spends the rest through `HealthManager.Damage` — armor, shield, health — while the
+      `"damage"` message still reaches the victim for its own effects. A type the victim does not
+      resist deals its full number (`steel` against `my FireResist 50`). That settles the four
+      decisions this part carried: (1) one word serves every element, so E4 needs no per-element
+      `send message` block per weapon; (2) the type never has to reach the victim's sheet — the engine
+      spends it — so there is no new value word; (3) F2's engine-side subtraction supersedes E4's
+      three sheet lines, which are retired rather than written beside it; (4) `damage area` gained the
+      same type qualifier in the same change. But both words push a `"damage"` message *and* apply the
+      number, so a victim sheet must not subtract `my DamageTaken` / `other's damage` a second time;
+      and neither word consults the matchup table (the shipped AoE never did either) — a sheet that
+      wants that gate writes `me can attack`. Crit/leech/pierce (Task 9 F12) remain optional future
+      consumers.
 - [x] **Part D — Area damage and target-pick.** `damage area around ...` sends real damage through
       the existing armor/shield/health path and the matchup gate; `aim` enters a pick mode with
       range/validity/timeout, a marker and a cancel.
@@ -1439,24 +1497,56 @@ when message "fire" arrives
       resolves only if a scene actor is named `Mouse`; a cursor-position value is Task 39 Part B.
 - [ ] **Part E — Loot tables and affixes.** Weighted table data in `.events`; `spawn item from` and
       `roll` read it; the affix generator (Task 9 E7) composes item stats from base + N affixes.
+      *Half landed:* the generator shipped as Task 9 E7 — `ItemGenerator.Roll` (base + rarity + item
+      level, 1–4 affixes by rarity, values rolling in range and growing 5% per level, no duplicate
+      stats, deterministic under a seed) and the spawn word is already qualifier-shaped:
+      `spawn Ring at me rarity "Rare" level 12` writes `my FireResist` / `my ItemName` / `my ItemLevel`
+      on the clone before its sheet attaches, and `equip` / `unequip` add and subtract exactly the
+      recorded numbers (Task 9 F1). **What is left is the table lookup only** (= `TASKS.md` Task 9
+      **F6**): a weighted `Loot.events`, `spawn item from "Loot" at <spot>`, `roll "<rarity>" from
+      "Loot"`, and an `EnemyTypes` `Level` so a death passes its own level. F6 must call
+      `ItemGenerator.Roll` rather than reimplement the roll, and should reuse the shared table loader
+      (Task 9 F10) instead of adding a seventh copy.
 - [ ] **Part F — Tests and example.** Stack/refresh/ignore, expiry restores base, cooldown readiness,
       fire vs fire-resist, AoE hits exactly once, aim cancel/timeout, loot table distribution and
       an equipped +5 sword still working.
+      *Most of this list is already green from the parts that shipped:* buff rules and base restore
+      (33 checks), cooldown arithmetic and both polarities (29), aim reach/validity/timeout/cancel and
+      the AoE parse (34), item roll/apply/remove exactness and hand-authored `+5` composing (24 + 12).
+      Genuinely uncovered, and all of it blocked on Part C or E: typed damage against a resistance,
+      AoE carrying a type, loot-table distribution, and one **combined RPG run** — a single sheet
+      that fireballs a `FireResist 50` zombie, applies a burn whose tick lands through the resist,
+      refuses a second cast while cooling down, and drops a rolled ring the player equips. That sheet
+      is content and belongs in `GameFiles/` with a headless play in `Tests`, the way `Marine.events`
+      and `Bag.events` are pinned today. **Typed damage and typed splash are now green too** (Task 9
+      F2, 12 checks: fire vs `FireResist 50`, `steel` ignoring it, each splash victim meeting its own
+      resist, `999` as immunity), so what Part F still owes is the loot-table distribution (F6) and
+      that one combined sheet.
 
 ### Done-when
 
 - A fireball spends mana, starts a cooldown, is refused while cooling down, and damages only valid
-  targets in its radius.
-- A fire-resistant zombie takes little damage from fire and normal damage from steel.
-- A burn buff ticks, expires, and restores the pre-buff stats without drift.
-- A dropped rare ring rolls 1–3 affixes and its `my` stats reflect them.
+  targets in its radius. **Met** by Task 27 A/E + `cast` (`SpellClock`); the only gap is that the
+  refusal is silent (Task 9 F7) and that `cast`'s clock is not yet the shared table (F5).
+- A fire-resistant zombie takes little damage from fire and normal damage from steel. **Met in the
+  engine** by Task 9 F2 — `damage <target> by <n> <type>` reads the victim's `<Type>Resist` — but no
+  zombie sheet wears the resist yet: that is the combined RPG run in Part F.
+- A burn buff ticks, expires, and restores the pre-buff stats without drift. **Met** by Task 27
+  Part C; the tick itself is the sheet's (`when buff "burn" starts` + a `when every` block on the
+  victim), and `my "burn" time left` is there if the sheet prefers to gate on the timer.
+- A dropped rare ring rolls 1–3 affixes and its `my` stats reflect them. **Met** by Task 9 E7/F1
+  through `spawn Ring … rarity "Rare" level <n>`; only the table-driven drop is missing (Part E / F6).
 
 ### Edge cases / parks
 
 - Skill trees, synergies, runewords, set items, crafting, vendors and gamblers stay parked
   (Task 9 E out-of-scope).
 - Buffs on buildings, research speed modifiers and stacking rules beyond refresh/stack/ignore are
-  later decisions.
+  later decisions. (Task 27 Part C shipped refresh/stack/ignore and no building path, so this is
+  unchanged.)
+- A second buff system must not be built. If a future RPG need looks unmet, check `Runtime/Buffs.cs`,
+  `Runtime/Cooldowns.cs` and `Runtime/Targeting.cs` first — the cost of a duplicate manager here is
+  an `.events` file that means two things on two genres.
 - Ability data (`Abilities.events`) may be added once the command card needs it; not required for v1.
 
 ---

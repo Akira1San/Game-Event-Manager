@@ -6,8 +6,8 @@
 #     (escape / right click cancels and refunds nothing, so the cooldown still starts)
 #   · `when my aim picks a target` runs on the caster's own sheet, and `my aim` is the point
 #   · `damage area around my aim` needs no projectile and never destroys the caster; every
-#     actor in the radius takes a real "damage" message, so armour, shields, health and the
-#     Task 23 matchup table apply
+#     actor in the radius takes the hit — 30 fire, so a unit wearing `my FireResist 50` loses
+#     half — then armour, shields and health, plus a real "damage" message for its effects
 #   · `my "psi storm" cooldown` is the shared timer, so nothing has to poll for it
 #
 # SETUP (editor): an EventSheet on the caster, Event File = `HighTemplar`, a `PsiStorm`
@@ -37,7 +37,7 @@ when Q is pressed
 # The storm lands where the player clicked. `my aim` is the pick point whether the click hit
 # bare ground or a unit, so the same line covers both; 180 is the storm's radius in cm.
 when my aim picks a target
-  damage area around my aim by 30 for radius 180
+  damage area around my aim by 30 fire for radius 180
   play particle "PsiStorm"
   play sound "psi storm"
   set my StormCasts to my StormCasts + 1

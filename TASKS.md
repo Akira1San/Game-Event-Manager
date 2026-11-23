@@ -1306,7 +1306,7 @@ brackets.
       bag → `EquipItem` → `UnequipItem`, re-equip is idempotent, removing an unworn ring is a
       no-op, a destroyed worn item returns the wearer to baseline and forgets its roll) →
       **1488/1488 green**; module build 0 errors.
-- [ ] **F2 — A real damage path: `damage <target> by <n> <type>` (C#, medium) [E4, Task 37 C].**
+- [x] **F2 — A real damage path: `damage <target> by <n> <type>` (C#, medium) [E4, Task 37 C].**
       `ExecuteSend` requires a literal message name, so a projectile stamped with `my Element`
       cannot pick its message today; E4 written now means one `send message "fire"` block per
       element per weapon. Add the action: resolve the target, subtract the victim's `<Type>Resist`,
@@ -1314,6 +1314,24 @@ brackets.
       for scripted events. Done-when: a fireball hurts an unresisted zombie and barely scratches a
       `FireResist 50` one with no per-element branches in any sheet; the same call with `steel`
       ignores FireResist.
+      *Landed 2026-11-23.* `damage <target> by <n> [<type>]` (`ActionVerb.Damage`; target = an actor,
+      `other`, `me`, `nearest player`, or the `my aim target` pick), and the same type qualifier on
+      `damage area around <spot> by <n> [<type>] [for radius <r>]`. New pure
+      `Runtime/DamageTypes.cs` maps a type to its stat (`fire` → `FireResist`, `cold`, `poison`, any
+      `<Word>Resist`), takes the victim's percentage off (clamped 0..100, so `my FireResist 999` is
+      immunity rather than healing) and hands the rest to `HealthManager.Damage` — armor → shield →
+      health, the path `add -<n> to Health` already uses. A type the victim does not resist deals its
+      full number (`steel` against `FireResist 50`). Both words also push the `"damage"` message, so a
+      victim's effects, i-frames and `other's damage` reads are unchanged; the number is applied once,
+      by the engine, so a sheet must not subtract it again. Two honest corrections: `damage area` now
+      applies the damage itself instead of trusting the victim's sheet (Marine has no `"damage"`
+      handler, so the shipped storm dealt nothing), and **no matchup-table gate was added** — neither
+      word consults `Matchups`, and the old claim that AoE enforced it was never true of the message
+      path either; a sheet that wants a gate writes `me can attack`. `HighTemplar.events`' storm is
+      `30 fire`. 12 new checks (both word shapes carry the type, `my FireResist 50` halves 30 fire, the
+      resisted number then spends armor and shield, `steel` ignores `FireResist`, a typed splash spends
+      each victim's own resistance, `999` is immunity, the word book row) -> **2591 passed, 0
+      failed**; Game module build 0 errors.
 - [ ] **F3 — Variables in numeric qualifiers (C#, small) [E1, E4].** `near Enemy by my Reach`
       parses and then reads 0 (`Conditions.cs` wants a number token), which forces one melee block
       per weapon and will bite spell range/cleave/aura sizes. Accept a number, a global or
@@ -1386,6 +1404,12 @@ on cooldown`, `damage <target> by <n> <type>`, `spawn item from "<table>"`); E3/
 composition later with no `.events` file changing. Instead: F5 gives Task 37 B its storage, F2 gives
 it C, F6 gives E its generator, and Task 37 A (buffs) should reuse the "apply exactly / remove
 exactly" bookkeeping from `ItemAffixes` (F1 is the prerequisite).
+
+**Reviewed 2026-11-23:** Task 37 A, B and D are already shipped (27 C, 27 E, 27 A), so **F2 and
+F6 are the whole of Task 37's remaining work** — do not reopen it as a fresh design. Two things
+the review pinned down for F2: `damage area` has no type qualifier, so splash must take the same
+`<type>` as the direct hit, and F2's engine-side `<Type>Resist` subtraction supersedes E4's
+three sheet lines instead of living beside them.
 
 ---
 

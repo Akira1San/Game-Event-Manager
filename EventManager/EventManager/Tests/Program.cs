@@ -10872,6 +10872,89 @@ var damageAimSpec = ActionWords.Parse(((RawActionNode)damageAimProg.Events[0].Bo
 Check(damageAimSpec.Verb == ActionVerb.DamageArea && damageAimSpec.Thing == "my aim target",
     "`damage area around my aim target` reads the pick");
 
+// ---- Task 9 F2: typed damage ----
+var typedHitProg = parser.Parse("when Q is pressed\n  damage other by 20 fire\n");
+var typedHitSpec = ActionWords.Parse(((RawActionNode)typedHitProg.Events[0].Body[0].Statement!).Words, _ => { });
+Check(typedHitSpec.Verb == ActionVerb.Damage && typedHitSpec.Thing == "other" &&
+      Math.Abs(typedHitSpec.Number - 20) < 0.0001 && typedHitSpec.Type == "fire" &&
+      typedHitSpec.Leftover.Count == 0,
+    "`damage other by 20 fire` is one typed hit on one target");
+
+var plainHitProg = parser.Parse("when Q is pressed\n  damage Mouse by 30\n");
+var plainHitSpec = ActionWords.Parse(((RawActionNode)plainHitProg.Events[0].Body[0].Statement!).Words, _ => { });
+Check(plainHitSpec.Verb == ActionVerb.Damage && plainHitSpec.Thing == "Mouse" && !plainHitSpec.HasType &&
+      Math.Abs(plainHitSpec.Number - 30) < 0.0001 && plainHitSpec.Leftover.Count == 0,
+    "`damage <target> by <n>` needs no type");
+
+var poisonHitProg = parser.Parse("when Q is pressed\n  damage my aim target by 25 poison\n");
+var poisonHitSpec = ActionWords.Parse(((RawActionNode)poisonHitProg.Events[0].Body[0].Statement!).Words, _ => { });
+Check(poisonHitSpec.Verb == ActionVerb.Damage && poisonHitSpec.Thing == "my aim target" &&
+      poisonHitSpec.Type == "poison" && Math.Abs(poisonHitSpec.Number - 25) < 0.0001,
+    "`damage my aim target by 25 poison` hits the unit the aim picked");
+
+var typedAreaProg = parser.Parse("when my aim picks a target\n  damage area around my aim target by 30 fire for radius 180\n");
+var typedAreaSpec = ActionWords.Parse(((RawActionNode)typedAreaProg.Events[0].Body[0].Statement!).Words, _ => { });
+Check(typedAreaSpec.Verb == ActionVerb.DamageArea && typedAreaSpec.Type == "fire" &&
+      Math.Abs(typedAreaSpec.Radius - 180) < 0.0001 && typedAreaSpec.Leftover.Count == 0,
+    "`damage area ... by 30 fire for radius 180` carries the type into the splash");
+
+// The pure half: a type meets its own resist, then armor, shield and health.
+var damageTypeVars = new EventVariables();
+var fireTank = new FakeActor("FireTank");
+HealthManager.Set(damageTypeVars, fireTank, "MaxHealth", 100);
+HealthManager.Set(damageTypeVars, fireTank, "Health", 100);
+HealthManager.Set(damageTypeVars, fireTank, "Armor", 5);
+HealthManager.Set(damageTypeVars, fireTank, "MaxShield", 10);
+HealthManager.Set(damageTypeVars, fireTank, "Shield", 10);
+damageTypeVars.SetLocal(fireTank, "FireResist", ValueBox.OfNumber(50));
+Check(DamageTypes.ResistStat("fire") == "FireResist" && DamageTypes.ResistStat("Cold") == "ColdResist" &&
+      DamageTypes.ResistStat("poison") == "PoisonResist" && DamageTypes.ResistStat("") == "",
+    "a damage type reads its own `<Type>Resist` stat");
+Check(Math.Abs(DamageTypes.Mitigate(damageTypeVars, fireTank, 30, "fire") - 15) < 1e-9 &&
+      Math.Abs(DamageTypes.Mitigate(damageTypeVars, fireTank, 30, "steel") - 30) < 1e-9,
+    "`my FireResist 50` halves 30 fire, and a type it does not resist is untouched");
+var fireHit = DamageTypes.Apply(damageTypeVars, fireTank, 30, "fire");
+Check(Math.Abs(fireHit.AbsorbedByShield - 10) < 1e-9 && fireHit.HealthLost == 0 &&
+      damageTypeVars.GetLocal(fireTank, "Health").AsNumber() == 100,
+    "the resisted 15 then spends armor (5) and the 10 shield, leaving health untouched");
+
+var steelVars = new EventVariables();
+var steelTank = new FakeActor("SteelTank");
+HealthManager.Set(steelVars, steelTank, "MaxHealth", 100);
+HealthManager.Set(steelVars, steelTank, "Health", 100);
+HealthManager.Set(steelVars, steelTank, "Armor", 5);
+steelVars.SetLocal(steelTank, "FireResist", ValueBox.OfNumber(50));
+var steelHit = DamageTypes.Apply(steelVars, steelTank, 30, "steel");
+var fireOnSteelTank = DamageTypes.Apply(steelVars, steelTank, 30, "fire");
+Check(steelHit.HealthLost == 25 && fireOnSteelTank.HealthLost == 10 &&
+      steelVars.GetLocal(steelTank, "Health").AsNumber() == 65,
+    "steel ignores `FireResist`: 25 off health where the same fire hit takes 10");
+
+// Splash: every victim meets its own resistance with the same type.
+var splashVars = new EventVariables();
+var fireWarded = new FakeActor("FireWarded");
+var coldWarded = new FakeActor("ColdWarded");
+foreach (var warded in new[] { fireWarded, coldWarded })
+{
+    HealthManager.Set(splashVars, warded, "MaxHealth", 100);
+    HealthManager.Set(splashVars, warded, "Health", 100);
+}
+splashVars.SetLocal(fireWarded, "FireResist", ValueBox.OfNumber(50));
+splashVars.SetLocal(coldWarded, "ColdResist", ValueBox.OfNumber(50));
+var fireOnWarded = DamageTypes.Apply(splashVars, fireWarded, 30, "fire");
+var fireOnCold = DamageTypes.Apply(splashVars, coldWarded, 30, "fire");
+Check(fireOnWarded.HealthLost == 15 && fireOnCold.HealthLost == 30,
+    "a typed splash spends each victim's own resistance (fire hits the fire-warded unit for half)");
+
+var immuneVars = new EventVariables();
+var elemental = new FakeActor("Elemental");
+HealthManager.Set(immuneVars, elemental, "MaxHealth", 100);
+HealthManager.Set(immuneVars, elemental, "Health", 100);
+immuneVars.SetLocal(elemental, "FireResist", ValueBox.OfNumber(999));
+var immuneHit = DamageTypes.Apply(immuneVars, elemental, 30, "fire");
+Check(immuneHit.HealthLost == 0 && immuneVars.GetLocal(elemental, "Health").AsNumber() == 100,
+    "`my FireResist 999` is immunity, never healing");
+
 var aimTriggerProg = parser.Parse("when my aim picks a target\n  set Picked to 1\n");
 var aimTriggerDesc = TriggerClassifier.Classify(aimTriggerProg.Events[0]);
 Check(aimTriggerDesc.Kind == TriggerKind.AimPicked,
@@ -10995,6 +11078,9 @@ Check(WordRegistry.All.Any(entry => entry.Kind == "trigger" && entry.Word == "wh
     "the word book lists the aim trigger");
 Check(WordRegistry.All.Any(entry => entry.Kind == "action" && entry.Word == "aim"),
     "the word book lists `aim`");
+Check(WordRegistry.All.Any(entry => entry.Kind == "action" && entry.Word == "damage" &&
+      entry.AltShape.Contains("damage <target> by <n> <type>", StringComparison.Ordinal)),
+    "the word book lists the typed direct damage form");
 Check(WordRegistry.All.Any(entry => entry.Kind == "action" && entry.Word == "damage" &&
       entry.Example.Contains("damage area", StringComparison.Ordinal)),
     "the word book lists `damage area`");
@@ -11765,6 +11851,8 @@ Check(stormDamageSpec != null && stormDamageSpec.Thing == "my aim" &&
       stormDamageSpec.AmountNode is NumberValue stormDamage && stormDamage.Value == 30 &&
       Math.Abs(stormDamageSpec.Radius - 180) < 1e-9,
     "HighTemplar's storm damages a 180 radius around the pick for 30");
+Check(stormDamageSpec != null && stormDamageSpec.Type == "fire",
+    "HighTemplar's storm is fire, so the splash takes the resist the direct hit would");
 Check(TriggerClassifier.Classify(templarFile.Events.First(e => e.Trigger.Any(t => t.Text == "picks"))).Kind == TriggerKind.AimPicked,
     "HighTemplar reacts to `when my aim picks a target`");
 
