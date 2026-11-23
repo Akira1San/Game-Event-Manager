@@ -946,6 +946,14 @@ namespace Game
                     Op = first == "lock" ? CursorOp.Lock : CursorOp.Unlock,
                 };
             }
+            // `toggle cursor lock` — one key flips capture. The long form keeps `toggle cursor`
+            // from reading like the cursor ART the words above draw; a sheet that writes it that
+            // way gets the ordinary `toggle` hint instead of a surprise.
+            if (first == "toggle" && words.Count == 3 &&
+                words[2].Type == TokenType.Word && words[2].Text == "lock")
+            {
+                return new CursorNode { Line = line.Line, Op = CursorOp.Toggle };
+            }
             return null;
         }
 

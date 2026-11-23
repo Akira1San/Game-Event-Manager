@@ -14915,6 +14915,28 @@ Check(lockEngine.CursorLocked, "`lock cursor` captures the pointer from a sheet"
 lockEngine.RemoveAllSheets();
 Check(!lockEngine.CursorLocked, "a new scene starts with the pointer released");
 
+var toggleWords = cursorParser.Parse("when game starts\n  toggle cursor lock\n  toggle cursor lock\n");
+var toggleOps = new List<CursorOp>();
+foreach (var toggleLine in toggleWords.Events[0].Body)
+{
+    if (toggleLine.Statement is CursorNode toggleNode)
+        toggleOps.Add(toggleNode.Op);
+}
+Check(toggleOps.Count == 2 && toggleOps[0] == CursorOp.Toggle && toggleOps[1] == CursorOp.Toggle,
+    "`toggle cursor lock` parses as a cursor word");
+
+var recaptureEngine = FreshEngine(new FakeWorld());
+recaptureEngine.AddSheet(new GlobalHost(), cursorParser.Parse("when game starts\n  lock cursor\n  toggle cursor lock\n"));
+recaptureEngine.SessionStarted();
+recaptureEngine.Tick(0);
+Check(!recaptureEngine.CursorLocked, "`toggle cursor lock` releases a captured pointer");
+
+var captureEngine = FreshEngine(new FakeWorld());
+captureEngine.AddSheet(new GlobalHost(), cursorParser.Parse("when game starts\n  toggle cursor lock\n"));
+captureEngine.SessionStarted();
+captureEngine.Tick(0);
+Check(captureEngine.CursorLocked, "`toggle cursor lock` captures a released pointer");
+
 var cursorEngine = FreshEngine(new FakeWorld());
 cursorEngine.AddSheet(new GlobalHost(),
     cursorParser.Parse("when game starts\n  set cursor \"Attack\"\n  push cursor \"Hand\"\n"));

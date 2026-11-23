@@ -1536,11 +1536,22 @@ window around a broken runtime.
   no framing to offset; it is cleared rather than fighting the parented rig), and the legacy
   `LookAtMouse` rule stops while the mode is on. Feel lives in `LookSensitivity` (degrees per
   pixel, default 0.12), `LookInvertX` / `LookInvertY`, and pointer capture is the new
-  `lock cursor` / `unlock cursor` pair: the OS mouse is centred and hidden, every cursor rule is
+  `lock cursor` / `unlock cursor` / `toggle cursor lock` family: the OS mouse is centred and
+  hidden, every cursor rule is
   outranked, and stopping play always restores it. Capture and release both move the pointer by
   themselves, so the look rig drops the one frame of mouse delta that follows either transition —
   otherwise the recentre jump would snap the view (the flag is windowed to a quarter second, so a
-  stale capture can never swallow a real movement). `GameFiles/FPS_Player.events` is the shipped
+  stale capture can never swallow a real movement). `toggle cursor lock` flips capture, which is
+  what lets one key (Escape in the shipped sheet) hand the pointer back and take it again on the
+  next press — a sheet cannot toggle with two `when Escape is pressed` blocks, because both gates
+  are read in the same tick after the first block has already written its variable. While the
+  pointer is captured the engine also
+  pins it back to the window centre at the end of every input update and caches that centre as the
+  previous position, which zeroes the absolute `MousePositionDelta` for scripts exactly when look
+  control needs it; the rig therefore reads `Input.MouseMoveRelative` while captured (raw pixels,
+  fired before the recentre, falling back to the `Mouse X` / `Mouse Y` axes divided back out of
+  their Input Settings sensitivity on a window that reports no relative moves) and the ordinary
+  delta while the pointer is free. `GameFiles/FPS_Player.events` is the shipped
   sheet (capture, WASD, run gate, jump, Escape releases the pointer). Parked: crouch, ADS/FOV,
   per-axis look triggers, and camera-relative movement for a body that does not turn.
 

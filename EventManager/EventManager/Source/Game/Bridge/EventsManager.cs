@@ -38,6 +38,16 @@ namespace Game
         /// only in the very first scene; <c>when scene starts</c> fires on every scene load.</summary>
         private static bool _sessionBegan;
         private float _nextWatchCheck;
+        /// <summary>
+        /// This frame's relative mouse movement, collected from <c>Input.MouseMoveRelative</c>.
+        /// While the pointer is captured Flax pins it back to the window centre at the end of every
+        /// input update and caches that position as the previous one, so
+        /// <c>Input.MousePositionDelta</c> reads zero exactly when look control needs it (Task_FPS
+        /// Phase 1). The relative events are sent before that recentre, so they still carry the
+        /// hand movement.
+        /// </summary>
+        private Float2 _mouseRelative;
+        private bool _mouseRelativeHooked;
         private bool _leftMouseDownLastFrame;
         private bool _rightMouseDownLastFrame;
         private bool _middleMouseDownLastFrame;
@@ -188,6 +198,10 @@ namespace Game
                 return;
             }
             Instance = this;
+            // The only channel that carries look movement while the pointer is captured (see
+            // _mouseRelative): the engine's absolute delta is zeroed by the capture recentre.
+            Input.MouseMoveRelative += HandleMouseRelative;
+            _mouseRelativeHooked = true;
             // A fresh self-test round per Play (Task 51 Part C). No sheet has registered yet —
             // components register through `Instance`, which only exists from here on — so this
             // cannot wipe a case this scene is about to discover.
@@ -640,10 +654,59 @@ namespace Game
             FlaxActions.WarnOnce("Event sheet: " + message);
         }
 
+        private void HandleMouseRelative(Float2 delta)
+        {
+            _mouseRelative += delta;
+        }
+
+        /// <summary>
+        /// This frame's look input, in pixels. With the pointer free the engine's own delta is the
+        /// answer. With it captured the engine recentres the mouse at the end of every input
+        /// update and stores that centre as the previous position, so <c>MousePositionDelta</c> is
+        /// always zero; the relative events (or, on a window that reports none, the virtual mouse
+        /// axes, which are evaluated before that recentre) are what still carry the movement.
+        /// </summary>
+        private Float2 LookDelta(Float2 relative)
+        {
+            if (!CursorView.Locked)
+                return Input.MousePositionDelta;
+            if (relative.X != 0f || relative.Y != 0f)
+                return relative;
+            return new Float2(AxisPixels("Mouse X"), AxisPixels("Mouse Y"));
+        }
+
+        /// <summary>
+        /// A mouse axis in pixels: the virtual axis is the delta scaled by its Input Settings
+        /// sensitivity, so dividing it back out keeps one feel knob (the sheet's
+        /// <c>LookSensitivity</c>) for both channels. An axis this project does not map answers 0,
+        /// and a mapping without a sensitivity is used as it comes.
+        /// </summary>
+        private static float AxisPixels(string axis)
+        {
+            float value = Input.GetAxis(axis);
+            if (value == 0f)
+                return 0f;
+            float sensitivity = Input.GetAxisConfigByName(axis).Sensitivity;
+            return sensitivity > 0f ? value / sensitivity : value;
+        }
+
         public override void OnDestroy()
         {
+            if (_mouseRelativeHooked)
+            {
+                Input.MouseMoveRelative -= HandleMouseRelative;
+                _mouseRelativeHooked = false;
+            }
+            _mouseRelative = Float2.Zero;
             if (Instance == this)
+            {
                 Instance = null;
+                // Stop and Play again happens in one editor process, and a static field outlives
+                // the stopped game: without this the second Play never fires `when game starts`,
+                // so `lock cursor` and every variable that block sets (Pace, RunSpeed...) are
+                // skipped and the run looks half dead.
+                _sessionBegan = false;
+            }
             Level.ActorDeleted -= ActorGoneAway;
             Level.SceneLoaded -= SceneLoadedAim;
             // The pointer is engine-wide state: stopping play must not leave it hidden on a
@@ -924,6 +987,10 @@ namespace Game
         /// </summary>
         private void UpdateFirstPersonCamera()
         {
+            // Taken first and cleared every frame, so a scene with no first-person player can
+            // never bank a relative movement and jump the view when one appears.
+            Float2 relative = _mouseRelative;
+            _mouseRelative = Float2.Zero;
             CameraState cam = Runtime.Camera;
             if (cam == null)
                 return;
@@ -970,7 +1037,7 @@ namespace Game
                 cam.EnterFirstPerson(player, player.EulerAngles.Y, 0.0);
             }
 
-            Float2 delta = Input.MousePositionDelta;
+            Float2 delta = LookDelta(relative);
             // The frame after capture turns on (or off) the engine recentres the pointer, and that
             // jump arrives as a mouse delta; dropping it keeps the view from snapping.
             if (CursorView.ConsumeRecenterDelta())

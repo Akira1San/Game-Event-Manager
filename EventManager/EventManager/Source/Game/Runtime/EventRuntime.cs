@@ -2844,6 +2844,13 @@ namespace Game
                 case CursorOp.Unlock:
                     CursorLocked = false;
                     break;
+                case CursorOp.Toggle:
+                    // `toggle cursor lock`: capture is the only thing flipped, and capturing also
+                    // dismisses any drawn cursor art — exactly what `lock cursor` does.
+                    CursorLocked = !CursorLocked;
+                    if (CursorLocked)
+                        CursorHidden = false;
+                    break;
             }
         }
 

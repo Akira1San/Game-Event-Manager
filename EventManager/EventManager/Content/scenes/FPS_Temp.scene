@@ -65,16 +65,16 @@
 			"Name": "Floor",
 			"Transform": {
 				"Scale": {
-					"X": 4.0,
+					"X": 10.0,
 					"Y": 0.5,
-					"Z": 4.0
+					"Z": 10.0
 				}
 			},
 			"Model": "b43f0f8f4aaba3f3156896a5a22ba493",
 			"Buffer": {
 				"Entries": [
 					{
-						"Material": "1771b53343d461faacdf2c8581b1fdbb",
+						"Material": "ea4b98824f51d74380d64fa533ea934a",
 						"ShadowsMode": 3,
 						"Visible": true,
 						"ReceiveDecals": true
@@ -83,23 +83,15 @@
 			}
 		},
 		{
-			"ID": "5015293946c9faa39924ec8a15b7a539",
-			"TypeName": "FlaxEngine.Camera",
-			"ParentID": "5ccc80b14f0d75c8591acca96975410d",
-			"Name": "Camera",
-			"Transform": {
-				"Translation": {
-					"X": 0.0,
-					"Y": 110.0,
-					"Z": 0.0
-				}
+			"ID": "9c46237f4e97bbd6ec4c05b1ecfc526c",
+			"TypeName": "FlaxEngine.BoxCollider",
+			"ParentID": "fdcd5f1744c1a94ceb7d1a934ad9b0d7",
+			"Name": "BoxCollider",
+			"Size": {
+				"X": 100.0,
+				"Y": 100.0,
+				"Z": 100.0
 			}
-		},
-		{
-			"ID": "46905f37441dd96b168f97b3140dc486",
-			"TypeName": "FlaxEngine.AudioListener",
-			"ParentID": "5015293946c9faa39924ec8a15b7a539",
-			"Name": "Audio Listener"
 		},
 		{
 			"ID": "21358b514009e6080e8d08a4cce1d4b2",
@@ -153,13 +145,26 @@
 		},
 		{
 			"ID": "5ccc80b14f0d75c8591acca96975410d",
-			"TypeName": "FlaxEngine.StaticModel",
+			"TypeName": "FlaxEngine.EmptyActor",
 			"ParentID": "8832199d456a70b39cfc22ba6060c2a6",
 			"Name": "FPS_Player",
 			"Transform": {
 				"Translation": {
 					"X": 0.0,
-					"Y": 125.0,
+					"Y": 75.0,
+					"Z": 0.0
+				}
+			}
+		},
+		{
+			"ID": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+			"TypeName": "FlaxEngine.StaticModel",
+			"ParentID": "5ccc80b14f0d75c8591acca96975410d",
+			"Name": "Body",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": -50.0,
 					"Z": 0.0
 				}
 			},
@@ -180,24 +185,43 @@
 			"TypeName": "Game.EventSheet",
 			"ParentID": "5ccc80b14f0d75c8591acca96975410d",
 			"V": {
-				"EventFile": "FPS_Player",
-				"FirstPerson": true,
-				"UsePhysicsMovement": true,
-				"MoveRelativeToCamera": true,
-				"ConfigureCharacterBody": true,
-				"CharacterRadius": 50.0,
-				"CharacterHeight": 150.0,
-				"CharacterStepOffset": 30.0,
-				"CharacterSlopeLimit": 45.0,
-				"CharacterGroundCheckDistance": 10.0
+	"EventFile": "FPS_Player",
+	"UsePhysicsMovement": true,
+	"FirstPerson": true,
+	"MoveRelativeToCamera": true,
+	"ConfigureCharacterBody": true,
+	"CharacterRadius": 25.0,
+	"CharacterHeight": 50.0,
+	"CharacterStepOffset": 30.0,
+	"CharacterSlopeLimit": 45.0,
+	"CharacterGroundCheckDistance": 10.0
+}
+		},
+		{
+			"ID": "5015293946c9faa39924ec8a15b7a539",
+			"TypeName": "FlaxEngine.Camera",
+			"ParentID": "5ccc80b14f0d75c8591acca96975410d",
+			"Name": "Camera",
+			"Transform": {
+				"Translation": {
+					"X": 0.0,
+					"Y": 40.0,
+					"Z": 0.0
+				}
 			}
+		},
+		{
+			"ID": "46905f37441dd96b168f97b3140dc486",
+			"TypeName": "FlaxEngine.AudioListener",
+			"ParentID": "5015293946c9faa39924ec8a15b7a539",
+			"Name": "Audio Listener"
 		},
 		{
 			"ID": "5e1f0000000000000000000000000201",
 			"TypeName": "FlaxEngine.CharacterController",
 			"ParentID": "5ccc80b14f0d75c8591acca96975410d",
-			"Radius": 50.0,
-			"Height": 150.0,
+			"Radius": 25.0,
+			"Height": 50.0,
 			"StepOffset": 30.0,
 			"SlopeLimit": 45.0
 		}

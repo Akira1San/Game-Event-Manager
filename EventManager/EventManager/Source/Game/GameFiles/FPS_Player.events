@@ -47,6 +47,7 @@ when Left Ctrl is released
 when Space is pressed
   jump
 
-# Hand the pointer back so a menu or the debugger stays usable.
+# Hand the pointer back so a menu or the debugger stays usable, and take it again on the
+# next press: one key flips capture.
 when Escape is pressed
-  unlock cursor
+  toggle cursor lock

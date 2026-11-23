@@ -1565,7 +1565,7 @@ Depends on Tasks 3 and 16. **Flax bridge** (P1/P2).
 | value | `touch x` / `touch z` | `set my TargetX to touch x` |
 | action | `move forward speed <n> relative to camera` | camera-relative movement |
 | trigger | `when key combo "Left Shift+W" is pressed` | modifiers and combos |
-| action | `lock cursor` / `unlock cursor` | first-person/aiming |
+| action | `lock cursor` / `unlock cursor` / `toggle cursor lock` | first-person/aiming |
 | value | `gamepad left x` / `left y` | raw analog stick |
 
 ### Examples

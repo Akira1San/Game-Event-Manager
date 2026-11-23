@@ -57,7 +57,7 @@ These are the *new* trigger/action/condition words this task introduces. Everyth
 ## Bridge C# to write
 
 - [x] `Runtime/MouseLook.cs` (pure): yaw/pitch accumulation from mouse delta, pitch clamp (±89°), yaw wrap, sensitivity/invert applied, per tick. Unit tested. (Shipped under this name instead of `FPSLook.cs`.)
-- [x] `EventsManager.UpdateFirstPersonCamera()`: reads `Input.MousePositionDelta` each tick, applies yaw to `me.Orientation` (world Y only) and pitch to the player's own camera child (`LocalOrientation`, local X). The mode lives in `CameraState` (`FirstPerson`), so it releases/absorbs the other camera rigs like they do; the child camera is found with `FlaxWorld.FindCameraUnder`. Enabled by the `First Person` tick box on the player's `EventSheet` (not a per-sheet instance field in FlaxActions).
+- [x] `EventsManager.UpdateFirstPersonCamera()`: reads this frame's mouse movement each tick — `Input.MousePositionDelta` while the pointer is free, `Input.MouseMoveRelative` while it is captured (Flax zeroes the absolute delta by recentring the mouse, so the relative channel is the one that still carries the hand), with the `Mouse X`/`Mouse Y` axes as the fallback — applies yaw to `me.Orientation` (world Y only) and pitch to the player's own camera child (`LocalOrientation`, local X). The mode lives in `CameraState` (`FirstPerson`), so it releases/absorbs the other camera rigs like they do; the child camera is found with `FlaxWorld.FindCameraUnder`. Enabled by the `First Person` tick box on the player's `EventSheet` (not a per-sheet instance field in FlaxActions).
 - [x] `Bridge/FlaxActions` direction override: with `MoveRelativeToCamera` on the sheet, `move forward/back/left/right` resolve from the player's camera heading flattened to XZ (`Runtime/CameraRelative.cs`), not the actor's facing; `up`/`down`, `move toward`, `face` and `look at` stay actor-relative. A player with no camera child warns once and falls back to the facing.
 - [x] `crouch` / `stand` / `toggle crouch` in `Bridge/FlaxActions`: `Runtime/Stance.cs` keeps the rules (55% capsule height with a 20 cm floor, 0.5× pace, half-the-lost-height sink), the bridge resizes the `CharacterController`, sinks the actor so the feet and the camera child move correctly, writes `my Stance` and leaves the sheet's speed words untouched. An actor with no controller still crouches (head only).
 - [ ] `Bridge/FlaxActions.Sprint/Walk()`: speed multiplier read from `my SprintSpeed` (default 2×), drains `my Stamina` each tick while held (5 per 0.1 s), regenerates when released (4 per 0.25 s), falls back to walk at 0.
@@ -80,9 +80,9 @@ These are the *new* trigger/action/condition words this task introduces. Everyth
 ## Phase plan
 ### Phase 1 — Camera + look (mouse look)
 - [x] `MouseLook.cs` pure rules + unit tests (yaw/pitch clamp, yaw wrap, sensitivity/invert, zero delta).
-- [x] Look rig in the bridge: mouse delta each tick, yaw on player Y, pitch on the camera child; `lock cursor` / `unlock cursor` (`Screen.CursorLock`), with the drawn cursor suppressed while captured and the pointer always restored on stop.
+- [x] Look rig in the bridge: this frame's mouse movement each tick (relative channel while captured), yaw on player Y, pitch on the camera child; `lock cursor` / `unlock cursor` / `toggle cursor lock` (`Screen.CursorLock`, with the toggle for a single key that flips capture), with the drawn cursor suppressed while captured and the pointer always restored on stop.
 - [x] `when <axis> is moved` — **deliberately not shipped**: look is continuous state, and a pushed trigger per mouse tick would be noise; the rig polls the delta each tick, which is the project's model.
-- [x] `FPS_Player.events`: `when game starts → lock cursor` (plus WASD, a Shift run gate, Space jump and Escape to release the pointer).
+- [x] `FPS_Player.events`: `when game starts → lock cursor` (plus WASD, a Shift run gate, Space jump and Escape → `toggle cursor lock`, so the pointer is handed back and recaptured on alternate presses).
 - [ ] Editor check: look around with the mouse, cursor locked, pitch clamped. (Needs a camera parented under the player with `First Person` ticked.)
 
 ### Phase 2 — Camera-relative movement + stance
@@ -118,7 +118,7 @@ These are the *new* trigger/action/condition words this task introduces. Everyth
 - [ ] All new unit tests green; Flax module build 0 errors; editor play-check in `FPS_Test.scene` clean.
 
 ## Risks / open questions
-- [ ] Flax 1.13 `Input` API for raw mouse delta vs action-mapped axes — confirm `Input.MouseDelta` or `Input.GetAxis("Mouse X/Y")` shape before writing `FPSCamera`.
+- [x] Flax 1.13 `Input` API for raw mouse delta vs action-mapped axes: `Input.MousePositionDelta` is zero while `Screen.CursorLock = Locked` because the engine recentres the pointer at the end of each input update and caches that centre as the previous position. `Input.MouseMoveRelative` (`Action<Float2>`, sent before the recentre) carries the relative movement, and `Input.GetAxis("Mouse X"/"Mouse Y")` is evaluated before the recentre too (delta × the mapping's sensitivity), so the look rig reads the relative event and divides the axis fallback back down to pixels.
 - [ ] Camera-as-child-of-player: pitch rotation must not roll the player; verify the pivot node is a separate child actor so only its local pitch changes.
 - [ ] CharacterController height shrink on crouch may intersect the floor; clamp the minimum height or accept a small crouch offset.
 - [ ] `move forward` currently resolves from actor facing (DESIGN §5); the camera-relative override is opt-in via `MoveRelativeToCamera` so existing top-down sheets are unchanged.

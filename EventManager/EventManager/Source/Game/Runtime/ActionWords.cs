@@ -1582,7 +1582,7 @@ namespace Game
                         return Finish(spec, ActionVerb.ToggleCrouch, words, 2);
                     if (words.Count >= 2 && words[1].Text == "light")
                         return Finish(spec, ActionVerb.ToggleLight, words, 2);
-                    return Unknown(spec, words, "\u201Ctoggle\u201D looks like this: \u201Ctoggle light\u201D or \u201Ctoggle crouch\u201D", warn);
+                    return Unknown(spec, words, "\u201Ctoggle\u201D looks like this: \u201Ctoggle light\u201D, \u201Ctoggle crouch\u201D or \u201Ctoggle cursor lock\u201D", warn);
             }
 
             if (words.Count >= 3 && words[0].Text == "play" && words[1].Text == "sound" && words[2].Type == TokenType.Str)

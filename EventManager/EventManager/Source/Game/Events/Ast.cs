@@ -69,10 +69,13 @@ namespace Game
         Lock,
         /// <summary><c>unlock cursor</c>.</summary>
         Unlock,
+        /// <summary><c>toggle cursor lock</c> — flip capture, so one key hands the pointer back
+        /// and the next press takes it again.</summary>
+        Toggle,
     }
 
-    /// <summary>One cursor word: set, push, pop, hide or show (Task 48 Part E), lock or unlock
-    /// (Task_FPS Phase 1).</summary>
+    /// <summary>One cursor word: set, push, pop, hide or show (Task 48 Part E), lock, unlock or
+    /// toggle the capture (Task_FPS Phase 1).</summary>
     public class CursorNode : StatementNode
     {
         public CursorOp Op;
