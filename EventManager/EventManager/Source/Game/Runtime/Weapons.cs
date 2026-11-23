@@ -127,8 +127,7 @@ namespace Game
         /// Stats authored in a data file (`WeaponData.events`), keyed by weapon then field. Read
         /// at load time so a weapon's numbers exist before any actor's `me appears` runs.
         /// </summary>
-        private static readonly Dictionary<string, Dictionary<string, ValueBox>> Authored =
-            new Dictionary<string, Dictionary<string, ValueBox>>(StringComparer.OrdinalIgnoreCase);
+        private static readonly DataTable Table = new DataTable("WeaponData", FieldNames);
 
         /// <summary>
         /// Reads <c>&lt;Weapon&gt;&lt;Field&gt;</c> assignments out of a data file, e.g.
@@ -137,65 +136,7 @@ namespace Game
         /// </summary>
         public static void LoadData(ProgramFile file)
         {
-            Authored.Clear();
-            if (file == null)
-                return;
-            foreach (EventNode ev in file.Events)
-            {
-                foreach (BodyLineNode line in ev.Body)
-                {
-                    if (!(line.Statement is SetNode set) || set.Op != '\0')
-                        continue;
-                    if (!TrySplitField(set.Target.Name, out string weapon, out string field))
-                        continue;
-                    if (!TryLiteral(set.Value, out ValueBox value))
-                        continue;
-                    if (!Authored.TryGetValue(weapon, out var stats))
-                    {
-                        stats = new Dictionary<string, ValueBox>(StringComparer.OrdinalIgnoreCase);
-                        Authored[weapon] = stats;
-                    }
-                    stats[field] = value;
-                }
-            }
-        }
-
-        /// <summary>Splits `PistolReload` into the weapon `Pistol` and the field `Reload`.</summary>
-        private static bool TrySplitField(string name, out string weapon, out string field)
-        {
-            weapon = "";
-            field = "";
-            if (string.IsNullOrEmpty(name))
-                return false;
-            foreach (string candidate in FieldNames)
-            {
-                if (name.Length <= candidate.Length ||
-                    !name.EndsWith(candidate, StringComparison.OrdinalIgnoreCase))
-                    continue;
-                weapon = name.Substring(0, name.Length - candidate.Length);
-                field = candidate;
-                return true;
-            }
-            return false;
-        }
-
-        private static bool TryLiteral(ValueNode node, out ValueBox value)
-        {
-            switch (node)
-            {
-                case NumberValue number:
-                    value = ValueBox.OfNumber(number.Value);
-                    return true;
-                case TextValue text:
-                    value = ValueBox.OfText(text.Text);
-                    return true;
-                case BooleanValue boolean:
-                    value = ValueBox.OfBoolean(boolean.Value);
-                    return true;
-                default:
-                    value = new ValueBox();
-                    return false;
-            }
+            Table.LoadData(file);
         }
 
         /// <summary>The names of the built-in weapons, sorted, for warning messages.</summary>
@@ -203,10 +144,7 @@ namespace Game
         {
             // Built-in defaults plus whatever WeaponData.events defines, so a data-only
             // weapon (the Flamer the Flamer enemy carries) is named in the help too.
-            var names = new List<string>(Builtins.Keys);
-            foreach (string authored in Authored.Keys)
-                if (!names.Contains(authored))
-                    names.Add(authored);
+            var names = Table.MergeWith(Builtins.Keys);
             names.Sort(StringComparer.OrdinalIgnoreCase);
             return string.Join(", ", names);
         }
@@ -223,13 +161,7 @@ namespace Game
             foreach (var pair in Builtins)
                 if (string.Equals(pair.Key, weaponName, StringComparison.OrdinalIgnoreCase))
                     return pair.Key;
-            foreach (var pair in Authored)
-                if (string.Equals(pair.Key, weaponName, StringComparison.OrdinalIgnoreCase))
-                    return pair.Key;
-            foreach (string field in FieldNames)
-                if (variables != null && variables.HasGlobal(weaponName + field))
-                    return weaponName;
-            return null;
+            return Table.CanonicalFor(variables, weaponName);
         }
 
         /// <summary>Resolves a weapon's full data (built-in defaults, then the data file, then globals).</summary>
@@ -266,29 +198,10 @@ namespace Game
             }
             result.Name = canonical;
             foreach (string field in FieldNames)
-                if (TryField(variables, canonical, field, out ValueBox value))
+                if (Table.TryRead(variables, canonical, field, out ValueBox value))
                     Apply(result, field, value);
             stats = result;
             return true;
-        }
-
-        /// <summary>One field: the data file's global when it exists, otherwise the built-in value.</summary>
-        private static bool TryField(EventVariables variables, string weaponName, string field, out ValueBox value)
-        {
-            string authored = weaponName + field;
-            if (variables != null && variables.HasGlobal(authored))
-            {
-                value = ValueBox.Copy(variables.GetGlobal(authored));
-                return true;
-            }
-            if (Authored.TryGetValue(weaponName, out var authoredStats) &&
-                authoredStats.TryGetValue(field, out ValueBox fromData))
-            {
-                value = ValueBox.Copy(fromData);
-                return true;
-            }
-            value = new ValueBox();
-            return false;
         }
 
         private static void Apply(WeaponStats stats, string field, ValueBox value)

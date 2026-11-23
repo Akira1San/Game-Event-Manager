@@ -1592,6 +1592,17 @@ window around a broken runtime.
   sheet (capture, WASD, run gate, jump, Escape releases the pointer). Parked: crouch, ADS/FOV,
   per-axis look triggers, and camera-relative movement for a body that does not turn.
 
+- **One `<Row><Field>` table loader (Task 9 F10):** every data table is rows of fields authored as one
+  global per row and field (`PistolDamage`, `ZombieHealth`, `SwordArmor`, `RareMinAffixes`), so loading one
+  is one shared walk: `Runtime/DataTable.cs` reads a data file's literal `set` lines, splits a name into the
+  row and the field it ends with, and keeps the value. A live global of the same name always wins over the
+  file, and a row that exists only as live globals is a valid row. Fields match longest-first **in the order
+  the table passes them**, which is why `AffixData` lists `MinAffixes` before `Min`. `WeaponData`,
+  `SpellData`, `ItemData`, `AffixData` and `EnemyTypes` are now a field list plus their built-in defaults and
+  their field-to-stat switch; `Matchups` is a pair table and reuses only the literal walk (`DataFile.ForEachLiteral`).
+  Adding `Loot.events` or `Buffs.events` is a `DataTable`, a field array and the switch that writes the stats —
+  no loader code.
+
 ## 10. The one-paragraph pitch
 
 Event Manager is a text-first game-logic system for non-programmers, inspired by Blender Game

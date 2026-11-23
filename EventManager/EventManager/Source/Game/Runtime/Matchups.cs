@@ -99,22 +99,12 @@ namespace Game
         public static void LoadData(ProgramFile file)
         {
             Authored.Clear();
-            if (file == null)
-                return;
-            foreach (EventNode ev in file.Events)
+            DataFile.ForEachLiteral(file, (name, value) =>
             {
-                foreach (BodyLineNode line in ev.Body)
-                {
-                    if (!(line.Statement is SetNode set) || set.Op != '\0')
-                        continue;
-                    if (!TrySplit(set.Target.Name, out string attacker, out string defender))
-                        continue;
-                    ValueBox value = LiteralOf(set.Value);
-                    if (value.IsNone())
-                        continue;
-                    Authored[(attacker, defender)] = value.AsNumber() != 0;
-                }
-            }
+                if (!TrySplit(name, out string attacker, out string defender))
+                    return;
+                Authored[(attacker, defender)] = value.AsNumber() != 0;
+            });
         }
 
         /// <summary>
@@ -137,21 +127,6 @@ namespace Game
             attacker = left;
             defender = right;
             return true;
-        }
-
-        private static ValueBox LiteralOf(ValueNode node)
-        {
-            switch (node)
-            {
-                case BooleanValue boolean:
-                    return ValueBox.OfBoolean(boolean.Value);
-                case NumberValue number:
-                    return ValueBox.OfNumber(number.Value);
-                case TextValue text:
-                    return ValueBox.OfText(text.Text);
-                default:
-                    return new ValueBox();
-            }
         }
 
         private static string Capitalised(string type)

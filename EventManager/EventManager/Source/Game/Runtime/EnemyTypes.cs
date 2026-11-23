@@ -76,8 +76,7 @@ namespace Game
         /// load time so a type's numbers exist before any actor's `me appears` runs — a data
         /// sheet attached to the Game actor would otherwise race the enemies' own sheets.
         /// </summary>
-        private static readonly Dictionary<string, Dictionary<string, ValueBox>> Authored =
-            new Dictionary<string, Dictionary<string, ValueBox>>(StringComparer.OrdinalIgnoreCase);
+        private static readonly DataTable Table = new DataTable("EnemyTypes", StatNames);
 
         /// <summary>
         /// Reads <c>&lt;Type&gt;&lt;Stat&gt;</c> assignments out of a data file, e.g.
@@ -86,65 +85,7 @@ namespace Game
         /// </summary>
         public static void LoadData(ProgramFile file)
         {
-            Authored.Clear();
-            if (file == null)
-                return;
-            foreach (EventNode ev in file.Events)
-            {
-                foreach (BodyLineNode line in ev.Body)
-                {
-                    if (!(line.Statement is SetNode set) || set.Op != '\0')
-                        continue;
-                    if (!TrySplitStat(set.Target.Name, out string type, out string stat))
-                        continue;
-                    if (!TryLiteral(set.Value, out ValueBox value))
-                        continue;
-                    if (!Authored.TryGetValue(type, out var stats))
-                    {
-                        stats = new Dictionary<string, ValueBox>(StringComparer.OrdinalIgnoreCase);
-                        Authored[type] = stats;
-                    }
-                    stats[stat] = value;
-                }
-            }
-        }
-
-        /// <summary>Splits `ZombieSightDistance` into the type `Zombie` and the stat `SightDistance`.</summary>
-        private static bool TrySplitStat(string name, out string type, out string stat)
-        {
-            type = "";
-            stat = "";
-            if (string.IsNullOrEmpty(name))
-                return false;
-            foreach (string candidate in StatNames)
-            {
-                if (name.Length <= candidate.Length ||
-                    !name.EndsWith(candidate, StringComparison.OrdinalIgnoreCase))
-                    continue;
-                type = name.Substring(0, name.Length - candidate.Length);
-                stat = candidate;
-                return true;
-            }
-            return false;
-        }
-
-        private static bool TryLiteral(ValueNode node, out ValueBox value)
-        {
-            switch (node)
-            {
-                case NumberValue number:
-                    value = ValueBox.OfNumber(number.Value);
-                    return true;
-                case TextValue text:
-                    value = ValueBox.OfText(text.Text);
-                    return true;
-                case BooleanValue boolean:
-                    value = ValueBox.OfBoolean(boolean.Value);
-                    return true;
-                default:
-                    value = new ValueBox();
-                    return false;
-            }
+            Table.LoadData(file);
         }
 
         /// <summary>
@@ -162,11 +103,7 @@ namespace Game
         /// <summary>Every type name that exists right now, unsorted.</summary>
         public static List<string> AllTypeNames()
         {
-            var names = new List<string>(Builtins.Keys);
-            foreach (string authored in Authored.Keys)
-                if (!names.Contains(authored))
-                    names.Add(authored);
-            return names;
+            return Table.MergeWith(Builtins.Keys);
         }
 
         /// <summary>
@@ -210,13 +147,7 @@ namespace Game
             foreach (var pair in Builtins)
                 if (string.Equals(pair.Key, typeName, StringComparison.OrdinalIgnoreCase))
                     return pair.Key;
-            foreach (var pair in Authored)
-                if (string.Equals(pair.Key, typeName, StringComparison.OrdinalIgnoreCase))
-                    return pair.Key;
-            foreach (string stat in StatNames)
-                if (variables != null && variables.HasGlobal(typeName + stat))
-                    return typeName;
-            return null;
+            return Table.CanonicalFor(variables, typeName);
         }
 
         /// <summary>
@@ -242,18 +173,8 @@ namespace Game
         /// <summary>One stat: the data file's global when it exists, otherwise the built-in value.</summary>
         private static bool TryStat(EventVariables variables, string typeName, string stat, out ValueBox value)
         {
-            string authored = typeName + stat;
-            if (variables != null && variables.HasGlobal(authored))
-            {
-                value = ValueBox.Copy(variables.GetGlobal(authored));
+            if (Table.TryRead(variables, typeName, stat, out value))
                 return true;
-            }
-            if (Authored.TryGetValue(typeName, out var authoredStats) &&
-                authoredStats.TryGetValue(stat, out ValueBox fromData))
-            {
-                value = ValueBox.Copy(fromData);
-                return true;
-            }
             if (Builtins.TryGetValue(typeName, out Definition definition))
                 return definition.TryGet(stat, out value);
             value = new ValueBox();

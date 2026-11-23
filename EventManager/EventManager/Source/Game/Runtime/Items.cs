@@ -85,94 +85,26 @@ namespace Game
 
         public static readonly string[] FieldNames = { "Slot", "Damage", "Armor", "ItemLevel" };
 
-        private static readonly Dictionary<string, Dictionary<string, ValueBox>> Authored =
-            new Dictionary<string, Dictionary<string, ValueBox>>(StringComparer.OrdinalIgnoreCase);
+        private static readonly DataTable Table = new DataTable(FileName, FieldNames);
 
         public static void LoadData(ProgramFile file)
         {
-            Authored.Clear();
-            if (file == null)
-                return;
-            foreach (EventNode ev in file.Events)
-            {
-                foreach (BodyLineNode line in ev.Body)
-                {
-                    if (!(line.Statement is SetNode set) || set.Op != '\0')
-                        continue;
-                    if (!TrySplitField(set.Target.Name, out string item, out string field))
-                        continue;
-                    if (!TryLiteral(set.Value, out ValueBox value))
-                        continue;
-                    if (!Authored.TryGetValue(item, out var stats))
-                    {
-                        stats = new Dictionary<string, ValueBox>(StringComparer.OrdinalIgnoreCase);
-                        Authored[item] = stats;
-                    }
-                    stats[field] = value;
-                }
-            }
-        }
-
-        private static bool TrySplitField(string name, out string item, out string field)
-        {
-            item = "";
-            field = "";
-            if (string.IsNullOrEmpty(name))
-                return false;
-            foreach (string candidate in FieldNames)
-            {
-                if (name.Length <= candidate.Length ||
-                    !name.EndsWith(candidate, StringComparison.OrdinalIgnoreCase))
-                    continue;
-                item = name.Substring(0, name.Length - candidate.Length);
-                field = candidate;
-                return true;
-            }
-            return false;
-        }
-
-        private static bool TryLiteral(ValueNode node, out ValueBox value)
-        {
-            switch (node)
-            {
-                case NumberValue number:
-                    value = ValueBox.OfNumber(number.Value);
-                    return true;
-                case TextValue text:
-                    value = ValueBox.OfText(text.Text);
-                    return true;
-                case BooleanValue boolean:
-                    value = ValueBox.OfBoolean(boolean.Value);
-                    return true;
-                default:
-                    value = new ValueBox();
-                    return false;
-            }
+            Table.LoadData(file);
         }
 
         public static List<string> AllNames()
         {
-            var names = new List<string>(Authored.Keys);
-            names.Sort(StringComparer.OrdinalIgnoreCase);
-            return names;
+            return Table.SortedRowNames();
         }
 
         public static string KnownNames()
         {
-            return string.Join(", ", AllNames());
+            return Table.KnownNames();
         }
 
         public static string CanonicalFor(EventVariables variables, string itemName)
         {
-            if (string.IsNullOrEmpty(itemName))
-                return null;
-            foreach (var pair in Authored)
-                if (string.Equals(pair.Key, itemName, StringComparison.OrdinalIgnoreCase))
-                    return pair.Key;
-            foreach (string field in FieldNames)
-                if (variables != null && variables.HasGlobal(itemName + field))
-                    return itemName;
-            return null;
+            return Table.CanonicalFor(variables, itemName);
         }
 
         public static bool TryGet(EventVariables variables, string itemName, out ItemBase item)
@@ -183,28 +115,10 @@ namespace Game
                 return false;
             var result = new ItemBase { Name = canonical };
             foreach (string field in FieldNames)
-                if (TryField(variables, canonical, field, out ValueBox value))
+                if (Table.TryRead(variables, canonical, field, out ValueBox value))
                     Apply(result, field, value);
             item = result;
             return true;
-        }
-
-        private static bool TryField(EventVariables variables, string itemName, string field, out ValueBox value)
-        {
-            string authored = itemName + field;
-            if (variables != null && variables.HasGlobal(authored))
-            {
-                value = ValueBox.Copy(variables.GetGlobal(authored));
-                return true;
-            }
-            if (Authored.TryGetValue(itemName, out var authoredStats) &&
-                authoredStats.TryGetValue(field, out ValueBox fromData))
-            {
-                value = ValueBox.Copy(fromData);
-                return true;
-            }
-            value = new ValueBox();
-            return false;
         }
 
         private static void Apply(ItemBase item, string field, ValueBox value)
@@ -261,8 +175,7 @@ namespace Game
             "MinAffixes", "MaxAffixes", "ItemLevel", "Suffix", "Stat", "Word", "Min", "Max",
         };
 
-        private static readonly Dictionary<string, Dictionary<string, ValueBox>> Authored =
-            new Dictionary<string, Dictionary<string, ValueBox>>(StringComparer.OrdinalIgnoreCase);
+        private static readonly DataTable Table = new DataTable(FileName, FieldNames);
 
         private static readonly Dictionary<string, RarityDef> BuiltinRarities =
             new Dictionary<string, RarityDef>(StringComparer.OrdinalIgnoreCase)
@@ -275,73 +188,16 @@ namespace Game
 
         public static void LoadData(ProgramFile file)
         {
-            Authored.Clear();
-            if (file == null)
-                return;
-            foreach (EventNode ev in file.Events)
-            {
-                foreach (BodyLineNode line in ev.Body)
-                {
-                    if (!(line.Statement is SetNode set) || set.Op != '\0')
-                        continue;
-                    if (!TrySplitField(set.Target.Name, out string name, out string field))
-                        continue;
-                    if (!TryLiteral(set.Value, out ValueBox value))
-                        continue;
-                    if (!Authored.TryGetValue(name, out var stats))
-                    {
-                        stats = new Dictionary<string, ValueBox>(StringComparer.OrdinalIgnoreCase);
-                        Authored[name] = stats;
-                    }
-                    stats[field] = value;
-                }
-            }
-        }
-
-        private static bool TrySplitField(string name, out string owner, out string field)
-        {
-            owner = "";
-            field = "";
-            if (string.IsNullOrEmpty(name))
-                return false;
-            foreach (string candidate in FieldNames)
-            {
-                if (name.Length <= candidate.Length ||
-                    !name.EndsWith(candidate, StringComparison.OrdinalIgnoreCase))
-                    continue;
-                owner = name.Substring(0, name.Length - candidate.Length);
-                field = candidate;
-                return true;
-            }
-            return false;
-        }
-
-        private static bool TryLiteral(ValueNode node, out ValueBox value)
-        {
-            switch (node)
-            {
-                case NumberValue number:
-                    value = ValueBox.OfNumber(number.Value);
-                    return true;
-                case TextValue text:
-                    value = ValueBox.OfText(text.Text);
-                    return true;
-                case BooleanValue boolean:
-                    value = ValueBox.OfBoolean(boolean.Value);
-                    return true;
-                default:
-                    value = new ValueBox();
-                    return false;
-            }
+            Table.LoadData(file);
         }
 
         /// <summary>Every affix the data file defines (rows with a <c>Stat</c>), in name order.</summary>
         public static List<AffixDef> All(EventVariables variables)
         {
             var found = new List<AffixDef>();
-            foreach (var pair in Authored)
+            foreach (string row in Table.RowNames)
             {
-                AffixDef def = DefOf(variables, pair.Key);
+                AffixDef def = DefOf(variables, row);
                 if (def != null)
                     found.Add(def);
             }
@@ -352,24 +208,24 @@ namespace Game
         /// <summary>One affix by name, or null when nothing defines it / it has no stat.</summary>
         public static AffixDef DefOf(EventVariables variables, string affixName)
         {
-            if (!Authored.TryGetValue(affixName, out var stats))
+            if (!Table.HasRow(affixName))
                 return null;
-            if (!TryRead(variables, affixName, "Stat", out ValueBox stat))
+            if (!Table.TryRead(variables, affixName, "Stat", out ValueBox stat))
                 return null;
             var def = new AffixDef { Name = CanonicalName(affixName), Stat = stat.AsText() };
-            if (TryRead(variables, affixName, "Min", out ValueBox min))
+            if (Table.TryRead(variables, affixName, "Min", out ValueBox min))
                 def.Min = min.AsNumber();
-            if (TryRead(variables, affixName, "Max", out ValueBox max))
+            if (Table.TryRead(variables, affixName, "Max", out ValueBox max))
                 def.Max = max.AsNumber();
             if (def.Max < def.Min)
                 def.Max = def.Min;
-            if (TryRead(variables, affixName, "ItemLevel", out ValueBox level))
+            if (Table.TryRead(variables, affixName, "ItemLevel", out ValueBox level))
                 def.ItemLevel = level.AsNumber();
-            if (TryRead(variables, affixName, "Word", out ValueBox word))
+            if (Table.TryRead(variables, affixName, "Word", out ValueBox word))
                 def.Word = word.AsText();
             if (string.IsNullOrEmpty(def.Word))
                 def.Word = def.Name;
-            if (TryRead(variables, affixName, "Suffix", out ValueBox suffix))
+            if (Table.TryRead(variables, affixName, "Suffix", out ValueBox suffix))
                 def.Suffix = suffix.AsBoolean();
             return def;
         }
@@ -380,13 +236,13 @@ namespace Game
             if (string.IsNullOrEmpty(rarityName))
                 return null;
             RarityDef result = null;
-            if (Authored.TryGetValue(rarityName, out var stats) &&
-                (stats.ContainsKey("MinAffixes") || stats.ContainsKey("MaxAffixes")))
+            if (Table.HasRow(rarityName) &&
+                (Table.HasField(rarityName, "MinAffixes") || Table.HasField(rarityName, "MaxAffixes")))
             {
                 result = new RarityDef { Name = CanonicalName(rarityName) };
-                if (TryRead(variables, rarityName, "MinAffixes", out ValueBox min))
+                if (Table.TryRead(variables, rarityName, "MinAffixes", out ValueBox min))
                     result.MinAffixes = (int)Math.Round(min.AsNumber());
-                if (TryRead(variables, rarityName, "MaxAffixes", out ValueBox max))
+                if (Table.TryRead(variables, rarityName, "MaxAffixes", out ValueBox max))
                     result.MaxAffixes = (int)Math.Round(max.AsNumber());
             }
             else
@@ -413,10 +269,10 @@ namespace Game
         public static List<string> RarityNames(EventVariables variables)
         {
             var names = new List<string>(BuiltinRarities.Keys);
-            foreach (var pair in Authored)
-                if (pair.Value.ContainsKey("MinAffixes") || pair.Value.ContainsKey("MaxAffixes"))
-                    if (!names.Exists(n => string.Equals(n, pair.Key, StringComparison.OrdinalIgnoreCase)))
-                        names.Add(pair.Key);
+            foreach (string row in Table.RowNames)
+                if (Table.HasField(row, "MinAffixes") || Table.HasField(row, "MaxAffixes"))
+                    if (!names.Exists(n => string.Equals(n, row, StringComparison.OrdinalIgnoreCase)))
+                        names.Add(row);
             names.Sort(StringComparer.OrdinalIgnoreCase);
             return names;
         }
@@ -430,29 +286,9 @@ namespace Game
             return string.Join(", ", names);
         }
 
-        private static bool TryRead(EventVariables variables, string name, string field, out ValueBox value)
-        {
-            string authored = name + field;
-            if (variables != null && variables.HasGlobal(authored))
-            {
-                value = ValueBox.Copy(variables.GetGlobal(authored));
-                return true;
-            }
-            if (Authored.TryGetValue(name, out var stats) && stats.TryGetValue(field, out ValueBox fromData))
-            {
-                value = ValueBox.Copy(fromData);
-                return true;
-            }
-            value = new ValueBox();
-            return false;
-        }
-
         private static string CanonicalName(string name)
         {
-            foreach (var pair in Authored)
-                if (string.Equals(pair.Key, name, StringComparison.OrdinalIgnoreCase))
-                    return pair.Key;
-            return name;
+            return Table.CanonicalRow(name) ?? name;
         }
     }
 

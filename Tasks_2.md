@@ -1823,13 +1823,25 @@ brackets.
       `equip` on the slot variable and either refuse or auto-unequip the old item. Done-when: the
       second ring is refused (or swaps the first, with its stats fully removed) and a sword cannot
       sit in the ring slot.
-- [ ] **F10 — One `<Owner><Field>` table loader (C#, medium refactor) [all data systems].**
+- [x] **F10 — One `<Owner><Field>` table loader (C#, medium refactor) [all data systems].**
       `WeaponData`, `SpellData`, `ItemData`, `AffixData`, `EnemyTypes` and `Matchups` are six copies
       of the same split-literal-read logic; the next tables (Abilities, Buffs, Loot) would be
       copies seven and eight. Extract a small generic table (field list, `LoadData`,
       `CanonicalFor`, `KnownNames`, layered globals-over-data) with no behavior change. Done-when:
       the six tables are thin classes over the helper, the suite is still green, and a new data
       table is ~10 lines.
+      *As shipped (2026-11-23):* new engine-free `Runtime/DataTable.cs` — `DataTable` (a file name,
+      the field list in matching order, `LoadData` over the literal `set` lines, `TrySplit`,
+      `CanonicalRow`/`CanonicalFor`, `HasRow`/`HasField`, `TryRead` (live global → data file),
+      `MergeWith`/`SortedRowNames`/`KnownNames`) plus `DataFile.ForEachLiteral`/`TryLiteral`, the one
+      walk over a data file's `set <name> to <literal>` lines. `WeaponData`, `SpellData`, `ItemData`,
+      `AffixData` and `EnemyTypes` are now a `DataTable` beside their built-in defaults and their
+      field-to-stat switch; `Matchups` keeps its pair key and reuses only the literal walk. Fields
+      still match longest-first in the order a table passes them, so `AffixData`'s `MinAffixes`
+      before `Min` is unchanged, and a live `<Row><Field>` global still wins over the file. No
+      behaviour change: **2613 passed, 0 failed**; `dotnet build Source/Game.csproj -c
+      Editor.Windows.Debug` 0 errors (14 pre-existing doc warnings). A seventh table is a field
+      array, a `DataTable` and the switch that writes the stats.
 - [ ] **F11 — Item identity the player can see (C# + data, medium) [E7, Task 34].** The bag tracks
       which actor an item came from, but sheets still read `Ring x2` and `equip Ring` always takes
       the first carried instance. Show instance names (`my bag items` / display names from

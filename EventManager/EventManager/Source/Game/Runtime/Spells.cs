@@ -58,8 +58,7 @@ namespace Game
         /// Stats authored in a data file (`SpellData.events`), keyed by spell then field. Read
         /// at load time so a spell is complete before any actor's `me appears` runs.
         /// </summary>
-        private static readonly Dictionary<string, Dictionary<string, ValueBox>> Authored =
-            new Dictionary<string, Dictionary<string, ValueBox>>(StringComparer.OrdinalIgnoreCase);
+        private static readonly DataTable Table = new DataTable(FileName, FieldNames);
 
         /// <summary>
         /// Reads <c>&lt;Spell&gt;&lt;Field&gt;</c> assignments out of a data file, e.g.
@@ -68,73 +67,13 @@ namespace Game
         /// </summary>
         public static void LoadData(ProgramFile file)
         {
-            Authored.Clear();
-            if (file == null)
-                return;
-            foreach (EventNode ev in file.Events)
-            {
-                foreach (BodyLineNode line in ev.Body)
-                {
-                    if (!(line.Statement is SetNode set) || set.Op != '\0')
-                        continue;
-                    if (!TrySplitField(set.Target.Name, out string spell, out string field))
-                        continue;
-                    if (!TryLiteral(set.Value, out ValueBox value))
-                        continue;
-                    if (!Authored.TryGetValue(spell, out var stats))
-                    {
-                        stats = new Dictionary<string, ValueBox>(StringComparer.OrdinalIgnoreCase);
-                        Authored[spell] = stats;
-                    }
-                    stats[field] = value;
-                }
-            }
-        }
-
-        /// <summary>Splits `FireballDamage` into the spell `Fireball` and the field `Damage`.</summary>
-        private static bool TrySplitField(string name, out string spell, out string field)
-        {
-            spell = "";
-            field = "";
-            if (string.IsNullOrEmpty(name))
-                return false;
-            foreach (string candidate in FieldNames)
-            {
-                if (name.Length <= candidate.Length ||
-                    !name.EndsWith(candidate, StringComparison.OrdinalIgnoreCase))
-                    continue;
-                spell = name.Substring(0, name.Length - candidate.Length);
-                field = candidate;
-                return true;
-            }
-            return false;
-        }
-
-        private static bool TryLiteral(ValueNode node, out ValueBox value)
-        {
-            switch (node)
-            {
-                case NumberValue number:
-                    value = ValueBox.OfNumber(number.Value);
-                    return true;
-                case TextValue text:
-                    value = ValueBox.OfText(text.Text);
-                    return true;
-                case BooleanValue boolean:
-                    value = ValueBox.OfBoolean(boolean.Value);
-                    return true;
-                default:
-                    value = new ValueBox();
-                    return false;
-            }
+            Table.LoadData(file);
         }
 
         /// <summary>The spell names the project defines right now, sorted, for help messages.</summary>
         public static string KnownNames(EventVariables variables)
         {
-            var names = new List<string>(Authored.Keys);
-            names.Sort(StringComparer.OrdinalIgnoreCase);
-            return string.Join(", ", names);
+            return Table.KnownNames();
         }
 
         /// <summary>
@@ -146,13 +85,7 @@ namespace Game
         {
             if (string.IsNullOrEmpty(spellName))
                 return null;
-            foreach (var pair in Authored)
-                if (string.Equals(pair.Key, spellName, StringComparison.OrdinalIgnoreCase))
-                    return pair.Key;
-            foreach (string field in FieldNames)
-                if (variables != null && variables.HasGlobal(spellName + field))
-                    return spellName;
-            return null;
+            return Table.CanonicalFor(variables, spellName);
         }
 
         /// <summary>True when the named spell exists — used to decide whether <c>my
@@ -171,29 +104,10 @@ namespace Game
                 return false;
             var result = new SpellStats { Name = canonical };
             foreach (string field in FieldNames)
-                if (TryField(variables, canonical, field, out ValueBox value))
+                if (Table.TryRead(variables, canonical, field, out ValueBox value))
                     Apply(result, field, value);
             stats = result;
             return true;
-        }
-
-        /// <summary>One field: the live global when it exists, otherwise the data file's value.</summary>
-        private static bool TryField(EventVariables variables, string spellName, string field, out ValueBox value)
-        {
-            string authored = spellName + field;
-            if (variables != null && variables.HasGlobal(authored))
-            {
-                value = ValueBox.Copy(variables.GetGlobal(authored));
-                return true;
-            }
-            if (Authored.TryGetValue(spellName, out var authoredStats) &&
-                authoredStats.TryGetValue(field, out ValueBox fromData))
-            {
-                value = ValueBox.Copy(fromData);
-                return true;
-            }
-            value = new ValueBox();
-            return false;
         }
 
         private static void Apply(SpellStats stats, string field, ValueBox value)
