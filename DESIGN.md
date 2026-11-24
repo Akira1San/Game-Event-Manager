@@ -1663,11 +1663,11 @@ window around a broken runtime.
   only calls it on its two refusals. The HUD half turned out to be a real bug, not a maybe: `bind
   Label to my "Fireball" cooldown` expands to `when <var> changes`, `Cooldowns.Remaining` changes
   every tick, so the label was rewritten about 60 times a second with `9.9833333`-style text. The
-  readouts (`my "<name>" cooldown`, `my <Spell>Cooldown`) are therefore countdowns — whole seconds
-  rounded up, 0 when ready — and repaint a bound label once a second; `Cooldowns.Remaining` keeps the
-  exact number for code and `Cooldowns.DisplaySeconds` holds the single rounding rule. A progress
-  bind on the same variable steps in seconds too: one readout serves the label and the gate, and a
-  smooth bar would need an exact value the label then has to round a second time.
+  fix sits where the text is written, not in the read: a bind's `set text of` rounds a cooldown
+  readout to whole seconds (`Cooldowns.DisplaySeconds`) and skips a write whose text has not
+  changed, so the label repaints once a second while `my "<name>" cooldown`, `my <Spell>Cooldown`,
+  every gate and `bind progress of` keep the exact number. Quantizing the readout instead would
+  have cost a gate and a smooth bar their fractions to serve one label.
 
 ## 10. The one-paragraph pitch
 

@@ -8503,6 +8503,33 @@ feedbackEngine.Tick(0.3);
 Check(feedbackEngine.Variables.GetLocal(feedbackCaster, "Failures").AsNumber() == 1,
     "`when cast fails \"Fireball\"` ignores another spell's refusal");
 
+// An `and` clause on a cast-failure trigger is a condition, not part of the spell name.
+var guardedDesc = TriggerClassifier.Classify(parser.Parse(
+    "when cast fails \"Fireball\" and my Mana is 0\n  add 1 to my Broke\n").Events[0]);
+Check(guardedDesc.Kind == TriggerKind.CastFailed && guardedDesc.RequireName == "Fireball" &&
+      guardedDesc.ExtraConditions.Count == 1,
+    "`when cast fails \"Fireball\" and my Mana is 0` keeps the `and` clause as one condition");
+var guardedWorld = new FakeWorld();
+var guardedEngine = FreshEngine(guardedWorld);
+var guardedCaster = new FakeActor("Mage");
+guardedEngine.AddSheet(guardedCaster, parser.Parse(@"
+when me appears
+  set Mana to 0
+  set Broke to 0
+  set Rested to 0
+when cast fails ""Fireball"" and my Mana is 0
+  add 1 to my Broke
+when cast fails ""Fireball"" and my Mana is 10
+  add 1 to my Rested
+"));
+guardedEngine.Tick(0);
+CastFeedback.RaiseFailed(guardedEngine, guardedCaster, "Fireball");
+guardedEngine.Tick(0.1);
+Check(guardedEngine.Variables.GetLocal(guardedCaster, "Broke").AsNumber() == 1,
+    "a cast-failure trigger whose `and` clause holds still fires");
+Check(guardedEngine.Variables.GetLocal(guardedCaster, "Rested").AsNumber() == 0,
+    "a cast-failure trigger whose `and` clause fails stays silent");
+
 // The HUD half: a bound cooldown label repaints once a second instead of every frame.
 var hudWorld = new FakeWorld();
 var hudEngine = FreshEngine(hudWorld);
@@ -8520,13 +8547,27 @@ for (int hudFrame = 1; hudFrame <= 60; hudFrame++)
     hudEngine.Tick(0.1 * hudFrame);
 Check(hudLabels.Count > 0 && hudLabels.Count <= 4,
     $"a bound cooldown label repaints about once a second, not every frame (got {hudLabels.Count} writes in 6 s)");
-Check(hudLabels.Count > 0 && hudLabels[0] == "3" && hudLabels[hudLabels.Count - 1] == "0",
+Check(hudLabels.Count > 0 && hudLabels[0] == "3" && hudLabels[hudLabels.Count - 1] == "0" &&
+      hudLabels.TrueForAll(text => !text.Contains(".")),
     "the bound label counts whole seconds down to 0");
 hudEngine.Cooldowns.Start(hudActor, "Fireball", 1.2);
 var hudContext = new EventContext { Runtime = hudEngine, Variables = hudEngine.Variables, Me = hudActor };
-Check(hudContext.ReadMy("cooldown fireball").AsNumber() == 2 &&
+Check(Math.Abs(hudContext.ReadMy("cooldown fireball").AsNumber() - 1.2) < 1e-9 &&
       Math.Abs(hudEngine.Cooldowns.Remaining(hudActor, "Fireball") - 1.2) < 1e-9,
-    "the readout counts whole seconds while `Cooldowns.Remaining` keeps the exact number");
+    "the readout stays exact — only the label text rounds (Task 37 F7 follow-up)");
+
+// A progress bind on the same readout keeps the sub-second value; only a text bind rounds.
+var barWorld = new FakeWorld();
+var barEngine = FreshEngine(barWorld);
+var barActor = new FakeActor("Hud");
+double barFill = -1;
+barEngine.OnSetProgress = (context, thing, value, reveal) => barFill = value.AsNumber();
+barEngine.AddSheet(barActor, parser.Parse("bind progress of ManaBar to my \"Fireball\" cooldown\n"));
+barEngine.Tick(0);
+barEngine.Cooldowns.Start(barActor, "Fireball", 1.2);
+barEngine.Tick(0.1);
+Check(barFill > 1.0 && barFill < 1.2,
+    $"a progress bind on a cooldown keeps its sub-second value (got {barFill})");
 
 // Ammo can be set outright, and never runs below zero.
 var emptyWorld = new FakeWorld();
@@ -10721,9 +10762,9 @@ spellEngine.AddSheet(spellMage, spellParser.Parse("when game starts\n  set Mana 
 spellEngine.Tick(0);
 spellEngine.Cooldowns.Start(spellMage, "Fireball", 1.2);
 var spellContext = new EventContext { Runtime = spellEngine, Variables = spellEngine.Variables, Me = spellMage };
-Check(spellContext.ReadMy("FireballCooldown").AsNumber() == 2 &&
+Check(Math.Abs(spellContext.ReadMy("FireballCooldown").AsNumber() - 1.2) < 1e-9 &&
       Math.Abs(spellEngine.Cooldowns.Remaining(spellMage, "Fireball") - 1.2) < 1e-9,
-    "`my FireballCooldown` reads the countdown rounded up to whole seconds (Task 37 F7)");
+    "`my FireballCooldown` reads the exact countdown (Task 37 F7 follow-up)");
 Check(!spellEngine.Variables.HasLocal(spellMage, "FireballCooldown"),
     "the cooldown readout is computed, not a mirrored variable");
 

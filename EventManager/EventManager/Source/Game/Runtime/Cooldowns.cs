@@ -94,14 +94,30 @@ namespace Game
         }
 
         /// <summary>
-        /// The countdown a HUD shows for a timer (Task 37 F7): whole seconds, rounded up, 0 when
+        /// The number a cooldown *label* shows (Task 37 F7): whole seconds, rounded up, 0 when
         /// ready. `bind CooldownLabel to my "Fireball" cooldown` expands to a `when ... changes`
-        /// watch, so a sub-second value would repaint the label every frame; whole seconds repaint
-        /// it once per second. <see cref="Remaining"/> keeps the exact number for code.
+        /// watch, so the exact value moves every frame; the bind rounds the text here and skips a
+        /// write whose words have not changed, while the readout itself (<see cref="Remaining"/>, and
+        /// so every gate and progress bind) keeps the exact number.
         /// </summary>
         public static double DisplaySeconds(double remaining)
         {
             return remaining > 0 ? Math.Ceiling(remaining) : 0;
+        }
+
+        /// <summary>
+        /// True when a variable name is a cooldown readout — `cooldown "&lt;name&gt;"` or
+        /// `&lt;Spell&gt;Cooldown` — so a text bind can round its label without the read becoming
+        /// coarse.
+        /// </summary>
+        public static bool IsReadout(string variable)
+        {
+            if (string.IsNullOrEmpty(variable))
+                return false;
+            if (TryReadVariable(variable, out _))
+                return true;
+            return variable.Length > 8 &&
+                   variable.EndsWith("Cooldown", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>

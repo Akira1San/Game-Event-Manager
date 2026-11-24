@@ -66,6 +66,10 @@ namespace Game
                         Target = spec.Thing,
                         Value = BoundValue(spec),
                         Reveal = false,
+                        Bound = true,
+                        // A cooldown label paints whole seconds; the readout stays exact for gates
+                        // and for `bind progress of`, which never reaches this branch.
+                        WholeSeconds = Cooldowns.IsReadout(variable.Name),
                     };
                 }
 

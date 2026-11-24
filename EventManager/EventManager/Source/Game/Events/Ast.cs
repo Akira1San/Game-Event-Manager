@@ -111,6 +111,14 @@ namespace Game
         /// behind it keeps changing. An explicit <c>set text of</c> keeps the reveal, so `hide
         /// GameText` cannot brick `show text`.</summary>
         public bool Reveal = true;
+        /// <summary>True for the statement a <c>bind</c> expands to (Task 37 F7): a bound value is
+        /// written only when its text really changed, so a watch on a per-tick value cannot repaint
+        /// the label every frame.</summary>
+        public bool Bound;
+        /// <summary>Round a number up to whole seconds before writing (a cooldown label). The
+        /// readout keeps its exact value for gates and progress bars; only this label text is
+        /// quantized.</summary>
+        public bool WholeSeconds;
     }
 
     /// <summary><c>set tooltip of &lt;thing&gt; to &lt;value&gt;</c> — the hover text a UI control

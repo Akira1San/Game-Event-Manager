@@ -135,10 +135,11 @@ namespace Game
             if (Buffs.TryReadTimeLeft(name, out string buffName))
                 return ValueBox.OfNumber(Runtime.Buffs.TimeLeft(Me, buffName));
             // `my "stim" cooldown` (Task 27 Part E): the countdown left on this actor's shared
-            // timer, computed like the buff readout so a HUD or gate never mirrors it. It reads
-            // whole seconds (Task 37 F7), so a bound label repaints once a second, not every frame.
+            // timer, computed like the buff readout so a HUD or gate never mirrors it. The value is
+            // exact (Task 37 F7 follow-up): whole seconds belong to the label text a `bind` writes,
+            // so a gate and a progress bar keep the sub-second number.
             if (Cooldowns.TryReadVariable(name, out string cooldownName))
-                return ValueBox.OfNumber(Cooldowns.DisplaySeconds(Runtime.Cooldowns.Remaining(Me, cooldownName)));
+                return ValueBox.OfNumber(Runtime.Cooldowns.Remaining(Me, cooldownName));
             // `my camera zoom` / `my camera position` (Task 26 Part D): the state the free-pan
             // controls keep, readable from any sheet — a HUD readout or a debug print. The
             // position is the ground point the camera is centred on, as "x, 0, z".
@@ -157,8 +158,8 @@ namespace Game
             if (string.Equals(name, "Ammo", StringComparison.OrdinalIgnoreCase))
                 return ValueBox.OfNumber(WeaponData.ReadAmmo(this, ReadMy(WeaponData.CurrentWeaponVariable).AsText()));
             // `my FireballCooldown` (Task 9 E3): the countdown on that spell's cooldown, computed
-            // like `my Ammo` so a HUD bind reads live without the sheet mirroring a timer. Whole
-            // seconds since Task 37 F7, so a `bind` repaints once a second instead of every frame.
+            // like `my Ammo` so a HUD bind reads live without the sheet mirroring a timer. Exact,
+            // like the quoted readout (Task 37 F7 follow-up); the label text a `bind` writes rounds.
             // Only names that really are a spell are treated this way, so an ordinary `my Cooldown`
             // variable still reads as a variable.
             if (name.Length > 8 && name.EndsWith("Cooldown", StringComparison.OrdinalIgnoreCase))
@@ -166,7 +167,7 @@ namespace Game
                 string spellName = name.Substring(0, name.Length - 8);
                 string canonical = SpellData.CanonicalFor(Variables, spellName);
                 if (canonical != null)
-                    return ValueBox.OfNumber(Cooldowns.DisplaySeconds(Runtime.Cooldowns.Remaining(Me, canonical)));
+                    return ValueBox.OfNumber(Runtime.Cooldowns.Remaining(Me, canonical));
             }
             return Variables.GetLocal(Me, name);
         }
@@ -726,6 +727,7 @@ namespace Game
             Targeting.Clear();
             Buffs.Reset(Variables);
             Cooldowns.Reset();
+            boundTexts.Clear();
             LiftOff.Reset();
             foreach (var sheet in sheets)
                 sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.SceneStart });
@@ -2100,7 +2102,8 @@ namespace Game
             // name however the sheet cases it — a timer keeps the data file's spelling, a sheet
             // should not have to.
             if (descriptor.Kind == TriggerKind.CastFailed)
-                return string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase);
+                return string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase) &&
+                       ExtraConditionsMatch(descriptor, sheet, signal.Other);
             if (descriptor.RequireName.Length == 0)
                 return true;
             // `when me is selected` / `when me is deselected`: the signal is broadcast, so
@@ -2374,6 +2377,42 @@ namespace Game
             return string.IsNullOrEmpty(name) ? NameOf(actor) : name;
         }
 
+        /// <summary>The last text each bound label was painted with, per sheet, so a watch on a
+        /// per-tick value stops rewriting the same words 60 times a second (Task 37 F7 follow-up).</summary>
+        private readonly Dictionary<object, Dictionary<string, string>> boundTexts =
+            new Dictionary<object, Dictionary<string, string>>();
+
+        /// <summary>
+        /// Writes a `set text of` value. A bind rounds a cooldown readout to whole seconds for the
+        /// label and skips a write whose text has not changed, so the label repaints once a second
+        /// while the readout itself stays exact for gates and progress bars.
+        /// </summary>
+        private void ExecuteSetText(EventContext context, SetTextNode setText)
+        {
+            var value = context.Evaluate(setText.Value);
+            if (setText.WholeSeconds)
+                value = ValueBox.OfNumber(Cooldowns.DisplaySeconds(value.AsNumber()));
+            if (setText.Bound && !BoundTextChanged(context, setText.Target, value.AsText()))
+                return;
+            OnSetText(context, setText.Target, value, setText.Reveal);
+        }
+
+        /// <summary>True when a bound label's text differs from the last text written to it; records
+        /// the new text as the one now on screen.</summary>
+        private bool BoundTextChanged(EventContext context, string target, string text)
+        {
+            object owner = context.Sheet != null ? context.Sheet.Actor : context.Me;
+            if (!boundTexts.TryGetValue(owner, out Dictionary<string, string> texts))
+            {
+                texts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                boundTexts[owner] = texts;
+            }
+            if (texts.TryGetValue(target, out string previous) && previous == text)
+                return false;
+            texts[target] = text;
+            return true;
+        }
+
         private bool ExtraConditionsMatch(TriggerDescriptor descriptor, SheetInstance sheet, object other)
         {
             if (descriptor.ExtraConditions.Count == 0)
@@ -2545,7 +2584,7 @@ namespace Game
                 }
                 else if (statement is SetTextNode setText)
                 {
-                    OnSetText(context, setText.Target, context.Evaluate(setText.Value), setText.Reveal);
+                    ExecuteSetText(context, setText);
                 }
                 else if (statement is SetTooltipNode tooltip)
                 {

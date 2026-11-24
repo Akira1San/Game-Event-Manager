@@ -1901,15 +1901,33 @@ brackets.
       `SpellData`) so the suite drives it; `FlaxActions.CastSpell` only calls it on its two
       refusals. The HUD half was a real bug rather than a guess: `bind Label to my "Fireball"
       cooldown` expands to `when <var> changes`, and `Cooldowns.Remaining` changes every tick, so
-      the label was rewritten about 60×/s with `9.9833333`-style text. The readouts
-      (`my "<name>" cooldown`, `my <Spell>Cooldown`) are countdowns now — whole seconds rounded up,
-      0 when ready — so a bound label repaints once a second; `Cooldowns.Remaining` keeps the exact
-      number for code and `Cooldowns.DisplaySeconds` holds the one rounding rule. 8 new checks (both
+      the label was rewritten about 60×/s with `9.9833333`-style text. The fix sits at the label: a
+      bind's `set text of` paints whole seconds (`Cooldowns.DisplaySeconds`, rounded up) and skips a
+      write whose text has not changed, so the label repaints once a second while the readouts
+      (`my "<name>" cooldown`, `my <Spell>Cooldown`) keep the exact number. 8 new checks (both
       trigger shapes classify, a refusal reaches the sheet and fires once, another spell's name is
-      ignored, a `bind` on a 2.5 s timer paints 3/2/1/0 in four writes over 6 s, the readout rounds
-      up while `Remaining` stays exact, and the spell readout check was rewritten for whole seconds)
+      ignored, a `bind` on a 2.5 s timer paints 3/2/1/0 in four writes over 6 s, the label text is
+      whole seconds while the readout stays exact, and the spell readout check was rewritten)
       -> **2699 passed, 0 failed**; Game module build 0 errors (14 pre-existing doc warnings). Word
       book + `keywords.html` rows updated.
+      *Follow-up 2026-11-24:* the trigger's `and` clause was dead weight — `when cast fails
+      "<spell>" and my Mana is 0` loaded (the parser only checks the words before `and`) but the
+      classifier matched by exact word count, so it never became a cast-failure trigger, and
+      `Matches` returned straight from the name match, so even a descriptor carrying conditions
+      would have fired regardless of them. The shape now splits the spell name at `and` and parses
+      the tail as one extra condition (the way `touches` / `overlaps` do), and the `CastFailed`
+      branch returns `name match && ExtraConditionsMatch`, so a guard gates it like any other
+      trigger. 3 new checks (the guarded trigger classifies with one condition; a refusal fires it
+      when the clause holds; it stays silent when it does not) -> **2702 passed, 0 failed**; Game
+      module build 0 errors (14 pre-existing doc warnings). Word book + `keywords.html` say so.
+      *Follow-up 2026-11-24 (label rounding):* the first cut rounded the readout itself, which cost
+      every gate and `bind progress of` its sub-second value. The readout is exact again, and the
+      whole-second rounding — plus a skip of any write whose text has not changed — lives in the
+      bind's `set text of` (`SetTextNode.Bound` / `.WholeSeconds`, `Cooldowns.IsReadout`), so a
+      label still repaints once a second while a progress bind on the same timer reads 1.1 s. 3 new
+      checks (a bound label still paints 3/2/1/0 in four writes; the readout and `Remaining` both
+      read the exact 1.2; a progress bind keeps its sub-second value) -> **2703 passed, 0 failed**;
+      Game module build 0 errors (14 pre-existing doc warnings).
 - [ ] **F8 — Extract the cast decision (C#, small) [E3].** Move "unknown / cooling / short mana /
       spend + start" out of `FlaxActions.CastSpell` into a pure `Runtime/SpellCasting.Decide(...)`
       returning a verdict, matching how `Steering`/`PhysicsMovement`/`Separation` keep rules out of

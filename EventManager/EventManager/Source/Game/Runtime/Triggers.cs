@@ -246,21 +246,41 @@ namespace Game
                 };
             // `when cast fails "Fireball"` / `when my cast fails "Fireball"` (Task 37 F7) — the
             // caster's own sheet hears a `cast` the engine refused. Sits before the generic shapes
-            // so `cast` is never read as a variable name.
-            if (words.Length == 3 && words[0] == "cast" && words[1] == "fails" &&
-                trigger[2].Type == TokenType.Str)
-                return new TriggerDescriptor
+            // so `cast` is never read as a variable name. An `and` clause after the spell name
+            // is an extra condition on the same descriptor, never part of the name.
+            {
+                int castAt = words.Length > 0 && words[0] == "my" ? 1 : 0;
+                int nameAt = castAt + 2;
+                if (words.Length > nameAt && words[castAt] == "cast" && words[castAt + 1] == "fails" &&
+                    trigger[nameAt].Type == TokenType.Str)
                 {
-                    Kind = TriggerKind.CastFailed,
-                    RequireName = trigger[2].Text,
-                };
-            if (words.Length == 4 && words[0] == "my" && words[1] == "cast" && words[2] == "fails" &&
-                trigger[3].Type == TokenType.Str)
-                return new TriggerDescriptor
-                {
-                    Kind = TriggerKind.CastFailed,
-                    RequireName = trigger[3].Text,
-                };
+                    int andIndex = -1;
+                    for (int i = nameAt + 1; i < trigger.Count; i++)
+                        if (trigger[i].Type == TokenType.Word && trigger[i].Text == "and")
+                        {
+                            andIndex = i;
+                            break;
+                        }
+                    if (andIndex == -1 || andIndex == nameAt + 1)
+                    {
+                        var castFailed = new TriggerDescriptor
+                        {
+                            Kind = TriggerKind.CastFailed,
+                            RequireName = trigger[nameAt].Text,
+                        };
+                        if (andIndex > 0)
+                        {
+                            var extraTokens = new List<Token>();
+                            for (int i = andIndex + 1; i < trigger.Count; i++)
+                                extraTokens.Add(trigger[i]);
+                            var cond = Conditions.Parse(extraTokens);
+                            if (cond.Kind != ConditionKind.Unknown)
+                                castFailed.ExtraConditions.Add(cond);
+                        }
+                        return castFailed;
+                    }
+                }
+            }
             // `when buff "stim" starts` / `when buff "stim" ends` (Task 27 Part C) — the buff'ed
             // actor's own sheet hears it, with the buff name matched against the signal.
             if (words.Length == 3 && words[0] == "buff" &&
