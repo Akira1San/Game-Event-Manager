@@ -1613,6 +1613,26 @@ window around a broken runtime.
   `my Level` (written by `enemy type`, with the `ItemLevel` global and then 1 as fallbacks) —
   which is what lets an enemy sheet say `spawn item from "Loot" at me` and nothing else.
 
+- **The RPG loop is one sheet of shipped words (Task 37 Part F):** `GameFiles/RPG_Duel.events`
+  shows the kit composing with no new vocabulary — a typed fireball, a burn whose tick meets the
+  same resistance, a shared cooldown that silently refuses the second press, a table-rolled ring
+  dropped at the enemy's own level, and the equip that puts its stats on the player. The burn tick
+  damages `me` on the *buffed* actor's sheet, which is where `when buff "…" starts` lives; a tick
+  written on the caster's sheet would burn the caster. Two shape traps the example pins: `add buff`
+  wants its length spelled `for <n> seconds` (a bare `for 3` does not parse as a buff), and
+  `damage <name> by …` reaches the name only through a sheet, so the headless play gives the rolled
+  ring the empty item sheet the bridge would attach. A headless run still needs a stand-in for
+  `FlaxActions`: the runtime owns conditions, buffs, cooldowns, bag and equip, while `damage`,
+  `add buff`, `put … on cooldown` and the loot words stay bridge-shaped.
+
+- **A distance qualifier is live data (Task 37 F3):** `by 40`, `by my Reach` and `by Range` are one
+  reading (`Runtime/DistanceValue.cs`), resolved when the condition or trigger runs — not at load
+  — so one melee block follows the weapon it equipped. The forms are accepted by `me is near … by`,
+  `me is above … by`, `me hears "…" by`, `player <n> is near me by`, and the `near` / `sees` /
+  `stops seeing` / `hears` trigger ranges. An unset local keeps that trigger's historical fallback
+  (sight unlimited, hearing 0, near never), and a global that was never set reads 0. Distances
+  inside *action* words (`select units near me by …`) are still literal numbers, read at parse time.
+
 ## 10. The one-paragraph pitch
 
 Event Manager is a text-first game-logic system for non-programmers, inspired by Blender Game

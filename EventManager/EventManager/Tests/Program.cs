@@ -3356,6 +3356,116 @@ when me is released
     Check(nearTriggerEngine.Variables.GetGlobal("Nearing").AsNumber() == 2, "coming back into range refires near");
 
     // ------------------------------------------------------------------
+    // Task 37 F3: a distance qualifier takes a number, `my <name>` or a global
+    // ------------------------------------------------------------------
+    // `by my Reach` used to parse and then read 0, which forced one melee/spell block per weapon.
+    var reachLines = parser.Parse(
+        "when every 1 seconds\n" +
+        "  me is near Enemy by my Reach\n" +
+        "  me is near Enemy by WatchRange\n" +
+        "  me is near Enemy by 40\n" +
+        "  me hears \"gunshot\" by my Hearing\n" +
+        "  me is above Ledge by my Clearance\n" +
+        "  set Probe to 1\n");
+    var reachMy = Conditions.Parse(reachLines.Events[0].Body[0].Words);
+    var reachGlobal = Conditions.Parse(reachLines.Events[0].Body[1].Words);
+    var reachFixed = Conditions.Parse(reachLines.Events[0].Body[2].Words);
+    var reachHear = Conditions.Parse(reachLines.Events[0].Body[3].Words);
+    var reachAbove = Conditions.Parse(reachLines.Events[0].Body[4].Words);
+    Check(reachMy.Kind == ConditionKind.Near && reachMy.Thing == "Enemy" &&
+          reachMy.DistanceOwner == "my" && reachMy.DistanceName == "Reach",
+        "`me is near Enemy by my Reach` parses its distance as the actor's own variable");
+    Check(reachGlobal.Kind == ConditionKind.Near && reachGlobal.DistanceOwner == "global" &&
+          reachGlobal.DistanceName == "WatchRange",
+        "`by WatchRange` names a global instead");
+    Check(reachFixed.Kind == ConditionKind.Near && reachFixed.DistanceOwner.Length == 0 &&
+          Math.Abs(reachFixed.Distance - 40) < 1e-9,
+        "`by 40` stays a fixed number");
+    Check(reachHear.Kind == ConditionKind.Hears && reachHear.DistanceOwner == "my" &&
+          reachHear.DistanceName == "Hearing",
+        "`me hears \"gunshot\" by my Hearing` takes the same variable distance");
+    Check(reachAbove.Kind == ConditionKind.Above && reachAbove.DistanceOwner == "my" &&
+          reachAbove.DistanceName == "Clearance",
+        "`me is above Ledge by my Clearance` takes it for the height margin too");
+
+    // The condition reads it live: the same 50 cm gap passes at Reach 60 and fails at Reach 40.
+    var reachCondWorld = new FakeWorld();
+    var reachGuard = new FakeActor("Guard");
+    var reachEnemy = new FakeActor("Enemy");
+    reachCondWorld.AddActor(reachGuard);
+    reachCondWorld.AddActor(reachEnemy);
+    reachCondWorld.SetDistance(reachGuard, reachEnemy, 50);
+    var reachCondEngine = FreshEngine(reachCondWorld);
+    reachCondEngine.AddSheet(reachGuard,
+        parser.Parse("when every 1 seconds\n  me is near Enemy by my Reach\n  set NearCount to NearCount + 1"));
+    reachCondEngine.AddSheet(reachEnemy,
+        parser.Parse("when every 1 seconds\n  me is near Guard by WatchRange\n  set WatchedCount to WatchedCount + 1"));
+    reachCondEngine.Variables.SetLocal(reachGuard, "Reach", ValueBox.OfNumber(60));
+    reachCondEngine.Tick(1);
+    Check(reachCondEngine.Variables.GetGlobal("NearCount").AsNumber() == 1,
+        "`me is near Enemy by my Reach` reaches 50 with `my Reach 60` (a 0 read would have failed)");
+    reachCondEngine.Variables.SetLocal(reachGuard, "Reach", ValueBox.OfNumber(40));
+    reachCondEngine.Tick(2);
+    Check(reachCondEngine.Variables.GetGlobal("NearCount").AsNumber() == 1,
+        "...and the distance is read live: `my Reach 40` stops passing at the same 50 cm");
+    reachCondEngine.Variables.SetGlobal("WatchRange", ValueBox.OfNumber(60));
+    reachCondEngine.Tick(3);
+    Check(reachCondEngine.Variables.GetGlobal("WatchedCount").AsNumber() == 1,
+        "`me is near Guard by WatchRange` reaches 50 from a 60 global");
+    reachCondEngine.Variables.SetGlobal("WatchRange", ValueBox.OfNumber(40));
+    reachCondEngine.Tick(4);
+    Check(reachCondEngine.Variables.GetGlobal("WatchedCount").AsNumber() == 1,
+        "...and the global is read live too");
+
+    // The trigger edge: a variable range must arm, hold and re-arm like a literal one.
+    var reachEdgeWorld = new FakeWorld();
+    var reachEdgeGuard = new FakeActor("Guard");
+    var reachEdgeEnemy = new FakeActor("Enemy");
+    reachEdgeWorld.AddActor(reachEdgeGuard);
+    reachEdgeWorld.AddActor(reachEdgeEnemy);
+    reachEdgeWorld.SetDistance(reachEdgeGuard, reachEdgeEnemy, 100);
+    var reachEdgeEngine = FreshEngine(reachEdgeWorld);
+    reachEdgeEngine.AddSheet(reachEdgeGuard,
+        parser.Parse("when me is near Enemy by my Reach\n  set Nearing to Nearing + 1"));
+    reachEdgeEngine.Variables.SetLocal(reachEdgeGuard, "Reach", ValueBox.OfNumber(80));
+    reachEdgeEngine.Tick(0);
+    Check(reachEdgeEngine.Variables.GetGlobal("Nearing").IsNone(),
+        "`when me is near Enemy by my Reach` stays quiet while the 100 gap is beyond `my Reach 80`");
+    reachEdgeEngine.Variables.SetLocal(reachEdgeGuard, "Reach", ValueBox.OfNumber(150));
+    reachEdgeEngine.Tick(1);
+    Check(reachEdgeEngine.Variables.GetGlobal("Nearing").AsNumber() == 1,
+        "widening Reach to 150 fires the near edge across the same 100 gap");
+    reachEdgeEngine.Tick(2);
+    Check(reachEdgeEngine.Variables.GetGlobal("Nearing").AsNumber() == 1,
+        "still inside the variable range does not refire (enter edge)");
+    reachEdgeWorld.SetDistance(reachEdgeGuard, reachEdgeEnemy, 200);
+    reachEdgeEngine.Tick(3);
+    reachEdgeWorld.SetDistance(reachEdgeGuard, reachEdgeEnemy, 100);
+    reachEdgeEngine.Tick(4);
+    Check(reachEdgeEngine.Variables.GetGlobal("Nearing").AsNumber() == 2,
+        "leaving and coming back re-arms the variable-range edge");
+
+    var reachGlobalDesc = TriggerClassifier.Classify(
+        parser.Parse("when me is near Enemy by my Reach\n  set Nearing to Nearing + 1").Events[0]);
+    Check(reachGlobalDesc.Kind == TriggerKind.Near && reachGlobalDesc.DistanceVariable == "Reach" &&
+          reachGlobalDesc.DistanceVariableOwner == "my" && reachGlobalDesc.Distance == -1,
+        "the near trigger records `my Reach` as its range, not a fixed distance");
+
+    var globalRangeWorld = new FakeWorld();
+    var globalRangeGuard = new FakeActor("Guard");
+    var globalRangeEnemy = new FakeActor("Enemy");
+    globalRangeWorld.AddActor(globalRangeGuard);
+    globalRangeWorld.AddActor(globalRangeEnemy);
+    globalRangeWorld.SetDistance(globalRangeGuard, globalRangeEnemy, 100);
+    var globalRangeEngine = FreshEngine(globalRangeWorld);
+    globalRangeEngine.AddSheet(globalRangeGuard,
+        parser.Parse("when me is near Enemy by WatchRange\n  set Nearing to Nearing + 1"));
+    globalRangeEngine.Variables.SetGlobal("WatchRange", ValueBox.OfNumber(150));
+    globalRangeEngine.Tick(0);
+    Check(globalRangeEngine.Variables.GetGlobal("Nearing").AsNumber() == 1,
+        "`when me is near Enemy by WatchRange` uses the global");
+
+    // ------------------------------------------------------------------
     // Task 7 Part G1: Enemy_LOS.events (line-of-sight chase, events only)
     // ------------------------------------------------------------------
 
@@ -10846,6 +10956,176 @@ Check(brokenRingVariables.GetLocal(brokenRingWearer, "MaxMana").AsNumber() == 0,
     "destroying a worn item takes its stats back off the wearer");
 Check(!brokenRingStore.HasRoll(brokenRing),
     "a destroyed item also forgets its roll");
+
+// ------------------------------------------------------------------
+// Task 37 Part F: one combined RPG run, as content
+// ------------------------------------------------------------------
+
+// The run is content, not a fixture: one GameFiles sheet, joined to the caster and the zombie the
+// way an authored scene joins them. `when Q is pressed` goes to the caster's sheet only, and a
+// stand-in for FlaxActions (the same shape the cooldown and buff checks use) hands the four bridge
+// words to the runtime managers, so the sheet's own conditions, buff, cooldown, typed damage and
+// loot are played as one loop instead of one word at a time.
+string rpgSheetPath = "Source/Game/GameFiles/RPG_Duel.events";
+var rpgProgram = parser.Parse(File.ReadAllText(rpgSheetPath));
+Check(rpgProgram.Events.Count == 7,
+    $"the combined RPG sheet keeps its seven blocks (got {rpgProgram.Events.Count})");
+
+var rpgVerbs = new List<ActionVerb>();
+string rpgRollTable = "";
+bool rpgFireballIsTyped = false;
+bool rpgBurnIsTyped = false;
+foreach (EventNode rpgEvent in rpgProgram.Events)
+{
+    foreach (BodyLineNode rpgLine in rpgEvent.Body)
+    {
+        if (rpgLine.IsCondition || !(rpgLine.Statement is RawActionNode rpgRaw))
+            continue;
+        ActionSpec rpgSpec = ActionWords.Parse(rpgRaw.Words, _ => { });
+        rpgVerbs.Add(rpgSpec.Verb);
+        if (rpgSpec.Verb == ActionVerb.Damage && rpgSpec.Thing == "Zombie")
+            rpgFireballIsTyped = rpgSpec.Type == "fire";
+        if (rpgSpec.Verb == ActionVerb.Damage && rpgSpec.Thing == "me")
+            rpgBurnIsTyped = rpgSpec.Type == "fire";
+        if (rpgSpec.Verb == ActionVerb.RollLoot)
+            rpgRollTable = rpgSpec.Thing;
+    }
+}
+Check(rpgVerbs.Contains(ActionVerb.Damage) && rpgVerbs.Contains(ActionVerb.AddBuff) &&
+      rpgVerbs.Contains(ActionVerb.PutOnCooldown) && rpgVerbs.Contains(ActionVerb.RollLoot),
+    "the sheet carries the cast, the burn and the cooldown as real words");
+Check(rpgFireballIsTyped, "the fireball is a typed hit on the zombie (`damage Zombie by 60 fire`)");
+Check(rpgBurnIsTyped, "the burn tick is typed too, so the resist applies to the damage over time");
+
+Check(rpgRollTable == "BossLoot", "the death rolls the ring table rather than a hand-written item");
+
+Loot.LoadData(itemParser.Parse(File.ReadAllText("Source/Game/GameFiles/Loot.events")));
+EnemyTypes.LoadData(itemParser.Parse(File.ReadAllText("Source/Game/GameFiles/EnemyTypes.events")));
+
+var rpgWorld = new FakeWorld();
+var rpgHero = new FakeActor("Hero");
+var rpgZombie = new FakeActor("Zombie");
+rpgWorld.AddActor(rpgHero);
+rpgWorld.AddActor(rpgZombie);
+var rpgEngine = FreshEngine(rpgWorld);
+rpgEngine.AddSheet(rpgHero, rpgProgram);
+rpgEngine.AddSheet(rpgZombie, rpgProgram);
+
+object rpgDropped = null;
+ItemRoll rpgDropRoll = null;
+rpgEngine.OnRawAction = (context, words) =>
+{
+    ActionSpec spec = ActionWords.Parse(words, _ => { });
+    switch (spec.Verb)
+    {
+        case ActionVerb.PutOnCooldown:
+            rpgEngine.Cooldowns.Start(context.Me, spec.Thing, spec.Duration);
+            break;
+        case ActionVerb.AddBuff:
+            BuffCommands.ExecuteAdd(context, spec);
+            break;
+        case ActionVerb.Damage:
+            object victim = string.Equals(spec.Thing, "me", StringComparison.OrdinalIgnoreCase)
+                ? context.Me
+                : string.Equals(spec.Thing, "other", StringComparison.OrdinalIgnoreCase)
+                    ? context.Other
+                    : rpgEngine.FindNamedActor(spec.Thing);
+            DamageTypes.Apply(context.Variables, victim, spec.Number, spec.Type);
+            break;
+        case ActionVerb.RollLoot:
+            string rarity = spec.HasRarity ? spec.Rarity : "";
+            if (Loot.TryRoll(context.Variables, spec.Thing, rarity,
+                    Loot.LevelFor(context.Variables, context.Me), out _, out ItemRoll dropRoll) ==
+                LootOutcome.Rolled)
+                rpgDropRoll = dropRoll;
+            break;
+    }
+};
+
+rpgEngine.Tick(0);
+Check(Math.Abs(rpgEngine.Variables.GetLocal(rpgZombie, "Health").AsNumber() - 45) < 1e-9 &&
+      Math.Abs(rpgEngine.Variables.GetLocal(rpgZombie, "FireResist").AsNumber() - 50) < 1e-9,
+    "`me appears` gives the duel its zombie body: 45 health and `my FireResist 50`");
+Check(Math.Abs(rpgEngine.Variables.GetLocal(rpgZombie, "Level").AsNumber() - 1) < 1e-9,
+    "...and the level `enemy type \"Zombie\"` writes, which the drop will roll at");
+
+// ---- the cast ----
+rpgEngine.RaisePush(rpgHero, new PushSignal { Kind = TriggerKind.KeyPressed, Name = "Q" });
+rpgEngine.Tick(0.05);
+Check(Math.Abs(rpgEngine.Variables.GetLocal(rpgZombie, "Health").AsNumber() - 15) < 1e-9,
+    "60 fire against `my FireResist 50` takes 30 off the zombie's 45 health");
+Check(Math.Abs(rpgEngine.Variables.GetLocal(rpgHero, "Mana").AsNumber() - 80) < 1e-9 &&
+      !rpgEngine.Cooldowns.Ready(rpgHero, "fireball"),
+    "the first cast spends its mana and starts the shared `fireball` cooldown");
+rpgEngine.Tick(0.15);
+Check(Math.Abs(rpgEngine.Variables.GetLocal(rpgZombie, "BurnTicks").AsNumber() - 3) < 1e-9,
+    "`when buff \"burn\" starts` runs on the zombie, not on the caster");
+
+// ---- the refused second cast ----
+double rpgCooling = rpgEngine.Cooldowns.Remaining(rpgHero, "fireball");
+rpgEngine.RaisePush(rpgHero, new PushSignal { Kind = TriggerKind.KeyPressed, Name = "Q" });
+rpgEngine.Tick(0.25);
+Check(Math.Abs(rpgEngine.Variables.GetLocal(rpgZombie, "Health").AsNumber() - 15) < 1e-9 &&
+      Math.Abs(rpgEngine.Variables.GetLocal(rpgHero, "Mana").AsNumber() - 80) < 1e-9,
+    "a press while `my \"fireball\" is ready` is false is refused: no damage, no mana");
+Check(rpgEngine.Cooldowns.Remaining(rpgHero, "fireball") < rpgCooling + 1e-9,
+    "the refused cast does not restart the cooldown either");
+
+// ---- the burn ticks, resist and all ----
+rpgEngine.Tick(1.35);
+Check(Math.Abs(rpgEngine.Variables.GetLocal(rpgZombie, "Health").AsNumber() - 10) < 1e-9,
+    "the first burn tick is typed too: 10 fire against `FireResist 50` lands 5, not 10");
+rpgEngine.Tick(2.35);
+Check(Math.Abs(rpgEngine.Variables.GetLocal(rpgZombie, "Health").AsNumber() - 5) < 1e-9,
+    "the burn keeps ticking while `my BurnTicks` has a tick left");
+rpgEngine.Tick(3.35);
+Check(rpgEngine.Variables.GetLocal(rpgZombie, "Health").AsNumber() == 0 &&
+      rpgEngine.Variables.GetLocal(rpgZombie, "BurnTicks").AsNumber() == 0,
+    "the third tick finishes the zombie and its burn runs out with it");
+Check(rpgEngine.Cooldowns.Ready(rpgHero, "fireball"),
+    "the shared cooldown is ready again without anything polling for it");
+
+// ---- the drop ----
+rpgEngine.Tick(4.35);
+// The bridge half of a drop: a scene actor named after the roll's base, its affixes stamped on it,
+// and the item's sheet attached, so the pickup and the equip can find it by name.
+if (rpgDropRoll != null)
+{
+    rpgDropped = new FakeActor(rpgDropRoll.Base);
+    rpgWorld.AddActor(rpgDropped);
+    rpgEngine.Affixes.Stamp(rpgDropped, rpgDropRoll);
+    rpgEngine.AddSheet(rpgDropped, new ProgramFile());
+}
+Check(rpgDropped != null && rpgDropRoll != null && rpgDropRoll.Base == "Ring" &&
+      rpgDropRoll.Rarity == "Rare",
+    "the death rolls a rare ring out of `BossLoot`");
+Check(rpgDropRoll != null && rpgDropRoll.ItemLevel == 1,
+    "the drop rolls at the zombie's own level (1), not at a number written in the sheet");
+Check(rpgDropRoll != null && rpgDropRoll.Stats.Count > 0 && rpgDropRoll.Stats.Count <= 3,
+    "the rolled ring carries 1-3 affixes for the player to gain");
+
+// ---- the player picks it up and equips it ----
+rpgEngine.RaisePush(rpgHero, new PushSignal { Kind = TriggerKind.Clicked, Name = "Ring", Other = rpgDropped });
+rpgEngine.Tick(0);
+Check(rpgEngine.BagHas(rpgHero, "Ring"),
+    "`when Ring is clicked` puts the dropped ring in the player's bag");
+
+var rpgStatsBefore = new Dictionary<string, double>();
+if (rpgDropRoll != null)
+    foreach (ItemStat rolledStat in rpgDropRoll.Stats)
+        rpgStatsBefore[rolledStat.Stat] = rpgEngine.Variables.GetLocal(rpgHero, rolledStat.Stat).AsNumber();
+rpgEngine.RaisePush(rpgHero, new PushSignal { Kind = TriggerKind.KeyPressed, Name = "1" });
+rpgEngine.Tick(0);
+Check(rpgDropped != null && ReferenceEquals(rpgEngine.Affixes.WearerOf(rpgDropped), rpgHero),
+    "pressing 1 equips the very ring the table rolled");
+bool rpgStatsLanded = rpgDropRoll != null && rpgDropRoll.Stats.Count > 0;
+if (rpgDropRoll != null)
+    foreach (ItemStat rolledStat in rpgDropRoll.Stats)
+        if (Math.Abs(rpgEngine.Variables.GetLocal(rpgHero, rolledStat.Stat).AsNumber() -
+                     (rpgStatsBefore[rolledStat.Stat] + rolledStat.Value)) > 1e-9)
+            rpgStatsLanded = false;
+Check(rpgStatsLanded, "every rolled stat lands on the player exactly once");
+EnemyTypes.LoadData(null);
 
 // ------------------------------------------------------------------
 // Task 31: Audio — music, buses and fades

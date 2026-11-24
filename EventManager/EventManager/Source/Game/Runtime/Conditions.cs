@@ -111,6 +111,11 @@ namespace Game
         public string Tag = "";
         public double Percent;
         public double Distance;
+        /// <summary>`by my Reach` / `by Reach` (Task 37 F3): where a distance comes from when
+        /// it is not a literal. <c>"my"</c> or <c>"global"</c>, empty for a number.</summary>
+        public string DistanceOwner = "";
+        /// <summary>The variable a <c>by ...</c> qualifier names; empty for a literal.</summary>
+        public string DistanceName = "";
         /// <summary>Control group number for <c>my control group &lt;n&gt; is assigned</c>.</summary>
         public int Group = -1;
         /// <summary>Which player (1 or 2) a <c>player &lt;n&gt; ...</c> condition is about.</summary>
@@ -246,9 +251,9 @@ namespace Game
                     node.Kind = ConditionKind.PlayerNear;
                     node.Player = playerNumber;
                     node.Thing = texts[rest + 2];
-                    for (int i = rest + 3; i < tokens.Count - 1; i++)
-                        if (texts[i] == "by" && tokens[i + 1].Type == TokenType.Number)
-                            node.Distance = tokens[i + 1].Number;
+                    int playerByIndex = Array.IndexOf(texts, "by", rest + 3);
+                    if (playerByIndex >= 0)
+                        SetDistance(node, tokens, playerByIndex);
                     return node;
                 }
                 if (texts.Length == rest + 3 && texts[rest] == "has" && texts[rest + 1] == "tag")
@@ -266,9 +271,9 @@ namespace Game
             {
                 node.Kind = ConditionKind.Hears;
                 node.Thing = tokens[2].Text;
-                for (int i = 3; i < tokens.Count - 1; i++)
-                    if (tokens[i].Text == "by" && tokens[i + 1].Type == TokenType.Number)
-                        node.Distance = tokens[i + 1].Number;
+                int hearsByIndex = Array.IndexOf(texts, "by", 3);
+                if (hearsByIndex >= 0)
+                    SetDistance(node, tokens, hearsByIndex);
                 return node;
             }
 
@@ -726,9 +731,8 @@ namespace Game
                     SetSubject(node, tokens, texts, isIndex);
                     node.Thing = ThingAfter(tokens, aboveIndex);
                     int aboveByIndex = Array.IndexOf(texts, "by", aboveIndex);
-                    if (aboveByIndex > aboveIndex && aboveByIndex + 1 < tokens.Count &&
-                        tokens[aboveByIndex + 1].Type == TokenType.Number)
-                        node.Distance = tokens[aboveByIndex + 1].Number;
+                    if (aboveByIndex > aboveIndex)
+                        SetDistance(node, tokens, aboveByIndex);
                     return node;
                 }
 
@@ -761,8 +765,8 @@ namespace Game
                     SetSubject(node, tokens, texts, isIndex);
                     node.Thing = ThingAfter(tokens, nearIndex);
                     int byIndex = Array.IndexOf(texts, "by");
-                    if (byIndex >= 0 && byIndex + 1 < tokens.Count && tokens[byIndex + 1].Type == TokenType.Number)
-                        node.Distance = tokens[byIndex + 1].Number;
+                    if (byIndex >= 0)
+                        SetDistance(node, tokens, byIndex);
                     return node;
                 }
                 bool held = Array.IndexOf(texts, "held", isIndex + 1) >= 0;
@@ -819,6 +823,24 @@ namespace Game
             return node;
         }
 
+        /// <summary>`by 12` / `by my Reach` / `by Reach` - Task 37 F3: a distance may be a
+        /// literal, the acting actor's own variable, or a global.</summary>
+        private static void SetDistance(ConditionNode node, List<Token> tokens, int byIndex)
+        {
+            DistanceValue.Reading reading = DistanceValue.Read(tokens, byIndex);
+            node.Distance = reading.Number;
+            node.DistanceOwner = reading.Owner;
+            node.DistanceName = reading.Name;
+        }
+
+        /// <summary>The node's distance, read live when the qualifier names a variable.</summary>
+        private static double DistanceOf(ConditionNode node, EventContext context)
+        {
+            if (string.IsNullOrEmpty(node.DistanceOwner))
+                return node.Distance;
+            return DistanceValue.Resolve(node.DistanceOwner, node.DistanceName, context.Variables, context.Me);
+        }
+
         public static bool Evaluate(ConditionNode node, EventContext context)
         {
             switch (node.Kind)
@@ -861,7 +883,7 @@ namespace Game
                     object anchor = node.Name == "other" && context.Other != null ? context.Other : context.Me;
                     if (thing == null)
                         return false;
-                    return context.World.Distance2D(anchor, thing) <= node.Distance;
+                    return context.World.Distance2D(anchor, thing) <= DistanceOf(node, context);
                 }
                 case ConditionKind.Above:
                 {
@@ -871,7 +893,7 @@ namespace Game
                         return false;
                     // `<n>` is a margin: "above by 4" means at least 4 up, "above" means level or
                     // higher (the same 0 margin), so a climber's feet at the landing count.
-                    return context.World.Height(anchor) >= context.World.Height(thing) + node.Distance;
+                    return context.World.Height(anchor) >= context.World.Height(thing) + DistanceOf(node, context);
                 }
                 case ConditionKind.UnitTypeIs:
                     return UnitTypes.Is(context, node.Name);
@@ -906,7 +928,7 @@ namespace Game
                     return context.World != null && context.World.IsTouchingWall(context.Me);
                 case ConditionKind.Hears:
                     return context.Runtime != null && context.Me != null &&
-                           context.Runtime.Sounds.IsAudible(node.Thing, context.Me, context.World, node.Distance);
+                           context.Runtime.Sounds.IsAudible(node.Thing, context.Me, context.World, DistanceOf(node, context));
                 case ConditionKind.MyTypeIs:
                     return string.Equals(context.ReadMy("Type").AsText(), node.Name,
                         StringComparison.OrdinalIgnoreCase);                case ConditionKind.Wandering:
@@ -1094,7 +1116,7 @@ namespace Game
                     object anchor = node.Thing == "other" && context.Other != null ? context.Other : context.Me;
                     if (player == null || anchor == null)
                         return false;
-                    return context.World.Distance2D(anchor, player) <= node.Distance;
+                    return context.World.Distance2D(anchor, player) <= DistanceOf(node, context);
                 }
                 case ConditionKind.PlayerHasTag:
                 {

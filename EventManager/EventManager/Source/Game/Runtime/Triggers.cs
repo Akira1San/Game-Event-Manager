@@ -161,6 +161,8 @@ namespace Game
         /// <summary>For `by my SightDistance`: the sheet actor's own variable to read the
         /// range from each poll (typed-enemy stats, Task 16 Part D).</summary>
         public string DistanceVariable = "";
+        /// <summary><c>"my"</c> or <c>"global"</c> for <see cref="DistanceVariable"/> (Task 37 F3).</summary>
+        public string DistanceVariableOwner = "";
         public double Seconds;
         public string WatchOwner = "";
         public string WatchName = "";
@@ -749,7 +751,8 @@ namespace Game
                 descriptor.Kind = TriggerKind.Hears;
                 descriptor.RequireName = trigger[2].Text;
                 descriptor.Distance = DistanceBy(trigger);
-                descriptor.DistanceVariable = DistanceNameBy(trigger);
+                descriptor.DistanceVariable = DistanceNameBy(trigger, out string distanceOwner);
+                descriptor.DistanceVariableOwner = distanceOwner;
                 return descriptor;
             }
             if (words.Length >= 3 && words[1] == "sees")
@@ -757,7 +760,8 @@ namespace Game
                 descriptor.Kind = TriggerKind.Sees;
                 descriptor.RequireName = words[2];
                 descriptor.Distance = DistanceBy(trigger);
-                descriptor.DistanceVariable = DistanceNameBy(trigger);
+                descriptor.DistanceVariable = DistanceNameBy(trigger, out string distanceOwner);
+                descriptor.DistanceVariableOwner = distanceOwner;
                 return descriptor;
             }
             if (words.Length >= 4 && words[1] == "stops" && words[2] == "seeing")
@@ -765,7 +769,8 @@ namespace Game
                 descriptor.Kind = TriggerKind.StopsSeeing;
                 descriptor.RequireName = words[3];
                 descriptor.Distance = DistanceBy(trigger);
-                descriptor.DistanceVariable = DistanceNameBy(trigger);
+                descriptor.DistanceVariable = DistanceNameBy(trigger, out string distanceOwner);
+                descriptor.DistanceVariableOwner = distanceOwner;
                 return descriptor;
             }
             if (words.Length >= 3 && words[1] == "gets")
@@ -788,6 +793,8 @@ namespace Game
                 descriptor.Kind = TriggerKind.Near;
                 descriptor.RequireName = trigger[3].Text;
                 descriptor.Distance = DistanceBy(trigger);
+                descriptor.DistanceVariable = DistanceNameBy(trigger, out string nearDistanceOwner);
+                descriptor.DistanceVariableOwner = nearDistanceOwner;
                 return descriptor;
             }
             if (words.Length >= 2 && words[1] == "appears")
@@ -801,17 +808,25 @@ namespace Game
         /// <summary>
         /// `by my SightDistance` — a range held in the sheet actor's own variable. A plain
         /// `by 12` stays a fixed distance (<see cref="DistanceBy"/> reads it); this only
-        /// answers the variable form, so typed enemies sight as far as their type says.
+        /// answers the variable form (a bare `by Reach` names a global), so typed enemies sight
+        /// as far as their type says and a weapon trigger as far as its own Reach (Task 37 F3).
         /// </summary>
-        private static string DistanceNameBy(List<Token> trigger)
+        private static string DistanceNameBy(List<Token> trigger, out string owner)
         {
+            owner = "";
             for (int i = trigger.Count - 2; i >= 0; i--)
             {
                 if (trigger[i].Type != TokenType.Word || trigger[i].Text != "by")
                     continue;
-                if (trigger[i + 1].Type == TokenType.Word && trigger[i + 1].Text == "my" && i + 2 < trigger.Count)
+                if (trigger[i + 1].Type != TokenType.Word)
+                    return "";
+                if (trigger[i + 1].Text == "my" && i + 2 < trigger.Count)
+                {
+                    owner = "my";
                     return trigger[i + 2].Text;
-                return "";
+                }
+                owner = "global";
+                return trigger[i + 1].Text;
             }
             return "";
         }

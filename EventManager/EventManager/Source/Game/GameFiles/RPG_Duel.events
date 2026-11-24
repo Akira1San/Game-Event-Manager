@@ -1,0 +1,59 @@
+# ---------------- RPG_Duel.events (Task 37 Part F: one combined RPG run) ----------------
+# One sheet, both halves of a Diablo-style exchange. Attach it to the caster and to the zombie:
+# `when Q is pressed` is delivered to the caster only, while the burn and the death run on the
+# actor they happen to.
+#
+# WHAT IT SHOWS
+#   · `my "fireball" is ready` is the shared timer (Task 27 Part E), so a second press inside the
+#     1.2 s costs no mana, deals no damage and does not restart the cooldown
+#   · `damage Zombie by 60 fire` is a typed hit (Task 9 F2): the zombie's own `FireResist 50`
+#     takes half off first, then armour, shield and health see the rest
+#   · the burn is a buff, and `when buff "burn" starts` is pushed to the *buffed* actor, so the
+#     ticking block belongs here and damages `me`. Every tick is typed too, so a resistance that
+#     stops half of the fireball also stops half of the damage over time (10 fire lands 5)
+#   · the death runs the loot table (Task 9 F6): `roll "Rare" from "BossLoot"` drops a rolled ring
+#     at the zombie, at the item level its own `my Level` says — `enemy type "Zombie"` writes 1
+#   · clicking the ring bags it and 1 equips it, so the rolled numbers land on the player, and
+#     unequipping would take exactly those numbers back (Task 9 E7 / F1)
+#
+# The numbers are chosen so the loop is visible in one run: 60 fire against `FireResist 50` is 30,
+# the zombie has 45 health, and three burn ticks of 5 finish it.
+#
+# HEADLESS: `Tests/Program.cs` parses this file, joins both actors to it and plays the run against
+# a stand-in for FlaxActions, so the words are checked as a loop rather than one word at a time.
+
+when me appears
+  # the duel body: EnemyTypes' Zombie (level 1, 50 health), tuned to die on the third burn tick
+  enemy type "Zombie"
+  set my Health to 45
+  set my FireResist to 50
+  set my Mana to 100
+
+# ---- the fireball ----
+when Q is pressed
+  my "fireball" is ready
+  my Mana is higher than 19
+  add -20 to my Mana
+  put "fireball" on cooldown for 1.2
+  damage Zombie by 60 fire
+  add buff "burn" to Zombie for 3 seconds
+
+# ---- the burn ----
+when buff "burn" starts
+  set my BurnTicks to 3
+
+when every 1 seconds
+  my BurnTicks is higher than 0
+  damage me by 10 fire
+  add -1 to my BurnTicks
+
+# ---- the drop ----
+when my Health becomes 0
+  roll "Rare" from "BossLoot"
+
+# ---- the pickup and the equip ----
+when Ring is clicked
+  add Ring to my bag
+
+when 1 is pressed
+  equip Ring

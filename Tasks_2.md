@@ -1414,7 +1414,7 @@ should be re-designed from scratch.
 | `put "…" on cooldown for <s>` · `my "…" is ready` · `my "…" cooldown` | **shipped** — Task 27 Part E, `Runtime/Cooldowns.cs` |
 | `aim` · `cancel aim` · `when aim picks a target` · `damage area around …` | **shipped** — Task 27 Part A, `Runtime/Targeting.cs` |
 | `damage <target> by <n> <type>` | **shipped** — F2 (§The follow-up queue), `Runtime/DamageTypes.cs`; the same `<type>` also works on `damage area` |
-| `spawn item from "<table>"` · `roll "<rarity>" from "<table>"` | **missing** — the generator exists behind `spawn <thing> … rarity "<name>" level <n>`; the table word is F6 |
+| `spawn item from "<table>"` · `roll "<rarity>" from "<table>"` | **shipped** — F6, `Runtime/Loot.cs` + `GameFiles/Loot.events`; see Part E |
 
 ### Examples
 
@@ -1423,7 +1423,7 @@ should be re-designed from scratch.
 # attacker's sheet: hit first, then hand the burn to the victim
 when message "fire" arrives
   damage other by 10 fire
-  add buff "burn" to other for 3
+  add buff "burn" to other for 3 seconds
 
 # victim's sheet: `when buff "burn" starts` is pushed to the *buffed* actor (and
 # `my "burn" time left` is read there too), so the ticking block belongs here, not
@@ -1547,7 +1547,7 @@ when message "fire" arrives
       the level gate in both directions (a level-1 drop never rolls the level-10 `Foxy` affix; a
       level-12 drop rolls at item level 12 and does) -> **2634 passed, 0 failed**;
       `dotnet build Source/Game.csproj -c Editor.Windows.Debug` 0 errors.
-- [ ] **Part F — Tests and example.** Stack/refresh/ignore, expiry restores base, cooldown readiness,
+- [x] **Part F — Tests and example.** Stack/refresh/ignore, expiry restores base, cooldown readiness,
       fire vs fire-resist, AoE hits exactly once, aim cancel/timeout, loot table distribution and
       an equipped +5 sword still working.
       *Most of this list is already green from the parts that shipped:* buff rules and base restore
@@ -1561,7 +1561,21 @@ when message "fire" arrives
       and `Bag.events` are pinned today. **Typed damage and typed splash are now green too**
       (**F2**, 12 checks: fire vs `FireResist 50`, `steel` ignoring it, each splash victim meeting
       its own resist, `999` as immunity), and the loot-table distribution is green with F6 (21
-      checks, both words + the level gate), so what Part F still owes is that one combined sheet.
+      checks, both words + the level gate).
+      *Landed 2026-11-24:* that sheet is `GameFiles/RPG_Duel.events`, one file attached to both
+      duelists. `me appears` gives the body (`enemy type "Zombie"`, 45 health, `my FireResist 50`,
+      100 mana); `when Q is pressed` gates on `my "fireball" is ready`, spends 20 mana, starts the
+      1.2 s timer and lands `damage Zombie by 60 fire` (30 through the resist) plus a 3-second
+      `"burn"`; the burn's own `damage me by 10 fire` tick lands 5; the death runs
+      `roll "Rare" from "BossLoot"` at the zombie's own `my Level` (1); clicking the dropped ring
+      bags it and 1 equips it. 22 new checks in `Tests/Program.cs` play the whole run headlessly —
+      the sheet parsed from disk and joined to a caster and a zombie, with a stand-in for
+      FlaxActions handing the four bridge words to `DamageTypes`, `BuffCommands`, `Cooldowns` and
+      `Loot` — and assert the halved hit, the refused second press (no damage, no mana, no
+      cooldown restart), the three resisted burn ticks down to 0 health, a cooldown ready again
+      with nothing polling, a level-1 rare ring with 1-3 affixes, and every rolled stat landing on
+      the player exactly once -> **2656 passed, 0 failed**. The editor pass is the same one Part E
+      records: watch a real enemy die and drop, then equip what it dropped.
 
 ### The D2 loop: bag, equip, acceptance (moved from `TASKS.md` Task 8)
 
@@ -1799,12 +1813,28 @@ brackets.
       resisted number then spends armor and shield, `steel` ignores `FireResist`, a typed splash spends
       each victim's own resistance, `999` is immunity, the word book row) -> **2591 passed, 0
       failed**; Game module build 0 errors.
-- [ ] **F3 — Variables in numeric qualifiers (C#, small) [E1, E4].** `near Enemy by my Reach`
+- [x] **F3 — Variables in numeric qualifiers (C#, small) [E1, E4].** `near Enemy by my Reach`
       parses and then reads 0 (`Conditions.cs` wants a number token), which forces one melee block
       per weapon and will bite spell range/cleave/aura sizes. Accept a number, a global or
       `my <name>` everywhere a distance is read, in conditions and triggers. Done-when: a weapon
       sheet with `by my Reach` reaches its authored distance, and `when me is near` by a variable
       re-arms on the right edge.
+      *Landed 2026-11-24.* New pure `Runtime/DistanceValue.cs` reads a `by …` qualifier once:
+      a number stays fixed, `by my Reach` is the acting actor's own variable and `by Range` is a
+      global, both read **live** every time the condition or trigger runs, so a weapon sheet keeps
+      one melee block and follows the weapon it equipped. The forms are wired into the distance
+      conditions (`me is near … by`, `me is above … by`, `me hears "…" by`, `player <n> is near me
+      by`) and into the `near`/`sees`/`stops seeing`/`hears` trigger ranges — the trigger
+      descriptor gained `DistanceVariableOwner`, and `EventRuntime.TriggerRange` resolves it with
+      each trigger's old fallback intact (sight unlimited, hearing 0, near never for an unset
+      local; a global that was never set reads 0). `when me is near Enemy by my Reach` could not
+      even classify its range before — it read 0 and never fired. 15 new checks (all four
+      condition shapes + literal, live `my` and global evaluation, the near trigger's variable
+      range arming / holding / re-arming, and the descriptor carrying `my Reach` instead of a
+      number) -> **2671 passed, 0 failed**; Game module build 0 errors. Word book + `keywords.html`
+      rows updated. Actions that take a distance (`select units near me by …`) stay literal —
+      they read the number at parse time, not per run, which is a separate slice if a command
+      card ever needs it.
 - [ ] **F4 — Mana bounds in the engine (C#, small) [E2, E3].** Health already clamps through
       `HealthManager.Add` (`0..MaxHealth`, armor/shield first); do the same for `Mana`/
       `MaxMana` so E2's potion and regen do not need a three-line `if` dance (there is no `min()`),

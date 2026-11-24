@@ -3659,12 +3659,9 @@ namespace Game
         {
             var inSight = sheet.InSight[eventIndex];
             var seeing = new List<object>();
-            double range = descriptor.Distance;
-            // `when me sees Player by my SightDistance`: the range is the sheet actor's own stat.
-            if (!string.IsNullOrEmpty(descriptor.DistanceVariable))
-                range = Variables.HasLocal(sheet.Actor, descriptor.DistanceVariable)
-                    ? Variables.GetLocal(sheet.Actor, descriptor.DistanceVariable).AsNumber()
-                    : double.MaxValue;
+            // `when me sees Player by my SightDistance` / `by SightRange`: the sheet actor's own
+            // stat, or a global (Task 37 F3). A missing local still reads as no limit.
+            double range = TriggerRange(descriptor, sheet, double.MaxValue);
             if (descriptor.Kind == TriggerKind.StopsSeeing && range < 0)
                 range = sheet.LastSeenRange.GetValueOrDefault(descriptor.RequireName, double.MaxValue);
             foreach (object other in World.Actors())
@@ -3728,12 +3725,9 @@ namespace Game
                 live.Add(sound.Id);
             heard.RemoveWhere(id => !live.Contains(id));
 
-            // `by <dist>` narrows the sound's own radius; `by my Hearing` reads the actor's stat.
-            double range = descriptor.Distance;
-            if (!string.IsNullOrEmpty(descriptor.DistanceVariable))
-                range = Variables.HasLocal(sheet.Actor, descriptor.DistanceVariable)
-                    ? Variables.GetLocal(sheet.Actor, descriptor.DistanceVariable).AsNumber()
-                    : 0;
+            // `by <dist>` narrows the sound's own radius; `by my Hearing` / `by Hearing` reads
+            // the actor's stat or the global (Task 37 F3).
+            double range = TriggerRange(descriptor, sheet, 0);
 
             foreach (HeardSound sound in Sounds.Audible(descriptor.RequireName, sheet.Actor, World, range))
             {
@@ -3793,11 +3787,27 @@ namespace Game
             }
         }
 
+        /// <summary>`by 12` / `by my Reach` / `by Reach` - the range a trigger watches with
+        /// (Task 37 F3). <paramref name="missing"/> is what an unset local variable reads as,
+        /// so each trigger keeps the fallback it always had; a global always reads (0 when unset).
+        /// </summary>
+        private double TriggerRange(TriggerDescriptor descriptor, SheetInstance sheet, double missing)
+        {
+            if (string.IsNullOrEmpty(descriptor.DistanceVariable))
+                return descriptor.Distance;
+            if (descriptor.DistanceVariableOwner == "global")
+                return Variables.GetGlobal(descriptor.DistanceVariable).AsNumber();
+            return Variables.HasLocal(sheet.Actor, descriptor.DistanceVariable)
+                ? Variables.GetLocal(sheet.Actor, descriptor.DistanceVariable).AsNumber()
+                : missing;
+        }
+
         /// <summary>Enter-edge distance near: fires once per target that comes within
         /// <c>descriptor.Distance</c>, then re-arms after the target leaves that range.</summary>
         private void PollNear(SheetInstance sheet, int eventIndex, TriggerDescriptor descriptor)
         {
-            if (descriptor.RequireName.Length == 0 || descriptor.Distance < 0)
+            double range = TriggerRange(descriptor, sheet, -1);
+            if (descriptor.RequireName.Length == 0 || range < 0)
                 return;
             var contacts = sheet.Contacts[eventIndex];
             var inRange = new List<object>();
@@ -3807,7 +3817,7 @@ namespace Game
                     continue;
                 if (!NameMatches(descriptor, other))
                     continue;
-                if (World.Distance2D(sheet.Actor, other) <= descriptor.Distance)
+                if (World.Distance2D(sheet.Actor, other) <= range)
                 {
                     inRange.Add(other);
                 }
