@@ -8430,7 +8430,17 @@ Check(reloadGunEngine.Variables.GetLocal(reloadGunner, "Shots").AsNumber() == 1,
     "a weapon that is not reloading fires");
 reloadGunEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "R" });
 reloadGunEngine.Tick(1);
-Check(reloadGunEngine.Weapons.IsReloading(reloadGunner, 1), "`reload` starts the weapon's timer");
+Check(reloadGunEngine.Cooldowns.Remaining(reloadGunner, Cooldowns.ReloadTimer) > 0,
+    "`reload` starts the weapon's timer");
+var reloadContext = new EventContext
+{
+    Variables = reloadGunEngine.Variables,
+    World = reloadGunEngine.World,
+    Me = reloadGunner,
+    Runtime = reloadGunEngine,
+};
+Check(reloadContext.ReadMy("cooldown reload").AsNumber() > 0,
+    "`reload` and `my \"reload\" cooldown` share the one timer table (Task 37 F5)");
 reloadGunEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "Space" });
 reloadGunEngine.Tick(1.5);
 Check(reloadGunEngine.Variables.GetLocal(reloadGunner, "Shots").AsNumber() == 1,
@@ -8442,16 +8452,18 @@ reloadGunEngine.Tick(2.6);
 Check(reloadGunEngine.Variables.GetLocal(reloadGunner, "Reloads").AsNumber() == 1,
     "a finished reload does not fire again on later ticks");
 
-var clock = new WeaponClock();
+var reloadTimers = new Cooldowns();
 var clockActor = new object();
-clock.Start(clockActor, 0, 5);
-Check(!clock.IsReloading(clockActor, 5) && clock.Completion(clockActor, 5) == 1,
+reloadTimers.Start(clockActor, Cooldowns.ReloadTimer, 0);
+Check(reloadTimers.Ready(clockActor, Cooldowns.ReloadTimer) &&
+      reloadTimers.Completion(clockActor, Cooldowns.ReloadTimer) == 1,
     "a zero-second reload completes on the spot");
-var cancelClock = new WeaponClock();
+var cancelTimers = new Cooldowns();
 var cancelledActor = new object();
-cancelClock.Start(cancelledActor, 3, 0);
-cancelClock.Cancel(cancelledActor);
-Check(!cancelClock.IsReloading(cancelledActor, 1) && cancelClock.Completion(cancelledActor, 4) == 0,
+cancelTimers.Start(cancelledActor, Cooldowns.ReloadTimer, 3);
+cancelTimers.Forget(cancelledActor, Cooldowns.ReloadTimer);
+Check(cancelTimers.Ready(cancelledActor, Cooldowns.ReloadTimer) &&
+      cancelTimers.Completion(cancelledActor, Cooldowns.ReloadTimer) == 0,
     "switching weapons cancels a reload without completing it");
 
 // Ammo can be set outright, and never runs below zero.
@@ -10623,17 +10635,20 @@ Check(!SpellData.TryGet(null, "Banana", out _), "a spell nobody defined is not i
 Check(SpellData.KnownNames(null).Contains("Fireball"), "the unknown-spell help lists what the project has");
 
 // Cooldowns: per actor AND per spell, so two spells on one sheet are independent.
-var spellClock = new SpellClock();
+var spellTimers = new Cooldowns();
 var mage = new FakeActor("Mage");
-spellClock.Start(mage, "Fireball", 1.2, 5);
-Check(spellClock.IsCooling(mage, "Fireball", 5.5) &&
-      Math.Abs(spellClock.Remaining(mage, "Fireball", 5.5) - 0.7) < 1e-9,
+spellTimers.Start(mage, "Fireball", 1.2);
+Check(!spellTimers.Ready(mage, "Fireball") &&
+      Math.Abs(spellTimers.Remaining(mage, "Fireball") - 1.2) < 1e-9,
     "a started cooldown is live and reports the seconds left");
-Check(!spellClock.IsCooling(mage, "Heal", 5.5), "another spell on the same actor is still ready");
-Check(!spellClock.IsCooling(mage, "Fireball", 6.3), "the cooldown expires on its own");
-spellClock.Start(mage, "Fireball", 1.2, 7);
-spellClock.Clear(mage);
-Check(!spellClock.IsCooling(mage, "Fireball", 7.1), "a destroyed actor's cooldowns are cleared");
+Check(spellTimers.Ready(mage, "Heal"), "another spell on the same actor is still ready");
+spellTimers.Tick(1.3);
+Check(spellTimers.Ready(mage, "Fireball") && spellTimers.Completion(mage, "Fireball") == 1,
+    "the cooldown expires on its own, counting one completion");
+spellTimers.Start(mage, "Fireball", 1.2);
+spellTimers.Clear(mage);
+Check(spellTimers.Ready(mage, "Fireball") && spellTimers.Completion(mage, "Fireball") == 0,
+    "a destroyed actor's cooldowns are cleared, completions and all");
 
 // `my <Spell>Cooldown` is a computed readout (like `my Ammo`), never a stored live timer.
 var spellWorld = new FakeWorld();
@@ -10642,7 +10657,7 @@ spellWorld.AddActor(spellMage);
 var spellEngine = FreshEngine(spellWorld);
 spellEngine.AddSheet(spellMage, spellParser.Parse("when game starts\n  set Mana to 30\n"));
 spellEngine.Tick(0);
-spellEngine.Spells.Start(spellMage, "Fireball", 1.2, 0);
+spellEngine.Cooldowns.Start(spellMage, "Fireball", 1.2);
 var spellContext = new EventContext { Runtime = spellEngine, Variables = spellEngine.Variables, Me = spellMage };
 Check(Math.Abs(spellContext.ReadMy("FireballCooldown").AsNumber() - 1.2) < 1e-9,
     "`my FireballCooldown` reads the live seconds left");
@@ -12349,6 +12364,91 @@ Check(Conditions.Evaluate(readyNode, cdContext) && !Conditions.Evaluate(notReady
     "the gate turns true when the timer runs out");
 Check(cdContext.ReadMy("cooldown stim").AsNumber() == 0,
     "the value reads 0 once ready");
+
+// ------------------------------------------------------------------
+// Task 37 F5: one named-timer table + a ready edge
+// ------------------------------------------------------------------
+
+// `when "<name>" is ready` is the expiry edge of the same timer, with or without `my`.
+var readyDesc = TriggerClassifier.Classify(parser.Parse(
+    "when \"stim\" is ready\n  set Flipped to 1\n").Events[0]);
+Check(readyDesc.Kind == TriggerKind.CooldownReady && readyDesc.RequireName == "stim",
+    "`when \"stim\" is ready` classifies to the named timer's ready edge");
+var myReadyDesc = TriggerClassifier.Classify(parser.Parse(
+    "when my \"Fireball\" is ready\n  set Flipped to 1\n").Events[0]);
+Check(myReadyDesc.Kind == TriggerKind.CooldownReady && myReadyDesc.RequireName == "Fireball",
+    "`when my \"Fireball\" is ready` names the same timer");
+Check(WordRegistry.All.Any(e => e.Kind == "trigger" && e.Word == "when \"<name>\" is ready"),
+    "the word book lists the ready edge");
+
+// End to end: the edge fires once per expiry, not on every tick the timer is ready.
+var readyEngine = FreshEngine(new FakeWorld());
+readyEngine.OnRawAction = (context, words) =>
+{
+    var spec = ActionWords.Parse(words, _ => { });
+    if (spec.Verb == ActionVerb.PutOnCooldown)
+        readyEngine.Cooldowns.Start(context.Me, spec.Thing, spec.Duration);
+};
+var readyHero = new FakeActor("Hero");
+readyEngine.AddSheet(readyHero, parser.Parse(@"when me appears
+  put ""stim"" on cooldown for 1 second
+
+when ""stim"" is ready
+  add 1 to my ReadyFlips
+"));
+readyEngine.Tick(0);
+Check(readyEngine.Variables.GetLocal(readyHero, "ReadyFlips").AsNumber() == 0,
+    "the ready edge does not fire while the timer runs");
+readyEngine.Tick(0.5);
+Check(readyEngine.Variables.GetLocal(readyHero, "ReadyFlips").AsNumber() == 0,
+    "half a second in, the timer is still live");
+readyEngine.Tick(1.5);
+Check(readyEngine.Variables.GetLocal(readyHero, "ReadyFlips").AsNumber() == 1,
+    "the ready edge fires once when the timer expires");
+readyEngine.Tick(3);
+Check(readyEngine.Variables.GetLocal(readyHero, "ReadyFlips").AsNumber() == 1,
+    "a ready timer does not fire the edge again on later ticks");
+
+// `for 0 seconds` clears the timer and still counts the one completion it means.
+var zeroTimerEngine = FreshEngine(new FakeWorld());
+zeroTimerEngine.OnRawAction = (context, words) =>
+{
+    var spec = ActionWords.Parse(words, _ => { });
+    if (spec.Verb == ActionVerb.PutOnCooldown)
+        zeroTimerEngine.Cooldowns.Start(context.Me, spec.Thing, spec.Duration);
+};
+var zeroTimerHero = new FakeActor("Hero");
+zeroTimerEngine.AddSheet(zeroTimerHero, parser.Parse(@"when me appears
+  put ""flash"" on cooldown for 0 seconds
+
+when ""flash"" is ready
+  add 1 to my Flashes
+"));
+zeroTimerEngine.Tick(0);
+Check(zeroTimerEngine.Cooldowns.Ready(zeroTimerHero, "flash") &&
+      zeroTimerEngine.Variables.GetLocal(zeroTimerHero, "Flashes").AsNumber() == 1,
+    "`for 0 seconds` leaves the timer ready and raises its ready edge once");
+
+// The reload completion edge comes from the same table's `reload` timer.
+var reloadEdgeEngine = FreshEngine(new FakeWorld());
+var reloadEdgeHero = new FakeActor("Player");
+reloadEdgeEngine.AddSheet(reloadEdgeHero, parser.Parse(@"when me appears
+  set weapon to ""Pistol""
+
+when R is pressed
+  reload
+
+when ""reload"" is ready
+  add 1 to my ReloadFlips
+"));
+reloadEdgeEngine.Tick(0);
+reloadEdgeEngine.RaisePushAll(new PushSignal { Kind = TriggerKind.KeyPressed, Name = "R" });
+// The runtime advances timers by at most one second per tick, so a 1.2 s reload needs three.
+reloadEdgeEngine.Tick(0.5);
+reloadEdgeEngine.Tick(1.5);
+reloadEdgeEngine.Tick(2.5);
+Check(reloadEdgeEngine.Variables.GetLocal(reloadEdgeHero, "ReloadFlips").AsNumber() == 1,
+    "`when \"reload\" is ready` fires on the reload timer the `reload` word started");
 
 // The old polling is untouched: `when every 1 seconds` still fires.
 var pollEngine = FreshEngine(new FakeWorld());

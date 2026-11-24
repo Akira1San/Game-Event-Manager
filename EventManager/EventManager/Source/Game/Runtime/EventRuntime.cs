@@ -164,7 +164,7 @@ namespace Game
                 string spellName = name.Substring(0, name.Length - 8);
                 string canonical = SpellData.CanonicalFor(Variables, spellName);
                 if (canonical != null)
-                    return ValueBox.OfNumber(Runtime.Spells.Remaining(Me, canonical, Runtime.Time));
+                    return ValueBox.OfNumber(Runtime.Cooldowns.Remaining(Me, canonical));
             }
             return Variables.GetLocal(Me, name);
         }
@@ -314,6 +314,9 @@ namespace Game
         /// <summary>Reloads finished so far, per `when reload completes` event, so a sheet that
         /// polls sees each completion exactly once.</summary>
         public int[] ReloadSeen = new int[0];
+        /// <summary>Timer completions so far, per `when "&lt;name&gt;" is ready` event (Task 37 F5),
+        /// so each expiry fires that trigger exactly once.</summary>
+        public int[] CooldownSeen = new int[0];
         /// <summary>The play token each <c>when anim ... reaches ...%</c> last saw, so a new play of
         /// the clip re-arms it and the same play only fires once (Task 33 Part B).</summary>
         public int[] AnimPlays = new int[0];
@@ -379,10 +382,10 @@ namespace Game
         public SoundBus Sounds = new SoundBus();
         /// <summary>Music, volume groups, fades and ducking behind the audio words (Task 31).</summary>
         public AudioMix Audio = new AudioMix();
-        /// <summary>Per-actor reload timers behind `reload` / `reloading` (Task 16 Part C).</summary>
-        public WeaponClock Weapons = new WeaponClock();
-        /// <summary>Per actor + spell cooldowns behind `cast` (Task 9 E3).</summary>
-        public SpellClock Spells = new SpellClock();
+        // Reload (Task 16 Part C) and spell cooldowns (Task 9 E3) are named timers in
+        // `Cooldowns` now (Task 37 F5): `reload` under `Cooldowns.ReloadTimer`, a cast under the
+        // spell's own name — one table, so `when "Fireball" is ready` and `when reload completes`
+        // are the same kind of edge.
         /// <summary>Target-pick mode behind `aim` (Task 27 Part A).</summary>
         public TargetingManager Targeting = new TargetingManager();
         /// <summary>Lines revealing a character at a time behind `type text` (Task 35 Part A).</summary>
@@ -617,6 +620,7 @@ namespace Game
             sheet.InSight = new HashSet<object>[count];
             sheet.Heard = new HashSet<int>[count];
             sheet.ReloadSeen = new int[count];
+            sheet.CooldownSeen = new int[count];
             sheet.AnimPlays = new int[count];
             sheet.AnimReached = new bool[count];
             sheet.Triggers.Clear();
@@ -3202,7 +3206,7 @@ namespace Game
             string canonical = WeaponData.CanonicalFor(context.Variables, name);
             if (canonical == null)
                 OnRuntimeWarning($"I don't know the weapon \u201C{name}\u201D \u2014 the built-in weapons are {WeaponData.KnownNames()}, and a new one needs its own `<Weapon><Field>` variables (see WeaponData.events).");
-            Weapons.Cancel(context.Me);
+            Cooldowns.Forget(context.Me, Cooldowns.ReloadTimer);
             context.WriteMy(WeaponData.CurrentWeaponVariable, ValueBox.OfText(canonical ?? name));
         }
 
@@ -3216,15 +3220,15 @@ namespace Game
             string weapon = string.IsNullOrEmpty(node.Weapon) && string.IsNullOrEmpty(node.WeaponVariable)
                 ? context.ReadMy(WeaponData.CurrentWeaponVariable).AsText()
                 : ResolveWeaponName(context, node.Weapon, node.WeaponVariable, "reload");
-            double seconds = WeaponClock.DefaultReload;
+            double seconds = WeaponData.DefaultReload;
             if (weapon.Length > 0 && WeaponData.TryGet(context.Variables, weapon, out WeaponStats stats))
                 // The reload is the holder's too (Task 27 Part B), so a per-player reload upgrade
                 // only shortens the reloading side's guns.
                 seconds = Tech.Scale(context.Variables, Tech.PlayerIndexOf(context),
                     stats.Name + "Reload", stats.Reload);
             else if (weapon.Length > 0)
-                OnRuntimeWarning($"I don't know the weapon \u201C{weapon}\u201D, so `reload` uses {WeaponClock.DefaultReload} seconds.");
-            Weapons.Start(context.Me, seconds, Time);
+                OnRuntimeWarning($"I don't know the weapon \u201C{weapon}\u201D, so `reload` uses {WeaponData.DefaultReload} seconds.");
+            Cooldowns.Start(context.Me, Cooldowns.ReloadTimer, seconds);
         }
 
         /// <summary>
@@ -3607,10 +3611,21 @@ namespace Game
                     break;
                 case TriggerKind.ReloadComplete:
                 {
-                    int completed = Weapons.Completion(sheet.Actor, Time);
+                    int completed = Cooldowns.Completion(sheet.Actor, Cooldowns.ReloadTimer);
                     if (completed <= sheet.ReloadSeen[eventIndex])
                         break;
                     sheet.ReloadSeen[eventIndex] = completed;
+                    RunEvent(sheet, eventIndex, null);
+                    break;
+                }
+                case TriggerKind.CooldownReady:
+                {
+                    // `when "<name>" is ready` (Task 37 F5): the named timer's expiry edge, from
+                    // the same table `reload`, `cast` and `put ... on cooldown` write.
+                    int completed = Cooldowns.Completion(sheet.Actor, descriptor.RequireName);
+                    if (completed <= sheet.CooldownSeen[eventIndex])
+                        break;
+                    sheet.CooldownSeen[eventIndex] = completed;
                     RunEvent(sheet, eventIndex, null);
                     break;
                 }

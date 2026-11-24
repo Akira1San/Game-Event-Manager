@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace Game
 {
     /// <summary>
-    /// Shared, per-actor named cooldown timers (Task 27 Part E).
+    /// Shared, per-actor named cooldown timers (Task 27 Part E; generalised in Task 37 F5).
     ///
     /// An ability says `put "stim" on cooldown for 10 seconds`, gates itself with
     /// `my "stim" is ready`, and a HUD can read `my "stim" cooldown` for the seconds left. Every
@@ -14,14 +14,27 @@ namespace Game
     /// Timers are stored as seconds remaining rather than absolute times, and keyed by actor plus
     /// name (case-insensitive), so two abilities on one sheet and one ability on two units cool
     /// down independently. No Flax types, so the runtime and the tests drive it directly.
+    ///
+    /// Since Task 37 F5 this is the **only** timer table: `put "stim" on cooldown`,
+    /// <c>reload</c> (under <see cref="ReloadTimer"/>) and <c>cast</c> (under the spell's name) all
+    /// start here, and `when "stim" is ready` / `when reload completes` are the expiry edges.
     /// </summary>
     public class Cooldowns
     {
         /// <summary>Prefix of the value form: <c>my "stim" cooldown</c> → <c>cooldown stim</c>.</summary>
         public const string VariablePrefix = "cooldown ";
 
+        /// <summary>The timer name <c>reload</c> uses, so a weapon reload is an ordinary named
+        /// timer next to spells and abilities (Task 37 F5).</summary>
+        public const string ReloadTimer = "reload";
+
         private readonly Dictionary<object, Dictionary<string, double>> _timers =
             new Dictionary<object, Dictionary<string, double>>();
+
+        /// <summary>How many times each timer has run out, per actor, so `when "stim" is ready`
+        /// is a one-shot edge however many sheets are polling.</summary>
+        private readonly Dictionary<object, Dictionary<string, int>> _completions =
+            new Dictionary<object, Dictionary<string, int>>();
 
         /// <summary>The variable name the parser builds for <c>my "stim" cooldown</c>.</summary>
         public static string VariableName(string timer)
@@ -42,7 +55,9 @@ namespace Game
 
         /// <summary>
         /// Starts (or restarts) a named timer. A duration of zero or less clears it instead, so
-        /// <c>for 0 seconds</c> means "ready right away" rather than a negative timer.
+        /// <c>for 0 seconds</c> means "ready right away" rather than a negative timer — and it
+        /// counts as one completion, which is what keeps a zero-second <c>reload</c> raising
+        /// `when reload completes` exactly as the old weapon clock did.
         /// </summary>
         public void Start(object actor, string timer, double seconds)
         {
@@ -51,6 +66,7 @@ namespace Game
             if (seconds <= 0)
             {
                 Forget(actor, timer);
+                RecordCompletion(actor, timer.Trim());
                 return;
             }
             if (!_timers.TryGetValue(actor, out Dictionary<string, double> timers))
@@ -77,6 +93,33 @@ namespace Game
             return remaining > 0 ? remaining : 0;
         }
 
+        /// <summary>
+        /// How many times a named timer has run out on an actor, counting one the first time it is
+        /// asked after the expiry. Comparing that count against the one a sheet saw last makes
+        /// `when "&lt;name&gt;" is ready` a one-shot edge, the same way the old weapon clock made
+        /// `when reload completes` one.
+        /// </summary>
+        public int Completion(object actor, string timer)
+        {
+            if (actor == null || string.IsNullOrWhiteSpace(timer))
+                return 0;
+            if (!_completions.TryGetValue(actor, out Dictionary<string, int> counts))
+                return 0;
+            return counts.TryGetValue(timer.Trim(), out int count) ? count : 0;
+        }
+
+        /// <summary>Counts one expiry of a named timer on an actor.</summary>
+        private void RecordCompletion(object actor, string timer)
+        {
+            if (!_completions.TryGetValue(actor, out Dictionary<string, int> counts))
+            {
+                counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                _completions[actor] = counts;
+            }
+            counts.TryGetValue(timer, out int done);
+            counts[timer] = done + 1;
+        }
+
         /// <summary>How many timers are still running on an actor (0 for an idle one).</summary>
         public int Count(object actor)
         {
@@ -101,14 +144,17 @@ namespace Game
         /// <summary>Forgets an actor entirely (it was destroyed) — every timer it had running.</summary>
         public void Clear(object actor)
         {
-            if (actor != null)
-                _timers.Remove(actor);
+            if (actor == null)
+                return;
+            _timers.Remove(actor);
+            _completions.Remove(actor);
         }
 
         /// <summary>Clears every timer for a scene restart / new session.</summary>
         public void Reset()
         {
             _timers.Clear();
+            _completions.Clear();
         }
 
         /// <summary>
@@ -136,7 +182,10 @@ namespace Game
                 if (expired == null)
                     continue;
                 foreach (string name in expired)
+                {
                     timers.Remove(name);
+                    RecordCompletion(pair.Key, name);
+                }
                 if (timers.Count == 0)
                     (idle ??= new List<object>()).Add(pair.Key);
             }

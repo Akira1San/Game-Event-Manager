@@ -40,7 +40,8 @@ namespace Game
     /// Spell definitions (Task 9 E3), shaped exactly like <see cref="WeaponData"/>.
     ///
     /// The action word is <c>cast "&lt;spell&gt;"</c> / <c>cast "&lt;spell&gt;" at &lt;thing&gt;</c>.
-    /// Mana is the caster's own <c>my Mana</c>; the cooldown lives in <see cref="SpellClock"/>,
+    /// Mana is the caster's own <c>my Mana</c>; the cooldown is the spell's own named timer in
+    /// <see cref="Cooldowns"/> (Task 37 F5),
     /// per actor and per spell, so two spells on one sheet cool down independently.
     /// </summary>
     public static class SpellData
@@ -124,70 +125,6 @@ namespace Game
                 case "Life": stats.Life = value.AsNumber(); break;
                 case "Sound": stats.Sound = value.AsText(); break;
             }
-        }
-    }
-
-    /// <summary>
-    /// Per-actor, per-spell cooldown timers (Task 9 E3). <c>cast</c> starts one when a spell goes
-    /// off and refuses the next cast while it is live, exactly like <see cref="WeaponClock"/> does
-    /// for <c>reload</c> — but keyed by (actor, spell), so a sheet can hold several spells.
-    ///
-    /// Kept free of engine types so the timing is unit-testable: the caller supplies "now".
-    /// </summary>
-    public class SpellClock
-    {
-        private readonly Dictionary<(object Actor, string Spell), double> ends =
-            new Dictionary<(object, string), double>();
-
-        /// <summary>Begin (or restart) a spell's cooldown, ending <paramref name="seconds"/> from now.</summary>
-        public void Start(object actor, string spell, double seconds, double now)
-        {
-            if (actor == null || string.IsNullOrEmpty(spell))
-                return;
-            if (seconds <= 0)
-            {
-                ends.Remove((actor, spell));
-                return;
-            }
-            ends[(actor, spell)] = now + seconds;
-        }
-
-        /// <summary>True while the spell's cooldown still has time on it.</summary>
-        public bool IsCooling(object actor, string spell, double now)
-        {
-            if (actor == null || string.IsNullOrEmpty(spell))
-                return false;
-            return ends.TryGetValue((actor, spell), out double end) && now < end;
-        }
-
-        /// <summary>Seconds left on a spell's cooldown, or 0 when it is ready.</summary>
-        public double Remaining(object actor, string spell, double now)
-        {
-            if (actor == null || string.IsNullOrEmpty(spell) ||
-                !ends.TryGetValue((actor, spell), out double end) || now >= end)
-                return 0;
-            return end - now;
-        }
-
-        /// <summary>Forget one spell for one actor.</summary>
-        public void Forget(object actor, string spell)
-        {
-            if (actor == null || string.IsNullOrEmpty(spell))
-                return;
-            ends.Remove((actor, spell));
-        }
-
-        /// <summary>Forget an actor entirely (it was destroyed) — every spell it had running.</summary>
-        public void Clear(object actor)
-        {
-            if (actor == null)
-                return;
-            var stale = new List<(object, string)>();
-            foreach (var key in ends.Keys)
-                if (ReferenceEquals(key.Item1, actor))
-                    stale.Add(key);
-            foreach (var key in stale)
-                ends.Remove(key);
         }
     }
 }

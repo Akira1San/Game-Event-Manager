@@ -73,6 +73,9 @@ namespace Game
                 if (entry.AltShape.Length > 0)
                     shapes.Add(SplitShape(entry.AltShape));
             }
+            // `when my "<name>" is ready` is the same ready edge as the quoted form (Task 37 F5);
+            // one registry row names both instead of listing the word twice.
+            shapes.Add(SplitShape("when my \"<name>\" is ready"));
             return shapes.ToArray();
         }
 

@@ -55,6 +55,10 @@ namespace Game
         /// <summary>The actor variable holding the current weapon's name (<c>my Weapon</c>).</summary>
         public const string CurrentWeaponVariable = "Weapon";
 
+        /// <summary>Reload length used when the acting sheet has no resolvable weapon. The reload
+        /// itself is an ordinary named timer in <see cref="Cooldowns"/> (Task 37 F5).</summary>
+        public const double DefaultReload = 1.5;
+
         /// <summary>Every field a weapon has, in a stable order.</summary>
         public static readonly string[] FieldNames =
         {
@@ -429,88 +433,6 @@ namespace Game
             if (radius <= 0)
                 return false;
             return offsetX * offsetX + offsetZ * offsetZ <= radius * radius;
-        }
-    }
-
-    /// <summary>
-    /// Per-actor reload timers (Task 16 Part C). <c>reload</c> starts one for the current
-    /// weapon's reload time; <c>reloading</c> is true until it runs out, which is what suspends
-    /// shooting (<c>unless reloading</c>), and <c>when reload completes</c> fires once when it does.
-    ///
-    /// Kept free of engine types so the timing is unit-testable: the caller supplies "now".
-    /// </summary>
-    public class WeaponClock
-    {
-        /// <summary>Reload length used when the acting sheet has no resolvable weapon.</summary>
-        public const double DefaultReload = 1.5;
-
-        private readonly Dictionary<object, double> ends = new Dictionary<object, double>();
-        private readonly Dictionary<object, int> completions = new Dictionary<object, int>();
-
-        /// <summary><c>reload</c>: begin (or restart) a reload that ends <paramref name="seconds"/> from now.</summary>
-        public void Start(object actor, double seconds, double now)
-        {
-            if (actor == null)
-                return;
-            if (seconds < 0)
-                seconds = 0;
-            ends[actor] = now + seconds;
-        }
-
-        /// <summary><c>reloading</c>: true while the timer still has time on it.</summary>
-        public bool IsReloading(object actor, double now)
-        {
-            return actor != null && ends.TryGetValue(actor, out double end) && now < end;
-        }
-
-        /// <summary>Seconds left on the reload, or 0 when the actor is not reloading.</summary>
-        public double Remaining(object actor, double now)
-        {
-            if (actor == null || !ends.TryGetValue(actor, out double end) || now >= end)
-                return 0;
-            return end - now;
-        }
-
-        /// <summary>
-        /// How many reloads the actor has finished, counting one the first time it is asked
-        /// after the timer runs out. Comparing that count against the one a sheet saw last
-        /// makes <c>when reload completes</c> a one-shot edge, however many sheets are polling.
-        /// </summary>
-        public int Completion(object actor, double now)
-        {
-            if (actor == null)
-                return 0;
-            completions.TryGetValue(actor, out int count);
-            if (ends.TryGetValue(actor, out double end) && now >= end)
-            {
-                ends.Remove(actor);
-                count++;
-                completions[actor] = count;
-            }
-            return count;
-        }
-
-        /// <summary>Switching weapons drops any reload in progress (the new one starts ready).</summary>
-        public void Cancel(object actor)
-        {
-            if (actor == null)
-                return;
-            ends.Remove(actor);
-        }
-
-        /// <summary>Forget an actor entirely (it was destroyed).</summary>
-        public void Clear(object actor)
-        {
-            if (actor == null)
-                return;
-            ends.Remove(actor);
-            completions.Remove(actor);
-        }
-
-        /// <summary>Actors with a reload still running.</summary>
-        public List<object> ActiveActors()
-        {
-            return new List<object>(ends.Keys);
         }
     }
 }

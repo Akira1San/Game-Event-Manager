@@ -1643,6 +1643,17 @@ window around a broken runtime.
   variable keeps the old plain arithmetic, exactly like the untracked health path, so existing
   sheets are unchanged.
 
+- **One timer table for reload, spells and abilities (Task 37 F5):** `Cooldowns` is the only named
+  timer storage — keyed `(actor, name)`, seconds remaining, advanced once per tick. `reload` writes
+  the name `Cooldowns.ReloadTimer` ("reload"), `cast` writes the spell's own name (so
+  `put "Fireball" on cooldown for 2` and `cast "Fireball"` are one timer), and `put "<name>" on
+  cooldown` writes whatever it is given; `WeaponClock` and `SpellClock` no longer exist. The table
+  also counts completions as timers expire, which makes `when "<name>" is ready` a one-shot edge the
+  way `when reload completes` always was; `for 0 seconds` clears the timer and records the one
+  completion, so a zero-second reload still completes. Readouts stayed put (`my "<name>" cooldown`,
+  `my <Spell>Cooldown`, `reloading`), so no shipped sheet changed: the runtime never had two clocks
+  ticking different numbers, only two classes over the same idea.
+
 ## 10. The one-paragraph pitch
 
 Event Manager is a text-first game-logic system for non-programmers, inspired by Blender Game

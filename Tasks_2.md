@@ -1854,13 +1854,29 @@ brackets.
       a free spell needing no purse, and a sheet whose `set` / `add` / `deduct` lines hold the
       bounds) -> **2681 passed, 0 failed**; Game module build 0 errors. Word book +
       `keywords.html` rows updated; the `clamp` example no longer teaches a redundant Mana clamp.
-- [ ] **F5 — One timer table + a ready edge (C#, medium) [Part B].** `WeaponClock` has
+- [x] **F5 — One timer table + a ready edge (C#, medium) [Part B].** `WeaponClock` has
       completion edges, `SpellClock` does not, and §Parts proposes `put "<name>" on cooldown for
       <s>` — a second cooldown system over the one that ships. Generalize into a named-timer table
       keyed `(actor, name)` used by `reload`, spells and future buffs; expose
       `when "<spell>" is ready` and keep `my "<spell>" cooldown` as the readout. Done-when: a HUD
       icon flips on the ready edge; `reload` and `cast` share one storage; an existing sheet's
       behaviour is unchanged.
+      *Landed 2026-11-24.* `Cooldowns` is now the only timer table: `put "<name>" on cooldown`,
+      `reload` (under `Cooldowns.ReloadTimer`) and `cast` (under the spell's own name) all start
+      there, `WeaponClock` and `SpellClock` are gone, and `WeaponData.DefaultReload` keeps the
+      fallback the reload warning quotes. `Cooldowns` gained `Completion(actor, name)` — counted in
+      `Tick` as a timer expires — so `when "<name>" is ready` (and the `my "…"` form) is a one-shot
+      edge per expiry, the same shape `when reload completes` always had; `for 0 seconds` clears the
+      timer and counts the single completion it means, which is what keeps a zero-second reload
+      firing its completion. The readouts are unchanged: `my "<name>" cooldown`,
+      `my <Spell>Cooldown`, `reloading` and `when reload completes` all read the shared table.
+      10 new checks (the edge classifies with and without `my`, it does not fire while the timer
+      runs, fires once on expiry and not again, `for 0 seconds` raises it once, the `reload` timer
+      raises it for the word and `my "reload" cooldown` reads the same timer, plus the spell table's
+      per-actor/per-name behaviour and completion counting) -> **2691 passed, 0 failed**; Game module
+      build 0 errors (14 pre-existing doc warnings). Word book + `keywords.html` rows updated.
+      `Keywords.html`'s `when "<name>" is ready` row is the new trigger; the parser accepts the
+      `my` form through one built-in shape rather than a second word-book row.
 - [x] **F6 — Loot tables (C# + data, medium) [E7, Part E].** A weighted table file
       (`Loot.events`) resolved by `spawn item from "Loot" at <spot>` (and `roll "<rarity>" from
       "Loot"`), choosing base + rarity + item level and then calling `ItemGenerator.Roll` — never

@@ -36,6 +36,9 @@ namespace Game
         Hears,
         // Weapons & ammo (Task 16 Part C)
         ReloadComplete,
+        /// <summary><c>when "&lt;name&gt;" is ready</c> (Task 37 F5) — a named timer's expiry edge,
+        /// from the same table <c>reload</c>, <c>cast</c> and <c>put ... on cooldown</c> write.</summary>
+        CooldownReady,
         Equipped,
         Unequipped,
         Dropped,
@@ -227,6 +230,16 @@ namespace Game
             // `when reload completes` — the current weapon's reload timer ran out (Task 16 Part C).
             if (words.Length >= 2 && words[0] == "reload" && words[1] == "completes")
                 return new TriggerDescriptor { Kind = TriggerKind.ReloadComplete };
+            // `when "stim" is ready` (Task 37 F5) — the expiry edge of a named timer, from the
+            // table reload, cast and `put ... on cooldown` share. Sits before the generic
+            // `is <value>` shapes so the quoted name is never read as a variable.
+            if (words.Length >= 3 && words[words.Length - 2] == "is" &&
+                words[words.Length - 1] == "ready" && trigger[words.Length - 3].Type == TokenType.Str)
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.CooldownReady,
+                    RequireName = trigger[words.Length - 3].Text,
+                };
             // `when buff "stim" starts` / `when buff "stim" ends` (Task 27 Part C) — the buff'ed
             // actor's own sheet hears it, with the buff name matched against the signal.
             if (words.Length == 3 && words[0] == "buff" &&

@@ -3578,15 +3578,16 @@ namespace Game
                     : $"I don't know the spell \u201C{named}\u201D. This project has: {known}.");
                 return;
             }
-            double now = context.Runtime != null ? context.Runtime.Time : 0;
-            if (context.Runtime != null && context.Runtime.Spells.IsCooling(me, spell.Name, now))
+            if (context.Runtime != null && !context.Runtime.Cooldowns.Ready(me, spell.Name))
                 return;
             // `my Mana` is the purse (Task 9 E2 writes it), spent through the pool's own bounds
             // (Task 37 F4) so a cast cannot bank past `my MaxMana` or below 0. A sheet that never
             // declared `my Mana` has no purse and simply cannot afford a spell.
             if (!HealthManager.TrySpendMana(variables, me, spell.Mana))
                 return;
-            context.Runtime?.Spells.Start(me, spell.Name, spell.Cooldown, now);
+            // One timer table for reload, spells and abilities (Task 37 F5), so a sheet's
+            // `when "Fireball" is ready` (or `my "Fireball" is ready`) gates this same timer.
+            context.Runtime?.Cooldowns.Start(me, spell.Name, spell.Cooldown);
             if (!string.IsNullOrEmpty(spell.Sound))
                 EmitSound(spell.Sound, me.Position, me);
 
@@ -3987,7 +3988,7 @@ namespace Game
             ClearActor(actor);
             // A destroyed actor takes its spell cooldowns and item roll with it, so a clone born
             // under the same name never inherits a stale timer or someone else's affixes.
-            context.Runtime.Spells.Clear(actor);
+
             // Passing the variables lets a destroyed *worn* item hand back the stats it added;
             // otherwise a destroyed ring would leave a permanent bonus on its wearer.
             context.Runtime.Affixes.Forget(context.Runtime.Variables, actor);

@@ -946,7 +946,8 @@ namespace Game
                     return Math.Abs(held - wanted) < 0.0001;
                 }
                 case ConditionKind.Reloading:
-                    return context.Runtime != null && context.Runtime.Weapons.IsReloading(context.Me, context.Runtime.Time);
+                    return context.Runtime != null &&
+                           context.Runtime.Cooldowns.Remaining(context.Me, Cooldowns.ReloadTimer) > 0;
                 case ConditionKind.Still:
                     return context.Runtime != null && context.Runtime.Wander.IsStill(context.Me);
                 case ConditionKind.ParticlePlaying:
