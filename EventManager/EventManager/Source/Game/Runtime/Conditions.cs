@@ -615,6 +615,18 @@ namespace Game
                 return node;
             }
 
+            // `my game file is "rpg_game"` — the active scene-wide global sheet (Task 23). It is a
+            // project setting stored as a global, so the condition reads the global too.
+            if (texts.Length >= 5 && texts[0] == "my" && texts[1] == "game" && texts[2] == "file" &&
+                texts[3] == "is")
+            {
+                bool gameFileNot = texts.Length >= 6 && texts[4] == "not";
+                node.Kind = gameFileNot ? ConditionKind.NotEqual : ConditionKind.Equal;
+                node.Name = GameFile.Variable;
+                node.Right = ValueFrom(tokens, texts, gameFileNot ? 5 : 4);
+                return node;
+            }
+
             // ---- target-pick mode (Task 27 Part A) ----
             // `my aim is a unit` reads the pick an `aim` left behind; `aim is a unit` is the
             // same line without the owner.

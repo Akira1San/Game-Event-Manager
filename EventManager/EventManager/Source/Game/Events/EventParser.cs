@@ -1030,6 +1030,15 @@ namespace Game
                     index += 3;
                     return new VariableValue { Line = t.Line, Owner = "my", Name = Cooldowns.VariableName(timerName) };
                 }
+                // `my game file` — the active scene-wide global sheet name (Task 23). It is one
+                // project-wide setting, so the read answers the global the bridge keeps in sync.
+                if (index + 2 < words.Count && words[index + 1].Type == TokenType.Word &&
+                    words[index + 2].Type == TokenType.Word &&
+                    words[index + 1].Text == "game" && words[index + 2].Text == "file")
+                {
+                    index += 3;
+                    return new VariableValue { Line = t.Line, Name = GameFile.Variable };
+                }
                 // `my cursor` — the cursor in effect right now (Task 48 Part E). It reads the
                 // global the bridge keeps in sync each frame, so a condition can compare it and
                 // `when my cursor changes` can watch it with the ordinary changes trigger.
@@ -1214,6 +1223,19 @@ namespace Game
         private StatementNode ParseSet(BodyLineNode line)
         {
             var words = line.Words;
+            // `set game file to "<name>"` — the scene-wide global sheet (Task 23): an action word,
+            // not a global variable called "game".
+            if (words.Count >= 3 && words[1].Type == TokenType.Word && words[1].Text == "game" &&
+                words[2].Type == TokenType.Word && words[2].Text == "file")
+            {
+                if (words.Count < 5 || words[3].Type != TokenType.Word || words[3].Text != "to")
+                    throw new ParseException("`set game file` looks like this: `set game file to \"rpg_game\"`", line.Line);
+                var gameFileNode = new SetGameFileNode { Line = line.Line };
+                int gameFileIndex = 4;
+                gameFileNode.Value = ReadValue(words, ref gameFileIndex, line.Line);
+                CheckEndOfLine(words, gameFileIndex, line.Line, "set game file to \"rpg_game\"");
+                return gameFileNode;
+            }
             // `set row <n> of list <thing> to <value>` — a runtime list row (Task 34 Part A),
             // not a global variable called "row".
             if (words.Count >= 2 && words[1].Type == TokenType.Word && words[1].Text == "row")

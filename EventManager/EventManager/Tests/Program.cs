@@ -17000,6 +17000,78 @@ Check(bareEngine.Lists.CountOf("Quests") == 20 &&
       bareEngine.Lists.RowsFor("Quests")[19] == "Quest 20",
     "twenty quests are twenty rows, in order, with no truncation");
 
+// ------------------------------------------------------------------
+// Task 23 (language): a configurable global event file name
+// ------------------------------------------------------------------
+var gameFileParse = parser.Parse("when game starts\n  set game file to \"rpg_game\"\n");
+var gameFileNode = gameFileParse.Events[0].Body[0].Statement as SetGameFileNode;
+Check(gameFileNode != null && gameFileNode.Value is TextValue gameFileValue &&
+      gameFileValue.Text == "rpg_game",
+    "`set game file to \"rpg_game\"` parses as the global-sheet action");
+
+var gameFileReadParse = parser.Parse("when game starts\n  set Shown to my game file\n");
+var gameFileRead = gameFileReadParse.Events[0].Body[0].Statement as SetNode;
+var gameFileReadValue = gameFileRead?.Value as VariableValue;
+Check(gameFileReadValue != null && gameFileReadValue.Owner.Length == 0 &&
+      gameFileReadValue.Name == GameFile.Variable,
+    "`my game file` reads the project-wide GameFile global, not a per-actor variable");
+
+var gameFileVars = new EventVariables();
+CheckStrings(GameFile.Default, GameFile.NameFrom(gameFileVars),
+    "an unset GameFile reads as Game");
+Check(GameFile.IsGlobalSheet("Game", gameFileVars) &&
+      !GameFile.IsGlobalSheet("rpg_game", gameFileVars),
+    "Game.events is the global sheet by default and another name is not");
+gameFileVars.SetGlobal(GameFile.Variable, ValueBox.OfText("rpg_game.events"));
+Check(!GameFile.IsGlobalSheet("Game", gameFileVars) &&
+      GameFile.IsGlobalSheet("rpg_game", gameFileVars) &&
+      GameFile.IsGlobalSheet("RPG_GAME.EVENTS", gameFileVars),
+    "a custom name makes Game.events stop being global, and the .events suffix is optional");
+Check(GameFile.IsGlobalActorName("rpg_game", gameFileVars) &&
+      !GameFile.IsGlobalActorName("Game", gameFileVars) &&
+      !GameFile.IsGlobalActorName("rpg_game 2", gameFileVars),
+    "the spawned-actor skip follows the configured name, not a hardcoded Game");
+CheckStrings(GameFile.Default, new GlobalHost().ToString(),
+    "a bare GlobalHost still reads as Game");
+
+var gameFileEngine = FreshEngine(new FakeWorld());
+var gameFileHost = new GlobalHost(gameFileEngine.Variables);
+gameFileEngine.AddSheet(gameFileHost, parser.Parse(
+    "when game starts\n  set game file to \"rpg_game.events\"\n  set Shown to my game file\n"));
+gameFileEngine.SessionStarted();
+gameFileEngine.Tick(0);
+CheckStrings("rpg_game", gameFileEngine.Variables.GetGlobal(GameFile.Variable).AsText(),
+    "`set game file to \"rpg_game.events\"` stores the bare name");
+CheckStrings("rpg_game", gameFileEngine.Variables.GetGlobal("Shown").AsText(),
+    "`my game file` reads the configured name back in the same tick");
+CheckStrings("rpg_game", gameFileHost.ToString(),
+    "GlobalHost reads the configured name inside the global sheet");
+
+var gameFileDirectEngine = FreshEngine(new FakeWorld());
+gameFileDirectEngine.AddSheet(new GlobalHost(gameFileDirectEngine.Variables), parser.Parse(
+    "when game starts\n  set GameFile to \"rng_game.events\"\n"));
+gameFileDirectEngine.SessionStarted();
+gameFileDirectEngine.Tick(0);
+CheckStrings("rng_game", gameFileDirectEngine.Variables.GetGlobal(GameFile.Variable).AsText(),
+    "writing the GameFile global directly also strips the .events suffix");
+
+var gameFileConditionEngine = FreshEngine(new FakeWorld());
+gameFileConditionEngine.Variables.SetGlobal(GameFile.Variable, ValueBox.OfText("rpg_game"));
+gameFileConditionEngine.AddSheet(new GlobalHost(gameFileConditionEngine.Variables), parser.Parse(
+    "when game starts\n  unless my game file is \"rpg_game\"\n  set Wrong to 1\n  if my game file is \"rpg_game\"\n  set Right to 1\n"));
+gameFileConditionEngine.SessionStarted();
+gameFileConditionEngine.Tick(0);
+Check(!gameFileConditionEngine.Variables.HasGlobal("Wrong") &&
+      gameFileConditionEngine.Variables.GetGlobal("Right").AsNumber() == 1,
+    "`my game file is \"rpg_game\"` is a real condition on the configured name");
+
+var gameFileSheetEngine = FreshEngine(new FakeWorld());
+gameFileSheetEngine.Variables.SetGlobal(GameFile.Variable, ValueBox.OfText("rpg_game"));
+var gameFileNamedHost = new GlobalHost(gameFileSheetEngine.Variables);
+gameFileSheetEngine.AddSheet(gameFileNamedHost, parser.Parse("when every 1 seconds\n  set Ticks to 1\n"));
+Check(gameFileSheetEngine.FindActorSheet("rpg_game") == null,
+    "the global host is never an ordinary actor named after its file");
+
 Console.WriteLine($"{passed} passed, {failed} failed");
 if (failed > 0)
     Environment.Exit(1);

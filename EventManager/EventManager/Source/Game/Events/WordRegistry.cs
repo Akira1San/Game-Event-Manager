@@ -330,6 +330,8 @@ namespace Game
             new WordEntry { Kind = "action", Word = "stop", Example = "stop this event" },
             new WordEntry { Kind = "action", Word = "send", Example = "send message \"die\"" },
             new WordEntry { Kind = "action", Word = "set", Example = "set Score to 0" },
+            new WordEntry { Kind = "action", Word = "set game file to \"<name>\"", Example = "set game file to \"rpg_game\"", AltShape = "names the scene-wide global sheet: the file that runs on every scene and answers `me` · `Game.events` is the default; `rpg_game` loads `rpg_game.events` and the `.events` suffix is optional · put it in a `when game starts` block, then the new sheet is attached with its own start signals · read it back with `my game file`" },
+            new WordEntry { Kind = "value", Word = "my game file", Example = "set text of FileLabel to my game file", AltShape = "the active global sheet's name — `Game` until `set game file to \"rpg_game\"` runs" },
             new WordEntry { Kind = "action", Word = "set <var> to <a> op <b> op <c>", Example = "set my Damage to my Strength * 2 + 5", AltShape = "two or three operators on one line, `* /` before `+ -` · no parentheses, and a fourth operator asks you to split the line" },
             new WordEntry { Kind = "action", Word = "set", Example = "set text of ScoreLabel to Score" },
             new WordEntry { Kind = "action", Word = "set", Example = "set my control group to 1" },

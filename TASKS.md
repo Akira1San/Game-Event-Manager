@@ -1784,7 +1784,7 @@ contact change proves useful.
 
 ---
 
-## Task 23 — Configurable global event file name `[ ]`
+## Task 23 — Configurable global event file name `[x]`
 
 Goal: the global sheet is always `Game.events` today, hardcoded by name. A project that wants its
 global sheet to be `rpg_game.events`, `adventure_game.events` or `rts_game.events` can't — the engine
@@ -1818,16 +1818,16 @@ when state is menu
 
 ### Parts
 
-- [ ] **Part A — Configurable name.** A `GameFile` global (default `"Game"`) read by `EventsManager`
+- [x] **Part A — Configurable name.** A `GameFile` global (default `"Game"`) read by `EventsManager`
       where it currently hardcodes `program.Name == "Game"` to detect the global sheet. `rpg_game`
       maps to `rpg_game.events` (the `.events` suffix is optional on write, required on disk).
-- [ ] **Part B — `GlobalHost` name.** `GlobalHost.ToString()` returns the configured name instead of
+- [x] **Part B — `GlobalHost` name.** `GlobalHost.ToString()` returns the configured name instead of
       hardcoded `"Game"`, so `me` reads as `"rpg_game"` inside the global sheet.
-- [ ] **Part C — Attach spawn skip.** `AttachSpawnedActor` skips an actor named after the configured
+- [x] **Part C — Attach spawn skip.** `AttachSpawnedActor` skips an actor named after the configured
       global file instead of hardcoded `"Game"`.
-- [ ] **Part D — Registry, keywords.html, DESIGN.md.** Document the `game file` value and the
+- [x] **Part D — Registry, keywords.html, DESIGN.md.** Document the `game file` value and the
       `set game file to` action; record the default and how to override.
-- [ ] **Part E — Tests.** `Game.events` default still attaches to GlobalHost; a custom name
+- [x] **Part E — Tests.** `Game.events` default still attaches to GlobalHost; a custom name
       (`rpg_game`) attaches to GlobalHost; `Game.events` with no custom name is *not* treated as
       global when a custom name is set; `my game file` reads the configured value; GlobalHost `ToString`
       matches the configured name.
@@ -1837,6 +1837,11 @@ when state is menu
 - `set game file to "rpg_game"` makes `rpg_game.events` the global sheet (attached to `me = "rpg_game"`).
 - `Game.events` is still the default global sheet when nothing is set.
 - A custom name works end-to-end: globals, `me`, and spawn-skip all use the configured name.
+
+**Landed 2026-11-24.** `Runtime/GameFile.cs` holds the name rules (`Normalize` drops `.events`, blank
+falls back to `Game`), `GlobalHost` answers `ToString()` with the configured name, and `EventsManager`
+swaps the attached global sheet in `SyncGlobalSheet()` after the tick so the newly attached file still
+receives `GameStart`/`SceneStart`. 12 new checks; **2716 passed, 0 failed**; editor build 0 errors.
 
 ---
 

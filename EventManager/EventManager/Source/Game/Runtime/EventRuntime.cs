@@ -4,12 +4,28 @@ using System.Linq;
 
 namespace Game
 {
-    /// <summary>Body for the global Game.events sheet — no actor, but `me` reads as "Game".</summary>
+    /// <summary>
+    /// Body for the scene-wide global sheet — no actor, but <c>me</c> reads as that file's name.
+    /// The name is read live from the <c>GameFile</c> global (Task 23), so it follows
+    /// <c>set game file to "rpg_game"</c>; a host built without variables answers the default
+    /// <c>Game</c>.
+    /// </summary>
     public class GlobalHost
     {
+        private readonly EventVariables _variables;
+
+        public GlobalHost()
+        {
+        }
+
+        public GlobalHost(EventVariables variables)
+        {
+            _variables = variables;
+        }
+
         public override string ToString()
         {
-            return "Game";
+            return GameFile.NameFrom(_variables);
         }
     }
 
@@ -1189,7 +1205,7 @@ namespace Game
         public SheetInstance FindActorSheet(string name)
         {
             foreach (var sheet in sheets)
-                if (name != "Game" && sheet.ActorName == name)
+                if (!(sheet.Actor is GlobalHost) && sheet.ActorName == name)
                     return sheet;
             return null;
         }
@@ -2554,6 +2570,10 @@ namespace Game
                 {
                     ExecuteCursor(cursor);
                 }
+                else if (statement is SetGameFileNode setGameFile)
+                {
+                    ExecuteSetGameFile(context, setGameFile);
+                }
                 else if (statement is SetNode set)
                 {
                     ExecuteSet(context, set);
@@ -3231,8 +3251,22 @@ namespace Game
                 if (AttackTypes.IsVariableName(set.Target.Name) && !AttackTypes.IsKnown(value.AsText()))
                     OnRuntimeWarning($"I don't know the attack type \u201C{value.AsText()}\u201D \u2014 attacks are {AttackTypes.KnownNames()}, and a sheet that writes none counts as {AttackTypes.Default}.");
             }
+            else if (set.Target.Owner.Length == 0 && GameFile.IsVariableName(set.Target.Name))
+                context.WriteGlobal(GameFile.Variable, ValueBox.OfText(GameFile.Normalize(value.AsText())));
             else
                 context.WriteGlobal(set.Target.Name, value);
+        }
+
+        /// <summary>
+        /// <c>set game file to "&lt;name&gt;"</c> (Task 23): records which <c>.events</c> file is the
+        /// scene-wide global sheet. The suffix is optional, so a sheet may write the file name it
+        /// sees on disk. The bridge notices the change after the tick and attaches that file to the
+        /// global host, giving it the scene's start signals so its own setup still runs.
+        /// </summary>
+        private static void ExecuteSetGameFile(EventContext context, SetGameFileNode node)
+        {
+            string name = GameFile.Normalize(context.Evaluate(node.Value).AsText());
+            context.WriteGlobal(GameFile.Variable, ValueBox.OfText(name));
         }
 
         /// <summary>

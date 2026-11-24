@@ -44,6 +44,16 @@ namespace Game
         public ValueNode Right;
     }
 
+    /// <summary>
+    /// <c>set game file to "&lt;name&gt;"</c> — names the scene-wide global sheet (Task 23). The
+    /// value is stored in the <c>GameFile</c> global with its optional <c>.events</c> suffix
+    /// stripped, so <c>rpg_game</c> and <c>rpg_game.events</c> are the same sheet.
+    /// </summary>
+    public class SetGameFileNode : StatementNode
+    {
+        public ValueNode Value = new TextValue();
+    }
+
     public class AddNode : StatementNode
     {
         public ValueNode Amount = new NumberValue();

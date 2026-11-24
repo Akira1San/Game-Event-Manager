@@ -34,6 +34,8 @@ namespace Game
         private readonly List<EventSheet> _components = new List<EventSheet>();
         private List<EventFileResult> _programs = new List<EventFileResult>();
         private bool _booted;
+        /// <summary>The global-sheet name the runtime currently has attached (Task 23).</summary>
+        private string _globalFileAttached = "";
         /// <summary>True once <c>when game starts</c> has fired this play session, so it runs
         /// only in the very first scene; <c>when scene starts</c> fires on every scene load.</summary>
         private static bool _sessionBegan;
@@ -292,6 +294,10 @@ namespace Game
             Upgrades.LoadData(ProgramNamed(Upgrades.FileName)?.File);
             RememberSignatures(programs);
             SweepComponents();
+            // The global sheet's name is a project setting (Task 23): `GameFile` starts as Game,
+            // and a sheet may change it with `set game file to "rpg_game"`.
+            if (!Runtime.Variables.HasGlobal(GameFile.Variable))
+                Runtime.Variables.SetGlobal(GameFile.Variable, ValueBox.OfText(GameFile.Default));
             AttachPrograms(programs, startedNow: true);
             _booted = true;
             Level.ActorDeleted += ActorGoneAway;
@@ -417,9 +423,15 @@ namespace Game
                     ShowFileError(program, startedNow);
                     continue;
                 }
-                if (program.Name == "Game" && !HasGlobalSheet())
-                    Runtime.AddSheet(new GlobalHost(), program.File);
+                if (GameFile.IsGlobalSheet(program.Name, Runtime.Variables) && !HasGlobalSheet())
+                    Runtime.AddSheet(new GlobalHost(Runtime.Variables), program.File, program.Name);
             }
+            // Track which name the runtime now has: an existing sheet with a different name is
+            // swapped after the tick (see SyncGlobalSheet), not re-attached on every reload.
+            string wantedGlobal = GameFile.NameFrom(Runtime.Variables);
+            SheetInstance globalSheet = GlobalSheet();
+            if (globalSheet == null || GameFile.IsGlobalSheet(globalSheet.SourceName, Runtime.Variables))
+                _globalFileAttached = wantedGlobal;
             // Explicit components win: every registered EventSheet points at its file.
             foreach (EventSheet component in _components)
                 TryAttachComponent(component);
@@ -555,7 +567,7 @@ namespace Game
         /// so component-first wins; name fallback otherwise.</summary>
         public void AttachSpawnedActor(Actor actor)
         {
-            if (actor == null || actor.Name == "Game")
+            if (actor == null || GameFile.IsGlobalActorName(actor.Name, Runtime.Variables))
                 return;
             if (Runtime.FindSheetFor(actor) != null)
                 return;
@@ -649,10 +661,48 @@ namespace Game
 
         private bool HasGlobalSheet()
         {
+            return GlobalSheet() != null;
+        }
+
+        /// <summary>The sheet standing in for the scene-wide host, or null (Task 23).</summary>
+        private SheetInstance GlobalSheet()
+        {
             foreach (SheetInstance sheet in Runtime.Sheets)
                 if (sheet.Actor is GlobalHost)
-                    return true;
-            return false;
+                    return sheet;
+            return null;
+        }
+
+        /// <summary>
+        /// Applies a <c>set game file to "&lt;name&gt;"</c> that ran this tick (Task 23): detaches the
+        /// old global sheet, attaches the configured file and gives it the scene's start signals,
+        /// so its own <c>when game starts</c> / <c>when scene starts</c> setup still runs. Runs
+        /// after the tick so a sheet is never removed from under the event that is executing.
+        /// </summary>
+        private void SyncGlobalSheet()
+        {
+            string wanted = GameFile.NameFrom(Runtime.Variables);
+            if (string.Equals(wanted, _globalFileAttached, StringComparison.OrdinalIgnoreCase))
+                return;
+            for (int i = Runtime.Sheets.Count - 1; i >= 0; i--)
+                if (Runtime.Sheets[i].Actor is GlobalHost)
+                    Runtime.RemoveSheet(Runtime.Sheets[i]);
+            _globalFileAttached = wanted;
+            EventFileResult program = ProgramNamed(wanted);
+            if (program == null)
+            {
+                Debug.LogWarning($"Event sheet: `set game file` names \"{wanted}.events\", but no such file exists in the GameFiles folder. The scene runs without a global sheet until it does.");
+                return;
+            }
+            if (!string.IsNullOrEmpty(program.Error))
+            {
+                ShowFileError(program, startedNow: false);
+                return;
+            }
+            SheetInstance sheet = Runtime.AddSheet(new GlobalHost(Runtime.Variables), program.File, program.Name);
+            if (_sessionBegan)
+                sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.GameStart });
+            sheet.PushQueue.Enqueue(new PushSignal { Kind = TriggerKind.SceneStart });
         }
 
         private void CancelOneTime(string message)
@@ -753,6 +803,9 @@ namespace Game
             // the draw modes need the refreshed grid after the tick (Task 18 Part F).
             UpdateFogActors();
             Runtime.Tick(Time.GameTime);
+            // A `set game file to "<name>"` this tick swaps the global sheet (Task 23). It runs
+            // after the tick so the sheet that wrote it finishes its block first.
+            SyncGlobalSheet();
             // Cursor art is scene content (Task 48 Part C): rescan after the tick so a sheet that
             // changed `my Cursor fps` this frame is seen by the next scan, which the view draws.
             Cursors.Update(Runtime.Variables, Time.GameTime);

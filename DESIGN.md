@@ -156,6 +156,14 @@ An `.events` file reaches an actor one of two ways — **explicit first, name fa
   Put the one manager on a **permanent scene-root actor** — never on an actor the game
   hides or spawns: `IsActive = false` (from `hide me`) also disables the manager's
   `OnUpdate`, so pending waits could never resume.
+  The file may carry any name (Task 23): a bootstrap `Game.events` with
+  `when game starts` → `set game file to "rpg_game"` hands the scene over to
+  `rpg_game.events` (the `.events` suffix is optional on write). The bridge detaches the old
+  global sheet after the tick and attaches the named file with its own `when game starts` /
+  `when scene starts` signals, so its setup runs; inside it `me` reads `rpg_game`, and a
+  spawned actor named `rpg_game` is skipped. `Game` stays the default when nothing is set,
+  `my game file` reads the active name, and a missing file warns and leaves the scene
+  without a global sheet until it appears.
 - **Reuse across files: `include "<file>"`.** A sheet can pull another GameFiles `.events` file
   in whole, at the line where the include sits: `include "FPS_Controls"` (quotes, bare name and a
   trailing `.events` all read the same). That is how the first-person input wiring is written once

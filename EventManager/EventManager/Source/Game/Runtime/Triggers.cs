@@ -930,6 +930,12 @@ namespace Game
                 from = 1;
             }
             string name = Join(trigger, from, until);
+            // `when my game file changes` watches the project setting, which is a global (Task 23).
+            if (descriptor.WatchOwner == "my" && string.Equals(name, "game file", StringComparison.OrdinalIgnoreCase))
+            {
+                descriptor.WatchOwner = "";
+                name = GameFile.Variable;
+            }
             descriptor.WatchName = descriptor.WatchOwner.Length == 0
                 ? ResourceManager.CanonicalOrName(name)
                 : name;
