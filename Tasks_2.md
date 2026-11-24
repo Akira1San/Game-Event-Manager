@@ -1835,12 +1835,25 @@ brackets.
       rows updated. Actions that take a distance (`select units near me by …`) stay literal —
       they read the number at parse time, not per run, which is a separate slice if a command
       card ever needs it.
-- [ ] **F4 — Mana bounds in the engine (C#, small) [E2, E3].** Health already clamps through
+- [x] **F4 — Mana bounds in the engine (C#, small) [E2, E3].** Health already clamps through
       `HealthManager.Add` (`0..MaxHealth`, armor/shield first); do the same for `Mana`/
       `MaxMana` so E2's potion and regen do not need a three-line `if` dance (there is no `min()`),
       and `cast`'s manual clamp becomes the same rule instead of a special case. Done-when: a potion
       fills to the cap and never past it; regen stops at `MaxMana`; the E3 cast spends through the
       same path.
+      *Landed 2026-11-24.* `Mana` / `MaxMana` are `HealthManager` stats, so `set` / `add` /
+      `deduct my Mana` clamp to `0..MaxMana` as soon as a sheet declares either variable, and
+      lowering `MaxMana` pulls the pool down with it — the potion and regen are now plain `add`
+      lines, no `clamp` needed. No armor or shield sits in front of a pool. New
+      `HealthManager.TrySpendMana(variables, actor, cost)` is the one spend path: false for a
+      sheet that never declared `my Mana` or holds too little, otherwise the subtraction goes
+      through `Add`; `FlaxActions.CastSpell` calls it, so the E3 `Math.Max(0, mana - cost)` special
+      case is gone. 10 new checks (potion caps at 100, regen at the cap, a 30 spend, a short purse
+      refusing with nothing spent, `add -80` and a further spend both stopping at 0, lowering
+      `MaxMana` to 25 pulling Mana to 25, a no-purse actor refused and left without the variable,
+      a free spell needing no purse, and a sheet whose `set` / `add` / `deduct` lines hold the
+      bounds) -> **2681 passed, 0 failed**; Game module build 0 errors. Word book +
+      `keywords.html` rows updated; the `clamp` example no longer teaches a redundant Mana clamp.
 - [ ] **F5 — One timer table + a ready edge (C#, medium) [Part B].** `WeaponClock` has
       completion edges, `SpellClock` does not, and §Parts proposes `put "<name>" on cooldown for
       <s>` — a second cooldown system over the one that ships. Generalize into a named-timer table

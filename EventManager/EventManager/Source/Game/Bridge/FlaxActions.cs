@@ -3556,8 +3556,9 @@ namespace Game
         /// action word of the spell system.
         ///
         /// Refuses quietly while the spell's cooldown is live or `my Mana` is short — a shortage
-        /// is normal play, not an error. A successful cast spends the mana (clamped at 0 here,
-        /// because the language has no `min()`), starts the cooldown, plays the spell's sound and
+        /// is normal play, not an error. A successful cast spends the mana through
+        /// <see cref="HealthManager.TrySpendMana"/> (the same 0..MaxMana pool every other write
+        /// uses), starts the cooldown, plays the spell's sound and
         /// then either clones the spell's bullet with its stats stamped on it, or — for a spell
         /// with no bullet — sends the message <c>"cast &lt;Spell&gt;"</c> so events decide what
         /// happens (a heal, a buff, a teleport).
@@ -3580,12 +3581,11 @@ namespace Game
             double now = context.Runtime != null ? context.Runtime.Time : 0;
             if (context.Runtime != null && context.Runtime.Spells.IsCooling(me, spell.Name, now))
                 return;
-            // `my Mana` is the purse (Task 9 E2 writes it). Read it without the "never set"
-            // warning: a sheet that has not added the mana block yet simply cannot afford a spell.
-            double mana = variables != null && variables.HasLocal(me, "Mana") ? context.ReadMy("Mana").AsNumber() : 0;
-            if (mana < spell.Mana)
+            // `my Mana` is the purse (Task 9 E2 writes it), spent through the pool's own bounds
+            // (Task 37 F4) so a cast cannot bank past `my MaxMana` or below 0. A sheet that never
+            // declared `my Mana` has no purse and simply cannot afford a spell.
+            if (!HealthManager.TrySpendMana(variables, me, spell.Mana))
                 return;
-            context.WriteMy("Mana", ValueBox.OfNumber(Math.Max(0, mana - spell.Mana)));
             context.Runtime?.Spells.Start(me, spell.Name, spell.Cooldown, now);
             if (!string.IsNullOrEmpty(spell.Sound))
                 EmitSound(spell.Sound, me.Position, me);

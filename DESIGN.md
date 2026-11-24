@@ -1633,6 +1633,16 @@ window around a broken runtime.
   (sight unlimited, hearing 0, near never), and a global that was never set reads 0. Distances
   inside *action* words (`select units near me by …`) are still literal numbers, read at parse time.
 
+- **Mana is a pool with the same bounds as Health (Task 37 F4):** `my Mana` / `my MaxMana` are
+  `HealthManager` stats, so `set` / `add` / `deduct` clamp to `0..MaxMana` the moment a sheet
+  declares either variable, `MaxMana` applies its ceiling (and pulls the pool down when it
+  shrinks), and an item's `MaxMana` affix raises the cap the same way `MaxHealth` does. No armor or
+  shield sits in front of it — it is a purse, not a body. `cast` spends through
+  `HealthManager.TrySpendMana`, so E3's manual `Math.Max(0, mana - cost)` is gone and a short (or
+  never-declared) purse refuses the cast without writing anything. A sheet that writes neither
+  variable keeps the old plain arithmetic, exactly like the untracked health path, so existing
+  sheets are unchanged.
+
 ## 10. The one-paragraph pitch
 
 Event Manager is a text-first game-logic system for non-programmers, inspired by Blender Game

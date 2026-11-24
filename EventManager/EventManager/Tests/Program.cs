@@ -9533,6 +9533,61 @@ HealthManager.Add(legacyState, legacyUnit, "health", -1);
 Check(HealthManager.Read(legacyState, legacyUnit, "health") == -1,
       "an actor with no health variables keeps the plain arithmetic");
 
+// Mana is a pool with the same bounds (Task 37 F4): a potion fills to the cap, regen stops
+// there, and a spend never goes below 0 whatever the sheet's arithmetic says.
+var manaState = new EventVariables();
+var casterUnit = new FakeActor("Caster");
+HealthManager.Set(manaState, casterUnit, "MaxMana", 100);
+HealthManager.Set(manaState, casterUnit, "Mana", 40);
+HealthManager.Add(manaState, casterUnit, "Mana", 90);
+Check(HealthManager.Read(manaState, casterUnit, HealthManager.Mana) == 100,
+      "a potion fills Mana to MaxMana and never past it (40 + 90 -> 100)");
+HealthManager.Add(manaState, casterUnit, "Mana", 5);
+Check(HealthManager.Read(manaState, casterUnit, HealthManager.Mana) == 100,
+      "regen at the cap leaves Mana at MaxMana");
+Check(HealthManager.TrySpendMana(manaState, casterUnit, 30) &&
+      HealthManager.Read(manaState, casterUnit, HealthManager.Mana) == 70,
+      "a cast spends 30 through the pool (100 -> 70)");
+Check(!HealthManager.TrySpendMana(manaState, casterUnit, 500) &&
+      HealthManager.Read(manaState, casterUnit, HealthManager.Mana) == 70,
+      "a short purse refuses the cast and spends nothing");
+HealthManager.Add(manaState, casterUnit, "Mana", -80);
+Check(HealthManager.Read(manaState, casterUnit, HealthManager.Mana) == 0,
+      "`add -80 to Mana` clamps at 0 instead of going negative");
+HealthManager.Add(manaState, casterUnit, "Mana", -10);
+Check(HealthManager.Read(manaState, casterUnit, HealthManager.Mana) == 0,
+      "spending an already empty pool stops at 0");
+HealthManager.Set(manaState, casterUnit, "Mana", 60);
+HealthManager.Set(manaState, casterUnit, "MaxMana", 25);
+Check(HealthManager.Read(manaState, casterUnit, HealthManager.Mana) == 25,
+      "lowering MaxMana pulls the current Mana down with it");
+var noPurse = new FakeActor("Commoner");
+Check(!HealthManager.TrySpendMana(manaState, noPurse, 10) &&
+      !manaState.HasLocal(noPurse, "Mana"),
+      "an actor with no `my Mana` has no purse: the cast is refused and nothing is written");
+Check(HealthManager.TrySpendMana(manaState, noPurse, 0),
+      "a free spell needs no purse");
+
+// Runtime: the statements themselves route to the pool, so a sheet needs no `clamp` dance.
+var manaEngine = FreshEngine(new FakeWorld());
+var manaMage = new FakeActor("Mage");
+manaEngine.AddSheet(manaMage, parser.Parse(@"when me appears
+  set my MaxMana to 50
+  set my Mana to 45
+  set Filled to my Mana
+  add 20 to my Mana
+  set Capped to my Mana
+  set my Mana to 999
+  set Overfilled to my Mana
+  deduct 80 from my Mana
+  set Emptied to my Mana"));
+manaEngine.Tick(0);
+Check(manaEngine.Variables.GetGlobal("Filled").AsNumber() == 45 &&
+      manaEngine.Variables.GetGlobal("Capped").AsNumber() == 50 &&
+      manaEngine.Variables.GetGlobal("Overfilled").AsNumber() == 50 &&
+      manaEngine.Variables.GetGlobal("Emptied").AsNumber() == 0,
+      "`set` / `add` / `deduct` on `my Mana` hold the 0..MaxMana bounds (45, potion 50, 999 -> 50, spend -> 0)");
+
 // Runtime: a `damage 25` message hands its number to the sheet and damage clamps at 0.
 var healthEngine = FreshEngine(new FakeWorld());
 var soldier = new FakeActor("Marine");

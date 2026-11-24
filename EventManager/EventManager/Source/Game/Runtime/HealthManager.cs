@@ -30,6 +30,10 @@ namespace Game
     /// <c>when my Health becomes 0</c> fires exactly once.</item>
     /// <item><c>add &lt;n&gt; to Health</c> heals, clamped at MaxHealth.</item>
     /// </list>
+    /// <c>my Mana</c> / <c>my MaxMana</c> are the same kind of stat (Task 37 F4), minus the body:
+    /// a write clamps to 0..MaxMana, <c>MaxMana</c> applies its ceiling, and
+    /// <see cref="TrySpendMana"/> is what <c>cast</c> spends through. No armor or shield sits in
+    /// front of a pool — it is a purse, not a body.
     /// An actor whose sheet never set any of these keeps the historical behaviour (plain
     /// arithmetic, no clamping, no warnings), so existing .events files are unchanged.
     /// </summary>
@@ -40,6 +44,8 @@ namespace Game
         public const string Shield = "Shield";
         public const string MaxShield = "MaxShield";
         public const string Armor = "Armor";
+        public const string Mana = "Mana";
+        public const string MaxMana = "MaxMana";
 
         /// <summary>Where a <c>when message "damage &lt;amount&gt;" arrives</c> pattern drops
         /// the number it captured, so a sheet can react to the size of the hit.</summary>
@@ -59,6 +65,8 @@ namespace Game
             Add(map, Shield, "Shield", "Shields");
             Add(map, MaxShield, "MaxShield", "Max Shield", "Max Shields");
             Add(map, Armor, "Armor", "Armour");
+            Add(map, Mana, "Mana", "MP", "Mana Points", "ManaPoints");
+            Add(map, MaxMana, "MaxMana", "Max Mana", "Max MP", "MaxMP", "Max Mana Points");
             return map;
         }
 
@@ -84,6 +92,12 @@ namespace Game
                     "MaxShield", "maxshield", "Max Shield", "max shield", "Max Shields", "max shields",
                 },
                 [Armor] = new[] { "Armor", "armor", "Armour", "armour" },
+                [Mana] = new[] { "Mana", "mana", "MP", "mp", "Mana Points", "mana points" },
+                [MaxMana] = new[]
+                {
+                    "MaxMana", "maxmana", "Max Mana", "max mana",
+                    "MaxMP", "maxmp", "Max MP", "max mp", "Max Mana Points", "max mana points",
+                },
             };
         }
 
@@ -151,6 +165,15 @@ namespace Game
                     variables.SetLocal(actor, shieldName, ValueBox.OfNumber(ceiling));
                 return;
             }
+            if (stat == MaxMana)
+            {
+                double ceiling = Math.Max(0, value);
+                Write(variables, actor, stat, name, ceiling);
+                string manaName = ExistingName(variables, actor, Mana, name);
+                if (TryReadLocal(variables, actor, manaName, out ValueBox mana) && mana.AsNumber() > ceiling)
+                    variables.SetLocal(actor, manaName, ValueBox.OfNumber(ceiling));
+                return;
+            }
 
             if (!IsTracked(variables, actor, stat))
             {
@@ -162,6 +185,7 @@ namespace Game
 
             double upper = stat == Health ? MaxOf(variables, actor, MaxHealth)
                          : stat == Shield ? MaxOf(variables, actor, MaxShield)
+                         : stat == Mana ? MaxOf(variables, actor, MaxMana)
                          : double.MaxValue;
             double clamped = Math.Max(0, upper == double.MaxValue ? value : Math.Min(value, upper));
             Write(variables, actor, stat, name, clamped);
@@ -182,7 +206,7 @@ namespace Game
                 variables.SetLocal(actor, name, ValueBox.OfNumber(legacy + delta));
                 return;
             }
-            if (stat == MaxHealth || stat == MaxShield)
+            if (stat == MaxHealth || stat == MaxShield || stat == MaxMana)
             {
                 // `add 20 to MaxHealth` raises the ceiling and keeps the current value below it.
                 Set(variables, actor, name, Read(variables, actor, stat) + delta);
@@ -257,7 +281,29 @@ namespace Game
                 return true;
             if (stat == Shield && HasAny(variables, actor, Candidate(MaxShield)))
                 return true;
+            if (stat == Mana && HasAny(variables, actor, Candidate(MaxMana)))
+                return true;
             return false;
+        }
+
+        /// <summary>
+        /// Spends from an actor's own mana pool: false when the actor never declared
+        /// <c>my Mana</c> (no purse, so nothing to spend) or holds less than
+        /// <paramref name="cost" />. A successful spend goes through
+        /// <see cref="Add(EventVariables, object, string, double)"/>, so it keeps
+        /// the same 0..MaxMana bounds as every other write. A zero cost spends nothing and
+        /// succeeds.
+        /// </summary>
+        public static bool TrySpendMana(EventVariables variables, object actor, double cost)
+        {
+            if (cost <= 0)
+                return true;
+            if (variables == null || actor == null || !HasAny(variables, actor, Candidate(Mana)))
+                return false;
+            if (Read(variables, actor, Mana) < cost)
+                return false;
+            Add(variables, actor, Mana, -cost);
+            return true;
         }
 
         private static double MaxOf(EventVariables variables, object actor, string stat)
