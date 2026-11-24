@@ -94,6 +94,17 @@ namespace Game
         }
 
         /// <summary>
+        /// The countdown a HUD shows for a timer (Task 37 F7): whole seconds, rounded up, 0 when
+        /// ready. `bind CooldownLabel to my "Fireball" cooldown` expands to a `when ... changes`
+        /// watch, so a sub-second value would repaint the label every frame; whole seconds repaint
+        /// it once per second. <see cref="Remaining"/> keeps the exact number for code.
+        /// </summary>
+        public static double DisplaySeconds(double remaining)
+        {
+            return remaining > 0 ? Math.Ceiling(remaining) : 0;
+        }
+
+        /// <summary>
         /// How many times a named timer has run out on an actor, counting one the first time it is
         /// asked after the expiry. Comparing that count against the one a sheet saw last makes
         /// `when "&lt;name&gt;" is ready` a one-shot edge, the same way the old weapon clock made

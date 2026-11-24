@@ -3555,8 +3555,10 @@ namespace Game
         /// <c>cast "&lt;spell&gt;"</c> / <c>cast "&lt;spell&gt;" at &lt;thing&gt;</c> (Task 9 E3): the one
         /// action word of the spell system.
         ///
-        /// Refuses quietly while the spell's cooldown is live or `my Mana` is short — a shortage
-        /// is normal play, not an error. A successful cast spends the mana through
+        /// Refuses while the spell's cooldown is live or `my Mana` is short — a shortage is normal
+        /// play, not an error — and tells the caster's own sheet with
+        /// `when cast fails "&lt;spell&gt;"` (Task 37 F7), so a HUD can flash the slot. A successful cast
+        /// spends the mana through
         /// <see cref="HealthManager.TrySpendMana"/> (the same 0..MaxMana pool every other write
         /// uses), starts the cooldown, plays the spell's sound and
         /// then either clones the spell's bullet with its stats stamped on it, or — for a spell
@@ -3579,12 +3581,20 @@ namespace Game
                 return;
             }
             if (context.Runtime != null && !context.Runtime.Cooldowns.Ready(me, spell.Name))
+            {
+                // A refusal is normal play, so nothing is printed — the caster's own sheet can still
+                // flash the slot through `when cast fails "<spell>"` (Task 37 F7).
+                CastFeedback.RaiseFailed(context.Runtime, me, spell.Name);
                 return;
+            }
             // `my Mana` is the purse (Task 9 E2 writes it), spent through the pool's own bounds
             // (Task 37 F4) so a cast cannot bank past `my MaxMana` or below 0. A sheet that never
             // declared `my Mana` has no purse and simply cannot afford a spell.
             if (!HealthManager.TrySpendMana(variables, me, spell.Mana))
+            {
+                CastFeedback.RaiseFailed(context.Runtime, me, spell.Name);
                 return;
+            }
             // One timer table for reload, spells and abilities (Task 37 F5), so a sheet's
             // `when "Fireball" is ready` (or `my "Fireball" is ready`) gates this same timer.
             context.Runtime?.Cooldowns.Start(me, spell.Name, spell.Cooldown);

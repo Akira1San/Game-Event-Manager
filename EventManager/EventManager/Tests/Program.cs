@@ -8466,6 +8466,68 @@ Check(cancelTimers.Ready(cancelledActor, Cooldowns.ReloadTimer) &&
       cancelTimers.Completion(cancelledActor, Cooldowns.ReloadTimer) == 0,
     "switching weapons cancels a reload without completing it");
 
+// ------------------------------------------------------------------
+// Task 37 F7: cast feedback + a cooldown label that repaints once a second
+// ------------------------------------------------------------------
+
+// `when cast fails "<spell>"` is a trigger of its own, in the quoted and `my` forms.
+var castFailDesc = TriggerClassifier.Classify(
+    parser.Parse("when cast fails \"Fireball\"\n  set Failed to 1\n").Events[0]);
+Check(castFailDesc.Kind == TriggerKind.CastFailed && castFailDesc.RequireName == "Fireball",
+    "`when cast fails \"Fireball\"` classifies to the cast-failure trigger");
+var myCastFailDesc = TriggerClassifier.Classify(
+    parser.Parse("when my cast fails \"Heal\"\n  set Failed to 1\n").Events[0]);
+Check(myCastFailDesc.Kind == TriggerKind.CastFailed && myCastFailDesc.RequireName == "Heal",
+    "`when my cast fails \"Heal\"` reads the same refusal on the caster's own sheet");
+
+// A refusal reaches the caster's sheet once per refused press, and only for that spell.
+var feedbackWorld = new FakeWorld();
+var feedbackEngine = FreshEngine(feedbackWorld);
+var feedbackCaster = new FakeActor("Mage");
+feedbackEngine.AddSheet(feedbackCaster, parser.Parse(@"
+when me appears
+  set Mana to 30
+when cast fails ""Fireball""
+  add 1 to my Failures
+"));
+feedbackEngine.Tick(0);
+CastFeedback.RaiseFailed(feedbackEngine, feedbackCaster, "fireball");
+feedbackEngine.Tick(0.1);
+Check(feedbackEngine.Variables.GetLocal(feedbackCaster, "Failures").AsNumber() == 1,
+    "a refused cast reaches the caster's sheet, whichever way the spell name is cased");
+feedbackEngine.Tick(0.2);
+Check(feedbackEngine.Variables.GetLocal(feedbackCaster, "Failures").AsNumber() == 1,
+    "one refused press fires its feedback once, not on later ticks");
+CastFeedback.RaiseFailed(feedbackEngine, feedbackCaster, "Heal");
+feedbackEngine.Tick(0.3);
+Check(feedbackEngine.Variables.GetLocal(feedbackCaster, "Failures").AsNumber() == 1,
+    "`when cast fails \"Fireball\"` ignores another spell's refusal");
+
+// The HUD half: a bound cooldown label repaints once a second instead of every frame.
+var hudWorld = new FakeWorld();
+var hudEngine = FreshEngine(hudWorld);
+var hudActor = new FakeActor("Hud");
+var hudLabels = new List<string>();
+hudEngine.OnSetText = (context, thing, value, reveal) => hudLabels.Add(value.AsText());
+hudEngine.AddSheet(hudActor, parser.Parse(@"
+when me appears
+  set Mana to 30
+bind CooldownLabel to my ""Fireball"" cooldown
+"));
+hudEngine.Tick(0);
+hudEngine.Cooldowns.Start(hudActor, "Fireball", 2.5);
+for (int hudFrame = 1; hudFrame <= 60; hudFrame++)
+    hudEngine.Tick(0.1 * hudFrame);
+Check(hudLabels.Count > 0 && hudLabels.Count <= 4,
+    $"a bound cooldown label repaints about once a second, not every frame (got {hudLabels.Count} writes in 6 s)");
+Check(hudLabels.Count > 0 && hudLabels[0] == "3" && hudLabels[hudLabels.Count - 1] == "0",
+    "the bound label counts whole seconds down to 0");
+hudEngine.Cooldowns.Start(hudActor, "Fireball", 1.2);
+var hudContext = new EventContext { Runtime = hudEngine, Variables = hudEngine.Variables, Me = hudActor };
+Check(hudContext.ReadMy("cooldown fireball").AsNumber() == 2 &&
+      Math.Abs(hudEngine.Cooldowns.Remaining(hudActor, "Fireball") - 1.2) < 1e-9,
+    "the readout counts whole seconds while `Cooldowns.Remaining` keeps the exact number");
+
 // Ammo can be set outright, and never runs below zero.
 var emptyWorld = new FakeWorld();
 var emptyGunEngine = FreshEngine(emptyWorld);
@@ -10659,8 +10721,9 @@ spellEngine.AddSheet(spellMage, spellParser.Parse("when game starts\n  set Mana 
 spellEngine.Tick(0);
 spellEngine.Cooldowns.Start(spellMage, "Fireball", 1.2);
 var spellContext = new EventContext { Runtime = spellEngine, Variables = spellEngine.Variables, Me = spellMage };
-Check(Math.Abs(spellContext.ReadMy("FireballCooldown").AsNumber() - 1.2) < 1e-9,
-    "`my FireballCooldown` reads the live seconds left");
+Check(spellContext.ReadMy("FireballCooldown").AsNumber() == 2 &&
+      Math.Abs(spellEngine.Cooldowns.Remaining(spellMage, "Fireball") - 1.2) < 1e-9,
+    "`my FireballCooldown` reads the countdown rounded up to whole seconds (Task 37 F7)");
 Check(!spellEngine.Variables.HasLocal(spellMage, "FireballCooldown"),
     "the cooldown readout is computed, not a mirrored variable");
 

@@ -39,6 +39,10 @@ namespace Game
         /// <summary><c>when "&lt;name&gt;" is ready</c> (Task 37 F5) — a named timer's expiry edge,
         /// from the same table <c>reload</c>, <c>cast</c> and <c>put ... on cooldown</c> write.</summary>
         CooldownReady,
+        /// <summary><c>when cast fails "&lt;spell&gt;"</c> (Task 37 F7) — the caster's own sheet
+        /// hears every <c>cast</c> the engine refused (cooldown live or purse short), so a HUD can
+        /// flash the slot instead of leaving the press silent.</summary>
+        CastFailed,
         Equipped,
         Unequipped,
         Dropped,
@@ -239,6 +243,23 @@ namespace Game
                 {
                     Kind = TriggerKind.CooldownReady,
                     RequireName = trigger[words.Length - 3].Text,
+                };
+            // `when cast fails "Fireball"` / `when my cast fails "Fireball"` (Task 37 F7) — the
+            // caster's own sheet hears a `cast` the engine refused. Sits before the generic shapes
+            // so `cast` is never read as a variable name.
+            if (words.Length == 3 && words[0] == "cast" && words[1] == "fails" &&
+                trigger[2].Type == TokenType.Str)
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.CastFailed,
+                    RequireName = trigger[2].Text,
+                };
+            if (words.Length == 4 && words[0] == "my" && words[1] == "cast" && words[2] == "fails" &&
+                trigger[3].Type == TokenType.Str)
+                return new TriggerDescriptor
+                {
+                    Kind = TriggerKind.CastFailed,
+                    RequireName = trigger[3].Text,
                 };
             // `when buff "stim" starts` / `when buff "stim" ends` (Task 27 Part C) — the buff'ed
             // actor's own sheet hears it, with the buff name matched against the signal.

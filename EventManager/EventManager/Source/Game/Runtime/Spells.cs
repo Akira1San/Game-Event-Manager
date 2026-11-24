@@ -127,4 +127,26 @@ namespace Game
             }
         }
     }
+
+    /// <summary>
+    /// The feedback half of <c>cast</c> (Task 37 F7). A refused cast is silent in play — a shortage
+    /// is normal — but a HUD may want to flash the slot, so the caster's own sheet hears
+    /// <c>when cast fails "&lt;spell&gt;"</c>. The bridge calls <see cref="RaiseFailed"/> on each of
+    /// its two refusals; the rule lives here rather than in the bridge so the suite can drive it.
+    /// </summary>
+    public static class CastFeedback
+    {
+        /// <summary>Raises the caster's `when cast fails "&lt;spell&gt;"` for one refused cast.</summary>
+        public static void RaiseFailed(EventRuntime runtime, object caster, string spell)
+        {
+            if (runtime == null || caster == null || string.IsNullOrEmpty(spell))
+                return;
+            runtime.RaisePush(caster, new PushSignal
+            {
+                Kind = TriggerKind.CastFailed,
+                Name = spell,
+                Other = caster,
+            });
+        }
+    }
 }

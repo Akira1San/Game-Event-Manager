@@ -134,10 +134,11 @@ namespace Game
             // `my "stim" time left` (Task 27 Part C): the seconds this actor's buff still has.
             if (Buffs.TryReadTimeLeft(name, out string buffName))
                 return ValueBox.OfNumber(Runtime.Buffs.TimeLeft(Me, buffName));
-            // `my "stim" cooldown` (Task 27 Part E): seconds left on this actor's shared timer,
-            // computed like the buff readout so a HUD or gate never mirrors a countdown.
+            // `my "stim" cooldown` (Task 27 Part E): the countdown left on this actor's shared
+            // timer, computed like the buff readout so a HUD or gate never mirrors it. It reads
+            // whole seconds (Task 37 F7), so a bound label repaints once a second, not every frame.
             if (Cooldowns.TryReadVariable(name, out string cooldownName))
-                return ValueBox.OfNumber(Runtime.Cooldowns.Remaining(Me, cooldownName));
+                return ValueBox.OfNumber(Cooldowns.DisplaySeconds(Runtime.Cooldowns.Remaining(Me, cooldownName)));
             // `my camera zoom` / `my camera position` (Task 26 Part D): the state the free-pan
             // controls keep, readable from any sheet — a HUD readout or a debug print. The
             // position is the ground point the camera is centred on, as "x, 0, z".
@@ -155,16 +156,17 @@ namespace Game
             // weapon and its rounds without the sheet mirroring a variable per weapon.
             if (string.Equals(name, "Ammo", StringComparison.OrdinalIgnoreCase))
                 return ValueBox.OfNumber(WeaponData.ReadAmmo(this, ReadMy(WeaponData.CurrentWeaponVariable).AsText()));
-            // `my FireballCooldown` (Task 9 E3): seconds left on that spell's cooldown, computed
-            // like `my Ammo` so a HUD bind reads live without the sheet mirroring a timer. Only
-            // names that really are a spell are treated this way, so an ordinary `my Cooldown`
+            // `my FireballCooldown` (Task 9 E3): the countdown on that spell's cooldown, computed
+            // like `my Ammo` so a HUD bind reads live without the sheet mirroring a timer. Whole
+            // seconds since Task 37 F7, so a `bind` repaints once a second instead of every frame.
+            // Only names that really are a spell are treated this way, so an ordinary `my Cooldown`
             // variable still reads as a variable.
             if (name.Length > 8 && name.EndsWith("Cooldown", StringComparison.OrdinalIgnoreCase))
             {
                 string spellName = name.Substring(0, name.Length - 8);
                 string canonical = SpellData.CanonicalFor(Variables, spellName);
                 if (canonical != null)
-                    return ValueBox.OfNumber(Runtime.Cooldowns.Remaining(Me, canonical));
+                    return ValueBox.OfNumber(Cooldowns.DisplaySeconds(Runtime.Cooldowns.Remaining(Me, canonical)));
             }
             return Variables.GetLocal(Me, name);
         }
@@ -2094,6 +2096,11 @@ namespace Game
             // written onto the receiving sheet's actor by BindMessageCaptures before the event runs.
             if (descriptor.Kind == TriggerKind.Message && descriptor.MessagePattern)
                 return MessagePattern.TryMatch(descriptor.RequireName, signal.Name, out _);
+            // `when cast fails "<spell>"` (Task 37 F7): the caster's own sheet, matched by the spell
+            // name however the sheet cases it — a timer keeps the data file's spelling, a sheet
+            // should not have to.
+            if (descriptor.Kind == TriggerKind.CastFailed)
+                return string.Equals(signal.Name, descriptor.RequireName, StringComparison.OrdinalIgnoreCase);
             if (descriptor.RequireName.Length == 0)
                 return true;
             // `when me is selected` / `when me is deselected`: the signal is broadcast, so

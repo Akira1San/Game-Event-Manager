@@ -76,6 +76,9 @@ namespace Game
             // `when my "<name>" is ready` is the same ready edge as the quoted form (Task 37 F5);
             // one registry row names both instead of listing the word twice.
             shapes.Add(SplitShape("when my \"<name>\" is ready"));
+            // `when my cast fails "<name>"` is the caster-only form of the same refusal (Task 37
+            // F7); one registry row names both.
+            shapes.Add(SplitShape("when my cast fails \"<name>\""));
             return shapes.ToArray();
         }
 

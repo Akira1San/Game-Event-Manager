@@ -1654,6 +1654,21 @@ window around a broken runtime.
   `my <Spell>Cooldown`, `reloading`), so no shipped sheet changed: the runtime never had two clocks
   ticking different numbers, only two classes over the same idea.
 
+- **Cast feedback and a countdown a HUD can bind (Task 37 F7):** a refused `cast` (cooldown live,
+  purse short) stays silent in play but now raises `when cast fails "<spell>"` on the caster's own
+  sheet — one signal per refused press, the name matched case-insensitively so `"fireball"` answers
+  the `Fireball` timer. The `my` form (`when my cast fails "<spell>"`) is one built-in parser shape
+  rather than a second word-book row, the same trick F5 used for its ready edge. The rule lives in
+  `Runtime/Spells.cs` (`CastFeedback.RaiseFailed`) so the suite drives it without the bridge, which
+  only calls it on its two refusals. The HUD half turned out to be a real bug, not a maybe: `bind
+  Label to my "Fireball" cooldown` expands to `when <var> changes`, `Cooldowns.Remaining` changes
+  every tick, so the label was rewritten about 60 times a second with `9.9833333`-style text. The
+  readouts (`my "<name>" cooldown`, `my <Spell>Cooldown`) are therefore countdowns — whole seconds
+  rounded up, 0 when ready — and repaint a bound label once a second; `Cooldowns.Remaining` keeps the
+  exact number for code and `Cooldowns.DisplaySeconds` holds the single rounding rule. A progress
+  bind on the same variable steps in seconds too: one readout serves the label and the gate, and a
+  smooth bar would need an exact value the label then has to round a second time.
+
 ## 10. The one-paragraph pitch
 
 Event Manager is a text-first game-logic system for non-programmers, inspired by Blender Game

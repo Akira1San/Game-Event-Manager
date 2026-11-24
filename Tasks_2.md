@@ -1887,12 +1887,29 @@ brackets.
       `GameFiles/Loot.events`, the `spawn item from` / `roll` words, `EnemyTypes`' `Level` stat (a
       row per shipped type) and 21 suite checks -> **2634 passed, 0 failed**. The editor play-check
       is the one in Part F: a table drop from a real enemy death.
-- [ ] **F7 — Cast feedback + HUD check (C#, small) [E3].** `cast` refuses silently on mana or
+- [x] **F7 — Cast feedback + HUD check (C#, small) [E3].** `cast` refuses silently on mana or
       cooldown (right for play, wrong for feedback). Push `when cast fails "<spell>"` (or a
       `"cast failed <Spell>"` message) so a sheet can flash a bar. Verify `bind <label> to my
       <Spell>Cooldown` — the expanded `when <var> changes` watch re-reads the computed value every
       tick, so it may work but churn the label 60×/s. Done-when: a failed cast triggers feedback;
       the cooldown label updates without per-frame churn.
+      *Landed 2026-11-24.* A refused `cast` no longer vanishes: the engine raises
+      `when cast fails "<spell>"` on the caster's own sheet — cooldown live or purse short, one
+      signal per refused press, the spell name matched however it is cased — and the `my` form
+      (`when my cast fails "<spell>"`) reads the same through one built-in parser shape, the way
+      F5's ready edge does. The rule sits in the runtime (`CastFeedback.RaiseFailed`, beside
+      `SpellData`) so the suite drives it; `FlaxActions.CastSpell` only calls it on its two
+      refusals. The HUD half was a real bug rather than a guess: `bind Label to my "Fireball"
+      cooldown` expands to `when <var> changes`, and `Cooldowns.Remaining` changes every tick, so
+      the label was rewritten about 60×/s with `9.9833333`-style text. The readouts
+      (`my "<name>" cooldown`, `my <Spell>Cooldown`) are countdowns now — whole seconds rounded up,
+      0 when ready — so a bound label repaints once a second; `Cooldowns.Remaining` keeps the exact
+      number for code and `Cooldowns.DisplaySeconds` holds the one rounding rule. 8 new checks (both
+      trigger shapes classify, a refusal reaches the sheet and fires once, another spell's name is
+      ignored, a `bind` on a 2.5 s timer paints 3/2/1/0 in four writes over 6 s, the readout rounds
+      up while `Remaining` stays exact, and the spell readout check was rewritten for whole seconds)
+      -> **2699 passed, 0 failed**; Game module build 0 errors (14 pre-existing doc warnings). Word
+      book + `keywords.html` rows updated.
 - [ ] **F8 — Extract the cast decision (C#, small) [E3].** Move "unknown / cooling / short mana /
       spend + start" out of `FlaxActions.CastSpell` into a pure `Runtime/SpellCasting.Decide(...)`
       returning a verdict, matching how `Steering`/`PhysicsMovement`/`Separation` keep rules out of
@@ -1956,8 +1973,8 @@ beside them.
 ### Done-when
 
 - A fireball spends mana, starts a cooldown, is refused while cooling down, and damages only valid
-  targets in its radius. **Met** by Task 27 A/E + `cast` (`SpellClock`); the only gap is that the
-  refusal is silent (**F7**) and that `cast`'s clock is not yet the shared table (F5).
+  targets in its radius. **Met** by Task 27 A/E + `cast`; the refusal is no longer silent
+  (**F7**, `when cast fails "<spell>"`) and `cast`'s clock is the shared timer table (**F5**).
 - A fire-resistant zombie takes little damage from fire and normal damage from steel. **Met in the
   engine** by **F2** — `damage <target> by <n> <type>` reads the victim's `<Type>Resist` — but no
   zombie sheet wears the resist yet: that is the combined RPG run in Part F.
